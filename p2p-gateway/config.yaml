@@ -1,0 +1,19 @@
+server:
+  port: "8081"
+  apiKey: "your-p2p-gateway-key"
+
+database:
+  host: "localhost"
+  port: "5432"
+  user: "cctv_user"
+  password: "securepass"
+  name: "cctv_db"
+  sslmode: "disable"
+
+alarm:
+  collectorURL: "http://localhost:8080"
+  apiKey: "collector-internal-key"
+
+hikvision:
+  go2rtcBinaryPath: "/usr/local/bin/go2rtc"
+  go2rtcApiPort: 1984
