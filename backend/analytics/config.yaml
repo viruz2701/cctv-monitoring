@@ -1,0 +1,24 @@
+db:
+  host: localhost
+  port: 5432
+  user: gb_user
+  password: gb_password
+  database: gb_telemetry
+
+deepseek:
+  api_key: "your-api-key"
+  model: "deepseek-chat"
+  enabled: false   # пока выключим, чтобы не зависеть от API
+
+ml:
+  feature_columns:
+    - offline_ratio
+    - error_count
+    - reboot_count
+    - age_days
+    - avg_alarm_priority
+    - last_error_code
+  model_path: "/home/viruz/gb-telemetry-collector/analytics/models/xgboost_model.pkl"
+deepseek:
+  enabled: false  # пока отключим, чтобы не требовать API ключ
+  api_key: ""

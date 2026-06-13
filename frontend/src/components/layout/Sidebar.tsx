@@ -1,0 +1,203 @@
+import React, { useState } from 'react';
+import { NavLink, Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
+import {
+    LayoutDashboard,
+    MapPin,
+    HardDrive,
+    Ticket,
+    FileText,
+    Users,
+    User,
+    Settings,
+    ChevronLeft,
+    ChevronRight,
+    ChevronUp,
+    Camera,
+    Shield,
+    X,
+    TrendingUp,
+    LogOut,
+} from 'lucide-react';
+import { ConfirmModal } from '../ui/Modal';
+import { useTranslation } from 'react-i18next';
+
+interface SidebarProps {
+    collapsed: boolean;
+    onToggle: () => void;
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
+}
+
+export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
+    const { t } = useTranslation();
+    const location = useLocation();
+    const { user, logout } = useAuth();
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+    // Определяем пункты меню ВНУТРИ компонента, чтобы использовать t()
+    const allNavItems = [
+        { path: '/dashboard', label: t('dashboard'), icon: LayoutDashboard, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/sites', label: t('sites'), icon: MapPin, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/devices', label: t('devices'), icon: HardDrive, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/tickets', label: t('tickets'), icon: Ticket, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/alerts', label: t('alerts'), icon: Shield, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/reports', label: t('reports'), icon: FileText, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        { path: '/users', label: t('users'), icon: Users, roles: ['admin'] },
+        { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
+        { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },
+    ];
+
+    const navItems = allNavItems.filter(item =>
+        user && item.roles.includes(user.role)
+    );
+
+    return (
+        <aside
+            className={`fixed left-0 top-0 z-40 h-screen bg-slate-900 transition-all duration-300 flex flex-col
+                ${collapsed ? 'w-20' : 'w-64'}
+                ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} 
+                lg:translate-x-0`}
+        >
+            {/* Logo */}
+            <div className="flex items-center justify-between h-16 px-4 border-b border-slate-800">
+                <Link to="/dashboard" className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-xl">
+                        <Camera className="w-5 h-5 text-white" />
+                    </div>
+                    {!collapsed && (
+                        <div className="overflow-hidden">
+                            <h1 className="text-lg font-bold text-white whitespace-nowrap">
+                                CCTV Monitor
+                            </h1>
+                            <p className="text-xs text-slate-400 dark:text-slate-300">Health Dashboard</p>
+                        </div>
+                    )}
+                </Link>
+                {mobileOpen && (
+                    <button
+                        onClick={onMobileClose}
+                        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        aria-label="Close menu"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 px-3 py-4 overflow-y-auto">
+                <ul className="space-y-1">
+                    {navItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = location.pathname.startsWith(item.path);
+                        return (
+                            <li key={item.path}>
+                                <NavLink
+                                    to={item.path}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${isActive
+                                        ? 'bg-blue-600 text-white'
+                                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                        }`}
+                                >
+                                    <Icon className="w-5 h-5 flex-shrink-0" />
+                                    {!collapsed && (
+                                        <span className="text-sm font-medium whitespace-nowrap">
+                                            {item.label}
+                                        </span>
+                                    )}
+                                </NavLink>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </nav>
+
+            {/* User Profile & Dropdown */}
+            <div className="border-t border-slate-800 p-3">
+                <div className="relative">
+                    {isProfileOpen && (
+                        <div className={`absolute bottom-full left-0 w-full mb-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden ${collapsed ? 'w-56 left-full ml-2 bottom-0' : ''}`}>
+                            <div className="py-1">
+                                <NavLink
+                                    to="/profile"
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
+                                    onClick={() => setIsProfileOpen(false)}
+                                >
+                                    <User className="w-4 h-4" />
+                                    Profile
+                                </NavLink>
+                                <NavLink
+                                    to="/settings"
+                                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
+                                    onClick={() => setIsProfileOpen(false)}
+                                >
+                                    <Settings className="w-4 h-4" />
+                                    Settings
+                                </NavLink>
+                                <div className="border-t border-slate-700 my-1"></div>
+                                <button
+                                    onClick={() => setIsLogoutModalOpen(true)}
+                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setIsProfileOpen(!isProfileOpen)}
+                        className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-800 transition-colors ${isProfileOpen ? 'bg-slate-800' : ''}`}
+                    >
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium flex-shrink-0 overflow-hidden">
+                            {user?.avatar && user.avatar.length > 4 ? (
+                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-sm">
+                                    {user?.avatar || (user?.name || '')
+                                        .split(' ')
+                                        .map(n => n[0])
+                                        .join('')
+                                        .toUpperCase()
+                                        .slice(0, 2)}
+                                </span>
+                            )}
+                        </div>
+
+                        {!collapsed && (
+                            <div className="flex-1 text-left overflow-hidden">
+                                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                            </div>
+                        )}
+
+                        {!collapsed && (
+                            <ChevronUp className={`w-4 h-4 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            {/* Collapse Toggle */}
+            <button
+                onClick={onToggle}
+                className="hidden lg:flex absolute -right-3 top-20 items-center justify-center w-6 h-6 bg-slate-700 border border-slate-600 rounded-full text-slate-300 hover:bg-slate-600 hover:text-white transition-colors"
+            >
+                {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+
+            <ConfirmModal
+                isOpen={isLogoutModalOpen}
+                onClose={() => setIsLogoutModalOpen(false)}
+                onConfirm={logout}
+                title={t('sign_out')}
+                message={t('sign_out_confirm')}
+                confirmText={t('sign_out')}
+                cancelText={t('cancel')}
+            />
+        </aside>
+    );
+}

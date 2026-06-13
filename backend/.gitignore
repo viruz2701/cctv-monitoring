@@ -1,0 +1,41 @@
+# Binaries
+gb-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+go.work
+go.work.sum
+
+# Environment files
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+
+# Python virtual environment (analytics)
+analytics/venv/
+analytics/__pycache__/
+analytics/*.pyc
+analytics/.pytest_cache/
+analytics/models/*.pkl
+
+# Logs
+*.log
+/var/log/
+
+# Data files
+*.db
+*.sqlite
