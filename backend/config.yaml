@@ -1,0 +1,82 @@
+debug: true
+
+# Основные настройки сервера
+sip_port: 5060
+sip_host: "0.0.0.0"
+api_addr: ":8080"
+worker_count: 100
+reaper_interval: "15s"
+heartbeat_timeout: "65s"
+images_dir: "/var/lib/gb-telemetry/images"
+
+
+pp2p_gateway_url: "http://localhost:8082"
+p2p_api_key: "your-secret-api-key-12345"
+
+
+# HTTP-приём событий (новые протоколы)
+http_xml_enabled: true      # включить эндпоинт /api/v1/external/alarm/xml
+vigi_enabled: true          # включить эндпоинт /api/v1/external/alarm/vigi
+save_event_images: true     # сохранять изображения из событий (base64)
+
+# Ротация и хранение логов
+log_file: "/var/log/gb-telemetry/collector.log"
+log_max_size_mb: 50
+log_max_backups: 7
+log_max_age_days: 30
+log_compress: true
+
+# Протокол Dahua (приватный)
+dahua:
+  enabled: true
+  ports: [37777, 37778]
+
+# Протокол Hisilicon
+hisilicon:
+  enabled: true
+  port: 15002
+
+# Протокол TVT
+tvt:
+  enabled: true
+  port: 15003
+
+# FTP-сервер для приёма изображений
+ftp:
+  enabled: true
+  port: 2121
+  rootPath: "/var/lib/gb-telemetry/ftp"
+  user: "alarm"
+  password: "alarm_pass"
+  allowFiles: true
+
+# Hikvision (HTTP streaming и raw TCP) – pull-модель (исходящие соединения)
+hikvision:
+  enabled: false
+  cams:
+    entrance:
+      address: "192.168.1.100"
+      https: false
+      username: "admin"
+      password: "admin123"
+      rawTcp: false
+    doorbell:
+      address: "192.168.1.101"
+      https: false
+      username: "admin"
+      password: "admin666"
+      rawTcp: true
+
+# SNMP trap receiver
+snmp:
+  enabled: true
+  port: 162
+  community: "public"
+  version: "v2c"
+  # Для SNMPv3 (если version: "v3") – раскомментировать и заполнить
+  # user: "monitoring"
+  # authProtocol: "SHA"
+  # authPassword: "your_auth_pass"
+  # privProtocol: "AES"
+  # privPassword: "your_priv_pass"
+  # engineID: ""
