@@ -4,41 +4,35 @@ import (
 	"log"
 	"net/http"
 
-	"p2p-gateway/pkg/adapters" // убедитесь, что путь соответствует вашей структуре
+	"p2p-gateway/pkg/adapters"
 )
 
 func main() {
 	cfg, err := LoadConfig("config.yaml")
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Printf("Config not found, using defaults: %v", err)
+		cfg = &Config{ListenAddr: ":8082"}
 	}
 
-	dm := NewDeviceManager(cfg)
+	dm := NewDeviceManager(8554)
 
-	// Регистрация адаптера Reolink
-	reolinkAdapter := NewReolinkAdapter(cfg.ProxyBinPath)
-	dm.RegisterAdapter("reolink", reolinkAdapter)
+	// Регистрация адаптеров
+	dm.RegisterAdapter("hikvision", adapters.NewHikvisionAdapter())
+	dm.RegisterAdapter("reolink", adapters.NewReolinkAdapter(cfg.ProxyBinPath))
 
-	// Регистрация адаптера Dahua (если настроен)
 	if cfg.DahuaPythonPath != "" && cfg.DahuaScriptPath != "" {
-		dahuaAdapter := adapters.NewDahuaAdapter(cfg.DahuaPythonPath, cfg.DahuaScriptPath)
-		dm.RegisterAdapter("dahua", dahuaAdapter)
+		dm.RegisterAdapter("dahua", adapters.NewDahuaAdapter(cfg.DahuaPythonPath, cfg.DahuaScriptPath))
+		log.Println("Dahua adapter registered")
 	} else {
 		log.Println("Dahua adapter not configured – skipping")
 	}
 
-	// Регистрация адаптера Xiongmai (если настроен)
-	if cfg.XiongmaiNodePath != "" && cfg.XiongmaiScriptPath != "" {
-		xiongmaiAdapter := adapters.NewXiongmaiAdapter(cfg.XiongmaiNodePath, cfg.XiongmaiScriptPath)
-		dm.RegisterAdapter("xiongmai", xiongmaiAdapter)
-	} else {
-		log.Println("Xiongmai adapter not configured – skipping")
-	}
+	// Xiongmai временно отключён
+	// if cfg.XiongmaiNodePath != "" {
+	//     dm.RegisterAdapter("xiongmai", adapters.NewXiongmaiAdapter(cfg.XiongmaiNodePath, cfg.XiongmaiScriptPath))
+	// }
 
-	router := NewRouter(dm, cfg)
-
-	log.Printf("p2p-gateway listening on %s", cfg.ListenAddr)
-	if err := http.ListenAndServe(cfg.ListenAddr, router); err != nil {
-		log.Fatal(err)
-	}
+	router := NewRouter(dm)
+	log.Printf("P2P gateway listening on %s", cfg.ListenAddr)
+	log.Fatal(http.ListenAndServe(cfg.ListenAddr, router))
 }
