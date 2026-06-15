@@ -14,10 +14,19 @@ type Config struct {
 	ProxyBaseRTSPPort    int    `yaml:"proxy_base_rtsp_port"`
 	ProxyBaseONVIFPort   int    `yaml:"proxy_base_onvif_port"`
 	DeviceStatusInterval int    `yaml:"device_status_interval_sec"`
-	DahuaPythonPath      string `yaml:"dahua_python_path"`
-	DahuaScriptPath      string `yaml:"dahua_script_path"`
-	XiongmaiNodePath     string `yaml:"xiongmai_node_path"`
-	XiongmaiScriptPath   string `yaml:"xiongmai_script_path"`
+
+	// Hikvision
+	HikvisionUsername string `yaml:"hikvision_username"`
+	HikvisionPassword string `yaml:"hikvision_password"`
+	FFmpegPath        string `yaml:"ffmpeg_path"`
+
+	// Dahua
+	DahuaPythonPath string `yaml:"dahua_python_path"`
+	DahuaScriptPath string `yaml:"dahua_script_path"`
+
+	// Xiongmai
+	XiongmaiNodePath   string `yaml:"xiongmai_node_path"`
+	XiongmaiScriptPath string `yaml:"xiongmai_script_path"`
 }
 
 func LoadConfig(path string) (*Config, error) {

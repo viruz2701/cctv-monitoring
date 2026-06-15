@@ -3,88 +3,85 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
+
+	"p2p-gateway/internal/models"
+	"p2p-gateway/pkg/adapters"
 )
-
-type DeviceStatus string
-
-const (
-	StatusUnknown DeviceStatus = "unknown"
-	StatusOnline  DeviceStatus = "online"
-	StatusOffline DeviceStatus = "offline"
-)
-
-type Device struct {
-	ID           string       `json:"id"`
-	Brand        string       `json:"brand"`
-	Serial       string       `json:"serial"`
-	Username     string       `json:"username,omitempty"`
-	Password     string       `json:"password,omitempty"`
-	SecurityCode string       `json:"security_code,omitempty"`
-	ProxyPort    int          `json:"proxy_port"`
-	RTSPURL      string       `json:"rtsp_url"`
-	Status       DeviceStatus `json:"status"`
-	LastSeen     time.Time    `json:"last_seen"`
-}
 
 type DeviceManager struct {
 	mu       sync.RWMutex
-	devices  map[string]*Device
-	adapters map[string]DeviceAdapter
-	cfg      *Config
+	adapters map[string]adapters.DeviceAdapter
+	devices  map[string]*models.Device
+	nextPort int
 }
 
-func NewDeviceManager(cfg *Config) *DeviceManager {
+func NewDeviceManager(startPort int) *DeviceManager {
 	return &DeviceManager{
-		devices:  make(map[string]*Device),
-		adapters: make(map[string]DeviceAdapter),
-		cfg:      cfg,
+		adapters: make(map[string]adapters.DeviceAdapter),
+		devices:  make(map[string]*models.Device),
+		nextPort: startPort,
 	}
 }
 
-func (dm *DeviceManager) RegisterAdapter(brand string, adapter DeviceAdapter) {
+func (dm *DeviceManager) RegisterAdapter(brand string, adapter adapters.DeviceAdapter) {
 	dm.adapters[brand] = adapter
 }
 
-func (dm *DeviceManager) AddDevice(dev *Device) error {
+func (dm *DeviceManager) AddDevice(brand, serial, username, password, securityCode string) (*models.Device, error) {
+	adapter, ok := dm.adapters[brand]
+	if !ok {
+		return nil, fmt.Errorf("unsupported brand: %s", brand)
+	}
+	dm.mu.Lock()
+	port := dm.nextPort
+	dm.nextPort += 2
+	dm.mu.Unlock()
+
+	dev := &models.Device{
+		ID:           fmt.Sprintf("%s_%s", brand, serial),
+		Brand:        brand,
+		Serial:       serial,
+		Username:     username,
+		Password:     password,
+		SecurityCode: securityCode,
+		ProxyPort:    port,
+		Status:       models.StatusUnknown,
+	}
+
+	if err := adapter.Start(dev); err != nil {
+		return nil, err
+	}
+
+	dm.mu.Lock()
+	dm.devices[dev.ID] = dev
+	dm.mu.Unlock()
+
+	return dev, nil
+}
+
+func (dm *DeviceManager) StopDevice(deviceID string) error {
+	dm.mu.RLock()
+	dev, ok := dm.devices[deviceID]
+	dm.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("device not found")
+	}
 	adapter, ok := dm.adapters[dev.Brand]
 	if !ok {
-		return fmt.Errorf("unsupported brand: %s", dev.Brand)
+		return fmt.Errorf("adapter for brand %s not found", dev.Brand)
 	}
-	// Assign unique ports
-	dev.ProxyPort = dm.cfg.ProxyBaseRTSPPort + len(dm.devices)*2
-	// Start proxy process
-	if err := adapter.Start(dev); err != nil {
+	if err := adapter.Stop(dev); err != nil {
 		return err
 	}
 	dm.mu.Lock()
-	dm.devices[dev.ID] = dev
+	delete(dm.devices, deviceID)
 	dm.mu.Unlock()
 	return nil
 }
 
-func (dm *DeviceManager) GetDevice(id string) (*Device, bool) {
+func (dm *DeviceManager) GetDevice(deviceID string) (*models.Device, bool) {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
-	dev, ok := dm.devices[id]
+	dev, ok := dm.devices[deviceID]
 	return dev, ok
-}
-
-func (dm *DeviceManager) GetAllDevices() []*Device {
-	dm.mu.RLock()
-	defer dm.mu.RUnlock()
-	list := make([]*Device, 0, len(dm.devices))
-	for _, dev := range dm.devices {
-		list = append(list, dev)
-	}
-	return list
-}
-
-func (dm *DeviceManager) UpdateStatus(devID string, status DeviceStatus) {
-	dm.mu.Lock()
-	defer dm.mu.Unlock()
-	if dev, ok := dm.devices[devID]; ok {
-		dev.Status = status
-		dev.LastSeen = time.Now()
-	}
 }

@@ -1,44 +1,53 @@
-# Compiled binaries
+cat > .gitignore << 'EOF'
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+p2p-gateway
+p2p-gateway.exe
+
+# Test binaries
 *.test
+
+# Output of the go coverage tool
 *.out
-/go2rtc
-/reolinkproxy
-/gb-telemetry-collector
-/p2p-gateway
 
-# Dependencies
-node_modules/
-venv/
-.venv/
-__pycache__/
-*.pyc
+# Dependency directories
+vendor/
 
-# Build outputs
-dist/
-build/
-tmp/
-*.log
+# Go workspace file
+go.work
+go.work.sum
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
+*~
 
-# Environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
 .env
-.env.local
-.env.*.local
+.venv
 
-# OS
+# Logs
+*.log
+
+# Temporary files
+/tmp/
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-
-# Go
-*.mod
-*.sum
+EOF
