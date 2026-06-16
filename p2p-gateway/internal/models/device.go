@@ -19,4 +19,5 @@ type Device struct {
 	RTSPURL      string       `json:"rtsp_url"`
 	Status       DeviceStatus `json:"status"`
 	LastSeen     string       `json:"last_seen,omitempty"`
+	IPAddress    string       `json:"ip_address,omitempty"` // для прямого режима
 }

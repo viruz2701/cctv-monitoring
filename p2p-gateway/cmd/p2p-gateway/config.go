@@ -24,9 +24,21 @@ type Config struct {
 	DahuaPythonPath string `yaml:"dahua_python_path"`
 	DahuaScriptPath string `yaml:"dahua_script_path"`
 
-	// Xiongmai
+	// Xiongmai (старый)
 	XiongmaiNodePath   string `yaml:"xiongmai_node_path"`
 	XiongmaiScriptPath string `yaml:"xiongmai_script_path"`
+
+	// Jftech (новый)
+	Jftech *JftechConfig `yaml:"jftech"`
+}
+
+type JftechConfig struct {
+	UUID      string `yaml:"uuid"`
+	AppKey    string `yaml:"app_key"`
+	AppSecret string `yaml:"app_secret"`
+	MoveCard  int    `yaml:"move_card"`
+	Endpoint  string `yaml:"endpoint"`
+	Region    string `yaml:"region"`
 }
 
 func LoadConfig(path string) (*Config, error) {

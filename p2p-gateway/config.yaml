@@ -19,5 +19,10 @@ dahua_python_path: "/usr/bin/python3"
 dahua_script_path: "./bin/dh-p2p/main.py"
 
 # Xiongmai
-xiongmai_node_path: "/usr/bin/node"
-xiongmai_script_path: "/opt/xmeye-proxy/index.js"
+jftech:
+  uuid: "your-uuid-here"
+  app_key: "your-appkey-here"
+  app_secret: "your-appsecret-here"
+  move_card: 2
+  endpoint: "api-cn.jftechws.com"   # для России можно оставить CN или указать другой
+  region: "RU"                   # или "RU" (подставьте нужный)

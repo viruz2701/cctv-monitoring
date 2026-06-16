@@ -27,7 +27,7 @@ func (dm *DeviceManager) RegisterAdapter(brand string, adapter adapters.DeviceAd
 	dm.adapters[brand] = adapter
 }
 
-func (dm *DeviceManager) AddDevice(brand, serial, username, password, securityCode string) (*models.Device, error) {
+func (dm *DeviceManager) AddDevice(brand, serial, username, password, securityCode, ipAddress string) (*models.Device, error) {
 	adapter, ok := dm.adapters[brand]
 	if !ok {
 		return nil, fmt.Errorf("unsupported brand: %s", brand)
@@ -44,6 +44,7 @@ func (dm *DeviceManager) AddDevice(brand, serial, username, password, securityCo
 		Username:     username,
 		Password:     password,
 		SecurityCode: securityCode,
+		IPAddress:    ipAddress,
 		ProxyPort:    port,
 		Status:       models.StatusUnknown,
 	}
@@ -84,4 +85,21 @@ func (dm *DeviceManager) GetDevice(deviceID string) (*models.Device, bool) {
 	defer dm.mu.RUnlock()
 	dev, ok := dm.devices[deviceID]
 	return dev, ok
+}
+
+func (dm *DeviceManager) GetDevices() []*models.Device {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	devices := make([]*models.Device, 0, len(dm.devices))
+	for _, dev := range dm.devices {
+		devices = append(devices, dev)
+	}
+	return devices
+}
+
+func (dm *DeviceManager) GetAdapter(brand string) (adapters.DeviceAdapter, bool) {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	adapter, ok := dm.adapters[brand]
+	return adapter, ok
 }
