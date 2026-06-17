@@ -5,10 +5,13 @@ go 1.25.0
 require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-chi/cors v1.2.2
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/gosnmp/gosnmp v1.43.2
 	github.com/icholy/digest v1.1.0
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/pquerna/otp v1.5.0
 	github.com/spf13/viper v1.21.0
 	goftp.io/server/v2 v2.0.3
 	golang.org/x/crypto v0.53.0
@@ -17,6 +20,7 @@ require (
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

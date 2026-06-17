@@ -9,13 +9,14 @@ import { useTranslation } from 'react-i18next';
 export function Login() {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { login, login2FA } = useAuth();
     const { settings } = useSettings();
 
     const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [otp, setOtp] = useState('');
+    const [sessionToken, setSessionToken] = useState('');
 
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
@@ -50,16 +51,19 @@ export function Login() {
             return;
         }
 
-        if (settings.security.requires2FA) {
-            setLoading(false);
-            setStep('2fa');
-            return;
-        }
-
         try {
-            await login(email, password);
-            console.log('login finished, navigating to /dashboard');
+            const result = await login(email, password);
+            
+            if (result.requires2FA && result.sessionToken) {
+                // 2FA required - show OTP input
+                setSessionToken(result.sessionToken);
+                setStep('2fa');
+                setLoading(false);
+                return;
+            }
 
+            // No 2FA required - login successful
+            console.log('login finished, navigating to /dashboard');
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.message || t('login_failed') || 'Login failed');
@@ -72,18 +76,21 @@ export function Login() {
         e.preventDefault();
         setError('');
         setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 800));
-        if (otp === '123456') {
-            try {
-                await login(email, password);
-                navigate('/dashboard');
-            } catch (err: any) {
-                setError(err.message || t('login_failed') || 'Login failed');
-            }
-        } else {
-            setError(t('login_error_otp') || 'Invalid authentication code. Try "123456"');
+
+        if (!otp || otp.length !== 6) {
+            setError(t('login_error_otp_invalid') || 'Please enter a valid 6-digit code');
+            setLoading(false);
+            return;
         }
-        setLoading(false);
+
+        try {
+            await login2FA(sessionToken, otp);
+            navigate('/dashboard');
+        } catch (err: any) {
+            setError(err.message || t('login_error_otp') || 'Invalid authentication code');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -198,7 +205,7 @@ export function Login() {
                                         />
                                         <span className="text-sm text-slate-600 dark:text-slate-300">{t('remember_me')}</span>
                                     </label>
-                                    <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                                    <a href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
                                         {t('forgot_password')}
                                     </a>
                                 </div>

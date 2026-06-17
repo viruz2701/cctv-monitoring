@@ -43,6 +43,15 @@ type Config struct {
 	Hikvision HikvisionConfig
 	SNMP      SNMPConfig
 	GB28181   GB28181Config // ДОБАВЛЕНО: GB28181 конфигурация
+
+	// Telegram bot configuration
+	Telegram TelegramConfig
+}
+
+// TelegramConfig — настройки Telegram бота
+type TelegramConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Token   string `mapstructure:"token"`
 }
 
 // GB28181Config — настройки GB/T 28181 сервера

@@ -73,12 +73,22 @@ type ParsedLog struct {
 }
 
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	OwnerID      *string   `json:"owner_id,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID             string     `json:"id"`
+	Username       string     `json:"username"`
+	PasswordHash   string     `json:"-"`
+	Role           string     `json:"role"`
+	OwnerID        *string    `json:"owner_id,omitempty"`
+	Email          string     `json:"email,omitempty"`
+	Avatar         string     `json:"avatar,omitempty"`
+	Sites          []string   `json:"sites,omitempty"`
+	Status         string     `json:"status,omitempty"`
+	LastLogin      *time.Time `json:"last_login,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	TOTPSecret     string     `json:"-"`
+	TOTPEnabled    bool       `json:"totp_enabled"`
+	TelegramChatID string     `json:"telegram_chat_id,omitempty"`
+	TelegramAlerts bool       `json:"telegram_alerts"`
+	Telegram2FA    bool       `json:"telegram_2fa"`
 }
 
 type Prediction struct {

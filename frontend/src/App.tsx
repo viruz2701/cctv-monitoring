@@ -12,11 +12,24 @@ import { TicketsProvider } from './context/TicketsContext';
 import { AlertsProvider } from './context/AlertsContext';
 import { NotificationsProvider } from './context/NotificationsContext';
 import { ReportsProvider } from './context/ReportsContext';
+import { MaintenanceProvider } from './context/MaintenanceContext';
+import { WorkOrdersProvider } from './context/WorkOrdersContext';
+import { SparePartsProvider } from './context/SparePartsContext';
 import { ToastProvider } from './components/ui';
 import { Analytics } from './pages/Analytics';
 import { Logs } from './pages/Logs';
+import { APIKeys } from './pages/APIKeys';
+import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
+import { WorkOrders } from './pages/WorkOrders';
+import { SpareParts } from './pages/SpareParts';
+import { TechnicianDashboard } from './pages/TechnicianDashboard';
+import { SLADashboard } from './pages/SLADashboard';
+import { MaintenanceReports } from './pages/MaintenanceReports';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { TechnicianAssignments } from './pages/TechnicianAssignments';
 
 import { useAuth } from './hooks/useAuth';
+import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -29,24 +42,29 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
-import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
-
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <SettingsProvider>
-          <UsersProvider>
-            <DevicesSitesProvider>
-              <TicketsProvider>
-                <AlertsProvider>
-                  <NotificationsProvider>
-                    <ReportsProvider>
-                      <BrowserRouter>
-                        <ToastProvider>
+      {/* ═══ ToastProvider вынесен на самый верх ═══ 
+          Все контексты ниже (UsersProvider, SettingsProvider и т.д.) 
+          теперь могут использовать useToast() */}
+      <ToastProvider>
+        <AuthProvider>
+          <SettingsProvider>
+            <UsersProvider>
+              <DevicesSitesProvider>
+                <TicketsProvider>
+                  <AlertsProvider>
+                    <NotificationsProvider>
+                      <ReportsProvider>
+                        <MaintenanceProvider>
+                          <WorkOrdersProvider>
+                            <SparePartsProvider>
+                              <BrowserRouter>
                           <Routes>
                             {/* Public Route */}
                             <Route path="/login" element={<Login />} />
+                            <Route path="/forgot-password" element={<ForgotPassword />} />
 
                             {/* Protected Routes with Layout */}
                             <Route element={
@@ -63,45 +81,65 @@ function App() {
                               <Route path="/tickets/:ticketId" element={<TicketDetail />} />
                               <Route path="/alerts" element={<Alerts />} />
                               <Route path="/notifications" element={<Notifications />} />
+                              
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
                                 <Route path="/reports" element={<Reports />} />
                               </Route>
-                              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support', 'owner']} />}>
                               
-                              <Route path="/analytics" element={<Analytics />} />
+                              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support', 'owner']} />}>
+                                <Route path="/analytics" element={<Analytics />} />
                               </Route>
+                              
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support']} />}>
-                              <Route path="/logs" element={<Logs />} />
+                                <Route path="/logs" element={<Logs />} />
                               </Route>
 
                               {/* Admin Only Routes */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
                                 <Route path="/users" element={<Users />} />
+                                <Route path="/api-keys" element={<APIKeys />} />
                               </Route>
 
-                              {/* Admin & Manager Routes */}
-                              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>
+                              {/* Admin Only Routes - Settings */}
+                              <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
                                 <Route path="/settings" element={<Settings />} />
                               </Route>
 
                               {/* Profile Route - Accessible to all authenticated users */}
                               <Route path="/profile" element={<Profile />} />
+
+                              {/* CMMS Routes */}
+                              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
+                                <Route path="/maintenance" element={<MaintenanceSchedules />} />
+                                <Route path="/work-orders" element={<WorkOrders />} />
+                                <Route path="/spare-parts" element={<SpareParts />} />
+                                <Route path="/technician-dashboard" element={<TechnicianDashboard />} />
+                                <Route path="/technician-assignments" element={<TechnicianAssignments />} />
+                              </Route>
+
+                              <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>
+                                <Route path="/sla" element={<SLADashboard />} />
+                                <Route path="/maintenance-reports" element={<MaintenanceReports />} />
+                              </Route>
                             </Route>
 
                             {/* Default Redirect */}
                             <Route path="/" element={<Navigate to="/dashboard" replace />} />
                             <Route path="*" element={<Navigate to="/dashboard" replace />} />
                           </Routes>
-                        </ToastProvider>
-                      </BrowserRouter>
-                    </ReportsProvider>
-                  </NotificationsProvider>
-                </AlertsProvider>
-              </TicketsProvider>
-            </DevicesSitesProvider>
-          </UsersProvider>
-        </SettingsProvider>
-      </AuthProvider>
+                              </BrowserRouter>
+                            </SparePartsProvider>
+                          </WorkOrdersProvider>
+                        </MaintenanceProvider>
+                      </ReportsProvider>
+                    </NotificationsProvider>
+                  </AlertsProvider>
+                </TicketsProvider>
+              </DevicesSitesProvider>
+            </UsersProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

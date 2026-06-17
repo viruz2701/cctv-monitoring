@@ -15,7 +15,8 @@ export interface AuthUser {
 interface AuthContextType {
     user: AuthUser | null;
     token: string | null;
-    login: (username: string, password: string) => Promise<void>;
+    login: (username: string, password: string) => Promise<{ requires2FA?: boolean; sessionToken?: string }>;
+    login2FA: (sessionToken: string, code: string) => Promise<void>;
     logout: () => void;
     hasPermission: (roles: string | string[]) => boolean;
     updateUser: (data: Partial<AuthUser>) => void;
@@ -47,24 +48,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [token]);
 
-   const login = async (username: string, password: string) => {
-    console.log('login start');
-    const { token: newToken, user: userData } = await api.login(username, password);
-    console.log('got token', newToken);
-    setAuthToken(newToken);
-    setToken(newToken);
-    setUser({
-        id: userData.id,
-        username: userData.username,
-        role: userData.role,
-        owner_id: userData.owner_id,
-        name: userData.username,
-        email: userData.username,
-        avatar: userData.avatar || '',
-        sites: userData.sites || [],
-    });
-    console.log('user set', userData.username);
+   const login = async (username: string, password: string): Promise<{ requires2FA?: boolean; sessionToken?: string }> => {
+    try {
+        const response = await fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+
+        if (response.status === 202) {
+            // 2FA required
+            const data = await response.json();
+            return { requires2FA: true, sessionToken: data.session_token };
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Login failed');
+        }
+
+        const { token: newToken, user: userData } = await response.json();
+        setAuthToken(newToken);
+        setToken(newToken);
+        setUser({
+            id: userData.id,
+            username: userData.username,
+            role: userData.role,
+            owner_id: userData.owner_id,
+            name: userData.username,
+            email: userData.username,
+            avatar: userData.avatar || '',
+            sites: userData.sites || [],
+        });
+        return {};
+    } catch (err: any) {
+        throw err;
+    }
 };
+
+    const login2FAFn = async (sessionToken: string, code: string) => {
+        const { token: newToken, user: userData } = await api.login2FA(sessionToken, code);
+        setAuthToken(newToken);
+        setToken(newToken);
+        setUser({
+            id: userData.id,
+            username: userData.username,
+            role: userData.role,
+            owner_id: userData.owner_id,
+            name: userData.username,
+            email: userData.username,
+            avatar: userData.avatar || '',
+            sites: userData.sites || [],
+        });
+    };
 
     const logout = () => {
         setAuthToken(null);
@@ -84,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, login, logout, hasPermission, updateUser }}>
+        <AuthContext.Provider value={{ user, token, login, login2FA: login2FAFn, logout, hasPermission, updateUser }}>
             {children}
         </AuthContext.Provider>
     );

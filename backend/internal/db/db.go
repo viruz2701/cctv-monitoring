@@ -450,6 +450,215 @@ func (db *DB) initSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);`,
 	}
+
+	// 17.1. TOTP columns for 2FA
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE;
+	`); err != nil {
+		db.Logger.Warn("Failed to add TOTP columns", "error", err)
+	}
+
+	// 17.2. Telegram columns
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_alerts BOOLEAN DEFAULT FALSE;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_2fa BOOLEAN DEFAULT FALSE;
+	`); err != nil {
+		db.Logger.Warn("Failed to add Telegram columns", "error", err)
+	}
+
+	// 17.3. Telegram link tokens table
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+			token TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_telegram_link_tokens_expires_at ON telegram_link_tokens(expires_at);
+	`); err != nil {
+		db.Logger.Warn("Failed to create telegram_link_tokens table", "error", err)
+	}
+
+	// 17.4. Telegram login codes table
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS telegram_login_codes (
+			user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			code TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		db.Logger.Warn("Failed to create telegram_login_codes table", "error", err)
+	}
+
+	// Password reset tokens
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			token TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		db.Logger.Warn("Failed to create password_reset_tokens table", "error", err)
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════
+	// CMMS Tables (Maintenance Schedules, Work Orders, Spare Parts, SLA)
+	// ═══════════════════════════════════════════════════════════════════════
+
+	// 18. Maintenance Schedules
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS maintenance_schedules (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			device_id TEXT REFERENCES devices(device_id) ON DELETE CASCADE,
+			schedule_type TEXT NOT NULL CHECK (schedule_type IN ('daily', 'weekly', 'monthly', 'quarterly', 'custom')),
+			interval_days INT,
+			custom_cron TEXT,
+			last_completed TIMESTAMPTZ,
+			next_due TIMESTAMPTZ NOT NULL,
+			assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL,
+			checklist JSONB NOT NULL DEFAULT '[]',
+			estimated_minutes INT DEFAULT 30,
+			priority TEXT DEFAULT 'medium' CHECK (priority IN ('critical', 'high', 'medium', 'low')),
+			notes TEXT,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create maintenance_schedules table: %w", err)
+	}
+
+	// 19. Work Orders
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS work_orders (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			schedule_id TEXT REFERENCES maintenance_schedules(id) ON DELETE SET NULL,
+			device_id TEXT REFERENCES devices(device_id) ON DELETE CASCADE,
+			type TEXT NOT NULL CHECK (type IN ('preventive', 'corrective', 'emergency')),
+			status TEXT DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'completed', 'cancelled')),
+			priority TEXT DEFAULT 'medium' CHECK (priority IN ('critical', 'high', 'medium', 'low')),
+			assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL,
+			sla_deadline TIMESTAMPTZ,
+			checklist JSONB NOT NULL DEFAULT '[]',
+			started_at TIMESTAMPTZ,
+			completed_at TIMESTAMPTZ,
+			notes TEXT,
+			photos JSONB DEFAULT '[]',
+			parts_used JSONB DEFAULT '[]',
+			created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create work_orders table: %w", err)
+	}
+
+	// 20. Technician Skills & Workload columns
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS skills TEXT[] DEFAULT '{}';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS max_workload INT DEFAULT 5;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS current_workload INT DEFAULT 0;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS base_location TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS certifications TEXT[] DEFAULT '{}';
+	`); err != nil {
+		db.Logger.Warn("Failed to add technician columns", "error", err)
+	}
+
+	// 21. SLA Configuration
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS sla_config (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			priority TEXT NOT NULL CHECK (priority IN ('critical', 'high', 'medium', 'low')),
+			response_time_minutes INT NOT NULL,
+			resolution_time_minutes INT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create sla_config table: %w", err)
+	}
+
+	// 22. Spare Parts Inventory
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS spare_parts (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			name TEXT NOT NULL,
+			sku TEXT UNIQUE,
+			category TEXT,
+			stock INT DEFAULT 0,
+			min_stock INT DEFAULT 5,
+			location TEXT,
+			compatible_devices TEXT[],
+			cost DECIMAL(10, 2),
+			supplier TEXT,
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create spare_parts table: %w", err)
+	}
+
+	// 23. Part Usage Log
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS part_usage (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			work_order_id TEXT REFERENCES work_orders(id) ON DELETE CASCADE,
+			part_id TEXT REFERENCES spare_parts(id) ON DELETE CASCADE,
+			quantity INT NOT NULL,
+			used_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+			used_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create part_usage table: %w", err)
+	}
+
+	// CMMS Indexes
+	cmmsIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_device ON maintenance_schedules(device_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_next_due ON maintenance_schedules(next_due);`,
+		`CREATE INDEX IF NOT EXISTS idx_maintenance_schedules_assigned ON maintenance_schedules(assigned_to);`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_device ON work_orders(device_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_assigned ON work_orders(assigned_to);`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_sla ON work_orders(sla_deadline);`,
+		`CREATE INDEX IF NOT EXISTS idx_spare_parts_sku ON spare_parts(sku);`,
+		`CREATE INDEX IF NOT EXISTS idx_part_usage_work_order ON part_usage(work_order_id);`,
+	}
+	for _, idx := range cmmsIndexes {
+		if _, err := tx.Exec(ctx, idx); err != nil {
+			db.Logger.Warn("Failed to create CMMS index", "sql", idx, "error", err)
+		}
+	}
+
+	// Default SLA config
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO sla_config (priority, response_time_minutes, resolution_time_minutes) VALUES
+		('critical', 15, 60),
+		('high', 30, 240),
+		('medium', 60, 480),
+		('low', 240, 1440)
+		ON CONFLICT DO NOTHING;
+	`); err != nil {
+		db.Logger.Warn("Failed to insert default SLA config", "error", err)
+	}
+
+	// Technician Site Assignments
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS technician_site_assignments (
+			id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+			technician_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+			is_primary BOOLEAN DEFAULT false,
+			assigned_at TIMESTAMPTZ DEFAULT NOW(),
+			assigned_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+			UNIQUE(technician_id, site_id)
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create technician_site_assignments table: %w", err)
+	}
+
 	for _, idx := range indexes {
 		if _, err := tx.Exec(ctx, idx); err != nil {
 			db.Logger.Warn("Failed to create index", "sql", idx, "error", err)

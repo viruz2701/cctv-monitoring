@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { useAlarmWebSocket } from '../../services/websocket';
 
 export function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const location = useLocation();
+
+    // Initialize WebSocket for real-time alarms (only connects if user is authenticated)
+    useAlarmWebSocket();
 
     // Close mobile menu on route change
     useEffect(() => {

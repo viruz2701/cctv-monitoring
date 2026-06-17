@@ -11,7 +11,7 @@ export function setAuthToken(token: string | null) {
     }
 }
 
-async function request<T>(
+export async function request<T>(
     path: string,
     options: RequestInit = {}
 ): Promise<T> {
@@ -35,7 +35,8 @@ async function request<T>(
     if (!response.ok) {
         if (response.status === 401) {
             setAuthToken(null);
-            if (typeof window !== 'undefined') {
+            // НЕ делаем редирект, если уже на странице логина
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
                 window.location.href = '/login';
             }
             throw new Error('Session expired. Please log in again.');
@@ -58,18 +59,22 @@ async function request<T>(
 
     return null as T;
 }
-
 // ─── Types ────────────────────────────────────────────────────────────
+
+
 
 export interface User {
     id: string;
     username: string;
+    name: string; // <-- УБРАЛИ ? (теперь обязательное)
     role: 'admin' | 'support' | 'owner' | 'manager' | 'technician' | 'viewer';
     owner_id?: string | null;
     created_at: string;
     avatar?: string;
     sites?: string[];
-    email?: string;
+    email: string; // <-- УБРАЛИ ? (теперь обязательное)
+    status?: 'active' | 'inactive';
+    lastLogin?: string;
 }
 
 export interface Device {
@@ -277,6 +282,19 @@ export interface ServicesSettings {
     services_p2p_gateway: P2PGatewaySettings;
 }
 
+// ─── Technician Site Assignments ──────────────────────────────────────
+
+export interface TechnicianSiteAssignment {
+    id: string;
+    technician_id: string;
+    site_id: string;
+    is_primary: boolean;
+    assigned_at: string;
+    assigned_by: string;
+    technician_name?: string;
+    site_name?: string;
+}
+
 // ─── Dashboard Stats ──────────────────────────────────────────────────
 
 export interface DashboardStats {
@@ -313,6 +331,9 @@ export const api = {
     logout(): void {
         setAuthToken(null);
     },
+
+
+   
 
     // ── Devices ────────────────────────────────────────────────────────
 
@@ -517,6 +538,63 @@ export const api = {
         });
     },
 
+    async resetUserPassword(userId: string, newPassword: string): Promise<void> {
+        await request<void>(`/users/${userId}/reset-password`, {
+            method: 'PUT',
+            body: JSON.stringify({ new_password: newPassword }),
+        });
+    },
+
+    // ── Session Management ─────────────────────────────────────────────
+    async getSessions(): Promise<any[]> {
+        return request<any[]>('/sessions');
+    },
+
+    async revokeSession(sessionId: string): Promise<void> {
+        await request<void>(`/sessions/${sessionId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async revokeAllOtherSessions(currentSessionId: string): Promise<void> {
+        await request<void>('/sessions/revoke-all', {
+            method: 'POST',
+            body: JSON.stringify({ current_session_id: currentSessionId }),
+        });
+    },
+
+    // ── 2FA (TOTP) ─────────────────────────────────────────────────────
+    async setup2FA(): Promise<{ secret: string; uri: string }> {
+        return request<{ secret: string; uri: string }>('/users/me/2fa/setup', {
+            method: 'POST',
+        });
+    },
+
+    async verify2FA(code: string): Promise<void> {
+        await request<void>('/users/me/2fa/verify', {
+            method: 'POST',
+            body: JSON.stringify({ code }),
+        });
+    },
+
+    async disable2FA(password: string): Promise<void> {
+        await request<void>('/users/me/2fa/disable', {
+            method: 'POST',
+            body: JSON.stringify({ password }),
+        });
+    },
+
+    async login2FA(sessionToken: string, code: string): Promise<{ token: string; user: User }> {
+        const data = await request<{ token: string; user: User }>('/auth/login/2fa', {
+            method: 'POST',
+            body: JSON.stringify({ session_token: sessionToken, code }),
+        });
+        if (data.token) {
+            setAuthToken(data.token);
+        }
+        return data;
+    },
+
     // ── Notifications ──────────────────────────────────────────────────
 
     async getNotifications(): Promise<Notification[]> {
@@ -676,6 +754,89 @@ export const api = {
         await request<void>('/external/alarm', {
             method: 'POST',
             body: JSON.stringify(alarm),
+        });
+    },
+
+    // ── API Keys Management ────────────────────────────────────────────
+
+    async getAPIKeys(): Promise<any[]> {
+        return request<any[]>('/api-keys');
+    },
+
+    async createAPIKey(data: { name: string; permissions: string[]; expires_at?: string }): Promise<any> {
+        return request<any>('/api-keys', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async revokeAPIKey(id: string): Promise<void> {
+        await request<void>(`/api-keys/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // ── Telegram Integration ───────────────────────────────────────────
+
+    async generateTelegramLink(): Promise<{ token: string; expires_at: string }> {
+        return request<{ token: string; expires_at: string }>('/users/me/telegram/generate-link', {
+            method: 'POST',
+        });
+    },
+
+    async getTelegramStatus(): Promise<{ linked: boolean; alerts: boolean; tfa: boolean }> {
+        return request<{ linked: boolean; alerts: boolean; tfa: boolean }>('/users/me/telegram/status');
+    },
+
+    async updateTelegramSettings(settings: { alerts: boolean; tfa: boolean }): Promise<void> {
+        await request<void>('/users/me/telegram/settings', {
+            method: 'POST',
+            body: JSON.stringify(settings),
+        });
+    },
+
+    async requestTelegramLoginCode(username: string): Promise<{ message: string; code: string }> {
+        return request<{ message: string; code: string }>('/auth/telegram/request-code', {
+            method: 'POST',
+            body: JSON.stringify({ username }),
+        });
+    },
+
+    async verifyTelegramLogin(username: string, code: string): Promise<{ token: string; user: any }> {
+        return request<{ token: string; user: any }>('/auth/telegram/verify', {
+            method: 'POST',
+            body: JSON.stringify({ username, code }),
+        });
+    },
+
+    // ── Technician Site Assignments ────────────────────────────────────
+
+    async getTechnicianSiteAssignments(filters?: { technician_id?: string; site_id?: string; is_primary?: boolean }): Promise<TechnicianSiteAssignment[]> {
+        const params = new URLSearchParams();
+        if (filters?.technician_id) params.append('technician_id', filters.technician_id);
+        if (filters?.site_id) params.append('site_id', filters.site_id);
+        if (filters?.is_primary !== undefined) params.append('is_primary', filters.is_primary.toString());
+        const query = params.toString() ? `?${params.toString()}` : '';
+        return request<TechnicianSiteAssignment[]>(`/technician-assignments${query}`);
+    },
+
+    async createTechnicianSiteAssignment(data: { technician_id: string; site_id: string; is_primary?: boolean }): Promise<TechnicianSiteAssignment> {
+        return request<TechnicianSiteAssignment>('/technician-assignments', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async updateTechnicianSiteAssignment(id: string, data: { is_primary?: boolean }): Promise<void> {
+        await request<void>(`/technician-assignments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteTechnicianSiteAssignment(id: string): Promise<void> {
+        await request<void>(`/technician-assignments/${id}`, {
+            method: 'DELETE',
         });
     },
 };

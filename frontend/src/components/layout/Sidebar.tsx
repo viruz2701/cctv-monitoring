@@ -8,7 +8,6 @@ import {
     Ticket,
     FileText,
     Users,
-    User,
     Settings,
     ChevronLeft,
     ChevronRight,
@@ -18,6 +17,7 @@ import {
     X,
     TrendingUp,
     LogOut,
+    Key,
 } from 'lucide-react';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +44,17 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/tickets', label: t('tickets'), icon: Ticket, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
         { path: '/alerts', label: t('alerts'), icon: Shield, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
         { path: '/reports', label: t('reports'), icon: FileText, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
+        // CMMS Routes
+        { path: '/maintenance', label: t('maintenance') || 'Maintenance', icon: FileText, roles: ['admin', 'manager', 'technician'] },
+        { path: '/work-orders', label: t('work_orders') || 'Work Orders', icon: FileText, roles: ['admin', 'manager', 'technician'] },
+        { path: '/spare-parts', label: t('spare_parts') || 'Spare Parts', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
+        { path: '/technician-assignments', label: t('technician_assignments') || 'Technician Assignments', icon: Users, roles: ['admin', 'manager'] },
+        { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
+        { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
+        // Admin Only
         { path: '/users', label: t('users'), icon: Users, roles: ['admin'] },
+        { path: '/api-keys', label: t('api_keys'), icon: Key, roles: ['admin'] },
+        { path: '/settings', label: t('settings'), icon: Settings, roles: ['admin'] },
         { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
         { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },
     ];
@@ -120,29 +130,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                     {isProfileOpen && (
                         <div className={`absolute bottom-full left-0 w-full mb-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden ${collapsed ? 'w-56 left-full ml-2 bottom-0' : ''}`}>
                             <div className="py-1">
-                                <NavLink
-                                    to="/profile"
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
-                                    onClick={() => setIsProfileOpen(false)}
-                                >
-                                    <User className="w-4 h-4" />
-                                    Profile
-                                </NavLink>
-                                <NavLink
-                                    to="/settings"
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white"
-                                    onClick={() => setIsProfileOpen(false)}
-                                >
-                                    <Settings className="w-4 h-4" />
-                                    Settings
-                                </NavLink>
-                                <div className="border-t border-slate-700 my-1"></div>
                                 <button
                                     onClick={() => setIsLogoutModalOpen(true)}
                                     className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300"
                                 >
                                     <LogOut className="w-4 h-4" />
-                                    Sign Out
+                                    {t('sign_out') || 'Sign Out'}
                                 </button>
                             </div>
                         </div>

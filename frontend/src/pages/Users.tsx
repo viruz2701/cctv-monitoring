@@ -1,53 +1,69 @@
-import { generateUUID } from '../utils/uuid';
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, Edit, Trash2, Shield, User as UserIcon, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, User as UserIcon, Filter, Key } from 'lucide-react';
 import {
     Card, CardHeader, CardBody, Table, Button, SearchInput,
-    Modal, ConfirmModal, Input, Select, Badge, RoleBadge
+    Modal, ConfirmModal, Input, Select, Badge, RoleBadge, useToast
 } from '../components/ui';
 import { useUsers } from '../context/DataContext';
-import type { User as UserType, UserRole, UserStatus } from '../types';
+import type { User } from '../services/api';
+import { api } from '../services/api';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
 
+type UserRole = User['role'];
+type UserStatus = NonNullable<User['status']>;
+
 export function Users() {
     const { t } = useTranslation();
+    const toast = useToast();
     const { users, addUser, updateUser, deleteUser } = useUsers();
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
     const [showRoleModal, setShowRoleModal] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
-    // Form state
+    // ═══ Reset Password States ═══
+    const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+    const [resetPasswordForm, setResetPasswordForm] = useState({ userId: '', newPassword: '', confirm: '' });
+    const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+    const [resetPasswordError, setResetPasswordError] = useState('');
+
     const [formData, setFormData] = useState({
+        username: '',
         name: '',
         email: '',
+        password: '',
         role: 'viewer' as UserRole,
         status: 'active' as UserStatus
     });
 
     const resetForm = () => {
         setFormData({
+            username: '',
             name: '',
             email: '',
+            password: '',
             role: 'viewer',
             status: 'active'
         });
         setSelectedUser(null);
     };
 
-    const handleOpenModal = (user?: UserType) => {
+    const handleOpenModal = (user?: User) => {
         if (user) {
             setSelectedUser(user);
             setFormData({
-                name: user.name,
-                email: user.email,
+                username: user.username,
+                name: user.name || user.username,
+                email: user.email || '',
+                password: '',
                 role: user.role,
-                status: user.status
+                status: user.status || 'active'
             });
         } else {
             resetForm();
@@ -55,38 +71,108 @@ export function Users() {
         setShowAddModal(true);
     };
 
-    const handleSubmit = () => {
-        if (selectedUser) {
-            updateUser(selectedUser.id, formData);
-        } else {
-            const newUser: UserType = {
-                id: `user-${generateUUID()}`,
-                name: formData.name,
-                email: formData.email,
-                role: formData.role,
-                status: formData.status,
-                avatar: formData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
-                lastLogin: new Date().toISOString(),
-                sites: [] // Default to no sites for refined prototype
-            };
-            addUser(newUser);
+    // ═══ Reset Password Handlers ═══
+    const handleOpenResetPassword = (userId: string) => {
+        setResetPasswordForm({ userId, newPassword: '', confirm: '' });
+        setResetPasswordError('');
+        setShowResetPasswordModal(true);
+    };
+
+    const handleResetPassword = async () => {
+        setResetPasswordError('');
+        if (!resetPasswordForm.newPassword || !resetPasswordForm.confirm) {
+            setResetPasswordError(t('all_fields_required') || 'All fields are required');
+            return;
         }
-        setShowAddModal(false);
-        resetForm();
+        if (resetPasswordForm.newPassword.length < 6) {
+            setResetPasswordError(t('password_min_length') || 'Password must be at least 6 characters');
+            return;
+        }
+        if (resetPasswordForm.newPassword !== resetPasswordForm.confirm) {
+            setResetPasswordError(t('passwords_do_not_match') || 'Passwords do not match');
+            return;
+        }
+
+        setResetPasswordLoading(true);
+        try {
+            await api.resetUserPassword(resetPasswordForm.userId, resetPasswordForm.newPassword);
+            toast.success(t('password_reset_success') || 'Password reset successfully');
+            setShowResetPasswordModal(false);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : (t('password_reset_failed') || 'Failed to reset password');
+            setResetPasswordError(message);
+        } finally {
+            setResetPasswordLoading(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        try {
+            if (selectedUser) {
+                await updateUser(selectedUser.id, {
+                    name: formData.name,
+                    email: formData.email,
+                    role: formData.role,
+                    status: formData.status,
+                });
+                toast.success(t('user_updated') || 'User updated successfully');
+            } else {
+                if (!formData.password) {
+                    toast.error(t('password_required') || 'Password is required for new users');
+                    setSubmitting(false);
+                    return;
+                }
+                if (!formData.username) {
+                    toast.error(t('username_required') || 'Username is required for login');
+                    setSubmitting(false);
+                    return;
+                }
+                const newUser = {
+                    username: formData.username,
+                    name: formData.name || formData.username,
+                    email: formData.email,
+                    password: formData.password,
+                    role: formData.role,
+                    status: formData.status,
+                    avatar: (formData.name || formData.username).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+                    lastLogin: new Date().toISOString(),
+                    sites: []
+                };
+                await addUser(newUser);
+                toast.success(t('user_created') || 'User created successfully');
+            }
+            setShowAddModal(false);
+            resetForm();
+        } catch (err: unknown) {
+            console.error('Submit error:', err);
+            const message = err instanceof Error ? err.message : (t('operation_failed') || 'Operation failed');
+            toast.error(message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleDelete = (id: string) => {
         setDeleteConfirm({ isOpen: true, id });
     };
 
-    const confirmDelete = () => {
-        if (deleteConfirm.id) deleteUser(deleteConfirm.id);
+    const confirmDelete = async () => {
+        if (deleteConfirm.id) {
+            try {
+                await deleteUser(deleteConfirm.id);
+                toast.success(t('user_deleted') || 'User deleted successfully');
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : (t('delete_failed') || 'Failed to delete user');
+                toast.error(message);
+            }
+        }
     };
 
     const filteredUsers = useMemo(() => {
         return users.filter((user) => {
-            const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                user.email.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = (user.name || user.username).toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
             const matchesRole = roleFilter === 'all' || user.role === roleFilter;
             const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
             return matchesSearch && matchesRole && matchesStatus;
@@ -95,36 +181,40 @@ export function Users() {
 
     const columns = [
         {
-            key: 'name' as keyof UserType,
+            key: 'name' as keyof User,
             header: t('user'),
-            render: (user: UserType) => (
+            render: (user: User) => (
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center font-semibold">
                         {user.avatar || <UserIcon className="w-5 h-5" />}
                     </div>
                     <div>
-                        <p className="font-medium text-slate-900 dark:text-white">{user.name}</p>
-                        <p className="text-sm text-slate-500 dark:text-slate-300">{user.email}</p>
+                        <p className="font-medium text-slate-900 dark:text-white">{user.name || user.username}</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-300">{user.email || ''}</p>
                     </div>
                 </div>
             ),
         },
-        { key: 'role' as keyof UserType, header: t('role'), render: (user: UserType) => <RoleBadge role={user.role} /> },
+        { key: 'role' as keyof User, header: t('role'), render: (user: User) => <RoleBadge role={user.role} /> },
         {
-            key: 'status' as keyof UserType,
+            key: 'status' as keyof User,
             header: t('status'),
-            render: (user: UserType) => <Badge variant={user.status === 'active' ? 'success' : 'neutral'} dot>{t(user.status)}</Badge>,
+            render: (user: User) => <Badge variant={user.status === 'active' ? 'success' : 'neutral'} dot>{t(user.status || 'inactive')}</Badge>,
         },
-        { key: 'sites' as keyof UserType, header: t('sites'), render: (user: UserType) => <span className="text-sm text-slate-600 dark:text-slate-300">{user.sites.length} {t('sites')}</span> },
-        { key: 'lastLogin' as keyof UserType, header: t('last_login'), render: (user: UserType) => <span className="text-sm text-slate-500 dark:text-slate-300">{new Date(user.lastLogin).toLocaleDateString()}</span> },
+        { key: 'sites' as keyof User, header: t('sites'), render: (user: User) => <span className="text-sm text-slate-600 dark:text-slate-300">{(user.sites || []).length} {t('sites')}</span> },
+        { key: 'lastLogin' as keyof User, header: t('last_login'), render: (user: User) => <span className="text-sm text-slate-500 dark:text-slate-300">{user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : '-'}</span> },
         {
             key: 'actions', header: '', align: 'right' as const,
-            render: (user: UserType) => (
+            render: (user: User) => (
                 <div className="flex justify-end gap-1">
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenModal(user); }}>
+                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenModal(user); }} title={t('edit_user')}>
                         <Edit className="w-4 h-4 text-slate-500 dark:text-slate-300" />
                     </button>
-                    <button className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); handleDelete(user.id); }}>
+                    {/* ═══ Reset Password Button ═══ */}
+                    <button className="p-2 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); handleOpenResetPassword(user.id); }} title={t('reset_password')}>
+                        <Key className="w-4 h-4 text-amber-500 hover:text-amber-600 dark:text-amber-400" />
+                    </button>
+                    <button className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onClick={(e) => { e.stopPropagation(); handleDelete(user.id); }} title={t('delete_user')}>
                         <Trash2 className="w-4 h-4 text-red-500 hover:text-red-600 dark:text-red-400" />
                     </button>
                 </div>
@@ -167,20 +257,13 @@ export function Users() {
             }
         >
             <div className="space-y-6">
-                {/* Header */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('users')}</h1>
-                        <p className="text-slate-500 dark:text-slate-400 mt-1">
-                            {t('users_subtitle')}
-                        </p>
+                        <p className="text-slate-500 dark:text-slate-400 mt-1">{t('users_subtitle')}</p>
                     </div>
                     <div className="flex gap-3">
-                        <Button
-                            variant={showFilters ? 'primary' : 'outline'}
-                            icon={<Filter className="w-4 h-4" />}
-                            onClick={() => setShowFilters(!showFilters)}
-                        >
+                        <Button variant={showFilters ? 'primary' : 'outline'} icon={<Filter className="w-4 h-4" />} onClick={() => setShowFilters(!showFilters)}>
                             {t('filter')}
                         </Button>
                         <Button icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>
@@ -189,7 +272,6 @@ export function Users() {
                     </div>
                 </div>
 
-                {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-slate-900 dark:text-white">{users.length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('total_users')}</p></div></CardBody></Card>
                     <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">{users.filter(u => u.status === 'active').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('active')}</p></div></CardBody></Card>
@@ -197,15 +279,11 @@ export function Users() {
                     <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-blue-600 dark:text-blue-500">{users.filter(u => u.role === 'technician').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('technicians')}</p></div></CardBody></Card>
                 </div>
 
-                {/* Filters */}
                 {showFilters && (
                     <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
                         <div className="flex-1 max-w-md">
                             <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('search')}</label>
-                            <SearchInput
-                                placeholder={t('search_users')}
-                                onSearch={setSearchQuery}
-                            />
+                            <SearchInput placeholder={t('search_users')} onSearch={setSearchQuery} />
                         </div>
                         <div className="flex gap-3">
                             <div className="min-w-[140px]">
@@ -255,21 +333,16 @@ export function Users() {
                 </Card>
 
                 <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={selectedUser ? t('edit_user') : t('add_user')} size="md"
-                    footer={<div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowAddModal(false)}>{t('cancel')}</Button><Button onClick={handleSubmit}>{selectedUser ? t('save') : t('add')}</Button></div>}>
+                    footer={<div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowAddModal(false)} disabled={submitting}>{t('cancel')}</Button><Button onClick={handleSubmit} disabled={submitting}>{submitting ? t('saving') : (selectedUser ? t('save') : t('add'))}</Button></div>}>
                     <div className="space-y-4">
-                        <Input
-                            label={t('full_name')}
-                            placeholder="John Doe"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        />
-                        <Input
-                            label={t('primary_email')}
-                            type="email"
-                            placeholder="john@company.com"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        />
+                        {!selectedUser && (
+                            <Input label={t('username') || 'Username'} placeholder="johndoe" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} required />
+                        )}
+                        <Input label={t('full_name')} placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                        <Input label={t('primary_email')} type="email" placeholder="john@company.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                        {!selectedUser && (
+                            <Input label={t('password')} type="password" placeholder="••••••••" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required />
+                        )}
                         <Select
                             label={t('role')}
                             options={[
@@ -293,6 +366,44 @@ export function Users() {
                     </div>
                 </Modal>
 
+                {/* ═══ Reset Password Modal ═══ */}
+                <Modal
+                    isOpen={showResetPasswordModal}
+                    onClose={() => setShowResetPasswordModal(false)}
+                    title={t('reset_password')}
+                    size="sm"
+                    footer={
+                        <div className="flex justify-end gap-3">
+                            <Button variant="outline" onClick={() => setShowResetPasswordModal(false)}>{t('cancel')}</Button>
+                            <Button onClick={handleResetPassword} loading={resetPasswordLoading}>{t('save')}</Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4">
+                        {resetPasswordError && (
+                            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+                                {resetPasswordError}
+                            </div>
+                        )}
+                        <Input
+                            label={t('new_password')}
+                            type="password"
+                            placeholder="••••••••"
+                            value={resetPasswordForm.newPassword}
+                            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, newPassword: e.target.value })}
+                            autoComplete="new-password"
+                        />
+                        <Input
+                            label={t('confirm_password')}
+                            type="password"
+                            placeholder="••••••••"
+                            value={resetPasswordForm.confirm}
+                            onChange={(e) => setResetPasswordForm({ ...resetPasswordForm, confirm: e.target.value })}
+                            autoComplete="new-password"
+                        />
+                    </div>
+                </Modal>
+
                 <ConfirmModal
                     isOpen={deleteConfirm.isOpen}
                     onClose={() => setDeleteConfirm({ isOpen: false, id: '' })}
@@ -304,13 +415,8 @@ export function Users() {
                     variant="danger"
                 />
 
-                <Modal
-                    isOpen={showRoleModal}
-                    onClose={() => setShowRoleModal(false)}
-                    title={t('roles_permissions')}
-                    size="lg"
-                    footer={<div className="flex justify-end"><Button onClick={() => setShowRoleModal(false)}>{t('close')}</Button></div>}
-                >
+                <Modal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} title={t('roles_permissions')} size="lg"
+                    footer={<div className="flex justify-end"><Button onClick={() => setShowRoleModal(false)}>{t('close')}</Button></div>}>
                     <div className="space-y-4 pr-2">
                         {rolePermissions.map((r) => (
                             <div key={r.role} className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700/50">
@@ -321,9 +427,7 @@ export function Users() {
                                     <div className="flex items-center gap-2 mb-1">
                                         <h4 className="font-semibold text-slate-900 dark:text-white capitalize">{r.role}</h4>
                                     </div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                                        {r.desc}
-                                    </p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{r.desc}</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[13px]">
                                         {r.perms.map(perm => (
                                             <div key={perm} className="flex items-center gap-2 text-slate-600 dark:text-slate-300">

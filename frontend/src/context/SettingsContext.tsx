@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import type { AppSettings, DashboardLayoutConfig, ServicesSettings } from '../types';
 import { api } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 interface SettingsContextType {
   settings: AppSettings;
@@ -17,6 +18,8 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const { token } = useAuth();
+  
   const [settings, setSettings] = useState<AppSettings>({
     organizationName: 'ACME Corporation',
     systemEmail: 'admin@acme.com',
@@ -55,10 +58,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   });
 
-  // Загрузка настроек сервисов при монтировании
+  // Загрузка настроек сервисов при наличии токена
   useEffect(() => {
-    refreshServicesSettings();
-  }, []);
+    if (token) {
+      refreshServicesSettings();
+    }
+  }, [token]);
 
   const refreshServicesSettings = async () => {
     setServicesLoading(true);

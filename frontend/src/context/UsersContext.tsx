@@ -1,34 +1,118 @@
-import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react';
-import { users as initialUsers } from '../data/mockData';
-import type { User } from '../types';
+// frontend/src/context/UsersContext.tsx
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { api, User } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../components/ui/Toast';
+
+interface NewUserInput {
+    username?: string;
+    name?: string;
+    email?: string;
+    password: string;
+    role: string;
+}
+
+interface UserUpdates {
+    name?: string;
+    role?: User['role'];
+    status?: User['status'];
+    email?: string;
+}
 
 interface UsersContextType {
     users: User[];
-    addUser: (user: User) => void;
-    updateUser: (id: string, updates: Partial<User>) => void;
-    deleteUser: (id: string) => void;
+    loading: boolean;
+    refresh: () => Promise<void>;
+    addUser: (user: NewUserInput) => Promise<void>;
+    updateUser: (id: string, updates: UserUpdates) => Promise<void>;
+    deleteUser: (id: string) => Promise<void>;
 }
 
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
+function getErrorMessage(err: unknown, fallback: string): string {
+    return err instanceof Error ? err.message : fallback;
+}
+
 export function UsersProvider({ children }: { children: ReactNode }) {
-    const [users, setUsers] = useState<User[]>(initialUsers);
+    const { token } = useAuth();
+    const toast = useToast();
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    const addUser = useCallback((newUser: User) => {
-        setUsers(prev => [...prev, newUser]);
-    }, []);
+    const { user } = useAuth();
+    
+    const loadData = useCallback(async () => {
+        if (!token || !user || user.role !== 'admin') return;
+        setLoading(true);
+        try {
+            const data = await api.getUsers();
+            const mappedUsers = data.map(u => {
+                const raw = u as User & { last_login?: string };
+                return {
+                    ...raw,
+                    name: raw.name || raw.username,
+                    lastLogin: raw.last_login || raw.lastLogin,
+                };
+            });
+            setUsers(mappedUsers);
+        } catch (err) {
+            console.error("Failed to load users", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [token, user]);
 
-    const updateUser = useCallback((id: string, updates: Partial<User>) => {
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
-    }, []);
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
-    const deleteUser = useCallback((id: string) => {
-        setUsers(prev => prev.filter(u => u.id !== id));
-    }, []);
+    const addUser = useCallback(async (newUser: NewUserInput) => {
+        try {
+            await api.createUser({
+                username: newUser.username || newUser.name || newUser.email || '',
+                password: newUser.password,
+                role: newUser.role,
+                email: newUser.email,
+            });
+            await loadData();
+            toast.success("Пользователь создан");
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, "Ошибка создания"));
+            throw err;
+        }
+    }, [loadData, toast]);
+
+    const updateUser = useCallback(async (id: string, updates: UserUpdates) => {
+        try {
+            await api.updateUser(id, {
+                name: updates.name,
+                role: updates.role,
+                status: updates.status,
+                email: updates.email,
+            });
+            await loadData();
+            toast.success("Данные обновлены");
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, "Ошибка обновления"));
+            throw err;
+        }
+    }, [loadData, toast]);
+
+    const deleteUser = useCallback(async (id: string) => {
+        try {
+            await api.deleteUser(id);
+            await loadData();
+            toast.success("Пользователь удален");
+        } catch (err: unknown) {
+            toast.error(getErrorMessage(err, "Ошибка удаления"));
+            throw err;
+        }
+    }, [loadData, toast]);
 
     const value = useMemo<UsersContextType>(() => ({
-        users, addUser, updateUser, deleteUser,
-    }), [users, addUser, updateUser, deleteUser]);
+        users, loading, refresh: loadData, addUser, updateUser, deleteUser,
+    }), [users, loading, loadData, addUser, updateUser, deleteUser]);
 
     return (
         <UsersContext.Provider value={value}>
@@ -37,6 +121,7 @@ export function UsersProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useUsers() {
     const context = useContext(UsersContext);
     if (context === undefined) {

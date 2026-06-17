@@ -5,6 +5,7 @@ import (
 	"gb-telemetry-collector/internal/api"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/config"
+	"gb-telemetry-collector/internal/cron"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/logging"
 	"gb-telemetry-collector/internal/logserver"
@@ -12,6 +13,7 @@ import (
 	"gb-telemetry-collector/internal/protocols"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
+	"gb-telemetry-collector/internal/telegram"
 	"log/slog"
 	"net/http"
 	"os"
@@ -46,9 +48,10 @@ func (w *DBWriter) Submit(job func()) {
 }
 
 type stateManagerWrapper struct {
-	inner    state.DeviceStateManager
-	dbWriter *DBWriter
-	logger   *slog.Logger
+	inner       state.DeviceStateManager
+	dbWriter    *DBWriter
+	logger      *slog.Logger
+	broadcastFn func(*models.Alarm)
 }
 
 func (w *stateManagerWrapper) Get(deviceID string) (*models.Device, bool) {
@@ -100,6 +103,9 @@ func (w *stateManagerWrapper) AddAlarm(deviceID string, alarm *models.Alarm) {
 	w.dbWriter.Submit(func() {
 		w.dbWriter.db.SaveAlarm(alarm)
 	})
+	if w.broadcastFn != nil {
+		w.broadcastFn(alarm)
+	}
 }
 
 func (w *stateManagerWrapper) GetAll() map[string]*models.Device {
@@ -150,7 +156,7 @@ func main() {
 	_, err = database.GetUserByUsername("admin@example.com")
 	if err != nil {
 		hashed, _ := auth.HashPassword("admin123")
-		database.CreateUser("admin@example.com", hashed, "admin", nil)
+		database.CreateUser("admin@example.com", hashed, "admin", "admin@example.com", nil)
 		logger.Info("Created admin user: admin@example.com / admin123")
 	}
 
@@ -250,6 +256,25 @@ func main() {
 
 	// --- API-сервер ---
 	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler)
+	stateWrapper.broadcastFn = apiServer.BroadcastAlarm
+
+	// --- Telegram бот ---
+	var telegramBot *telegram.Bot
+	if cfg.Telegram.Enabled && cfg.Telegram.Token != "" {
+		var err error
+		telegramBot, err = telegram.NewBot(telegram.Config{
+			Token:  cfg.Telegram.Token,
+			Logger: logger,
+		}, database, stateWrapper)
+		if err != nil {
+			logger.Error("Failed to create Telegram bot", "error", err)
+		} else {
+			apiServer.SetTelegramBot(telegramBot)
+			go telegramBot.Start(ctx)
+			logger.Info("Telegram bot started")
+		}
+	}
+
 	go func() {
 		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
 			logger.Error("API server failed", "error", err)
@@ -257,6 +282,28 @@ func main() {
 		}
 	}()
 	defer apiServer.Stop()
+
+	if telegramBot != nil {
+		defer telegramBot.Stop()
+	}
+
+	// --- Maintenance Cron Job (каждые 15 минут) ---
+	maintenanceCron := cron.NewMaintenanceCron(database, logger)
+	maintenanceCronTicker := time.NewTicker(15 * time.Minute)
+	defer maintenanceCronTicker.Stop()
+	go func() {
+		// Запуск сразу при старте
+		maintenanceCron.Run(ctx)
+		for {
+			select {
+			case <-maintenanceCronTicker.C:
+				maintenanceCron.Run(ctx)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	logger.Info("Maintenance cron job started (every 15 minutes)")
 
 	// --- Reaper ---
 	reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
