@@ -212,7 +212,7 @@ export function Devices() {
                         <p className="font-medium text-slate-900 dark:text-white flex items-center gap-2">
                             {device.name}
                             {device.p2p_brand && (
-                                <Cloud className="w-4 h-4 text-blue-500" title="P2P Device" />
+                                <Cloud className="w-4 h-4 text-blue-500" />
                             )}
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400 uppercase">

@@ -1,0 +1,30 @@
+# Системные и скрытые
+.git/
+.idea/
+.vscode/
+.DS_Store
+
+# Зависимости и сборка
+node_modules/
+vendor/
+dist/
+build/
+out/
+bin/
+obj/
+
+# Логи и сетевые данные (CCTV/Network специфика)
+*.log
+*.pcap
+*.pcapng
+captures/
+logs/
+tmp/
+temp/
+
+# Секреты
+.env
+.env.local
+*.pem
+*.key
+secrets.json

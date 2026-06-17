@@ -10,7 +10,7 @@ heartbeat_timeout: "65s"
 images_dir: "/var/lib/gb-telemetry/images"
 
 
-pp2p_gateway_url: "http://localhost:8082"
+p2p_gateway_url: "http://localhost:8082"
 p2p_api_key: "your-secret-api-key-12345"
 
 

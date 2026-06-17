@@ -4,7 +4,7 @@ import { api, setAuthToken } from '../services/api';
 export interface AuthUser {
     id: string;
     username: string;
-    role: 'admin' | 'support' | 'owner';
+    role: 'admin' | 'support' | 'owner' | 'manager' | 'technician' | 'viewer';
     owner_id?: string | null;
     name?: string;
     email?: string;

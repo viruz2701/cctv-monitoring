@@ -1,0 +1,128 @@
+.
+|-- backend
+|   |-- analytics
+|   |   |-- models
+|   |   |-- config.yaml
+|   |   |-- etl.py
+|   |   |-- predict.py
+|   |   |-- requirements.txt
+|   |   `-- train.py
+|   |-- cmd
+|   |   `-- server
+|   |-- internal
+|   |   |-- api
+|   |   |-- auth
+|   |   |-- config
+|   |   |-- db
+|   |   |-- handlers
+|   |   |-- logging
+|   |   |-- logserver
+|   |   |-- models
+|   |   |-- protocols
+|   |   |-- sip
+|   |   |-- state
+|   |   `-- worker
+|   |-- opt
+|   |-- pkg
+|   |   `-- models
+|   |-- README.md
+|   |-- config.yaml
+|   |-- gb-server
+|   |-- go.mod
+|   |-- launch.json
+|   `-- main.go
+|-- frontend
+|   |-- public
+|   |   `-- vite.svg
+|   |-- src
+|   |   |-- assets
+|   |   |-- components
+|   |   |-- context
+|   |   |-- data
+|   |   |-- hooks
+|   |   |-- pages
+|   |   |-- services
+|   |   |-- types
+|   |   |-- utils
+|   |   |-- App.tsx
+|   |   |-- i18n.ts
+|   |   |-- index.css
+|   |   `-- main.tsx
+|   |-- README.md
+|   |-- eslint.config.js
+|   |-- index.html
+|   |-- package.json
+|   |-- tailwind.config.js
+|   |-- tsconfig.app.json
+|   |-- tsconfig.json
+|   |-- tsconfig.node.json
+|   `-- vite.config.ts
+|-- neolink
+|   |-- crates
+|   |   |-- core
+|   |   |-- decoder
+|   |   |-- mailnoti
+|   |   `-- pushnoti
+|   |-- dissector
+|   |   |-- README.md
+|   |   |-- baichuan.lua
+|   |   |-- mediapacket.md
+|   |   |-- messages.md
+|   |   |-- protocol.md
+|   |   `-- udp.md
+|   |-- docker
+|   |   `-- entrypoint.sh
+|   |-- docs
+|   |   |-- screenshots
+|   |   |-- Setting\ Up\ Neolink\ For\ Use\ With\ Blue\ Iris.md
+|   |   |-- unix_service.md
+|   |   `-- unix_setup.md
+|   |-- kubernetes
+|   |   |-- README.md
+|   |   `-- manifest.yaml
+|   |-- src
+|   |   |-- battery
+|   |   |-- common
+|   |   |-- image
+|   |   |-- mqtt
+|   |   |-- pir
+|   |   |-- ptz
+|   |   |-- reboot
+|   |   |-- rtsp
+|   |   |-- services
+|   |   |-- statusled
+|   |   |-- talk
+|   |   |-- users
+|   |   |-- cmdline.rs
+|   |   |-- config.rs
+|   |   |-- errors.rs
+|   |   |-- main.rs
+|   |   `-- utils.rs
+|   |-- Cargo.toml
+|   |-- Dockerfile
+|   |-- LICENSE
+|   |-- README.md
+|   |-- build.rs
+|   |-- deny.toml
+|   |-- rustfmt.toml
+|   `-- sample_config.toml
+|-- p2p-gateway
+|   |-- bin
+|   |   |-- dh-p2p
+|   |   `-- neolink
+|   |-- cmd
+|   |   `-- p2p-gateway
+|   |-- internal
+|   |   `-- models
+|   |-- pkg
+|   |   |-- adapters
+|   |   |-- hikp2p
+|   |   `-- jftech
+|   |-- web
+|   |-- config.yaml
+|   |-- go.mod
+|   `-- p2p-gateway
+|-- ARCHITECTURE.md
+`-- project-structure.txt
+
+70 directories, 56 files

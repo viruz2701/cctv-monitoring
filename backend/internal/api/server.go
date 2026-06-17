@@ -25,6 +25,7 @@ import (
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
+	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
 )
 
@@ -35,6 +36,7 @@ type Server struct {
 	httpServer   *http.Server
 	imagesDir    string
 	config       *config.Config
+	sipHandler   *sip.SIPHandler
 
 	// P2P gateway integration
 	p2pGatewayURL string
@@ -42,7 +44,7 @@ type Server struct {
 	httpClient    *http.Client
 }
 
-func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config) *Server {
+func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler) *Server {
 	r := chi.NewRouter()
 
 	// CORS middleware
@@ -64,6 +66,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		db:            database,
 		imagesDir:     imagesDir,
 		config:        cfg,
+		sipHandler:    sipHandler,
 		p2pGatewayURL: cfg.P2PGatewayURL,
 		p2pAPIKey:     cfg.P2PAPIKey,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},
@@ -101,6 +104,10 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Get("/api/v1/p2p/status/{id}", s.getP2PDeviceStatus)
 		r.Post("/api/v1/p2p/command/{id}", s.sendP2PCommand)
 		r.Get("/api/v1/p2p/snapshot/{id}", s.getP2PSnapshot)
+
+		// GB28181 API endpoints
+		r.Post("/api/v1/gb28181/catalog/{id}", s.requestCatalog)
+		r.Post("/api/v1/gb28181/ptz/{id}", s.sendPTZCommand)
 	})
 
 	s.httpServer = &http.Server{
@@ -108,6 +115,54 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		Handler: r,
 	}
 	return s
+}
+
+func (s *Server) requestCatalog(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	if err := s.sipHandler.RequestCatalog(deviceID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"status":    "catalog_requested",
+		"device_id": deviceID,
+	})
+}
+
+func (s *Server) sendPTZCommand(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+
+	var req struct {
+		Command string `json:"command"`
+		Speed   int    `json:"speed"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Speed == 0 {
+		req.Speed = 128
+	}
+
+	cmd := sip.PTZCommand{
+		Action: req.Command,
+		Speed:  req.Speed,
+	}
+
+	if err := s.sipHandler.SendPTZCommand(deviceID, cmd); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"status":    "command_sent",
+		"device_id": deviceID,
+		"command":   req.Command,
+	})
 }
 
 func (s *Server) Start() error {
@@ -703,7 +758,7 @@ func (s *Server) searchLogs(w http.ResponseWriter, r *http.Request) {
 	timeFrom := r.URL.Query().Get("time_from")
 	timeTo := r.URL.Query().Get("time_to")
 
-	logs, err := s.db.SearchParsedLogs(deviceID, level, keyword, timeFrom, timeTo)
+	logs, err := s.db.SearchLogs(deviceID, level, keyword, timeFrom, timeTo)
 	if err != nil {
 		s.logger.Error("failed to search logs", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

@@ -1,329 +1,327 @@
 package main
 
 import (
-    "context"
-    "gb-telemetry-collector/internal/api"
-    "gb-telemetry-collector/internal/auth"
-    "gb-telemetry-collector/internal/config"
-    "gb-telemetry-collector/internal/db"
-    "gb-telemetry-collector/internal/logging"
-    "gb-telemetry-collector/internal/logserver"
-    "gb-telemetry-collector/internal/models"
-    "gb-telemetry-collector/internal/protocols"
-    "gb-telemetry-collector/internal/sip"
-    "gb-telemetry-collector/internal/state"
-    "log/slog"
-    "net/http"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"context"
+	"gb-telemetry-collector/internal/api"
+	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/config"
+	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/logging"
+	"gb-telemetry-collector/internal/logserver"
+	"gb-telemetry-collector/internal/models"
+	"gb-telemetry-collector/internal/protocols"
+	"gb-telemetry-collector/internal/sip"
+	"gb-telemetry-collector/internal/state"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 type DBWriter struct {
-    db *db.DB
-    ch chan func()
+	db *db.DB
+	ch chan func()
 }
 
 func NewDBWriter(database *db.DB, bufferSize int) *DBWriter {
-    w := &DBWriter{db: database, ch: make(chan func(), bufferSize)}
-    go w.start()
-    return w
+	w := &DBWriter{db: database, ch: make(chan func(), bufferSize)}
+	go w.start()
+	return w
 }
 
 func (w *DBWriter) start() {
-    for job := range w.ch {
-        job()
-    }
+	for job := range w.ch {
+		job()
+	}
 }
 
 func (w *DBWriter) Submit(job func()) {
-    select {
-    case w.ch <- job:
-    default:
-        // логгер будет доступен позже, но сброс не критичен
-    }
+	select {
+	case w.ch <- job:
+	default:
+		// логгер будет доступен позже, но сброс не критичен
+	}
 }
 
 type stateManagerWrapper struct {
-    inner    state.DeviceStateManager
-    dbWriter *DBWriter
-    logger   *slog.Logger
+	inner    state.DeviceStateManager
+	dbWriter *DBWriter
+	logger   *slog.Logger
 }
 
 func (w *stateManagerWrapper) Get(deviceID string) (*models.Device, bool) {
-    return w.inner.Get(deviceID)
+	return w.inner.Get(deviceID)
 }
 
 func (w *stateManagerWrapper) Set(device *models.Device) {
-    w.inner.Set(device)
-    w.dbWriter.Submit(func() {
-        if err := w.dbWriter.db.SaveDevice(device); err != nil {
-            w.logger.Error("Failed to save device", "device_id", device.DeviceID, "error", err)
-        }
-    })
+	w.inner.Set(device)
+	w.dbWriter.Submit(func() {
+		if err := w.dbWriter.db.SaveDevice(device); err != nil {
+			w.logger.Error("Failed to save device", "device_id", device.DeviceID, "error", err)
+		}
+	})
 }
 
 func (w *stateManagerWrapper) Delete(deviceID string) {
-    w.inner.Delete(deviceID)
+	w.inner.Delete(deviceID)
 }
 
 func (w *stateManagerWrapper) UpdateLastSeen(deviceID string) {
-    w.inner.UpdateLastSeen(deviceID)
-    if dev, ok := w.inner.Get(deviceID); ok {
-        w.dbWriter.Submit(func() {
-            w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
-        })
-    }
+	w.inner.UpdateLastSeen(deviceID)
+	if dev, ok := w.inner.Get(deviceID); ok {
+		w.dbWriter.Submit(func() {
+			w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
+		})
+	}
 }
 
 func (w *stateManagerWrapper) SetOnline(deviceID string) {
-    w.inner.SetOnline(deviceID)
-    if dev, ok := w.inner.Get(deviceID); ok {
-        w.dbWriter.Submit(func() {
-            w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
-        })
-    }
+	w.inner.SetOnline(deviceID)
+	if dev, ok := w.inner.Get(deviceID); ok {
+		w.dbWriter.Submit(func() {
+			w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
+		})
+	}
 }
 
 func (w *stateManagerWrapper) SetOffline(deviceID string) {
-    w.inner.SetOffline(deviceID)
-    if dev, ok := w.inner.Get(deviceID); ok {
-        w.dbWriter.Submit(func() {
-            w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
-        })
-    }
+	w.inner.SetOffline(deviceID)
+	if dev, ok := w.inner.Get(deviceID); ok {
+		w.dbWriter.Submit(func() {
+			w.dbWriter.db.SaveTelemetry(dev.DeviceID, dev.Status, dev.LastSeen, dev.HeartbeatInterval)
+		})
+	}
 }
 
 func (w *stateManagerWrapper) AddAlarm(deviceID string, alarm *models.Alarm) {
-    w.inner.AddAlarm(deviceID, alarm)
-    w.dbWriter.Submit(func() {
-        w.dbWriter.db.SaveAlarm(alarm)
-    })
+	w.inner.AddAlarm(deviceID, alarm)
+	w.dbWriter.Submit(func() {
+		w.dbWriter.db.SaveAlarm(alarm)
+	})
 }
 
 func (w *stateManagerWrapper) GetAll() map[string]*models.Device {
-    return w.inner.GetAll()
+	return w.inner.GetAll()
 }
 
 func getEnv(key, def string) string {
-    if v := os.Getenv(key); v != "" {
-        return v
-    }
-    return def
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 func main() {
-    cfg := config.Load()
+	cfg := config.Load()
 
-    // Инициализация логгера с ротацией
-    logLevel := slog.LevelInfo
-    if cfg.Debug {
-        logLevel = slog.LevelDebug
-    }
-    logger := logging.NewLogger(logging.Config{
-        FilePath:   cfg.LogFile,
-        MaxSizeMB:  cfg.LogMaxSizeMB,
-        MaxBackups: cfg.LogMaxBackups,
-        MaxAgeDays: cfg.LogMaxAgeDays,
-        Compress:   cfg.LogCompress,
-        Level:      logLevel,
-        AddSource:  cfg.Debug,
-    })
+	// Инициализация логгера с ротацией
+	logLevel := slog.LevelInfo
+	if cfg.Debug {
+		logLevel = slog.LevelDebug
+	}
+	logger := logging.NewLogger(logging.Config{
+		FilePath:   cfg.LogFile,
+		MaxSizeMB:  cfg.LogMaxSizeMB,
+		MaxBackups: cfg.LogMaxBackups,
+		MaxAgeDays: cfg.LogMaxAgeDays,
+		Compress:   cfg.LogCompress,
+		Level:      logLevel,
+		AddSource:  cfg.Debug,
+	})
 
-    dbCfg := db.Config{
-        Host:     getEnv("DB_HOST", "localhost"),
-        Port:     5432,
-        User:     getEnv("DB_USER", "gb_user"),
-        Password: getEnv("DB_PASSWORD", "gb_password"),
-        DBName:   getEnv("DB_NAME", "gb_telemetry"),
-        SSLMode:  "disable",
-    }
-    database, err := db.New(dbCfg, logger)
-    if err != nil {
-        logger.Error("Failed to connect to database", "error", err)
-        os.Exit(1)
-    }
-    defer database.Close()
+	dbCfg := db.Config{
+		Host:     getEnv("DB_HOST", "localhost"),
+		Port:     5432,
+		User:     getEnv("DB_USER", "gb_user"),
+		Password: getEnv("DB_PASSWORD", "gb_password"),
+		DBName:   getEnv("DB_NAME", "gb_telemetry"),
+		SSLMode:  "disable",
+	}
+	database, err := db.New(dbCfg, logger)
+	if err != nil {
+		logger.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
 
-    // Создание пользователя admin@example.com
-    _, err = database.GetUserByUsername("admin@example.com")
-    if err != nil {
-        hashed, _ := auth.HashPassword("admin123")
-        database.CreateUser("admin@example.com", hashed, "admin", nil)
-        logger.Info("Created admin user: admin@example.com / admin123")
-    }
+	// Создание пользователя admin@example.com
+	_, err = database.GetUserByUsername("admin@example.com")
+	if err != nil {
+		hashed, _ := auth.HashPassword("admin123")
+		database.CreateUser("admin@example.com", hashed, "admin", nil)
+		logger.Info("Created admin user: admin@example.com / admin123")
+	}
 
-    dbWriter := NewDBWriter(database, 1000)
+	dbWriter := NewDBWriter(database, 1000)
 
-    stateManager := state.NewInMemoryStateManager()
-    stateWrapper := &stateManagerWrapper{
-        inner:    stateManager,
-        dbWriter: dbWriter,
-        logger:   logger,
-    }
+	stateManager := state.NewInMemoryStateManager()
+	stateWrapper := &stateManagerWrapper{
+		inner:    stateManager,
+		dbWriter: dbWriter,
+		logger:   logger,
+	}
 
-   // --- Лог-сервер ---
-logCfg := &logserver.Config{
-    SyslogEnabled: true,
-    SyslogPort:    cfg.LogServerPort,
-    SyslogProto:   "udp",
-    HTTPEnabled:   false, // можно вынести в конфиг позже
-    // остальные поля оставить как в DefaultConfig или тоже из конфига
-}
-logServer := logserver.NewLogServer(logCfg, logger, func(log *models.ParsedLog) error {
-    dbWriter.Submit(func() {
-        if err := database.SaveParsedLog(log); err != nil {
-            logger.Error("Failed to save parsed log", "error", err)
-        }
-    })
-    return nil
-})
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+	// --- Лог-сервер ---
+	logCfg := &logserver.Config{
+		SyslogEnabled: true,
+		SyslogUDPPort: cfg.LogServerPort,
+		HTTPEnabled:   false,
+	}
+	logServer := logserver.NewLogServer(logCfg, logger, stateWrapper, func(log *models.ParsedLog) error {
+		dbWriter.Submit(func() {
+			if err := database.SaveParsedLog(log); err != nil {
+				logger.Error("Failed to save parsed log", "error", err)
+			}
+		})
+		return nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-    if err := logServer.Start(ctx); err != nil {
-        logger.Error("Failed to start log server", "error", err)
-        os.Exit(1)
-    }
-    defer logServer.Stop()
+	if err := logServer.Start(ctx); err != nil {
+		logger.Error("Failed to start log server", "error", err)
+		os.Exit(1)
+	}
+	defer logServer.Stop()
 
-    // --- SIP-сервер ---
-    sipHandler := sip.NewSIPHandler(stateWrapper, logger, cfg.SIPHost, cfg.SIPPort)
-    if err := sipHandler.Start(ctx); err != nil {
-        logger.Error("Failed to start SIP server", "error", err)
-        os.Exit(1)
-    }
-    defer sipHandler.Stop(ctx)
+	// --- SIP-сервер ---
+	sipHandler := sip.NewSIPHandler(stateWrapper, logger, cfg.GB28181)
+	if err := sipHandler.Start(ctx); err != nil {
+		logger.Error("Failed to start SIP server", "error", err)
+		os.Exit(1)
+	}
+	defer sipHandler.Stop()
 
-    // --- Запуск дополнительных протоколов ---
-    protocolManager := protocols.NewManager(logger)
+	// --- Запуск дополнительных протоколов ---
+	protocolManager := protocols.NewManager(logger)
 
-    if cfg.Dahua.Enabled {
-        dahuaHandler := protocols.NewDahuaHandler(cfg.Dahua.Ports, stateWrapper, logger)
-        protocolManager.Register(dahuaHandler)
-    }
+	if cfg.Dahua.Enabled {
+		dahuaHandler := protocols.NewDahuaHandler(cfg.Dahua.Ports, stateWrapper, logger)
+		protocolManager.Register(dahuaHandler)
+	}
 
-    if cfg.Hisilicon.Enabled {
-        hisiliconHandler := protocols.NewHisiliconHandler(cfg.Hisilicon.Port, stateWrapper, logger)
-        protocolManager.Register(hisiliconHandler)
-    }
+	if cfg.Hisilicon.Enabled {
+		hisiliconHandler := protocols.NewHisiliconHandler(cfg.Hisilicon.Port, stateWrapper, logger)
+		protocolManager.Register(hisiliconHandler)
+	}
 
-    if cfg.TVT.Enabled {
-        tvtHandler := protocols.NewTVTHandler(cfg.TVT.Port, stateWrapper, logger)
-        protocolManager.Register(tvtHandler)
-    }
+	if cfg.TVT.Enabled {
+		tvtHandler := protocols.NewTVTHandler(cfg.TVT.Port, stateWrapper, logger)
+		protocolManager.Register(tvtHandler)
+	}
 
-    if cfg.FTP.Enabled {
-        ftpHandler := protocols.NewFTPHandler(cfg.FTP.Port, cfg.FTP.RootPath, cfg.FTP.User, cfg.FTP.Password, stateWrapper, logger)
-        protocolManager.Register(ftpHandler)
-    }
+	if cfg.FTP.Enabled {
+		ftpHandler := protocols.NewFTPHandler(cfg.FTP.Port, cfg.FTP.RootPath, cfg.FTP.User, cfg.FTP.Password, stateWrapper, logger)
+		protocolManager.Register(ftpHandler)
+	}
 
-    if cfg.Hikvision.Enabled && len(cfg.Hikvision.Cameras) > 0 {
-        // Преобразуем карту в слайс структур HikCameraConfig
-        var hikCameras []protocols.HikCameraConfig
-        for name, cam := range cfg.Hikvision.Cameras {
-            hikCameras = append(hikCameras, protocols.HikCameraConfig{
-                Name:     name,
-                Address:  cam.Address,
-                HTTPS:    cam.HTTPS,
-                Username: cam.Username,
-                Password: cam.Password,
-                RawTCP:   cam.RawTCP,
-            })
-        }
-        hikHandler := protocols.NewHikvisionHandler(hikCameras, stateWrapper, logger)
-        protocolManager.Register(hikHandler)
-        logger.Info("Hikvision handler registered", "cameras", len(hikCameras))
-    }
+	if cfg.Hikvision.Enabled && len(cfg.Hikvision.Cameras) > 0 {
+		// Преобразуем карту в слайс структур HikCameraConfig
+		var hikCameras []protocols.HikCameraConfig
+		for name, cam := range cfg.Hikvision.Cameras {
+			hikCameras = append(hikCameras, protocols.HikCameraConfig{
+				Name:     name,
+				Address:  cam.Address,
+				HTTPS:    cam.HTTPS,
+				Username: cam.Username,
+				Password: cam.Password,
+				RawTCP:   cam.RawTCP,
+			})
+		}
+		hikHandler := protocols.NewHikvisionHandler(hikCameras, stateWrapper, logger)
+		protocolManager.Register(hikHandler)
+		logger.Info("Hikvision handler registered", "cameras", len(hikCameras))
+	}
 
-    // SNMP
-    if cfg.SNMP.Enabled {
-        snmpHandler := protocols.NewSNMPHandler(cfg.SNMP, stateWrapper, logger)
-        protocolManager.Register(snmpHandler)
-        logger.Info("SNMP handler registered", "port", cfg.SNMP.Port, "version", cfg.SNMP.Version)
-    }
+	// SNMP
+	if cfg.SNMP.Enabled {
+		snmpHandler := protocols.NewSNMPHandler(cfg.SNMP, stateWrapper, logger)
+		protocolManager.Register(snmpHandler)
+		logger.Info("SNMP handler registered", "port", cfg.SNMP.Port, "version", cfg.SNMP.Version)
+	}
 
-    if err := protocolManager.StartAll(ctx); err != nil {
-        logger.Error("Failed to start additional protocols", "error", err)
-        os.Exit(1)
-    }
-    defer protocolManager.StopAll()
+	if err := protocolManager.StartAll(ctx); err != nil {
+		logger.Error("Failed to start additional protocols", "error", err)
+		os.Exit(1)
+	}
+	defer protocolManager.StopAll()
 
-    // --- API-сервер ---
-    apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg)
-    go func() {
-        if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
-            logger.Error("API server failed", "error", err)
-            cancel()
-        }
-    }()
-    defer apiServer.Stop()
+	// --- API-сервер ---
+	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler)
+	go func() {
+		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
+			logger.Error("API server failed", "error", err)
+			cancel()
+		}
+	}()
+	defer apiServer.Stop()
 
-    // --- Reaper ---
-    reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
-    reaper.Start()
-    defer reaper.Stop()
+	// --- Reaper ---
+	reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
+	reaper.Start()
+	defer reaper.Stop()
 
-    sigChan := make(chan os.Signal, 1)
-    signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-    <-sigChan
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
 
-    logger.Info("Shutting down...")
-    cancel()
-    shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer shutdownCancel()
+	logger.Info("Shutting down...")
+	cancel()
+	_, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
-    sipHandler.Stop(shutdownCtx)
-    apiServer.Stop()
-    reaper.Stop()
-    close(dbWriter.ch)
+	sipHandler.Stop()
+	apiServer.Stop()
+	reaper.Stop()
+	close(dbWriter.ch)
 }
 
 type Reaper struct {
-    stateManager state.DeviceStateManager
-    timeout      time.Duration
-    logger       *slog.Logger
-    ticker       *time.Ticker
-    stopCh       chan struct{}
+	stateManager state.DeviceStateManager
+	timeout      time.Duration
+	logger       *slog.Logger
+	ticker       *time.Ticker
+	stopCh       chan struct{}
 }
 
 func NewReaper(stateMgr state.DeviceStateManager, timeout time.Duration, logger *slog.Logger) *Reaper {
-    return &Reaper{
-        stateManager: stateMgr,
-        timeout:      timeout,
-        logger:       logger,
-        stopCh:       make(chan struct{}),
-    }
+	return &Reaper{
+		stateManager: stateMgr,
+		timeout:      timeout,
+		logger:       logger,
+		stopCh:       make(chan struct{}),
+	}
 }
 
 func (r *Reaper) Start() {
-    r.ticker = time.NewTicker(15 * time.Second)
-    go func() {
-        for {
-            select {
-            case <-r.ticker.C:
-                r.check()
-            case <-r.stopCh:
-                r.ticker.Stop()
-                return
-            }
-        }
-    }()
+	r.ticker = time.NewTicker(15 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-r.ticker.C:
+				r.check()
+			case <-r.stopCh:
+				r.ticker.Stop()
+				return
+			}
+		}
+	}()
 }
 
 func (r *Reaper) check() {
-    now := time.Now()
-    for _, dev := range r.stateManager.GetAll() {
-        if dev.Status == models.StatusOnline {
-            if now.Sub(dev.LastSeen) > r.timeout {
-                r.logger.Info("Device timed out, marking offline", "device_id", dev.DeviceID)
-                r.stateManager.SetOffline(dev.DeviceID)
-            }
-        }
-    }
+	now := time.Now()
+	for _, dev := range r.stateManager.GetAll() {
+		if dev.Status == models.StatusOnline {
+			if now.Sub(dev.LastSeen) > r.timeout {
+				r.logger.Info("Device timed out, marking offline", "device_id", dev.DeviceID)
+				r.stateManager.SetOffline(dev.DeviceID)
+			}
+		}
+	}
 }
 
 func (r *Reaper) Stop() {
-    close(r.stopCh)
+	close(r.stopCh)
 }

@@ -31,9 +31,9 @@ type Config struct {
 	P2PAPIKey     string `mapstructure:"p2p_api_key"`
 
 	// Новые настройки для HTTP-приёма событий
-	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`  // включить XML-эндпоинт
-	VigiEnabled     bool `mapstructure:"vigi_enabled"`      // включить Vigi JSON-эндпоинт
-	SaveEventImages bool `mapstructure:"save_event_images"` // сохранять изображения из событий
+	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`
+	VigiEnabled     bool `mapstructure:"vigi_enabled"`
+	SaveEventImages bool `mapstructure:"save_event_images"`
 
 	// Протоколы
 	Dahua     DahuaConfig
@@ -42,6 +42,26 @@ type Config struct {
 	FTP       FTPConfig
 	Hikvision HikvisionConfig
 	SNMP      SNMPConfig
+	GB28181   GB28181Config // ДОБАВЛЕНО: GB28181 конфигурация
+}
+
+// GB28181Config — настройки GB/T 28181 сервера
+type GB28181Config struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	Host              string `mapstructure:"host"`
+	Port              int    `mapstructure:"port"`
+	ServerID          string `mapstructure:"server_id"`
+	ServerIP          string `mapstructure:"server_ip"`
+	Realm             string `mapstructure:"realm"`
+	AuthEnabled       bool   `mapstructure:"auth_enabled"`
+	AuthUser          string `mapstructure:"auth_user"`
+	AuthPassword      string `mapstructure:"auth_password"`
+	AutoCatalog       bool   `mapstructure:"auto_catalog"`
+	AutoDeviceInfo    bool   `mapstructure:"auto_device_info"`
+	KeepaliveInterval int    `mapstructure:"keepalive_interval"`
+	KeepaliveTimeout  int    `mapstructure:"keepalive_timeout"`
+	MaxSubChannels    int    `mapstructure:"max_sub_channels"`
+	LogSIPMessages    bool   `mapstructure:"log_sip_messages"`
 }
 
 type DahuaConfig struct {
@@ -112,7 +132,6 @@ func Load() *Config {
 	viper.SetDefault("reaper_interval", "15s")
 	viper.SetDefault("heartbeat_timeout", "65s")
 	viper.SetDefault("images_dir", "/var/lib/gb-telemetry/images")
-
 	viper.SetDefault("log_file", "/var/log/gb-telemetry/collector.log")
 	viper.SetDefault("log_max_size_mb", 50)
 	viper.SetDefault("log_max_backups", 7)
@@ -121,40 +140,44 @@ func Load() *Config {
 	viper.SetDefault("log_server_port", 515)
 
 	// Новые настройки
-	viper.SetDefault("http_xml_enabled", true)  // по умолчанию включено
-	viper.SetDefault("vigi_enabled", true)      // по умолчанию включено
-	viper.SetDefault("save_event_images", true) // сохранять изображения
+	viper.SetDefault("http_xml_enabled", true)
+	viper.SetDefault("vigi_enabled", true)
+	viper.SetDefault("save_event_images", true)
 
 	viper.SetDefault("dahua.enabled", true)
 	viper.SetDefault("dahua.ports", []int{37777, 37778})
-
 	viper.SetDefault("hisilicon.enabled", true)
 	viper.SetDefault("hisilicon.port", 15002)
-
 	viper.SetDefault("tvt.enabled", true)
 	viper.SetDefault("tvt.port", 15003)
-
 	viper.SetDefault("ftp.enabled", false)
 	viper.SetDefault("ftp.port", 2121)
 	viper.SetDefault("ftp.rootPath", "./ftp")
 	viper.SetDefault("ftp.user", "alarm")
 	viper.SetDefault("ftp.password", "alarm_pass")
 	viper.SetDefault("ftp.allowFiles", true)
-
 	viper.SetDefault("hikvision.enabled", false)
-
 	viper.SetDefault("snmp.enabled", false)
 	viper.SetDefault("snmp.port", 162)
 	viper.SetDefault("snmp.community", "public")
 	viper.SetDefault("snmp.version", "v2c")
-	viper.SetDefault("snmp.user", "")
-	viper.SetDefault("snmp.authProtocol", "SHA")
-	viper.SetDefault("snmp.authPassword", "")
-	viper.SetDefault("snmp.privProtocol", "AES")
-	viper.SetDefault("snmp.privPassword", "")
-	viper.SetDefault("snmp.engineID", "")
-	viper.SetDefault("snmp.contextEngineID", "")
-	viper.SetDefault("snmp.contextName", "")
+
+	// GB28181 defaults
+	viper.SetDefault("gb28181.enabled", true)
+	viper.SetDefault("gb28181.host", "0.0.0.0")
+	viper.SetDefault("gb28181.port", 5060)
+	viper.SetDefault("gb28181.server_id", "34020000002000000001")
+	viper.SetDefault("gb28181.server_ip", "")
+	viper.SetDefault("gb28181.realm", "3402000000")
+	viper.SetDefault("gb28181.auth_enabled", false)
+	viper.SetDefault("gb28181.auth_user", "admin")
+	viper.SetDefault("gb28181.auth_password", "")
+	viper.SetDefault("gb28181.auto_catalog", true)
+	viper.SetDefault("gb28181.auto_device_info", true)
+	viper.SetDefault("gb28181.keepalive_interval", 60)
+	viper.SetDefault("gb28181.keepalive_timeout", 180)
+	viper.SetDefault("gb28181.max_sub_channels", 64)
+	viper.SetDefault("gb28181.log_sip_messages", false)
 
 	bindEnv("debug", "GB_DEBUG")
 	bindEnv("sip_port", "GB_SIP_PORT")
@@ -164,18 +187,15 @@ func Load() *Config {
 	bindEnv("reaper_interval", "GB_REAPER_INTERVAL")
 	bindEnv("heartbeat_timeout", "GB_HEARTBEAT_TIMEOUT")
 	bindEnv("images_dir", "GB_IMAGES_DIR")
-
 	bindEnv("log_file", "GB_LOG_FILE")
 	bindEnv("log_max_size_mb", "GB_LOG_MAX_SIZE_MB")
 	bindEnv("log_max_backups", "GB_LOG_MAX_BACKUPS")
 	bindEnv("log_max_age_days", "GB_LOG_MAX_AGE_DAYS")
 	bindEnv("log_compress", "GB_LOG_COMPRESS")
 	bindEnv("log_server_port", "GB_LOG_SERVER_PORT")
-
 	bindEnv("http_xml_enabled", "GB_HTTP_XML_ENABLED")
 	bindEnv("vigi_enabled", "GB_VIGI_ENABLED")
 	bindEnv("save_event_images", "GB_SAVE_EVENT_IMAGES")
-
 	bindEnv("dahua.enabled", "GB_DAHUA_ENABLED")
 	bindEnv("hisilicon.enabled", "GB_HISILICON_ENABLED")
 	bindEnv("hisilicon.port", "GB_HISILICON_PORT")
@@ -188,19 +208,27 @@ func Load() *Config {
 	bindEnv("ftp.password", "GB_FTP_PASSWORD")
 	bindEnv("ftp.allowFiles", "GB_FTP_ALLOW_FILES")
 	bindEnv("hikvision.enabled", "GB_HIKVISION_ENABLED")
-
 	bindEnv("snmp.enabled", "GB_SNMP_ENABLED")
 	bindEnv("snmp.port", "GB_SNMP_PORT")
 	bindEnv("snmp.community", "GB_SNMP_COMMUNITY")
 	bindEnv("snmp.version", "GB_SNMP_VERSION")
-	bindEnv("snmp.user", "GB_SNMP_USER")
-	bindEnv("snmp.authProtocol", "GB_SNMP_AUTH_PROTOCOL")
-	bindEnv("snmp.authPassword", "GB_SNMP_AUTH_PASSWORD")
-	bindEnv("snmp.privProtocol", "GB_SNMP_PRIV_PROTOCOL")
-	bindEnv("snmp.privPassword", "GB_SNMP_PRIV_PASSWORD")
-	bindEnv("snmp.engineID", "GB_SNMP_ENGINE_ID")
-	bindEnv("snmp.contextEngineID", "GB_SNMP_CONTEXT_ENGINE_ID")
-	bindEnv("snmp.contextName", "GB_SNMP_CONTEXT_NAME")
+
+	// GB28181 env bindings
+	bindEnv("gb28181.enabled", "GB_GB28181_ENABLED")
+	bindEnv("gb28181.host", "GB_GB28181_HOST")
+	bindEnv("gb28181.port", "GB_GB28181_PORT")
+	bindEnv("gb28181.server_id", "GB_GB28181_SERVER_ID")
+	bindEnv("gb28181.server_ip", "GB_GB28181_SERVER_IP")
+	bindEnv("gb28181.realm", "GB_GB28181_REALM")
+	bindEnv("gb28181.auth_enabled", "GB_GB28181_AUTH_ENABLED")
+	bindEnv("gb28181.auth_user", "GB_GB28181_AUTH_USER")
+	bindEnv("gb28181.auth_password", "GB_GB28181_AUTH_PASSWORD")
+	bindEnv("gb28181.auto_catalog", "GB_GB28181_AUTO_CATALOG")
+	bindEnv("gb28181.auto_device_info", "GB_GB28181_AUTO_DEVICE_INFO")
+	bindEnv("gb28181.keepalive_interval", "GB_GB28181_KEEPALIVE_INTERVAL")
+	bindEnv("gb28181.keepalive_timeout", "GB_GB28181_KEEPALIVE_TIMEOUT")
+	bindEnv("gb28181.max_sub_channels", "GB_GB28181_MAX_SUB_CHANNELS")
+	bindEnv("gb28181.log_sip_messages", "GB_GB28181_LOG_SIP_MESSAGES")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -220,17 +248,14 @@ func Load() *Config {
 		HeartbeatTimeout: viper.GetDuration("heartbeat_timeout"),
 		ImagesDir:        viper.GetString("images_dir"),
 		LogServerPort:    viper.GetInt("log_server_port"),
-
-		LogFile:       viper.GetString("log_file"),
-		LogMaxSizeMB:  viper.GetInt("log_max_size_mb"),
-		LogMaxBackups: viper.GetInt("log_max_backups"),
-		LogMaxAgeDays: viper.GetInt("log_max_age_days"),
-		LogCompress:   viper.GetBool("log_compress"),
-
-		HTTPXMLEnabled:  viper.GetBool("http_xml_enabled"),
-		VigiEnabled:     viper.GetBool("vigi_enabled"),
-		SaveEventImages: viper.GetBool("save_event_images"),
-
+		LogFile:          viper.GetString("log_file"),
+		LogMaxSizeMB:     viper.GetInt("log_max_size_mb"),
+		LogMaxBackups:    viper.GetInt("log_max_backups"),
+		LogMaxAgeDays:    viper.GetInt("log_max_age_days"),
+		LogCompress:      viper.GetBool("log_compress"),
+		HTTPXMLEnabled:   viper.GetBool("http_xml_enabled"),
+		VigiEnabled:      viper.GetBool("vigi_enabled"),
+		SaveEventImages:  viper.GetBool("save_event_images"),
 		Dahua: DahuaConfig{
 			Enabled: viper.GetBool("dahua.enabled"),
 			Ports:   viper.GetIntSlice("dahua.ports"),
@@ -268,6 +293,23 @@ func Load() *Config {
 			EngineID:        viper.GetString("snmp.engineID"),
 			ContextEngineID: viper.GetString("snmp.contextEngineID"),
 			ContextName:     viper.GetString("snmp.contextName"),
+		},
+		GB28181: GB28181Config{
+			Enabled:           viper.GetBool("gb28181.enabled"),
+			Host:              viper.GetString("gb28181.host"),
+			Port:              viper.GetInt("gb28181.port"),
+			ServerID:          viper.GetString("gb28181.server_id"),
+			ServerIP:          viper.GetString("gb28181.server_ip"),
+			Realm:             viper.GetString("gb28181.realm"),
+			AuthEnabled:       viper.GetBool("gb28181.auth_enabled"),
+			AuthUser:          viper.GetString("gb28181.auth_user"),
+			AuthPassword:      viper.GetString("gb28181.auth_password"),
+			AutoCatalog:       viper.GetBool("gb28181.auto_catalog"),
+			AutoDeviceInfo:    viper.GetBool("gb28181.auto_device_info"),
+			KeepaliveInterval: viper.GetInt("gb28181.keepalive_interval"),
+			KeepaliveTimeout:  viper.GetInt("gb28181.keepalive_timeout"),
+			MaxSubChannels:    viper.GetInt("gb28181.max_sub_channels"),
+			LogSIPMessages:    viper.GetBool("gb28181.log_sip_messages"),
 		},
 	}
 
