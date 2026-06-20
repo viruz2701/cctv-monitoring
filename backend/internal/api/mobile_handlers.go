@@ -35,7 +35,7 @@ func (s *Server) listMobileWorkOrders(w http.ResponseWriter, r *http.Request) {
 		filters["status"] = status
 	}
 
-	workOrders, err := s.db.GetWorkOrders(filters)
+	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get mobile work orders", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -114,7 +114,7 @@ func (s *Server) listMobileWorkOrders(w http.ResponseWriter, r *http.Request) {
 // getMobileWorkOrder возвращает детали наряда для мобильного
 func (s *Server) getMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	wo, err := s.db.GetWorkOrder(id)
+	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Work order not found", http.StatusNotFound)
 		return
@@ -212,7 +212,7 @@ func (s *Server) getMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.StartWorkOrder(id); err != nil {
+	if err := s.cmmsRouter.StartWorkOrder(r.Context(), id); err != nil {
 		s.logger.Error("Failed to start mobile work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -245,7 +245,7 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 
 	// Сохраняем чек-лист в work order
 	checklistJSON, _ := json.Marshal(req.Checklist)
-	if err := s.db.UpdateWorkOrder(id, map[string]interface{}{"checklist": checklistJSON}); err != nil {
+	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"checklist": checklistJSON}); err != nil {
 		s.logger.Warn("Failed to update checklist", "error", err)
 	}
 
@@ -263,11 +263,11 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 	// Сохраняем location
 	if req.Location != nil {
 		locJSON, _ := json.Marshal(req.Location)
-		_ = s.db.UpdateWorkOrder(id, map[string]interface{}{"notes": notes, "location": locJSON})
+		_ = s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"notes": notes, "location": locJSON})
 	}
 
 	userID := getUserIDFromContext(r.Context())
-	if err := s.db.CompleteWorkOrder(id, notes, req.Photos, req.PartsUsed, userID); err != nil {
+	if err := s.cmmsRouter.CompleteWorkOrder(r.Context(), id, notes, req.Photos, req.PartsUsed, userID); err != nil {
 		s.logger.Error("Failed to complete mobile work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -305,7 +305,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 	photoURL := "/api/v1/images/" + filename
 
 	// Обновляем work order photos
-	wo, err := s.db.GetWorkOrder(workOrderID)
+	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), workOrderID)
 	if err != nil {
 		http.Error(w, "Work order not found", http.StatusNotFound)
 		return
@@ -318,7 +318,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 	existingPhotos = append(existingPhotos, photoURL)
 
 	photosJSON, _ := json.Marshal(existingPhotos)
-	if err := s.db.UpdateWorkOrder(workOrderID, map[string]interface{}{"photos": photosJSON}); err != nil {
+	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), workOrderID, map[string]interface{}{"photos": photosJSON}); err != nil {
 		s.logger.Error("Failed to update work order photos", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -359,7 +359,7 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Сохраняем push-токен в БД
-	if err := s.db.SavePushToken(claims.UserID, req.Token, req.Platform); err != nil {
+	if err := s.cmmsRouter.SavePushToken(r.Context(), claims.UserID, req.Token, req.Platform); err != nil {
 		s.logger.Error("Failed to save push token", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -378,7 +378,7 @@ func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	workload, err := s.db.GetTechnicianWorkload(claims.UserID)
+	workload, err := s.cmmsRouter.GetTechnicianWorkload(r.Context(), claims.UserID)
 	if err != nil {
 		// Возвращаем базовый профиль если workload не найден
 		user, err := s.db.GetUserByID(claims.UserID)
@@ -409,7 +409,7 @@ func (s *Server) getMobileTechnicianStats(w http.ResponseWriter, r *http.Request
 	}
 
 	// Получаем статистику из БД
-	stats, err := s.db.GetTechnicianMonthlyStats(claims.UserID)
+	stats, err := s.cmmsRouter.GetTechnicianMonthlyStats(r.Context(), claims.UserID)
 	if err != nil {
 		s.logger.Error("Failed to get technician stats", "error", err)
 		// Возвращаем нулевую статистику

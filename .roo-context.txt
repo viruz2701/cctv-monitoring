@@ -1,4 +1,3 @@
-.
 |-- backend
 |   |-- analytics
 |   |   |-- models
@@ -11,36 +10,74 @@
 |   |   `-- server
 |   |-- internal
 |   |   |-- api
+|   |   |   |-- server.go
+|   |   |   |-- cmms_handlers.go       # Headless CMMS integration
+|   |   |   |-- mobile_handlers.go     # Optimized endpoints for Mobile App
+|   |   |   |-- telegram_handlers.go   # Telegram Bot commands & alerts
+|   |   |   |-- apikey_handlers.go     # External API keys management
 |   |   |-- auth
 |   |   |-- config
 |   |   |-- db
+|   |   |   |-- db.go
+|   |   |   |-- repository.go
+|   |   |   |-- cmms_repository.go     # CMMS specific DB queries
+|   |   |   `-- migrations
 |   |   |-- handlers
 |   |   |-- logging
 |   |   |-- logserver
 |   |   |-- models
+|   |   |   |-- device.go
+|   |   |   `-- cmms.go                # WorkOrders, SpareParts, SLA models
 |   |   |-- protocols
 |   |   |-- sip
 |   |   |-- state
-|   |   `-- worker
+|   |   |-- telegram
+|   |   |   `-- bot.go                 # Telegram Bot core logic
+|   |   |-- worker
+|   |   `-- ws
+|   |       |-- client.go              # WebSocket client
+|   |       `-- hub.go                 # WebSocket hub for real-time alerts
 |   |-- opt
 |   |-- pkg
 |   |   `-- models
 |   |-- README.md
 |   |-- config.yaml
-|   |-- gb-server
 |   |-- go.mod
-|   |-- launch.json
 |   `-- main.go
 |-- frontend
 |   |-- public
-|   |   `-- vite.svg
 |   |-- src
 |   |   |-- assets
 |   |   |-- components
+|   |   |   |-- auth
+|   |   |   |-- dashboard
+|   |   |   |-- layout
+|   |   |   |-- p2p
+|   |   |   |-- reports
+|   |   |   `-- ui
 |   |   |-- context
+|   |   |   |-- AlertsContext.tsx
+|   |   |   |-- DevicesSitesContext.tsx
+|   |   |   |-- MaintenanceContext.tsx   # PM Schedules
+|   |   |   |-- SparePartsContext.tsx    # Inventory
+|   |   |   |-- WorkOrdersContext.tsx    # Internal CMMS
+|   |   |   |-- TicketsContext.tsx
+|   |   |   |-- UsersContext.tsx
+|   |   |   |-- SettingsContext.tsx
+|   |   |   |-- ThemeContext.tsx
+|   |   |   |-- NotificationsContext.tsx
+|   |   |   `-- ReportsContext.tsx
 |   |   |-- data
 |   |   |-- hooks
 |   |   |-- pages
+|   |   |   |-- APIKeys.tsx
+|   |   |   |-- MaintenanceSchedules.tsx
+|   |   |   |-- MaintenanceReports.tsx
+|   |   |   |-- SLADashboard.tsx
+|   |   |   |-- Dashboard.tsx
+|   |   |   |-- Devices.tsx
+|   |   |   |-- Sites.tsx
+|   |   |   `-- ... (other pages)
 |   |   |-- services
 |   |   |-- types
 |   |   |-- utils
@@ -57,56 +94,37 @@
 |   |-- tsconfig.json
 |   |-- tsconfig.node.json
 |   `-- vite.config.ts
-|-- neolink
-|   |-- crates
-|   |   |-- core
-|   |   |-- decoder
-|   |   |-- mailnoti
-|   |   `-- pushnoti
-|   |-- dissector
-|   |   |-- README.md
-|   |   |-- baichuan.lua
-|   |   |-- mediapacket.md
-|   |   |-- messages.md
-|   |   |-- protocol.md
-|   |   `-- udp.md
-|   |-- docker
-|   |   `-- entrypoint.sh
-|   |-- docs
-|   |   |-- screenshots
-|   |   |-- Setting\ Up\ Neolink\ For\ Use\ With\ Blue\ Iris.md
-|   |   |-- unix_service.md
-|   |   `-- unix_setup.md
-|   |-- kubernetes
-|   |   |-- README.md
-|   |   `-- manifest.yaml
+|-- mobile                                 # React Native / Expo App for Technicians
 |   |-- src
-|   |   |-- battery
-|   |   |-- common
-|   |   |-- image
-|   |   |-- mqtt
-|   |   |-- pir
-|   |   |-- ptz
-|   |   |-- reboot
-|   |   |-- rtsp
-|   |   |-- services
-|   |   |-- statusled
-|   |   |-- talk
-|   |   |-- users
-|   |   |-- cmdline.rs
-|   |   |-- config.rs
-|   |   |-- errors.rs
-|   |   |-- main.rs
-|   |   `-- utils.rs
+|   |   |-- components
+|   |   |-- hooks
+|   |   |-- navigation
+|   |   |-- screens
+|   |   |   |-- ChecklistScreen.tsx
+|   |   |   |-- DashboardScreen.tsx
+|   |   |   |-- LoginScreen.tsx
+|   |   |   |-- PhotoCaptureScreen.tsx
+|   |   |   |-- ProfileScreen.tsx
+|   |   |   |-- QRScannerScreen.tsx
+|   |   |   |-- SignatureScreen.tsx
+|   |   |   `-- WorkOrderDetailScreen.tsx
+|   |   |-- store
+|   |   |-- types
+|   |   `-- utils
+|   |-- App.tsx
+|   |-- app.json
+|   `-- package.json
+|-- neolink                                # Rust-based P2P binary for Reolink
+|   |-- crates
+|   |-- dissector
+|   |-- docker
+|   |-- docs
+|   |-- kubernetes
+|   |-- src
 |   |-- Cargo.toml
 |   |-- Dockerfile
-|   |-- LICENSE
-|   |-- README.md
-|   |-- build.rs
-|   |-- deny.toml
-|   |-- rustfmt.toml
-|   `-- sample_config.toml
-|-- p2p-gateway
+|   `-- ...
+|-- p2p-gateway                            # Go-based P2P Gateway (Dahua, Hikvision, JFtech)
 |   |-- bin
 |   |   |-- dh-p2p
 |   |   `-- neolink
@@ -123,6 +141,6 @@
 |   |-- go.mod
 |   `-- p2p-gateway
 |-- ARCHITECTURE.md
+|-- .clinerules
+|-- .roo-context.txt
 `-- project-structure.txt
-
-70 directories, 56 files

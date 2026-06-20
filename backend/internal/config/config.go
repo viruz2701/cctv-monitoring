@@ -30,6 +30,11 @@ type Config struct {
 	P2PGatewayURL string `mapstructure:"p2p_gateway_url"`
 	P2PAPIKey     string `mapstructure:"p2p_api_key"`
 
+	// CMMS Adapter configuration
+	CMMSAdapter string `mapstructure:"cmms_adapter"` // "internal" (default) | "atlas"
+	AtlasURL    string `mapstructure:"atlas_url"`
+	AtlasAPIKey string `mapstructure:"atlas_api_key"`
+
 	// Новые настройки для HTTP-приёма событий
 	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`
 	VigiEnabled     bool `mapstructure:"vigi_enabled"`

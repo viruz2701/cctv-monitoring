@@ -23,6 +23,7 @@ import (
 	"github.com/pquerna/otp/totp"
 
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
@@ -42,6 +43,9 @@ type Server struct {
 	sipHandler   *sip.SIPHandler
 	wsHub        *ws.Hub
 	telegramBot  *telegram.Bot
+
+	// CMMS adapter — абстракция над Internal/Atlas CMMS
+	cmmsRouter *cmms.CMMSRouter
 
 	// P2P gateway integration
 	p2pGatewayURL string
@@ -65,6 +69,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Инициализация CMMS Router
+	cmmsRouter := cmms.NewCMMSRouterFromConfig(cfg, database)
+
 	s := &Server{
 		stateManager:  stateMgr,
 		logger:        logger,
@@ -73,6 +80,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		config:        cfg,
 		sipHandler:    sipHandler,
 		wsHub:         ws.NewHub(),
+		cmmsRouter:    cmmsRouter,
 		p2pGatewayURL: cfg.P2PGatewayURL,
 		p2pAPIKey:     cfg.P2PAPIKey,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},

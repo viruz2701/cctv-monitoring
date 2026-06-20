@@ -47,7 +47,7 @@ func (s *Server) listMaintenanceSchedules(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	schedules, err := s.db.GetMaintenanceSchedules(filters)
+	schedules, err := s.cmmsRouter.GetMaintenanceSchedules(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get maintenance schedules", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -120,7 +120,7 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 		schedule.EstimatedMinutes = 30
 	}
 
-	if err := s.db.CreateMaintenanceSchedule(&schedule); err != nil {
+	if err := s.cmmsRouter.CreateMaintenanceSchedule(r.Context(), &schedule); err != nil {
 		s.logger.Error("Failed to create maintenance schedule", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -135,7 +135,7 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) getMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	schedule, err := s.db.GetMaintenanceSchedule(id)
+	schedule, err := s.cmmsRouter.GetMaintenanceSchedule(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Schedule not found", http.StatusNotFound)
 		return
@@ -164,7 +164,7 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if err := s.db.UpdateMaintenanceSchedule(id, updates); err != nil {
+	if err := s.cmmsRouter.UpdateMaintenanceSchedule(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update maintenance schedule", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -179,7 +179,7 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 func (s *Server) deleteMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.DeleteMaintenanceSchedule(id); err != nil {
+	if err := s.cmmsRouter.DeleteMaintenanceSchedule(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete maintenance schedule", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -192,7 +192,7 @@ func (s *Server) deleteMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) getDueSchedules(w http.ResponseWriter, r *http.Request) {
-	schedules, err := s.db.GetDueSchedules()
+	schedules, err := s.cmmsRouter.GetDueSchedules(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get due schedules", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -207,14 +207,14 @@ func (s *Server) getDueSchedules(w http.ResponseWriter, r *http.Request) {
 func (s *Server) completeMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.CompleteMaintenanceSchedule(id); err != nil {
+	if err := s.cmmsRouter.CompleteMaintenanceSchedule(r.Context(), id); err != nil {
 		s.logger.Error("Failed to complete maintenance schedule", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Создаём work order из завершённого графика
-	schedule, err := s.db.GetMaintenanceSchedule(id)
+	schedule, err := s.cmmsRouter.GetMaintenanceSchedule(r.Context(), id)
 	if err == nil {
 		wo := &models.WorkOrder{
 			ScheduleID: &schedule.ID,
@@ -227,11 +227,11 @@ func (s *Server) completeMaintenanceSchedule(w http.ResponseWriter, r *http.Requ
 			Notes:      "Auto-created from maintenance schedule",
 		}
 		// Устанавливаем SLA deadline
-		if sla, err := s.db.GetSLAConfig(schedule.Priority); err == nil {
+		if sla, err := s.cmmsRouter.GetSLAConfig(r.Context(), schedule.Priority); err == nil {
 			deadline := time.Now().Add(time.Duration(sla.ResolutionTimeMinutes) * time.Minute)
 			wo.SLADeadline = &deadline
 		}
-		if err := s.db.CreateWorkOrder(wo); err != nil {
+		if err := s.cmmsRouter.CreateWorkOrder(r.Context(), wo); err != nil {
 			s.logger.Error("Failed to create work order from schedule", "error", err)
 		}
 	}
@@ -275,7 +275,7 @@ func (s *Server) listWorkOrders(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	workOrders, err := s.db.GetWorkOrders(filters)
+	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get work orders", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -314,7 +314,7 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Устанавливаем SLA deadline
-	if sla, err := s.db.GetSLAConfig(wo.Priority); err == nil {
+	if sla, err := s.cmmsRouter.GetSLAConfig(r.Context(), wo.Priority); err == nil {
 		deadline := time.Now().Add(time.Duration(sla.ResolutionTimeMinutes) * time.Minute)
 		wo.SLADeadline = &deadline
 	}
@@ -323,7 +323,7 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	userID := getUserIDFromContext(r.Context())
 	wo.CreatedBy = &userID
 
-	if err := s.db.CreateWorkOrder(&wo); err != nil {
+	if err := s.cmmsRouter.CreateWorkOrder(r.Context(), &wo); err != nil {
 		s.logger.Error("Failed to create work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -335,7 +335,7 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	wo, err := s.db.GetWorkOrder(id)
+	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Work order not found", http.StatusNotFound)
 		return
@@ -362,7 +362,7 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.UpdateWorkOrder(id, updates); err != nil {
+	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -376,7 +376,7 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.UpdateWorkOrder(id, map[string]interface{}{"status": "cancelled"}); err != nil {
+	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"status": "cancelled"}); err != nil {
 		s.logger.Error("Failed to delete work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -398,7 +398,7 @@ func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.db.AssignWorkOrder(id, req.UserID); err != nil {
+	if err := s.cmmsRouter.AssignWorkOrder(r.Context(), id, req.UserID); err != nil {
 		s.logger.Error("Failed to assign work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -412,7 +412,7 @@ func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.StartWorkOrder(id); err != nil {
+	if err := s.cmmsRouter.StartWorkOrder(r.Context(), id); err != nil {
 		s.logger.Error("Failed to start work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -437,7 +437,7 @@ func (s *Server) completeWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserIDFromContext(r.Context())
-	if err := s.db.CompleteWorkOrder(id, req.Notes, req.Photos, req.Parts, userID); err != nil {
+	if err := s.cmmsRouter.CompleteWorkOrder(r.Context(), id, req.Notes, req.Photos, req.Parts, userID); err != nil {
 		s.logger.Error("Failed to complete work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -457,7 +457,7 @@ func (s *Server) cancelWorkOrder(w http.ResponseWriter, r *http.Request) {
 		req.Reason = "No reason provided"
 	}
 
-	if err := s.db.CancelWorkOrder(id, req.Reason); err != nil {
+	if err := s.cmmsRouter.CancelWorkOrder(r.Context(), id, req.Reason); err != nil {
 		s.logger.Error("Failed to cancel work order", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -504,7 +504,7 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update work order photos
-	wo, err := s.db.GetWorkOrder(id)
+	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Work order not found", http.StatusNotFound)
 		return
@@ -517,7 +517,7 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 	existingPhotos = append(existingPhotos, photoURLs...)
 
 	photosJSON, _ := json.Marshal(existingPhotos)
-	if err := s.db.UpdateWorkOrder(id, map[string]interface{}{"photos": photosJSON}); err != nil {
+	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"photos": photosJSON}); err != nil {
 		s.logger.Error("Failed to update work order photos", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -539,7 +539,7 @@ func (s *Server) addWorkOrderParts(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	for _, part := range req.Parts {
-		if err := s.db.UsePartInWorkOrder(id, part.PartID, part.Quantity, userID); err != nil {
+		if err := s.cmmsRouter.UsePartInWorkOrder(r.Context(), id, part.PartID, part.Quantity, userID); err != nil {
 			s.logger.Error("Failed to use part in work order", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -573,7 +573,7 @@ func (s *Server) listSpareParts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	parts, err := s.db.GetSpareParts(filters)
+	parts, err := s.cmmsRouter.GetSpareParts(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get spare parts", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -598,7 +598,7 @@ func (s *Server) createSparePart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.db.CreateSparePart(&part); err != nil {
+	if err := s.cmmsRouter.CreateSparePart(r.Context(), &part); err != nil {
 		s.logger.Error("Failed to create spare part", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -611,7 +611,7 @@ func (s *Server) createSparePart(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getSparePart(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	part, err := s.db.GetSparePart(id)
+	part, err := s.cmmsRouter.GetSparePart(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Spare part not found", http.StatusNotFound)
 		return
@@ -639,7 +639,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.UpdateSparePart(id, updates); err != nil {
+	if err := s.cmmsRouter.UpdateSparePart(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update spare part", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -653,7 +653,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteSparePart(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if err := s.db.DeleteSparePart(id); err != nil {
+	if err := s.cmmsRouter.DeleteSparePart(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete spare part", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -665,7 +665,7 @@ func (s *Server) deleteSparePart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLowStockParts(w http.ResponseWriter, r *http.Request) {
-	parts, err := s.db.GetLowStockParts()
+	parts, err := s.cmmsRouter.GetLowStockParts(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get low stock parts", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -688,7 +688,7 @@ func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.db.UpdateSparePartStock(id, req.Quantity); err != nil {
+	if err := s.cmmsRouter.UpdateSparePartStock(r.Context(), id, req.Quantity); err != nil {
 		s.logger.Error("Failed to adjust spare part stock", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -704,7 +704,7 @@ func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
 // ═══════════════════════════════════════════════════════════════════════
 
 func (s *Server) getAllTechnicianWorkloads(w http.ResponseWriter, r *http.Request) {
-	workloads, err := s.db.GetAllTechnicianWorkloads()
+	workloads, err := s.cmmsRouter.GetAllTechnicianWorkloads(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get technician workloads", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -718,7 +718,7 @@ func (s *Server) getAllTechnicianWorkloads(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) getTechnicianWorkload(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	workload, err := s.db.GetTechnicianWorkload(id)
+	workload, err := s.cmmsRouter.GetTechnicianWorkload(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Technician not found", http.StatusNotFound)
 		return
@@ -738,7 +738,7 @@ func (s *Server) updateTechnicianSkills(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.db.UpdateTechnicianSkills(id, req.Skills, req.Certifications); err != nil {
+	if err := s.cmmsRouter.UpdateTechnicianSkills(r.Context(), id, req.Skills, req.Certifications); err != nil {
 		s.logger.Error("Failed to update technician skills", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -754,7 +754,7 @@ func (s *Server) updateTechnicianSkills(w http.ResponseWriter, r *http.Request) 
 // ═══════════════════════════════════════════════════════════════════════
 
 func (s *Server) getSLAConfig(w http.ResponseWriter, r *http.Request) {
-	configs, err := s.db.GetAllSLAConfigs()
+	configs, err := s.cmmsRouter.GetAllSLAConfigs(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get SLA configs", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -783,7 +783,7 @@ func (s *Server) updateSLAConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.db.UpdateSLAConfig(priority, req.ResponseTimeMinutes, req.ResolutionTimeMinutes); err != nil {
+	if err := s.cmmsRouter.UpdateSLAConfig(r.Context(), priority, req.ResponseTimeMinutes, req.ResolutionTimeMinutes); err != nil {
 		s.logger.Error("Failed to update SLA config", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -795,7 +795,7 @@ func (s *Server) updateSLAConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getMaintenanceReport(w http.ResponseWriter, r *http.Request) {
-	report, err := s.db.GetMaintenanceReport()
+	report, err := s.cmmsRouter.GetMaintenanceReport(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get maintenance report", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -808,7 +808,7 @@ func (s *Server) getMaintenanceReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSLAComplianceReport(w http.ResponseWriter, r *http.Request) {
-	report, err := s.db.GetSLAComplianceReport()
+	report, err := s.cmmsRouter.GetSLAComplianceReport(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get SLA compliance report", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -837,7 +837,7 @@ func (s *Server) listTechnicianSiteAssignments(w http.ResponseWriter, r *http.Re
 		filters["is_primary"] = isPrimary == "true"
 	}
 
-	assignments, err := s.db.GetTechnicianSiteAssignments(filters)
+	assignments, err := s.cmmsRouter.GetTechnicianSiteAssignments(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get technician site assignments", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -874,7 +874,7 @@ func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 		assignment.AssignedBy = "" // БД-метод должен обработать пустую строку как NULL
 	}
 
-	if err := s.db.CreateTechnicianSiteAssignment(&assignment); err != nil {
+	if err := s.cmmsRouter.CreateTechnicianSiteAssignment(r.Context(), &assignment); err != nil {
 		s.logger.Error("Failed to create technician site assignment", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -911,7 +911,7 @@ func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := s.db.UpdateTechnicianSiteAssignment(id, allowedUpdates); err != nil {
+	if err := s.cmmsRouter.UpdateTechnicianSiteAssignment(r.Context(), id, allowedUpdates); err != nil {
 		s.logger.Error("Failed to update technician site assignment", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -931,7 +931,7 @@ func (s *Server) deleteTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := s.db.DeleteTechnicianSiteAssignment(id); err != nil {
+	if err := s.cmmsRouter.DeleteTechnicianSiteAssignment(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete technician site assignment", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
