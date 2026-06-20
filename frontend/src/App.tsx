@@ -26,7 +26,6 @@ import { TechnicianDashboard } from './pages/TechnicianDashboard';
 import { SLADashboard } from './pages/SLADashboard';
 import { MaintenanceReports } from './pages/MaintenanceReports';
 import { ForgotPassword } from './pages/ForgotPassword';
-import { TechnicianAssignments } from './pages/TechnicianAssignments';
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -114,7 +113,6 @@ function App() {
                                 <Route path="/work-orders" element={<WorkOrders />} />
                                 <Route path="/spare-parts" element={<SpareParts />} />
                                 <Route path="/technician-dashboard" element={<TechnicianDashboard />} />
-                                <Route path="/technician-assignments" element={<TechnicianAssignments />} />
                               </Route>
 
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>

@@ -960,12 +960,20 @@ func (db *DB) CreateTechnicianSiteAssignment(assignment *models.TechnicianSiteAs
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Преобразуем пустую строку assigned_by в nil (NULL в БД)
+	var assignedBy interface{}
+	if assignment.AssignedBy == "" {
+		assignedBy = nil
+	} else {
+		assignedBy = assignment.AssignedBy
+	}
+
 	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO technician_site_assignments (
 			technician_id, site_id, is_primary, assigned_by
 		) VALUES ($1, $2, $3, $4)
 		RETURNING id, assigned_at
-	`, assignment.TechnicianID, assignment.SiteID, assignment.IsPrimary, assignment.AssignedBy,
+	`, assignment.TechnicianID, assignment.SiteID, assignment.IsPrimary, assignedBy,
 	).Scan(&assignment.ID, &assignment.AssignedAt)
 
 	if err != nil {
@@ -1065,4 +1073,57 @@ func (db *DB) UpdateTechnicianSiteAssignment(id string, updates map[string]inter
 		return fmt.Errorf("update technician_site_assignment %s: %w", id, err)
 	}
 	return nil
+}
+
+// SavePushToken сохраняет push-токен для техника
+func (db *DB) SavePushToken(userID, token, platform string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE users SET push_token = $1, push_platform = $2, updated_at = NOW()
+		WHERE id = $3
+	`, token, platform, userID)
+	if err != nil {
+		return fmt.Errorf("save push token for user %s: %w", userID, err)
+	}
+	return nil
+}
+
+// GetTechnicianMonthlyStats возвращает статистику техника за текущий месяц
+func (db *DB) GetTechnicianMonthlyStats(userID string) (*models.TechnicianMonthlyStats, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var stats models.TechnicianMonthlyStats
+	err := db.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_this_month,
+			COUNT(*) as total_work_orders,
+			COALESCE(
+				ROUND(
+					100.0 * COUNT(CASE WHEN status = 'completed' AND (sla_deadline IS NULL OR completed_at <= sla_deadline) THEN 1 END)
+					/ NULLIF(COUNT(CASE WHEN status = 'completed' THEN 1 END), 0),
+					1
+				), 0
+			) as on_time_percent,
+			COALESCE(AVG(
+				CASE WHEN status = 'completed' THEN
+					CASE
+						WHEN sla_deadline IS NULL THEN 5.0
+						WHEN completed_at <= sla_deadline THEN 5.0
+						WHEN completed_at <= sla_deadline + INTERVAL '1 hour' THEN 4.0
+						WHEN completed_at <= sla_deadline + INTERVAL '4 hours' THEN 3.0
+						ELSE 2.0
+					END
+				END
+			), 0) as avg_rating
+		FROM work_orders
+		WHERE assigned_to = $1
+			AND created_at >= date_trunc('month', NOW())
+	`, userID).Scan(&stats.CompletedThisMonth, &stats.TotalWorkOrders, &stats.OnTimePercent, &stats.AvgRating)
+	if err != nil {
+		return nil, fmt.Errorf("get technician monthly stats for user %s: %w", userID, err)
+	}
+	return &stats, nil
 }

@@ -204,6 +204,16 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Put("/api/v1/sla/config/{priority}", s.updateSLAConfig)
 		r.Get("/api/v1/reports/maintenance", s.getMaintenanceReport)
 		r.Get("/api/v1/reports/sla-compliance", s.getSLAComplianceReport)
+
+		// Mobile API — оптимизированные эндпоинты для мобильного приложения техников
+		r.Get("/api/v1/mobile/work-orders", s.listMobileWorkOrders)
+		r.Get("/api/v1/mobile/work-orders/{id}", s.getMobileWorkOrder)
+		r.Post("/api/v1/mobile/work-orders/{id}/start", s.startMobileWorkOrder)
+		r.Post("/api/v1/mobile/work-orders/{id}/complete", s.completeMobileWorkOrder)
+		r.Post("/api/v1/mobile/work-orders/{id}/photos", s.uploadMobileWorkOrderPhoto)
+		r.Post("/api/v1/mobile/push-token", s.registerMobilePushToken)
+		r.Get("/api/v1/mobile/profile", s.getMobileTechnicianProfile)
+		r.Get("/api/v1/mobile/stats", s.getMobileTechnicianStats)
 	})
 
 	// External endpoints with API key auth

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -11,15 +11,12 @@ import {
     Settings,
     ChevronLeft,
     ChevronRight,
-    ChevronUp,
     Camera,
     Shield,
     X,
     TrendingUp,
-    LogOut,
     Key,
 } from 'lucide-react';
-import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
 
 interface SidebarProps {
@@ -32,9 +29,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
     const { t } = useTranslation();
     const location = useLocation();
-    const { user, logout } = useAuth();
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+    const { user } = useAuth();
 
     // Определяем пункты меню ВНУТРИ компонента, чтобы использовать t()
     const allNavItems = [
@@ -48,7 +43,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/maintenance', label: t('maintenance') || 'Maintenance', icon: FileText, roles: ['admin', 'manager', 'technician'] },
         { path: '/work-orders', label: t('work_orders') || 'Work Orders', icon: FileText, roles: ['admin', 'manager', 'technician'] },
         { path: '/spare-parts', label: t('spare_parts') || 'Spare Parts', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
-        { path: '/technician-assignments', label: t('technician_assignments') || 'Technician Assignments', icon: Users, roles: ['admin', 'manager'] },
         { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
         // Admin Only
@@ -124,56 +118,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                 </ul>
             </nav>
 
-            {/* User Profile & Dropdown */}
-            <div className="border-t border-slate-800 p-3">
-                <div className="relative">
-                    {isProfileOpen && (
-                        <div className={`absolute bottom-full left-0 w-full mb-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700 overflow-hidden ${collapsed ? 'w-56 left-full ml-2 bottom-0' : ''}`}>
-                            <div className="py-1">
-                                <button
-                                    onClick={() => setIsLogoutModalOpen(true)}
-                                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300"
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                    {t('sign_out') || 'Sign Out'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        className={`flex items-center gap-3 w-full p-2 rounded-lg hover:bg-slate-800 transition-colors ${isProfileOpen ? 'bg-slate-800' : ''}`}
-                    >
-                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium flex-shrink-0 overflow-hidden">
-                            {user?.avatar && user.avatar.length > 4 ? (
-                                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-sm">
-                                    {user?.avatar || (user?.name || '')
-                                        .split(' ')
-                                        .map(n => n[0])
-                                        .join('')
-                                        .toUpperCase()
-                                        .slice(0, 2)}
-                                </span>
-                            )}
-                        </div>
-
-                        {!collapsed && (
-                            <div className="flex-1 text-left overflow-hidden">
-                                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-                                <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-                            </div>
-                        )}
-
-                        {!collapsed && (
-                            <ChevronUp className={`w-4 h-4 text-slate-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
-                        )}
-                    </button>
-                </div>
-            </div>
-
             {/* Collapse Toggle */}
             <button
                 onClick={onToggle}
@@ -182,15 +126,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                 {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
             </button>
 
-            <ConfirmModal
-                isOpen={isLogoutModalOpen}
-                onClose={() => setIsLogoutModalOpen(false)}
-                onConfirm={logout}
-                title={t('sign_out')}
-                message={t('sign_out_confirm')}
-                confirmText={t('sign_out')}
-                cancelText={t('cancel')}
-            />
         </aside>
     );
 }

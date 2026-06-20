@@ -563,6 +563,8 @@ func (db *DB) initSchema() error {
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS current_workload INT DEFAULT 0;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS base_location TEXT;
 		ALTER TABLE users ADD COLUMN IF NOT EXISTS certifications TEXT[] DEFAULT '{}';
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
+		ALTER TABLE users ADD COLUMN IF NOT EXISTS push_platform TEXT;
 	`); err != nil {
 		db.Logger.Warn("Failed to add technician columns", "error", err)
 	}

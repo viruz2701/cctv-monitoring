@@ -377,6 +377,7 @@ export function DeviceDetail() {
                         [t('ip_address'), device.ipAddress, true],
                         [t('site'), device.siteName, false],
                         [t('recording_status'), device.recordingStatus.replace('_', ' '), false],
+                        [t('assigned_technicians') || 'Assigned Technicians', t('view_in_site_settings') || 'Manage in site settings', false],
                     ].map(([label, value, mono], idx, arr) => (
                         <div key={label as string} className={`flex justify-between py-2 ${idx < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/50' : ''}`}>
                             <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>

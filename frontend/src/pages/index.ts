@@ -11,5 +11,4 @@ export * from './Users';
 export * from './Settings';
 export * from './Profile';
 export * from './Notifications';
-export * from './TechnicianAssignments';
 

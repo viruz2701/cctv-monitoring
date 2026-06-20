@@ -527,6 +527,31 @@ const resources = {
       "create": "Create",
       "name": "Name",
 
+      // CMMS - Technician Assignments
+      "assigned_technicians": "Assigned Technicians",
+      "view_in_site_settings": "Manage in site settings",
+      "no_technicians_assigned": "No technicians assigned to this site",
+      "assigned_date": "Assigned",
+      "set_primary": "Set as primary",
+      "unset_primary": "Unset as primary",
+      "select_technician": "Select technician...",
+      "assignment_created": "Assignment created",
+      "assignment_deleted": "Assignment deleted",
+      "remove_assignment": "Remove Assignment",
+      "remove_assignment_confirm": "Are you sure you want to remove this technician assignment?",
+      "remove": "Remove",
+      "primary_technician": "Primary",
+
+      // CMMS - Calendar View
+      "view_table": "Table",
+      "view_calendar": "Calendar",
+      "no_events": "No maintenance events scheduled",
+      "schedule_details": "Schedule Details",
+      "interval_days": "Interval (days)",
+      "last_completed": "Last Completed",
+      "month": "Month",
+      "week": "Week",
+
       // Footer
       "copyright": "© 2026 CCTV Health Monitor. All rights reserved."
     }
@@ -1059,6 +1084,31 @@ const resources = {
 
       // Footer
       "copyright": "© 2026 CCTV Health Monitor. Все права защищены.",
+
+      // CMMS - Technician Assignments
+      "assigned_technicians": "Назначенные техники",
+      "view_in_site_settings": "Управление в настройках площадки",
+      "no_technicians_assigned": "Нет техников, назначенных на эту площадку",
+      "assigned_date": "Назначен",
+      "set_primary": "Назначить основным",
+      "unset_primary": "Снять с основного",
+      "select_technician": "Выберите техника...",
+      "assignment_created": "Назначение создано",
+      "assignment_deleted": "Назначение удалено",
+      "remove_assignment": "Удалить назначение",
+      "remove_assignment_confirm": "Вы уверены, что хотите удалить это назначение техника?",
+      "remove": "Удалить",
+      "primary_technician": "Основной",
+
+      // CMMS - Calendar View
+      "view_table": "Таблица",
+      "view_calendar": "Календарь",
+      "no_events": "Нет запланированных событий ТО",
+      "schedule_details": "Детали графика",
+      "interval_days": "Интервал (дней)",
+      "last_completed": "Последнее выполнение",
+      "month": "Месяц",
+      "week": "Неделя",
 
       // CMMS
       "maintenance_schedules": "Графики ТО",

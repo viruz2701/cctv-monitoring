@@ -381,8 +381,8 @@ func (b *Bot) SendAlarmNotification(userID string, alarm *models.Alarm) error {
 	msg := fmt.Sprintf(
 		"🚨 *ALARM NOTIFICATION*\n\n"+
 			"📹 Device: %s\n"+
-			"⚠️ Priority: %s\n"+
-			"🔧 Method: %s\n"+
+			"⚠️ Priority: %d\n"+
+			"🔧 Method: %d\n"+
 			"📝 Description: %s\n"+
 			"🕐 Time: %s",
 		alarm.DeviceID,

@@ -135,3 +135,11 @@ type SLAComplianceReport struct {
 	AvgResponseTime   float64 `json:"avg_response_minutes"`
 	AvgResolutionTime float64 `json:"avg_resolution_minutes"`
 }
+
+// TechnicianMonthlyStats — статистика техника за текущий месяц
+type TechnicianMonthlyStats struct {
+	CompletedThisMonth int     `json:"completed_this_month"`
+	TotalWorkOrders    int     `json:"total_work_orders"`
+	OnTimePercent      float64 `json:"on_time_percent"`
+	AvgRating          float64 `json:"avg_rating"`
+}

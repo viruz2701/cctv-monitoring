@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -60,23 +61,54 @@ func (s *Server) listMaintenanceSchedules(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
-	var schedule models.MaintenanceSchedule
-	if err := json.NewDecoder(r.Body).Decode(&schedule); err != nil {
+	var raw struct {
+		DeviceID         string          `json:"device_id"`
+		ScheduleType     string          `json:"schedule_type"`
+		IntervalDays     int             `json:"interval_days"`
+		CustomCron       string          `json:"custom_cron"`
+		NextDue          string          `json:"next_due"`
+		AssignedTo       *string         `json:"assigned_to"`
+		Checklist        json.RawMessage `json:"checklist"`
+		EstimatedMinutes int             `json:"estimated_minutes"`
+		Priority         string          `json:"priority"`
+		Notes            string          `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if schedule.DeviceID == "" {
+	if raw.DeviceID == "" {
 		http.Error(w, "device_id is required", http.StatusBadRequest)
 		return
 	}
-	if schedule.ScheduleType == "" {
+	if raw.ScheduleType == "" {
 		http.Error(w, "schedule_type is required", http.StatusBadRequest)
 		return
 	}
-	if schedule.NextDue.IsZero() {
+	if raw.NextDue == "" {
 		http.Error(w, "next_due is required", http.StatusBadRequest)
 		return
+	}
+
+	// Парсим дату в нескольких форматах (RFC3339, YYYY-MM-DD)
+	nextDue, err := parseFlexibleDate(raw.NextDue)
+	if err != nil {
+		http.Error(w, "invalid next_due format, use RFC3339 or YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	schedule := models.MaintenanceSchedule{
+		DeviceID:         raw.DeviceID,
+		ScheduleType:     raw.ScheduleType,
+		IntervalDays:     raw.IntervalDays,
+		CustomCron:       raw.CustomCron,
+		NextDue:          nextDue,
+		AssignedTo:       raw.AssignedTo,
+		Checklist:        raw.Checklist,
+		EstimatedMinutes: raw.EstimatedMinutes,
+		Priority:         raw.Priority,
+		Notes:            raw.Notes,
 	}
 	if schedule.Checklist == nil {
 		schedule.Checklist = json.RawMessage("[]")
@@ -834,10 +866,12 @@ func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Get assigned_by from context
+	// Get assigned_by from context; если claims нет — оставляем nil, а не пустую строку
 	claims := auth.GetClaims(r)
-	if claims != nil {
+	if claims != nil && claims.UserID != "" {
 		assignment.AssignedBy = claims.UserID
+	} else {
+		assignment.AssignedBy = "" // БД-метод должен обработать пустую строку как NULL
 	}
 
 	if err := s.db.CreateTechnicianSiteAssignment(&assignment); err != nil {
@@ -925,6 +959,21 @@ func getUserIDFromContext(ctx context.Context) string {
 		return userID
 	}
 	return "system"
+}
+
+// parseFlexibleDate парсит дату в форматах RFC3339, YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS
+func parseFlexibleDate(s string) (time.Time, error) {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("cannot parse date: %s", s)
 }
 
 func (s *Server) logAudit(userID, action, entityType, entityID string, oldValue, newValue interface{}) {
