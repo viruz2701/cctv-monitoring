@@ -1,3 +1,97 @@
 dh-p2p/venv/
 dh-p2p/__pycache__/
 dh-p2p/*.pyc
+
+# Compiled binaries
+backend/tmp/
+backend/gb-telemetry-collector
+*.exe
+!*.exe~
+
+# Compiled binaries
+backend/tmp/
+backend/gb-telemetry-collector
+*.exe
+!*.exe~
+
+# Mobile app (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/.expo-shared/
+mobile/web-build/
+mobile/dist/
+mobile/package-lock.json
+mobile/.gitignore
+
+# Expo credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+EOFcat >> .gitignore << 'EOF'
+
+# Mobile app (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/.expo-shared/
+mobile/web-build/
+mobile/dist/
+mobile/package-lock.json
+mobile/.gitignore
+
+# Expo credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+EOFcat >> .gitignore << 'EOF'
+
+# Mobile app (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/.expo-shared/
+mobile/web-build/
+mobile/dist/
+mobile/package-lock.json
+mobile/.gitignore
+
+# Expo credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Mobile app (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/.expo-shared/
+mobile/web-build/
+mobile/dist/
+mobile/package-lock.json
+mobile/.gitignore
+
+# Expo credentials
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
