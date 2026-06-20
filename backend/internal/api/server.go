@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"log/slog"
@@ -53,8 +54,82 @@ type Server struct {
 	httpClient    *http.Client
 }
 
+// rateLimiter — in-memory rate limiter per IP
+type rateLimiter struct {
+	mu      sync.Mutex
+	entries map[string][]time.Time
+	limit   int
+	window  time.Duration
+}
+
+func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	return &rateLimiter{
+		entries: make(map[string][]time.Time),
+		limit:   limit,
+		window:  window,
+	}
+}
+
+func (rl *rateLimiter) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	// Filter old entries
+	entries := rl.entries[ip]
+	filtered := entries[:0]
+	for _, t := range entries {
+		if t.After(cutoff) {
+			filtered = append(filtered, t)
+		}
+	}
+
+	if len(filtered) >= rl.limit {
+		rl.entries[ip] = filtered
+		return false
+	}
+
+	filtered = append(filtered, now)
+	rl.entries[ip] = filtered
+	return true
+}
+
+// rateLimitMiddleware wraps the rate limiter for login endpoint
+func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
+	rl := newRateLimiter(5, time.Minute)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			ip = strings.Split(forwarded, ",")[0]
+		}
+		if !rl.allow(ip) {
+			http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// securityHeadersMiddleware добавляет security headers ко всем ответам
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; frame-ancestors 'none'")
+		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler) *Server {
 	r := chi.NewRouter()
+
+	// Security headers — must be first
+	r.Use(securityHeadersMiddleware)
 
 	// CORS middleware
 	r.Use(cors.Handler(cors.Options{
@@ -88,7 +163,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	go s.wsHub.Run()
 
 	// Публичные маршруты (без JWT)
-	r.Post("/api/v1/auth/login", s.handleLogin)
+	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/login", s.handleLogin)
 	if cfg.HTTPXMLEnabled {
 		r.Post("/api/v1/external/alarm/xml", s.handleExternalAlarmXML)
 	}
@@ -217,6 +292,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Get("/api/v1/mobile/work-orders", s.listMobileWorkOrders)
 		r.Get("/api/v1/mobile/work-orders/{id}", s.getMobileWorkOrder)
 		r.Post("/api/v1/mobile/work-orders/{id}/start", s.startMobileWorkOrder)
+		r.Post("/api/v1/mobile/work-orders/{id}/verify", s.handleVerifyWorkOrder)
 		r.Post("/api/v1/mobile/work-orders/{id}/complete", s.completeMobileWorkOrder)
 		r.Post("/api/v1/mobile/work-orders/{id}/photos", s.uploadMobileWorkOrderPhoto)
 		r.Post("/api/v1/mobile/push-token", s.registerMobilePushToken)

@@ -10,8 +10,9 @@ heartbeat_timeout: "65s"
 images_dir: "/var/lib/gb-telemetry/images"
 
 
+# P2P Gateway — credentials are set via environment variables:
+#   GB_P2P_GATEWAY_URL, GB_P2P_API_KEY
 p2p_gateway_url: "http://localhost:8082"
-p2p_api_key: "your-secret-api-key-12345"
 
 
 # HTTP-приём событий (новые протоколы)
@@ -42,30 +43,18 @@ tvt:
   port: 15003
 
 # FTP-сервер для приёма изображений
+# Credentials: GB_FTP_USER, GB_FTP_PASSWORD (env vars)
 ftp:
   enabled: true
   port: 2121
   rootPath: "/var/lib/gb-telemetry/ftp"
-  user: "alarm"
-  password: "alarm_pass"
   allowFiles: true
 
 # Hikvision (HTTP streaming и raw TCP) – pull-модель (исходящие соединения)
+# Credentials: задаются через переменные окружения для каждой камеры
+#   GB_HIKVISION_<NAME>_ADDRESS, GB_HIKVISION_<NAME>_USERNAME, GB_HIKVISION_<NAME>_PASSWORD
 hikvision:
   enabled: false
-  cams:
-    entrance:
-      address: "192.168.1.100"
-      https: false
-      username: "admin"
-      password: "admin123"
-      rawTcp: false
-    doorbell:
-      address: "192.168.1.101"
-      https: false
-      username: "admin"
-      password: "admin666"
-      rawTcp: true
 
 # SNMP trap receiver
 snmp:

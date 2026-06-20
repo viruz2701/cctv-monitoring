@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gb-telemetry-collector/internal/models"
 	"strings"
 	"time"
+
+	"gb-telemetry-collector/internal/crypto"
+	"gb-telemetry-collector/internal/models"
 )
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1075,19 +1077,49 @@ func (db *DB) UpdateTechnicianSiteAssignment(id string, updates map[string]inter
 	return nil
 }
 
-// SavePushToken сохраняет push-токен для техника
+// SavePushToken сохраняет push-токен для техника с AES-256-GCM шифрованием
 func (db *DB) SavePushToken(userID, token, platform string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := db.Pool.Exec(ctx, `
+	encryptedToken, err := crypto.Encrypt(token)
+	if err != nil {
+		return fmt.Errorf("encrypt push token for user %s: %w", userID, err)
+	}
+
+	_, err = db.Pool.Exec(ctx, `
 		UPDATE users SET push_token = $1, push_platform = $2, updated_at = NOW()
 		WHERE id = $3
-	`, token, platform, userID)
+	`, encryptedToken, platform, userID)
 	if err != nil {
 		return fmt.Errorf("save push token for user %s: %w", userID, err)
 	}
 	return nil
+}
+
+// GetPushToken возвращает расшифрованный push-токен техника
+func (db *DB) GetPushToken(userID string) (token string, platform string, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var encryptedToken string
+	err = db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(push_token, ''), COALESCE(push_platform, '')
+		FROM users WHERE id = $1
+	`, userID).Scan(&encryptedToken, &platform)
+	if err != nil {
+		return "", "", fmt.Errorf("get push token for user %s: %w", userID, err)
+	}
+
+	if encryptedToken == "" {
+		return "", "", nil
+	}
+
+	token, err = crypto.Decrypt(encryptedToken)
+	if err != nil {
+		return "", "", fmt.Errorf("decrypt push token for user %s: %w", userID, err)
+	}
+	return token, platform, nil
 }
 
 // GetTechnicianMonthlyStats возвращает статистику техника за текущий месяц

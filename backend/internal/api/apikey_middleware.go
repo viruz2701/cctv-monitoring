@@ -1,11 +1,12 @@
 package api
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"gb-telemetry-collector/internal/db"
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // APIKeyMiddleware validates API keys from X-API-Key header
@@ -25,31 +26,47 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Hash the provided key
-		hash := sha256.Sum256([]byte(apiKey))
-		keyHash := hex.EncodeToString(hash[:])
+		// Extract prefix for lookup (first 8 chars of the key)
+		prefix := ""
+		if len(apiKey) >= 8 {
+			prefix = apiKey[:8]
+		}
 
-		// Look up the key in database
-		key, err := s.db.GetAPIKeyByHash(keyHash)
-		if err != nil {
+		// Look up keys by prefix
+		keys, err := s.db.GetAPIKeysByPrefix(prefix)
+		if err != nil || len(keys) == 0 {
+			http.Error(w, "Invalid API key", http.StatusUnauthorized)
+			return
+		}
+
+		// Verify with bcrypt — try each matching key
+		var matchedKey *db.APIKey
+		for i := range keys {
+			if err := bcrypt.CompareHashAndPassword([]byte(keys[i].KeyHash), []byte(apiKey)); err == nil {
+				matchedKey = &keys[i]
+				break
+			}
+		}
+
+		if matchedKey == nil {
 			http.Error(w, "Invalid API key", http.StatusUnauthorized)
 			return
 		}
 
 		// Check if key is expired
-		if key.ExpiresAt != nil && key.ExpiresAt.Before(time.Now()) {
+		if matchedKey.ExpiresAt != nil && matchedKey.ExpiresAt.Before(time.Now()) {
 			http.Error(w, "API key expired", http.StatusUnauthorized)
 			return
 		}
 
 		// Update last used timestamp (async to not block request)
 		go func() {
-			_ = s.db.UpdateAPIKeyLastUsed(key.ID)
+			_ = s.db.UpdateAPIKeyLastUsed(matchedKey.ID)
 		}()
 
 		// Add key info to context for handlers
 		ctx := r.Context()
-		ctx = setAPIKeyContext(ctx, key)
+		ctx = setAPIKeyContext(ctx, matchedKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

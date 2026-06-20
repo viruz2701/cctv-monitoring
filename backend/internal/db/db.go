@@ -105,6 +105,9 @@ func (db *DB) initSchema() error {
 			site_id TEXT REFERENCES sites(id) ON DELETE SET NULL,
 			name TEXT,
 			location TEXT,
+			latitude DOUBLE PRECISION DEFAULT 0,
+			longitude DOUBLE PRECISION DEFAULT 0,
+			geofence_radius_meters DOUBLE PRECISION DEFAULT 500,
 			vendor_type TEXT,
 			device_type TEXT DEFAULT 'camera' CHECK (device_type IN ('camera', 'nvr', 'dvr', 'switch')),
 			status TEXT DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'warning')),
@@ -378,6 +381,7 @@ func (db *DB) initSchema() error {
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			key_hash TEXT NOT NULL,
+			key_prefix TEXT NOT NULL DEFAULT '',
 			permissions TEXT[],
 			expires_at TIMESTAMPTZ,
 			last_used_at TIMESTAMPTZ,
@@ -386,6 +390,13 @@ func (db *DB) initSchema() error {
 		);
 	`); err != nil {
 		return fmt.Errorf("failed to create api_keys table: %w", err)
+	}
+	// Миграция: добавляем key_prefix если таблица уже существовала
+	if _, err := tx.Exec(ctx, `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT NOT NULL DEFAULT '';`); err != nil {
+		db.Logger.Warn("Failed to add key_prefix column to api_keys", "error", err)
+	}
+	if _, err := tx.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);`); err != nil {
+		db.Logger.Warn("Failed to create idx_api_keys_prefix", "error", err)
 	}
 
 	// 16. User sessions

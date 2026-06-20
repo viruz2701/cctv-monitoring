@@ -47,6 +47,7 @@ export interface CompleteWorkOrderPayload {
   photos: string[];
   parts_used: PartUsage[];
   signature?: string;
+  verification_token?: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -80,9 +81,61 @@ export type RootStackParamList = {
   WorkOrderDetail: { workOrderId: string };
   Checklist: { workOrder: WorkOrder };
   PhotoCapture: { workOrder: WorkOrder; checklist: ChecklistItem[] };
-  Signature: { workOrder: WorkOrder; checklist: ChecklistItem[]; photos: string[] };
+  Verification: { workOrder: WorkOrder; checklist: ChecklistItem[]; photos: string[] };
+  Signature: { workOrder: WorkOrder; checklist: ChecklistItem[]; photos: string[]; verificationToken: string };
   QRScanner: undefined;
 };
+
+export interface VerificationRequest {
+  gps: {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    timestamp: string;
+  };
+  photo_exif: {
+    gps_latitude: number;
+    gps_longitude: number;
+    date_time_original: string;
+    make: string;
+    model: string;
+  };
+  photo_before_url: string;
+  photo_after_url: string;
+  checklist_completed: boolean;
+  signature: string;
+  gps_skip_reason?: string;
+}
+
+export interface VerificationResponse {
+  passed: boolean;
+  token?: string;
+  gps: {
+    passed: boolean;
+    distance_meters: number;
+    accuracy_meters: number;
+    within_geofence: boolean;
+    timestamp_valid: boolean;
+    error?: string;
+  };
+  exif: {
+    passed: boolean;
+    gps_match: boolean;
+    timestamp_valid: boolean;
+    has_exif: boolean;
+    error?: string;
+  };
+  ai: {
+    passed: boolean;
+    similarity: number;
+    change_detected: boolean;
+    summary?: string;
+    error?: string;
+    skipped: boolean;
+  };
+  message?: string;
+  fail_reasons?: string[];
+}
 
 export type MainTabParamList = {
   Dashboard: undefined;

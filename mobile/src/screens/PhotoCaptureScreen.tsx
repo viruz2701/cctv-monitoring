@@ -89,7 +89,7 @@ export default function PhotoCaptureScreen({ route }: Props) {
 
     setUploading(false);
 
-    navigation.navigate('Signature', {
+    navigation.navigate('Verification', {
       workOrder,
       checklist,
       photos: uploadedUrls,

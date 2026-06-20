@@ -1,127 +1,292 @@
 
+# .clinerules — AI Assistant Rules for CCTV Intelligence Platform v4.0
+
+**Обновлено:** 2026-06-21
+**Фаза:** 1.5 (Gatekeeper + ISO Quick Wins + UX Refresh)
+
 ---
 
-# 📄 .clinerules (~250 строк)
-
-```markdown
-# .clinerules — AI Assistant Rules for CCTV Intelligence Platform v3.0
-
 ## 1. РОЛЬ И КОНТЕКСТ
+
 Ты — старший системный архитектор и full-stack разработчик.
-**Стек:** Go (chi, pgx), React 19, React Native/Expo, Rust (P2P), TimescaleDB.
-**Особенность:** Проект уже имеет Mobile App, базовый CMMS, Telegram Bot, P2P Gateway.
-**Твоя задача:** Интегрировать Headless CMMS (Atlas/ServiceNow), внедрить Gatekeeper, 
-провести UX-Refresh, обеспечить ISO 27001.
+
+**Стек:** Go 1.25 (chi, pgx), React 19, React Native/Expo, Rust (P2P binaries), TimescaleDB, Python (XGBoost).
+
+**Состояние проекта:** ЗРЕЛОЕ. Фазы 0 и 1 частично выполнены.
+- ✅ CMMS Adapter Pattern (InternalAdapter + AtlasAdapter stub)
+- ✅ 7 протоколов CCTV + GB28181 SIP
+- ✅ Mobile App (Expo) с offline sync
+- ✅ Telegram Bot, 2FA, API Keys
+- ❌ Gatekeeper Service (GPS/EXIF/AI верификация)
+- ❌ UX Refresh (DataGrid, Gauge, Shelf.nu cards)
+- ⚠️ ISO 27001 Baseline (JWT secret, API key hashing, push token encryption)
+
+**Твоя задача в Phase 1.5:**
+1. Завершить Gatekeeper Service (Epic 1.2)
+2. Выполнить ISO Quick Wins (remediation-plan.md Phase 1)
+3. UX Refresh для WorkOrders, SpareParts, SLADashboard
+
+---
 
 ## 2. СТРОГИЕ ЗАПРЕТЫ
+
 - ❌ **НЕ ПИШИ** мобильное приложение с нуля. Используй существующее `mobile/`.
-- ❌ **НЕ УДАЛЯЙ** существующие `WorkOrdersContext`, `SparePartsContext`. 
-  Они становятся `InternalCMMSAdapter`.
-- ❌ **НЕ ХАРДКОДЬ** API Keys, JWT секреты, Push Tokens. Используй Vault.
-- ❌ **НЕ ЛОГИРУЙ** sensitive data (push_token, api_key_hash, password).
+- ❌ **НЕ УДАЛЯЙ** существующие контексты: `WorkOrdersContext`, `SparePartsContext`, `MaintenanceContext`. Они обёртка над InternalAdapter.
+- ❌ **НЕ ХАРДКОДЬ** секреты: JWT_SECRET, API Keys, Push Tokens, DB passwords. Используй `os.Getenv()` или Vault.
+- ❌ **НЕ ЛОГИРУЙ** sensitive data: push_token, api_key_hash, password, totp_secret.
 - ❌ **НЕ КОПИРУЙ** код из Shelf.nu/Snipe-IT/Atlas 1-в-1. Только UX-паттерны.
+- ❌ **НЕ УДАЛЯЙ** существующие protocol handlers (Dahua, Hisilicon, TVT, FTP, SNMP, Hikvision, Syslog, GB28181).
+- ❌ **НЕ ЛОМАЙ** CMMS Adapter interface — 33 метода, все должны быть реализованы в каждом адаптере.
 - ✅ **ВСЕГДА** проверяй RBAC (`claims.Role`) в новых хендлерах.
 - ✅ **ВСЕГДА** используй `context.WithTimeout` для I/O операций.
+- ✅ **ВСЕГДА** добавляй audit log для write-операций через `s.logAudit()`.
+- ✅ **ВСЕГДА** поддерживай i18n: все новые UI-строки через `t('key')`.
+
+---
 
 ## 3. АРХИТЕКТУРНЫЕ ПАТТЕРНЫ
 
-### 3.1 CMMS Router Pattern
-Все операции с нарядами идут через `CMMSRouter`.
+### 3.1 CMMS Router Pattern (ADR-002)
+
+Все операции с нарядами идут через `CMMSRouter`:
+
 ```go
-// backend/internal/cmms/router.go
+// backend/internal/cmms/adapter.go
 type CMMSRouter struct {
-    adapters map[string]CMMSAdapter
-    fallback *InternalAdapter
+    adapter CMMSAdapter
+    // future: fallback *InternalAdapter, retryQueue chan
 }
-Задача Phase 1: Написать AtlasAdapter, добавить выбор адаптера в Settings.
-3.2 Gatekeeper Pattern
-Верификация ТО перед закрытием наряда.
-Mobile App отправляет фото + GPS + EXIF в /api/v1/mobile/work-orders/{id}/verify.
-Go Backend проверяет: GPS (геофенсинг), EXIF (время/устройство), AI (До/После).
-Если OK -> возвращает verification_token.
-Mobile App отправляет токен при закрытии наряда.
+Правило: Handlers (cmms_handlers.go, mobile_handlers.go) НЕ вызывают db.DB напрямую. Только через s.cmmsRouter.*.
+Исключение: db.DB допустим для non-CMMS операций (users, devices, audit_log, sessions).
+3.2 Gatekeeper Pattern (ADR-004) — ПРИОРИТЕТ PHASE 1.5
+Mobile App                     Backend                        AI/ML
+    │                              │                            │
+    │  POST /api/v1/mobile/        │                            │
+    │  work-orders/{id}/verify     │                            │
+    │  {photos[], gps, exif}       │                            │
+    ├─────────────────────────────►│                            │
+    │                              │ 1. Validate GPS            │
+    │                              │    (site geofence)         │
+    │                              │ 2. Validate EXIF           │
+    │                              │    (timestamp, device)     │
+    │                              │ 3. AI before/after check   │
+    │                              ├───────────────────────────►│
+    │                              │                            │ DeepSeek Vision
+    │                              │◄───────────────────────────┤
+    │                              │ 4. Generate verify_token   │
+    │                              │    (Redis, TTL 10min)      │
+    │◄─────────────────────────────┤                            │
+    │  {verification_token,        │                            │
+    │   gps_valid, exif_valid,     │                            │
+    │   ai_score}                  │                            │
+    │                              │                            │
+    │  POST /complete              │                            │
+    │  {token, notes, photos,      │                            │
+    │   parts_used, signature}     │                            │
+    ├─────────────────────────────►│                            │
+    │                              │ Validate token → complete  │
+
+Требования к реализации:
+Endpoint: POST /api/v1/mobile/work-orders/{id}/verify
+Middleware: auth.AuthMiddleware (JWT required)
+GPS: проверка расстояния до sites.geofence_polygon (PostGIS или Haversine)
+EXIF: time ∈ [work_order.started_at, now], device_model matches
+AI: DeepSeek Vision API, score > 0.7 = pass
+Token: JWT с sub: "gatekeeper", wo_id, TTL 10 минут
+Audit: обязательная запись action: "gatekeeper_verify"
 3.3 Mobile API Optimization
-Эндпоинты в mobile_handlers.go должны возвращать минимальный payload.
-Используй fields параметр для выборки только нужных колонок.
-4. UX-ПАТТЕРНЫ (ДЛЯ СУЩЕСТВУЮЩЕГО UI)
-4.1 Desktop (React)
-WorkOrders.tsx: Snipe-IT style. Таблица, фильтры по статусу/приоритету, bulk actions.
-SpareParts.tsx: Shelf.nu style. Карточки, индикатор остатка (красный если < min_stock).
-SLADashboard.tsx: Визуализация TTR/TTO, таймлайны нарушений.
-4.2 Mobile (React Native)
-Экраны техника: Крупные кнопки, offline-first (AsyncStorage + sync).
-Камера: Блокировка загрузки из галереи (только live shot для Gatekeeper).
-QR Scan: Интеграция expo-camera, переход в карточку актива.
+Эндпоинты в mobile_handlers.go возвращают минимальный payload:
+Используй fields query parameter для выборки колонок
+Не возвращай photos и parts_used в list endpoint — только counts
+SLA deadline — как ISO string, не как объект
+4. ISO 27001 — ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ
+4.1 Phase 1 Quick Wins (remediation-plan.md)
+ID
+Задача
+Файл
+Deadline
+QW-1
+JWT Secret: os.Getenv с panic
+auth/jwt.go
+Phase 1.5
+QW-2
+API Keys: SHA-256 → bcrypt(cost=12)
+apikey_handlers.go
+Phase 1.5
+QW-3
+Push Tokens: AES-256-GCM
+cmms_repository.go
+Phase 1.5
+QW-4
+Config secrets → env vars
+config.yaml
+Phase 1.5
+QW-5
+Rate limiting на /auth/login
+server.go
+Phase 1.5
+QW-6
+Security headers middleware
+server.go
+Phase 1.5
+4.2 Правила для нового кода
+A.9 Access Control:
+6 ролей: admin, support, owner, manager, technician, viewer
+PermissionGuard в React для UI элементов
+RoleProtectedRoute для страниц
+Middleware auth.AuthMiddleware для API endpoints
+A.10 Cryptography:
+Passwords: bcrypt (cost 12)
+API Keys: bcrypt (cost 12) ← ИЗМЕНИТЬ С SHA-256
+Push Tokens: AES-256-GCM ← ДОБАВИТЬ
+JWT: HS256, secret from env, TTL 24h
+TOTP: RFC 6238, 6 digits, 30s window
+A.12.4 Logging:
+Audit log для: create/update/delete work orders, spare parts, schedules
+Audit log для: gatekeeper verify, login, 2FA, password change
+НИКОГДА не логировать: password, push_token, api_key (только hash), totp_secret
+A.13 Communications:
+TLS 1.3 на reverse proxy
+CORS: whitelist из конфига (не "*")
+Security headers: CSP, X-Frame-Options, X-Content-Type-Options
 5. ПРАВИЛА ДЛЯ GO (Backend)
-Роутер: chi/v5. Группировка: /api/v1/mobile/*, /api/v1/cmms/*.
-БД: pgx/v5. Методы repository.go должны возвращать error с контекстом.
-WebSocket: ws/hub.go для real-time алертов. Не храни состояние в Hub, только подписки.
-Telegram: telegram/bot.go. Обработка команд через паттерн Command Pattern.
-P2P Gateway: Не трогай Rust-код без крайней необходимости. Go-адаптеры в pkg/adapters/.
+5.1 Роутер
+chi/v5, группировка: /api/v1/mobile/*, /api/v1/cmms/*, /api/v1/p2p/*
+Middleware порядок: CORS → Logger → Recoverer → Auth → RateLimit → Handler
+5.2 База данных
+pgx/v5 с пулом (pgxpool)
+Все методы repository возвращают error с контекстом: fmt.Errorf("get work_order %s: %w", id, err)
+Все query используют context.WithTimeout(ctx, 5*time.Second)
+Миграции в db/migrations/ — numbered SQL files
+Audit log через s.logAudit(userID, action, entityType, entityID, oldValue, newValue)
+5.3 WebSocket
+ws/hub.go — только подписки, НЕ хранить бизнес-состояние
+client.go — ReadPump/WritePump с ping/pong
+Token через query parameter: ?token=...
+5.4 Protocols
+НЕ трогай существующие handlers без причины
+Новые протоколы — через protocols.Manager.Register()
+Все протоколы обновляют state.DeviceStateManager и пишут в alarms hypertable
+5.5 GB28181
+SIP parser в sip/handler.go — не модифицировать без тестов
+DeviceID parsing: sip/gb28181.go — 20 digits regex
+GB2312 decoding: simplifiedchinese.GB18030
 6. ПРАВИЛА ДЛЯ FRONTEND (React)
-Контексты: Используй доменные хуки (useWorkOrders(), useSpareParts()).
-i18n: ВСЕГДА t('key'). Ключи в frontend/src/i18n.ts (en + ru).
-UI-атомы: Используй components/ui/ (Card, Button, Table). Не создавай новые.
-Auth: PermissionGuard для элементов UI, RoleProtectedRoute для страниц.
-7. ПРАВИЛА ДЛЯ MOBILE (React Native)
-Навигация: React Navigation. Stepper для прохождения чек-листа.
-Offline: Очередь действий в AsyncStorage. Sync при появлении сети.
-Push: SavePushToken на backend. Обработка silent push для background sync.
-Камера: expo-camera. Проверка EXIF перед отправкой.
-8. ISO 27001 ТРЕБОВАНИЯ
-A.9 Access Control: 6 ролей. Проверка claims.Role в middleware.
-A.10 Cryptography: API Keys хешируются (bcrypt/argon2). Push Tokens шифруются (AES-256).
-A.12.4 Logging: Audit log для: создание/закрытие нарядов, верификация, изменение SLA.
-A.13 Communications: TLS 1.3. Certificate pinning в Mobile App (опционально).
+6.1 Контексты
+Используй доменные хуки: useWorkOrders(), useSpareParts(), useMaintenance()
+DataContext — deprecated façade, не использовать в новом коде
+useData() — только для backward compatibility
+6.2 i18n
+ВСЕ новые строки через t('key')
+Ключи в frontend/src/i18n.ts (en + ru)
+Секции: navigation, common, pages, cmms, errors
+6.3 UI-атомы
+Используй components/ui/: Card, Button, Table, Badge, Modal, Input, Toast
+Новые компоненты: DataGrid, Gauge, Progress, Tabs — создавать в components/ui/
+НЕ создавай inline стили — только Tailwind + dark: prefix
+6.4 Auth
+PermissionGuard для элементов UI
+RoleProtectedRoute для страниц
+useAuth() hook для currentUser, hasPermission()
+6.5 UX Refresh (Phase 1.5)
+Страница
+Паттерн
+Источник
+WorkOrders
+DataGrid, Bulk Actions, Quick Filters
+Snipe-IT
+SpareParts
+Card Grid, QR, Stock Indicator
+Shelf.nu
+SLADashboard
+Gauge, Progress Bar, Timeline
+Atlas CMMS
+WorkOrderDetail (новая)
+Three-Column Layout
+Atlas CMMS
+Settings
+Tabs layout
+Custom
+7. ПРАВИЛА ДЛЯ MOBILE (React Native / Expo)
+7.1 Навигация
+React Navigation 7: NativeStack + BottomTabs
+Типизация: RootStackParamList, MainTabParamList
+7.2 Offline-First
+Zustand store syncStore — очередь операций
+AsyncStorage для persistence
+AppState listener для auto-sync при background → active
+Retry: 3 attempts, затем drop + alert
+7.3 Камера и GPS
+expo-camera для Gatekeeper (live shot only, NO gallery)
+expo-location для GPS verification
+EXIF data extraction для timestamp/device validation
+7.4 Push Notifications
+expo-notifications для push token registration
+Token сохраняется через POST /mobile/push-token
+Silent push для background sync (future)
+8. ПРАВИЛА ДЛЯ ANALYTICS (Python)
+8.1 ML Pipeline
+train.py — XGBoost classifier, AUC metric
+predict.py — batch predictions, DeepSeek explanations
+etl.py — SQL-based feature extraction
+8.2 Безопасность
+API keys в config.yaml — вынести в env vars
+psycopg2 с параметризованными запросами (не string formatting!)
+Model artifacts в analytics/models/ — добавить в .gitignore
 9. ЧЕК-ЛИСТ ПЕРЕД КОММИТОМ
-Нет хардкод-секретов.
-Нет sensitive data в логах.
-RBAC проверен для новых эндпоинтов.
-i18n добавлен для новых строк UI.
-Mobile App протестирован в offline-режиме.
-WebSocket не вызывает утечек памяти (unsubscribe on unmount).
+Backend
+Нет хардкод-секретов (grep: password, secret, key)
+Нет sensitive data в логах
+RBAC проверен для новых эндпоинтов
+context.WithTimeout для всех DB-операций
+Audit log добавлен для write-операций
+Error messages обёрнуты с fmt.Errorf("...: %w", err)
+Frontend
+Все новые строки через t('key')
+dark: prefix для всех Tailwind классов
+Loading, empty, error, success состояния обработаны
+cursor-pointer + hover: + focus:ring-2 для clickable
+aria-label для accessibility
+WebSocket unsubscribe on unmount
+Mobile
+Offline queue для write-операций
+Camera permission requested
+GPS permission requested (для Gatekeeper)
+Push token registered on login
 10. ФОРМАТ ОТВЕТА AI
-Анализ (2-3 предложения).
-План (список файлов для чтения/изменения).
-Код (точные diff'и).
-Команды (для сборки/тестов).
-Предупреждения (риски).
-ВСЕГДА завершай вопросом: «Что дальше: продолжаем по плану или нужна корректировка?»
-
-# ⚠️ ВНИМАНИЕ: СОСТОЯНИЕ ПРОЕКТА (ВАЖНО ДЛЯ AI)
-
-Проект является ЗРЕЛЫМ. Ниже список модулей, которые УЖЕ СУЩЕСТВУЮТ и работают.
-**СТРОГО ЗАПРЕЩЕНО** удалять их, переписывать с нуля или игнорировать при рефакторинге.
-
-##. УЖЕ РЕАЛИЗОВАННЫЕ МОДУЛИ (НЕ ТРОГАТЬ БЕЗ НЕОБХОДИМОСТИ)
-
-### Backend (Go)
-- `backend/internal/api/cmms_handlers.go` — базовый Internal CMMS (наряды, запчасти).
-- `backend/internal/api/mobile_handlers.go` — оптимизированные эндпоинты для Mobile App.
-- `backend/internal/api/telegram_handlers.go` — интеграция с Telegram Bot.
-- `backend/internal/api/apikey_handlers.go` — управление API-ключами для внешних интеграций.
-- `backend/internal/telegram/bot.go` — ядро Telegram Bot.
-- `backend/internal/ws/hub.go` и `client.go` — WebSocket для real-time алертов.
-- `backend/internal/db/cmms_repository.go` — репозиторий для CMMS-сущностей.
-- `backend/internal/models/cmms.go` — модели WorkOrder, SparePart, SLA.
-
-### Frontend (React)
-- `frontend/src/context/WorkOrdersContext.tsx` — управление нарядами.
-- `frontend/src/context/SparePartsContext.tsx` — управление запчастями.
-- `frontend/src/context/MaintenanceContext.tsx` — графики ТО.
-- `frontend/src/pages/SLADashboard.tsx` — панель SLA.
-- `frontend/src/pages/APIKeys.tsx` — управление API ключами.
-- `frontend/src/pages/MaintenanceSchedules.tsx` — расписания ТО.
-
-### Mobile App (React Native / Expo)
-- Директория `mobile/` ПОЛНОСТЬЮ ФУНКЦИОНАЛЬНА.
-- Экраны: `ChecklistScreen`, `PhotoCaptureScreen`, `QRScannerScreen`, `SignatureScreen`, `WorkOrderDetailScreen`.
-- Есть оффлайн-синхронизация, Push-уведомления, сканирование QR.
-
-
-## . ПРАВИЛО ПРОВЕРКИ ДЕРЕВА (ОБНОВЛЕНО)
-
-**ПЕРЕД ЛЮБЫМ ИЗМЕНЕНИЕМ** выполни:
-1. Прочитай актуальное дерево проекта из `.roo-context.txt`.
-2. Если файл, который ты собираешься изменить, отсутствует в дереве — сообщи пользователю.
-3. Если ты видишь в коде ссылку на `mobile/`, `telegram/`, `ws/` — знай, что эти директории РЕАЛЬНЫ и существуют. Не помечай их как "несуществующие".
+Анализ (2-3 предложения): что нужно сделать и почему
+План (список файлов для чтения/изменения)
+Код (точные diff'и, не полные файлы если возможно)
+Команды (для сборки/тестов/миграций)
+Предупреждения (риски, breaking changes)
+Вопрос: «Что дальше: продолжаем по плану или нужна корректировка?»
+11. СОСТОЯНИЕ ПРОЕКТА — КРИТИЧЕСКИ ВАЖНЫЕ МОДУЛИ
+НЕ ТРОГАТЬ без крайней необходимости:
+Backend (Go):
+backend/internal/api/cmms_handlers.go — CMMS handlers через Router
+backend/internal/api/mobile_handlers.go — mobile-optimized endpoints
+backend/internal/api/telegram_handlers.go — Telegram integration
+backend/internal/api/apikey_handlers.go — API key management
+backend/internal/telegram/bot.go — Telegram bot core
+backend/internal/ws/hub.go + client.go — WebSocket
+backend/internal/db/cmms_repository.go — CMMS DB queries
+backend/internal/cmms/adapter.go — CMMSAdapter interface + Router
+backend/internal/protocols/* — 7 protocol handlers
+backend/internal/sip/handler.go — GB28181 SIP server
+Frontend (React):
+frontend/src/context/WorkOrdersContext.tsx
+frontend/src/context/SparePartsContext.tsx
+frontend/src/context/MaintenanceContext.tsx
+frontend/src/context/DevicesSitesContext.tsx
+frontend/src/services/api.ts — main API client
+frontend/src/i18n.ts — translations
+Mobile (React Native):
+Директория mobile/ ПОЛНОСТЬЮ ФУНКЦИОНАЛЬНА
+Экраны: Checklist, PhotoCapture, QRScanner, Signature, WorkOrderDetail
+Offline sync, Push notifications, QR scanning
+ПРАВИЛО ПРОВЕРКИ ДЕРЕВА
+ПЕРЕД ЛЮБЫМ ИЗМЕНЕНИЕМ:
+Прочитай актуальное дерево проекта из .roo-context.txt
+Если файл отсутствует в дереве — сообщи пользователю
+Если видишь ссылку на mobile/, telegram/, ws/, protocols/ — эти директории РЕАЛЬНЫ
+НЕ помечай существующие модули как "несуществующие"

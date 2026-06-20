@@ -244,6 +244,22 @@ func Load() *Config {
 	bindEnv("gb28181.max_sub_channels", "GB_GB28181_MAX_SUB_CHANNELS")
 	bindEnv("gb28181.log_sip_messages", "GB_GB28181_LOG_SIP_MESSAGES")
 
+	// P2P Gateway
+	bindEnv("p2p_gateway_url", "GB_P2P_GATEWAY_URL")
+	bindEnv("p2p_api_key", "GB_P2P_API_KEY")
+
+	// CMMS Adapter
+	bindEnv("cmms_adapter", "GB_CMMS_ADAPTER")
+	bindEnv("atlas_url", "GB_ATLAS_URL")
+	bindEnv("atlas_api_key", "GB_ATLAS_API_KEY")
+
+	// Telegram
+	bindEnv("telegram.enabled", "GB_TELEGRAM_ENABLED")
+	bindEnv("telegram.token", "GB_TELEGRAM_TOKEN")
+
+	// Database
+	bindEnv("database.url", "DATABASE_URL")
+
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			fmt.Println("Config file not found, using defaults and environment variables")
@@ -324,6 +340,15 @@ func Load() *Config {
 			KeepaliveTimeout:  viper.GetInt("gb28181.keepalive_timeout"),
 			MaxSubChannels:    viper.GetInt("gb28181.max_sub_channels"),
 			LogSIPMessages:    viper.GetBool("gb28181.log_sip_messages"),
+		},
+		P2PGatewayURL: viper.GetString("p2p_gateway_url"),
+		P2PAPIKey:     viper.GetString("p2p_api_key"),
+		CMMSAdapter:   viper.GetString("cmms_adapter"),
+		AtlasURL:      viper.GetString("atlas_url"),
+		AtlasAPIKey:   viper.GetString("atlas_api_key"),
+		Telegram: TelegramConfig{
+			Enabled: viper.GetBool("telegram.enabled"),
+			Token:   viper.GetString("telegram.token"),
 		},
 	}
 

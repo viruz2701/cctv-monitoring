@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { WorkOrder } from '../services/workOrdersApi';
-import { Button, Card, Table, Badge, Modal, Input } from '../components/ui';
+import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
 import { Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 
 export const WorkOrders: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { workOrders, loading, startWorkOrder, completeWorkOrder, cancelWorkOrder } = useWorkOrders();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
@@ -149,12 +151,16 @@ export const WorkOrders: React.FC = () => {
           </select>
         </div>
 
-        <Table
+        <DataGrid
           data={filtered}
           columns={columns}
           keyExtractor={(item) => item.id}
           loading={loading}
           emptyMessage={t('no_work_orders')}
+          exportable
+          exportFilename="work-orders.csv"
+          selectable
+          onRowClick={(item) => navigate(`/work-orders/${item.id}`)}
         />
       </Card>
 

@@ -22,6 +22,7 @@ import { APIKeys } from './pages/APIKeys';
 import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
 import { WorkOrders } from './pages/WorkOrders';
 import { SpareParts } from './pages/SpareParts';
+import { WorkOrderDetail } from './pages/WorkOrderDetail';
 import { TechnicianDashboard } from './pages/TechnicianDashboard';
 import { SLADashboard } from './pages/SLADashboard';
 import { MaintenanceReports } from './pages/MaintenanceReports';
@@ -111,6 +112,7 @@ function App() {
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
                                 <Route path="/maintenance" element={<MaintenanceSchedules />} />
                                 <Route path="/work-orders" element={<WorkOrders />} />
+                                <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
                                 <Route path="/spare-parts" element={<SpareParts />} />
                                 <Route path="/technician-dashboard" element={<TechnicianDashboard />} />
                               </Route>

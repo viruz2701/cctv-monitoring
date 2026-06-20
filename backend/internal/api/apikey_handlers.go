@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 	"gb-telemetry-collector/internal/auth"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // handleCreateAPIKey creates a new API key
@@ -45,9 +45,14 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	apiKey := "sk_live_" + hex.EncodeToString(keyBytes)
 
-	// Hash the key for storage
-	hash := sha256.Sum256([]byte(apiKey))
-	keyHash := hex.EncodeToString(hash[:])
+	// Hash the key with bcrypt (cost=12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(apiKey), 12)
+	if err != nil {
+		s.logger.Error("failed to hash API key", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	keyHash := string(hash)
 
 	// Generate ID
 	idBytes := make([]byte, 16)
@@ -58,8 +63,11 @@ func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	id := hex.EncodeToString(idBytes)
 
+	// Extract prefix for lookup
+	keyPrefix := apiKey[:8]
+
 	// Save to database
-	if err := s.db.CreateAPIKey(id, req.Name, keyHash, req.Permissions, req.ExpiresAt, claims.UserID); err != nil {
+	if err := s.db.CreateAPIKey(id, req.Name, keyHash, keyPrefix, req.Permissions, req.ExpiresAt, claims.UserID); err != nil {
 		s.logger.Error("failed to create API key", "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

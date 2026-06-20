@@ -20,7 +20,7 @@ import { useSyncStore } from '../store/syncStore';
 type Props = NativeStackScreenProps<RootStackParamList, 'Signature'>;
 
 export default function SignatureScreen({ route }: Props) {
-  const { workOrder, checklist, photos } = route.params;
+  const { workOrder, checklist, photos, verificationToken } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const completeMutation = useCompleteWorkOrder();
   const { latitude, longitude } = useLocation();
@@ -55,6 +55,7 @@ export default function SignatureScreen({ route }: Props) {
       parts_used: [] as PartUsage[],
       signature,
       location: { latitude, longitude },
+      verification_token: verificationToken,
     };
 
     try {

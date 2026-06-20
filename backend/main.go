@@ -20,6 +20,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type DBWriter struct {
@@ -120,6 +122,9 @@ func getEnv(key, def string) string {
 }
 
 func main() {
+	// Загружаем .env файл перед чтением конфигурации
+	_ = godotenv.Load()
+
 	cfg := config.Load()
 
 	// Инициализация логгера с ротацией
@@ -308,7 +313,6 @@ func main() {
 	// --- Reaper ---
 	reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
 	reaper.Start()
-	defer reaper.Stop()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

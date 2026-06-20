@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpareParts } from '../context/SparePartsContext';
-import { SparePart } from '../services/sparePartsApi';
-import { Button, Card, Table, Modal, Input } from '../components/ui';
-import { Plus, AlertTriangle, Minus, Package } from 'lucide-react';
+import { Button, PartCard, Modal, Input } from '../components/ui';
+import { Plus, Search } from 'lucide-react';
 
 export const SpareParts: React.FC = () => {
   const { t } = useTranslation();
-  const { spareParts, loading, deleteSparePart, adjustStock } = useSpareParts();
+  const { spareParts, loading, createSparePart } = useSpareParts();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -16,54 +15,18 @@ export const SpareParts: React.FC = () => {
     return true;
   });
 
-  const isLowStock = (part: SparePart) => part.stock <= part.min_stock;
-
-  const columns = [
-    {
-      key: 'name',
-      header: t('name'),
-      render: (item: SparePart) => (
-        <div className="flex items-center gap-2">
-          <Package size={16} className="text-slate-400" />
-          {item.name}
-        </div>
-      ),
-    },
-    { key: 'sku', header: 'SKU' },
-    { key: 'category', header: t('category'), render: (item: SparePart) => item.category || '-' },
-    {
-      key: 'stock',
-      header: t('stock'),
-      render: (item: SparePart) => (
-        <div className="flex items-center gap-2">
-          <span className={isLowStock(item) ? 'text-red-600 font-bold' : ''}>
-            {item.stock}
-          </span>
-          {isLowStock(item) && <AlertTriangle className="text-red-500" size={16} />}
-          <span className="text-xs text-slate-400">/ min: {item.min_stock}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'cost',
-      header: t('cost'),
-      render: (item: SparePart) => `$${item.cost?.toFixed(2) || '0.00'}`,
-    },
-    { key: 'location', header: t('location'), render: (item: SparePart) => item.location || '-' },
-    {
-      key: 'actions',
-      header: t('actions'),
-      render: (item: SparePart) => (
-        <div className="flex gap-1">
-          <Button size="sm" onClick={(e) => { e.stopPropagation(); adjustStock(item.id, item.stock + 1); }} icon={<Plus size={14} />} />
-          <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); adjustStock(item.id, Math.max(0, item.stock - 1)); }} icon={<Minus size={14} />} />
-          <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); deleteSparePart(item.id); }}>
-            {t('delete')}
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  const mapToPartCard = (p: typeof spareParts[0]) => ({
+    id: p.id,
+    name: p.name,
+    part_number: p.sku,
+    category: p.category,
+    quantity: p.stock,
+    min_quantity: p.min_stock,
+    unit: 'шт',
+    price: p.cost,
+    supplier: p.supplier,
+    location: p.location,
+  });
 
   return (
     <div className="p-6">
@@ -74,22 +37,37 @@ export const SpareParts: React.FC = () => {
         </Button>
       </div>
 
-      <Card>
-        <div className="mb-4">
-          <Input
+      <div className="mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
             placeholder={t('search_parts')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <Table
-          data={filtered}
-          columns={columns}
-          keyExtractor={(item) => item.id}
-          loading={loading}
-          emptyMessage={t('no_parts')}
-        />
-      </Card>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="animate-pulse bg-white dark:bg-slate-800 rounded-xl p-5 h-48 border border-slate-200 dark:border-slate-700" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((part) => (
+            <PartCard key={part.id} part={mapToPartCard(part)} />
+          ))}
+          {filtered.length === 0 && (
+            <div className="col-span-full text-center py-12 text-slate-500 dark:text-slate-400">
+              {search ? 'No parts match your search' : t('no_parts')}
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title={t('add_part')}>
         <CreatePartForm onClose={() => setShowCreateModal(false)} />

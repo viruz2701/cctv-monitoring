@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/gatekeeper"
 	"gb-telemetry-collector/internal/models"
 )
 
@@ -223,23 +224,42 @@ func (s *Server) startMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
-// completeMobileWorkOrder — завершить наряд с расширенным payload
+// completeMobileWorkOrder — завершить наряд с расширенным payload.
+// Требует verification_token, полученный через POST /verify.
 func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Notes     string                 `json:"notes"`
-		Checklist []models.ChecklistItem `json:"checklist"`
-		Photos    []string               `json:"photos"`
-		PartsUsed []models.PartUsage     `json:"parts_used"`
-		Signature *string                `json:"signature"`
-		Location  *struct {
+		Notes             string                 `json:"notes"`
+		Checklist         []models.ChecklistItem `json:"checklist"`
+		Photos            []string               `json:"photos"`
+		PartsUsed         []models.PartUsage     `json:"parts_used"`
+		Signature         *string                `json:"signature"`
+		VerificationToken string                 `json:"verification_token"`
+		Location          *struct {
 			Latitude  float64 `json:"latitude"`
 			Longitude float64 `json:"longitude"`
 		} `json:"location"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Gatekeeper: проверяем verification token
+	if req.VerificationToken == "" {
+		http.Error(w, `{"error":"verification_token is required. Call POST /verify first."}`, http.StatusBadRequest)
+		return
+	}
+
+	vClaims, err := gatekeeper.ValidateVerificationToken(req.VerificationToken)
+	if err != nil {
+		http.Error(w, `{"error":"invalid or expired verification_token"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if vClaims.WorkOrderID != id {
+		http.Error(w, `{"error":"verification_token does not match this work order"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -260,6 +280,12 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Добавляем информацию о верификации в notes
+	notes += "\n\n[VERIFIED: GPS=" + boolToStr(vClaims.GPSPassed) +
+		" EXIF=" + boolToStr(vClaims.EXIFPassed) +
+		" AI=" + boolToStr(vClaims.AIPassed) +
+		" GPS_SKIPPED=" + boolToStr(vClaims.GPSSkipped) + "]"
+
 	// Сохраняем location
 	if req.Location != nil {
 		locJSON, _ := json.Marshal(req.Location)
@@ -275,6 +301,14 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 
 	s.logAudit(userID, "mobile_complete_work_order", "work_order", id, nil, req)
 	respondJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+}
+
+// boolToStr converts bool to "true"/"false" string.
+func boolToStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // uploadMobileWorkOrderPhoto — загрузка одного фото через multipart

@@ -695,6 +695,7 @@ type APIKey struct {
 	ID          string     `json:"id"`
 	Name        string     `json:"name"`
 	KeyHash     string     `json:"-"`
+	KeyPrefix   string     `json:"-"`
 	Permissions []string   `json:"permissions"`
 	ExpiresAt   *time.Time `json:"expires_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
@@ -702,14 +703,14 @@ type APIKey struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
-func (db *DB) CreateAPIKey(id, name, keyHash string, permissions []string, expiresAt *time.Time, createdBy string) error {
+func (db *DB) CreateAPIKey(id, name, keyHash, keyPrefix string, permissions []string, expiresAt *time.Time, createdBy string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	_, err := db.Pool.Exec(ctx, `
-		INSERT INTO api_keys (id, name, key_hash, permissions, expires_at, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, id, name, keyHash, permissions, expiresAt, createdBy)
+		INSERT INTO api_keys (id, name, key_hash, key_prefix, permissions, expires_at, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`, id, name, keyHash, keyPrefix, permissions, expiresAt, createdBy)
 	return err
 }
 
@@ -718,7 +719,7 @@ func (db *DB) GetAPIKeys(createdBy string) ([]APIKey, error) {
 	defer cancel()
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, name, key_hash, permissions, expires_at, last_used_at, created_by, created_at
+		SELECT id, name, key_hash, COALESCE(key_prefix, ''), permissions, expires_at, last_used_at, created_by, created_at
 		FROM api_keys
 		WHERE created_by = $1
 		ORDER BY created_at DESC
@@ -731,7 +732,7 @@ func (db *DB) GetAPIKeys(createdBy string) ([]APIKey, error) {
 	var keys []APIKey
 	for rows.Next() {
 		var key APIKey
-		if err := rows.Scan(&key.ID, &key.Name, &key.KeyHash, &key.Permissions, &key.ExpiresAt, &key.LastUsedAt, &key.CreatedBy, &key.CreatedAt); err != nil {
+		if err := rows.Scan(&key.ID, &key.Name, &key.KeyHash, &key.KeyPrefix, &key.Permissions, &key.ExpiresAt, &key.LastUsedAt, &key.CreatedBy, &key.CreatedAt); err != nil {
 			return nil, err
 		}
 		keys = append(keys, key)
@@ -739,20 +740,30 @@ func (db *DB) GetAPIKeys(createdBy string) ([]APIKey, error) {
 	return keys, rows.Err()
 }
 
-func (db *DB) GetAPIKeyByHash(keyHash string) (*APIKey, error) {
+// GetAPIKeysByPrefix returns all API keys matching the given prefix (for bcrypt lookup)
+func (db *DB) GetAPIKeysByPrefix(prefix string) ([]APIKey, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var key APIKey
-	err := db.Pool.QueryRow(ctx, `
-		SELECT id, name, key_hash, permissions, expires_at, last_used_at, created_by, created_at
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, name, key_hash, COALESCE(key_prefix, ''), permissions, expires_at, last_used_at, created_by, created_at
 		FROM api_keys
-		WHERE key_hash = $1
-	`, keyHash).Scan(&key.ID, &key.Name, &key.KeyHash, &key.Permissions, &key.ExpiresAt, &key.LastUsedAt, &key.CreatedBy, &key.CreatedAt)
+		WHERE key_prefix = $1
+	`, prefix)
 	if err != nil {
 		return nil, err
 	}
-	return &key, nil
+	defer rows.Close()
+
+	var keys []APIKey
+	for rows.Next() {
+		var key APIKey
+		if err := rows.Scan(&key.ID, &key.Name, &key.KeyHash, &key.KeyPrefix, &key.Permissions, &key.ExpiresAt, &key.LastUsedAt, &key.CreatedBy, &key.CreatedAt); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
 }
 
 func (db *DB) RevokeAPIKey(id, createdBy string) error {
@@ -828,4 +839,31 @@ func (db *DB) UpdateAPIKeyLastUsed(id string) error {
 		WHERE id = $1
 	`, id)
 	return err
+}
+
+// SiteInfo содержит координаты объекта для Gatekeeper-верификации.
+type SiteInfo struct {
+	SiteID               string
+	SiteName             string
+	Latitude             float64
+	Longitude            float64
+	GeofenceRadiusMeters float64
+}
+
+// GetSiteInfo возвращает информацию об объекте (координаты) для наряда.
+// Используется Gatekeeper Service для верификации GPS и EXIF.
+func (db *DB) GetSiteInfo(ctx context.Context, workOrderID string) (*SiteInfo, error) {
+	var info SiteInfo
+	err := db.Pool.QueryRow(ctx, `
+		SELECT d.device_id, COALESCE(d.name, d.device_id),
+		       COALESCE(d.latitude, 0), COALESCE(d.longitude, 0),
+		       COALESCE(d.geofence_radius_meters, 500)
+		FROM work_orders wo
+		JOIN devices d ON wo.device_id = d.device_id
+		WHERE wo.id = $1
+	`, workOrderID).Scan(&info.SiteID, &info.SiteName, &info.Latitude, &info.Longitude, &info.GeofenceRadiusMeters)
+	if err != nil {
+		return nil, fmt.Errorf("get site info for work_order %s: %w", workOrderID, err)
+	}
+	return &info, nil
 }

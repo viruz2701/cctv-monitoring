@@ -15,6 +15,7 @@ import PhotoCaptureScreen from '../screens/PhotoCaptureScreen';
 import SignatureScreen from '../screens/SignatureScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QRScannerScreen from '../screens/QRScannerScreen';
+import VerificationScreen from '../screens/VerificationScreen';
 
 import { RootStackParamList, MainTabParamList } from '../types';
 
@@ -107,6 +108,11 @@ export default function AppNavigator() {
               name="PhotoCapture"
               component={PhotoCaptureScreen}
               options={{ title: 'Фотофиксация' }}
+            />
+            <Stack.Screen
+              name="Verification"
+              component={VerificationScreen}
+              options={{ title: 'Верификация' }}
             />
             <Stack.Screen
               name="Signature"
