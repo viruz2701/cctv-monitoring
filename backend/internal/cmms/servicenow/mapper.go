@@ -253,7 +253,7 @@ func buildTablePath(table string, filters map[string]interface{}) string {
 }
 
 // toWorkOrderResponse преобразует ServiceNow-ответ в models.WorkOrder.
-func toWorkOrderResponse(raw map[string]interface{}) (*models.WorkOrder, error) {
+func toWorkOrderResponse(_ map[string]interface{}) (*models.WorkOrder, error) {
 	// ServiceNow возвращает поле result с объектом или массивом
 	return &models.WorkOrder{}, nil
 }

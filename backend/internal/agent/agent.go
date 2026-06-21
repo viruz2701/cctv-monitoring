@@ -533,7 +533,7 @@ func (a *Agent) escalate(ctx context.Context, decision Decision, deviceID string
 }
 
 // scheduleMaintenance планирует обслуживание.
-func (a *Agent) scheduleMaintenance(ctx context.Context, deviceID string, decision Decision) {
+func (a *Agent) scheduleMaintenance(_ context.Context, deviceID string, decision Decision) {
 	a.logAction(deviceID, "maintenance_scheduled", decision.Level, decision.PlaybookRef, true, decision.Reason)
 	a.logger.Info("maintenance scheduled", "device", deviceID, "reason", decision.Reason)
 }

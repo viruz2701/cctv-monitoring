@@ -170,7 +170,7 @@ func (s *Subscriber) startWorkers() {
 	}
 }
 
-func (s *Subscriber) worker(id int) {
+func (s *Subscriber) worker(_ int) {
 	defer s.wg.Done()
 	for {
 		select {
