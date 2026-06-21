@@ -46,6 +46,7 @@ type Device struct {
 	P2PBrand          string       `json:"p2p_brand,omitempty"`
 	P2PSerial         string       `json:"p2p_serial,omitempty"`
 	CloudStatus       string       `json:"cloud_status,omitempty"`
+	AssetClass        string       `json:"asset_class,omitempty"` // critical, confidential, internal, public
 }
 
 type Alarm struct {

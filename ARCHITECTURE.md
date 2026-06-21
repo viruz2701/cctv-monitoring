@@ -1,14 +1,14 @@
-# CCTV Intelligence Platform — Architecture Document v5.0
+# CCTV Intelligence Platform — Architecture Document v6.0
 
 **Дата обновления:** 2026-06-21
-**Статус:** Phase 2 in progress (AI Intelligence & Atlas Integration)
-**Версия:** 5.0 (post-Phase 1.5)
+**Статус:** Phase 3 in progress (Universal CMMS Gateway + Self-Healing)
+**Версия:** 6.0 (post-Phase 2)
 
 ---
 
 ## 1. Executive Summary
 
-CCTV Intelligence Platform — зрелая экосистема для мониторинга CCTV, управления обслуживанием и предиктивной аналитики.
+CCTV Intelligence Platform — зрелая экосистема enterprise-класса для мониторинга CCTV, предиктивного обслуживания и ИТ/ИБ-конвергенции.
 
 **Текущий стек:**
 - **Backend:** Go 1.25 (chi, pgx/v5, gorilla/websocket, telegram-bot-api)
@@ -16,44 +16,43 @@ CCTV Intelligence Platform — зрелая экосистема для мони
 - **Mobile:** React Native / Expo 52, React Query, Zustand
 - **P2P Gateway:** Go 1.25 + бинарные адаптеры (neolink, dh-p2p)
 - **Analytics:** Python 3.11 (XGBoost, pandas, psycopg2)
+- **AI/ML:** XGBoost (predictions), DeepSeek Vision (gatekeeper), Whisper + DeepSeek NLP (voice)
 - **Data:** PostgreSQL + TimescaleDB (hypertables)
 
-**Ключевые архитектурные решения (приняты):**
-- **ADR-001:** Headless CMMS — CMMS как интерфейс, не как жёсткая привязка
-- **ADR-002:** CMMS Adapter Pattern — InternalAdapter + AtlasAdapter + Router
-- **ADR-003:** Event Bus — NATS (Phase 1-3), Kafka (Phase 4)
-- **ADR-004:** Gatekeeper Pattern — GPS/EXIF/AI верификация закрытия нарядов ✅ **РЕАЛИЗОВАНО**
+**Ключевые архитектурные решения:**
+- **ADR-001:** Headless CMMS ✅
+- **ADR-002:** CMMS Adapter Pattern ✅ (InternalAdapter + AtlasAdapter + Router)
+- **ADR-003:** Event Bus (NATS) — Phase 3
+- **ADR-004:** Gatekeeper Pattern ✅ (GPS/EXIF/AI)
 
-**Реализовано сверх roadmap:**
-- GB/T 28181 SIP-сервер (полный стек: REGISTER, MESSAGE, Catalog, PTZ)
-- 7 приватных протоколов CCTV (Dahua, Hisilicon, TVT, Hikvision ISAPI, FTP, SNMP, Syslog)
-- Telegram Bot (account linking, 2FA login, alarm notifications)
-- Mobile App с offline-first синхронизацией
-- P2P Gateway для 4 брендов (Hikvision, Reolink, Dahua, Xiongmai/Jftech)
+**Выполненные фазы:**
+- ✅ Phase 0: Foundation & Analysis
+- ✅ Phase 1: Headless CMMS (CMMS Router, Maintenance Schedules)
+- ✅ Phase 1.5: Gatekeeper + ISO Quick Wins + UX Refresh
+- ✅ Phase 2: Atlas Integration + Predictive Maintenance + TCO + Voice-to-Report
+
+**В процессе:**
+- 🔄 Phase 3: ServiceNow / Jira / 1С:ТОИР адаптеры, NATS Event Bus, Agentic Self-Healing
 
 ---
 
 ## 2. High-Level Architecture
 
+
 ┌─────────────────────────────────────────────────────────────────────┐
 │ CLIENTS LAYER │
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
 │ │ Desktop │ │ Mobile App │ │ Telegram Bot │ │
-│ │ (React/Vite) │ │ (Expo/RN) │ │ (Commands & │ │
-│ │ │ │ │ │ Alerts) │ │
+│ │ (React/Vite) │ │ (Expo/RN) │ │ (Commands) │ │
 │ └──────────────┘ └──────────────┘ └──────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 │ HTTPS / WSS
 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ API GATEWAY (Go/chi) │
-│ ┌────────────────────────────────────────────────────────────┐ │
-│ │ Middleware: Auth(JWT), RBAC, CORS, Logger, Recoverer, │ │
-│ │ RateLimiter, SecurityHeaders ✅ │ │
-│ │ Handlers: api, mobile, cmms, telegram, apikey, ws, p2p, │ │
-│ │ gatekeeper ✅ │ │
-│ │ Protocols: SIP/GB28181, Dahua, Hisilicon, TVT, FTP, SNMP │ │
-│ └────────────────────────────────────────────────────────────┘ │
+│ Middleware: SecurityHeaders ✅, RateLimiter ✅, Auth, RBAC, CORS │
+│ Handlers: api, mobile, cmms, gatekeeper ✅, telegram, ws, p2p, │
+│ atlas_sync ✅, predictions ✅, tco ✅, voice ✅ │
 └─────────────────────────────────────────────────────────────────────┘
 │
 ▼
@@ -61,17 +60,15 @@ CCTV Intelligence Platform — зрелая экосистема для мони
 │ CORE DOMAIN SERVICES │
 │ │
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│ │ Telemetry │ │ CMDB │ │ Gatekeeper │ │
-│ │ Collector │ │ Service │ │ Service │ ✅ DONE │
-│ │ (RTSP/SNMP/ │ │ (Devices, │ │ (GPS/EXIF/ │ │
-│ │ ISAPI/SIP/ │ │ Sites, QR) │ │ AI Verify) │ │
-│ │ Dahua/FTP) │ │ │ │ │ │
+│ │ Telemetry │ │ Gatekeeper │ │ Predictions │ │
+│ │ Collector │ │ Service ✅ │ │ Service ✅ │ │
+│ │ (8 protos) │ │ (GPS/EXIF/AI)│ │ (XGBoost) │ │
 │ └──────────────┘ └──────────────┘ └──────────────┘ │
 │ │
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│ │ Alarm & │ │ SLA & │ │ AI/ML │ │
-│ │ State Mgr │ │ Workload │ │ Service │ │
-│ │ (WebSocket) │ │ Manager │ │ (XGBoost) │ │
+│ │ TCO │ │ Voice │ │ Alarm & │ │
+│ │ Calculator ✅│ │ NLP ✅ │ │ State Mgr │ │
+│ │ (per device) │ │ (Whisper+NLP)│ │ (WebSocket) │ │
 │ └──────────────┘ └──────────────┘ └──────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 │
@@ -84,13 +81,23 @@ CCTV Intelligence Platform — зрелая экосистема для мони
 │ │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │ │
 │ │ │ Internal │ │ Atlas │ │ServiceNow│ │ Jira │ │ │
 │ │ │ (PgSQL) │ │ Adapter │ │ Adapter │ │ Adapter │ │ │
-│ │ │ ✅ │ │ ⚠️ Stub │ │ Phase 3 │ │ Phase 3 │ │ │
+│ │ │ ✅ │ │ ✅ │ │ Phase 3 │ │ Phase 3 │ │ │
 │ │ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │ │
+│ │ ┌──────────┐ ┌──────────────┐ │ │
+│ │ │ Toir │ │ Fallback │ │ │
+│ │ │ Adapter │ │ Queue ✅ │ │ │
+│ │ │ Phase 3 │ │ (offline) │ │ │
+│ │ └──────────┘ └──────────────┘ │ │
 │ └────────────────────────────────────────────────────────────┘ │
 │ │
 │ ┌────────────────────────────────────────────────────────────┐ │
-│ │ P2P Gateway (Go + binaries) │ │
-│ │ Adapters: Hikvision ✅, Reolink ✅, Dahua ✅, Xiongmai ✅ │ │
+│ │ Event Bus (NATS) — Phase 3 ⚠️ │ │
+│ │ Topics: alarms.{device_id}, cmms.workorder.*, predictions │ │
+│ └────────────────────────────────────────────────────────────┘ │
+│ │
+│ ┌────────────────────────────────────────────────────────────┐ │
+│ │ P2P Gateway (Go + binaries) ✅ │ │
+│ │ Adapters: Hikvision, Reolink, Dahua, Xiongmai │ │
 │ └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 │
@@ -100,16 +107,11 @@ CCTV Intelligence Platform — зрелая экосистема для мони
 │ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────┐ │
 │ │ TimescaleDB │ │ PostgreSQL │ │ Redis │ │
 │ │ (telemetry, │ │ (CMDB, CMMS, │ │ (Cache, │ │
-│ │ alarms, logs, │ │ Users, SLA, │ │ Sessions) │ │
-│ │ predictions) │ │ API Keys) │ │ ⚠️ Pending │ │
+│ │ alarms, logs, │ │ Users, SLA, │ │ Sessions, │ │
+│ │ predictions ✅)│ │ API Keys) │ │ NATS ⚠️) │ │
 │ └──────────────────┘ └──────────────────┘ └──────────────┘ │
-│ │
-│ ┌──────────────────┐ ┌──────────────────┐ │
-│ │ Object Storage │ │ Vault │ │
-│ │ (Photos, │ │ (Secrets, JWT) │ │
-│ │ Reports) │ │ ⚠️ Pending │ │
-│ └──────────────────┘ └──────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
+
 
 ---
 
@@ -119,346 +121,243 @@ CCTV Intelligence Platform — зрелая экосистема для мони
 
 | Entity | Таблица | Статус | Описание |
 |--------|---------|--------|----------|
-| **Device** | `devices` | ✅ | id, name, type, vendor, site_id, qr_code, GB28181 fields, P2P fields, ONVIF fields, **latitude/longitude/geofence** ✅ |
-| **Site** | `sites` | ✅ | Hierarchy (Site → Building → Floor → Rack), GPS, geofence |
-| **Alarm** | `alarms` (hypertable) | ✅ | device_id, type, severity, status, image_path |
-| **WorkOrder** | `work_orders` | ✅ | type, status, priority, SLA deadline, checklist (JSONB), photos, parts_used, **verification_token** ✅ |
-| **SparePart** | `spare_parts` | ✅ | name, sku, stock, min_stock, cost, location |
-| **MaintenanceSchedule** | `maintenance_schedules` | ✅ | schedule_type, interval_days, next_due, checklist |
-| **Technician** | `users` + columns | ✅ | skills, workload, **push_token (AES-256-GCM)** ✅, certifications |
-| **SLAConfig** | `sla_config` | ✅ | priority → response_time, resolution_time |
-| **APIKey** | `api_keys` | ✅ | hash (**bcrypt** ✅), **key_prefix** ✅, permissions, expires_at |
-| **TechnicianSiteAssignment** | `technician_site_assignments` | ✅ | technician_id, site_id, is_primary |
-| **AuditLog** | `audit_log` | ✅ | user_id, action, entity, old/new JSONB |
-| **UserSession** | `user_sessions` | ✅ | token_hash, ip, user_agent, expires_at |
-| **Prediction** | `predictions` (hypertable) | ✅ | failure_probability, explanation |
-| **TelegramLinkToken** | `telegram_link_tokens` | ✅ | token, user_id, expires_at |
+| Device | devices | ✅ | + lat/lng/geofence |
+| Site | sites | ✅ | + geofence_polygon |
+| WorkOrder | work_orders | ✅ | + verification_token, atlas_external_id |
+| SparePart | spare_parts | ✅ | + sku, min_stock, tco_contribution |
+| MaintenanceSchedule | maintenance_schedules | ✅ | + auto_create_from_prediction |
+| APIKey | api_keys | ✅ | bcrypt hash + prefix |
+| Prediction | predictions (hypertable) | ✅ | + ttf (time-to-failure), features |
+| TCORecord | tco_records ✅ | NEW | device_id, capex, opex, mttr, mtbf |
+| VoiceReport | voice_reports ✅ | NEW | user_id, audio_path, transcript, entities (JSONB) |
+| AtlasSyncState | atlas_sync_state ✅ | NEW | last_sync, pending_changes, conflict_log |
 
-### 3.2 CMMS Adapter Interface (ADR-002)
+### 3.2 CMMS Adapter Interface (ADR-002) — 33 метода
 
 ```go
-// backend/internal/cmms/adapter.go
 type CMMSAdapter interface {
-    // Work Orders (8 methods)
-    CreateWorkOrder(ctx, wo) error
-    GetWorkOrders(ctx, filters) ([]WorkOrder, error)
-    // ... AssignWorkOrder, StartWorkOrder, CompleteWorkOrder, CancelWorkOrder
-    
-    // Spare Parts (7 methods)
-    CreateSparePart, GetSpareParts, UpdateSparePart, DeleteSparePart, ...
-    
-    // Maintenance Schedules (7 methods)
-    CreateMaintenanceSchedule, GetDueSchedules, CompleteMaintenanceSchedule, ...
-    
-    // SLA, Technicians, Reports, Site Assignments, Mobile
+    // Work Orders, Spare Parts, Maintenance, SLA, Technicians, Reports
     // Total: 33 methods
 }
 Реализации:
-InternalAdapter ✅ — обёртка над db.DB, production-ready
-AtlasAdapter ⚠️ — все методы возвращают ErrNotImplemented (задел на Phase 2)
-ServiceNowAdapter, JiraAdapter — planned for Phase 3
-3.3 Gatekeeper Pattern (ADR-004) — ✅ РЕАЛИЗОВАНО
-Mobile App                    Backend                      AI Service
-    │                            │                             │
-    │  POST /verify              │                             │
-    │  {photo, GPS, EXIF}        │                             │
-    ├───────────────────────────►│                             │
-    │                            │  1. GPS geofence check ✅   │
-    │                            │  2. EXIF time/device ✅     │
-    │                            │  3. POST /gatekeeper/ai     │
-    │                            ├────────────────────────────►│
-    │                            │                             │ DeepSeek: before/after
-    │                            │◄────────────────────────────┤
-    │                            │  4. Generate verify_token ✅│
-    │◄───────────────────────────┤                             │
-    │  {verification_token}      │                             │
-    │                            │                             │
-    │  POST /complete            │                             │
-    │  {token, notes, photos}    │                             │
-    ├───────────────────────────►│                             │
-    │                            │  Validate token → complete ✅│
-    Реализованные компоненты:
-gatekeeper/verifier.go — оркестратор верификации
-gatekeeper/gps.go — Haversine distance, geofence validation
-gatekeeper/exif.go — EXIF metadata validation (timestamp, GPS match)
-gatekeeper/ai.go — DeepSeek Vision API integration (graceful skip if not configured)
-gatekeeper/token.go — JWT verification token (10 min TTL)
-api/gatekeeper_handler.go — HTTP endpoint
-Mobile: VerificationScreen.tsx, GPSStatus.tsx, EXIFStatus.tsx, AIScore.tsx
-4. Protocol Architecture (реализовано сверх roadmap)
-4.1 GB/T 28181 (China National Standard)
-Полная реализация SIP-сервера:
-REGISTER — регистрация устройств, NAT traversal
-MESSAGE — Keepalive, Alarm, MobilePosition
-Catalog — запрос каталога NVR → авто-регистрация child devices
-DeviceInfo — авто-запрос manufacturer/model/firmware
-PTZ — команды управления (Direction + Zoom)
-GB2312/GBK — декодирование китайской кодировки
-DeviceID parsing — 20-значный код (type/region/manufacturer/serial)
-4.2 Приватные протоколы
-Протокол
-Порт
+Adapter
 Статус
-Особенности
-Dahua
-37777, 37778
-✅
-Binary header 0x12 0x34, key=value payload
-Hisilicon
-15002
-✅
-JSON в бинарных данных, hex→IP конвертация
-TVT
-15003
-✅
-XML/JSON fallback, ASCII-поиск
-Hikvision ISAPI
-HTTP pull
-✅
-Multipart streaming + Raw TCP fallback
-FTP
-2121
-✅
-Приём snapshot, авто-регистрация
-SNMP traps
-162
-✅
-v1/v2c, OID-based vendor detection
-Syslog
-1514 UDP/TCP
-✅
-Эвристический парсер (Hikvision/Dahua)
-4.3 P2P Gateway
-Микросервис на Go 1.25 с бинарными адаптерами:
-Hikvision — EZVIZ/Hik-Connect cloud proxy
-Reolink — neolink (Rust binary)
-Dahua — dh-p2p (Python script)
-Xiongmai/Jftech — nat traversal через JftechWS API
-5. Security Architecture (ISO 27001 Status)
-5.1 Реализовано ✅
+Target System
+API Docs
+InternalAdapter
+✅ Production
+PostgreSQL
+Internal
+AtlasAdapter
+✅ Production (Phase 2)
+Atlas CMMS
+Maintenancex/Atlas REST API
+ServiceNowAdapter
+🔄 Phase 3
+ServiceNow ITSM
+ServiceNow REST API
+JiraAdapter
+🔄 Phase 3
+Jira Service Mgmt
+Jira REST API v3
+ToirAdapter
+🔄 Phase 3
+1С:ТОИР (152-ФЗ)
+ТОИР API Docs
+3.3 Gatekeeper Pattern (ADR-004) — ✅
+Mobile → POST /verify → GPS+EXIF+AI → verification_token (JWT, 10 min TTL)
+Mobile → POST /complete + token → validate → complete WO
+3.4 Predictive Maintenance Pipeline (Phase 2 ✅)
+TimescaleDB telemetry → ETL (Python) → XGBoost model
+                                              ↓
+                              predictions table (TTF, failure_prob)
+                                              ↓
+                    ┌────────────────────────┼────────────────────┐
+                    ▼                        ▼                    ▼
+            Frontend Predictions    Auto-create PM WO    Mobile push
+            (DeepSeek explain)      (CMMS Router)        notifications
+
+3.5 TCO Calculator Pipeline (Phase 2 ✅)
+CMMS data (spare parts + labor hours + cost)
+            ↓
+    Aggregator per device/site
+            ↓
+    CapEx + OpEx + MTTR + MTBF
+            ↓
+    Replace vs Repair recommendation (threshold-based)
+            ↓
+    Frontend TCO.tsx (charts + recommendations)
+3.6 Voice-to-Report Pipeline (Phase 2 ✅)
+Mobile VoiceRecorder → audio blob → POST /voice/reports
+                                         ↓
+                              Whisper API → transcript
+                                         ↓
+                              DeepSeek NLP → entities (JSONB):
+                                  {device_id, site_id, 
+                                   issue_type, parts_used,
+                                   confidence_score}
+                                         ↓
+                    ┌────────────────────┼────────────────────┐
+                    ▼                    ▼                    ▼
+            CMDB auto-update    WorkOrder creation    Audit log
+            (if conf > 0.8)     (if conf > 0.7)       (all reports)
+4. Security Architecture (ISO 27001)
+4.1 Реализовано ✅
 Control
 Реализация
-Файл
 A.9.1 RBAC
-6 ролей: admin, support, owner, manager, technician, viewer
-auth/middleware.go
-A.9.2 User Registration
-CreateUser с хешированием bcrypt
-api/server.go
-A.9.4 Password Policy
-Min 6 chars (basic), 8+symbol (strong)
-Settings.tsx
+6 ролей, PermissionGuard
 A.10.1 TOTP 2FA
-RFC 6238, Google Authenticator
-api/server.go, auth/jwt.go
+RFC 6238
 A.10.2 API Keys
-bcrypt (cost=12) ✅ с prefix lookup
-apikey_handlers.go
+bcrypt(cost=12) + prefix
 A.10.3 Push Tokens
-AES-256-GCM шифрование ✅
-crypto/aes.go
+AES-256-GCM
 A.10.4 JWT Secret
-env var (panic if missing) ✅
-auth/jwt.go
+env var (panic if missing)
 A.12.4 Audit Log
-Все CMMS-операции логируются
-cmms_handlers.go
-A.13.1 TLS
-Termination на reverse proxy
-infra
+все write-операции
 A.13.2 Security Headers
-CSP, X-Frame-Options, HSTS, Referrer-Policy ✅
-server.go
+CSP, X-Frame-Options, HSTS
 A.13.3 Rate Limiting
-In-memory rate limiter на login ✅
-server.go
-A.14.2 Input Validation
-chi URL params, JSON decode
-все handlers
-5.2 Pending ⚠️
+login + mobile endpoints
+4.2 Pending (Phase 3-4)
 Gap
-Severity
-Remediation
-Redis for sessions/caching
-MEDIUM
-Добавить Redis для session storage
+Phase
+Redis sessions
+Phase 3
 Vault integration
-MEDIUM
-HashiCorp Vault для secrets
-CORS restriction
-MEDIUM
-Config-based allowed origins
-Audit Log Integrity (HMAC)
-MEDIUM
-HMAC-подпись для audit-записей
-JWT → HttpOnly Cookies
-MEDIUM
-Перевести на HttpOnly cookies с CSRF
-Vulnerability scanning CI/CD
-MEDIUM
-gosec, trivy, npm audit в GitHub Actions
-6. Mobile Architecture
-6.1 Screens & Navigation (обновлено)
-LoginScreen
-    └── MainTabs
-        ├── DashboardScreen (WorkOrderCard list)
-        │   └── WorkOrderDetailScreen
-        │       ├── ChecklistScreen (progress bar)
-        │       ├── PhotoCaptureScreen (camera + GPS)
-        │       ├── VerificationScreen ✅ (GPS/EXIF/AI checks)
-        │       ├── SignatureScreen (accepts verification_token)
-        │       └── QRScannerScreen (expo-barcode-scanner)
-        └── ProfileScreen (stats, skills, logout)
-        6.2 Offline-First Architecture
-        ┌─────────────────────────────────────────────┐
-│  UI Layer (React Query)                     │
-│  ├── useQuery → cached data                 │
-│  └── useMutation → optimistic updates       │
-├─────────────────────────────────────────────┤
-│  State Layer (Zustand)                      │
-│  ├── authStore — token, user                │
-│  ├── workOrderStore — cached Map            │
-│  └── syncStore — offline queue              │
-├─────────────────────────────────────────────┤
-│  Sync Layer                                 │
-│  ├── AppState listener (background→active)  │
-│  ├── AsyncStorage persistence               │
-│  └── Retry logic (3 attempts, then drop)    │
-└─────────────────────────────────────────────┘
-7. Data Layer
-7.1 TimescaleDB Hypertables
-Table
-Partition Key
-Retention
-telemetry
-time
-30 days
-alarms
-time
-90 days
-parsed_logs
-time
-30 days
-predictions
-prediction_date
-365 days
-7.2 PostgreSQL Tables (23 total)
-Core: users, sites, devices, tickets, ticket_comments, notifications, reports
-CMMS: work_orders, maintenance_schedules, spare_parts, part_usage, sla_config
-Auth: api_keys, user_sessions, telegram_link_tokens, telegram_login_codes, password_reset_tokens
-Meta: system_settings, audit_log, technician_site_assignments
-8. Integration Architecture
-8.1 CMMS Router
-// backend/internal/cmms/adapter.go
-func NewCMMSRouterFromConfig(cfg *config.Config, db *db.DB) *CMMSRouter {
-    switch cfg.CMMSAdapter {
-    case "atlas":
-        return NewCMMSRouter(NewAtlasAdapter(cfg.AtlasURL, cfg.AtlasAPIKey))
-    default:
-        return NewCMMSRouter(NewInternalAdapter(db))
-    }
-}
-Текущее поведение: Все запросы идут в InternalAdapter (PostgreSQL). AtlasAdapter — stub.
-Planned (Phase 2-3): Fallback queue, bi-directional sync, conflict resolution.
-8.2 WebSocket Hub
+Phase 3
+HMAC audit log integrity
+Phase 3
+JWT → HttpOnly Cookies + CSRF
+Phase 3
+CI/CD vulnerability scanning
+Phase 3
+ISO 27001 Stage 1 + Stage 2 audit
+Phase 4
+5. Integration Architecture
+5.1 CMMS Router (ADR-002)
+Handler → CMMSRouter.adapter
+                    ↓
+        ┌───────────┼───────────┬──────────┬──────────┐
+        ▼           ▼           ▼          ▼          ▼
+   Internal    Atlas (✅)  ServiceNow  Jira        Toir
+   Adapter     OAuth2      Phase 3    Phase 3    Phase 3
+                    ↓
+            Fallback Queue (✅)
+                    ↓
+        Internal DB + async retry
 
-Backend ──alarm──► ws.Hub ──broadcast──► All connected clients
-                                             │
-                                             ├── Desktop (AlertsContext)
-                                             ├── Mobile (future)
-                                             └── Telegram Bot (future)
-                                             9. Roadmap (Updated)
+5.2 Atlas Integration Details (Phase 2 ✅)
+Auth: OAuth2 с automatic token refresh
+Sync: Bi-directional webhook-driven
+Fallback: Internal DB + async queue если Atlas недоступен
+Conflict Resolution: Atlas-wins для статуса, наш-wins для локальных полей
+Health Check: /api/v1/integrations/atlas/health
+5.3 NATS Event Bus (Phase 3)
+Publisher:
+  - alarms.{device_id}
+  - cmms.workorder.{created|updated|completed}
+  - predictions.{device_id}
+  - telemetry.{device_id}
+
+Subscribers:
+  - WebSocket Hub (desktop)
+  - Mobile push service
+  - Worker (async tasks)
+  - Analytics service
+5.4 Agentic Self-Healing (Phase 3)
+Alarm → AI Agent (topology analysis)
+              ↓
+      Decision Tree:
+        ├── Auto-fix (ISAPI/ONVIF via P2P)
+        ├── Human-approval required
+        └── Escalate to CMMS
+              ↓
+      CMMS Router: auto-close ticket on success
+6. Roadmap (Updated)
 Phase
 Срок
 Статус
-Ключевые deliverables
+Deliverables
 Phase 0
 Недели 1-2
 ✅ Done
-UX Research, ISO Gap Analysis
+UX Research, ISO Gap
 Phase 1
 Месяцы 1-2
 ✅ Done
-CMMS Router, Maintenance Schedules, Technician Assignments
+CMMS Router, Maintenance
 Phase 1.5
 Месяц 3
 ✅ Done
-Gatekeeper ✅, ISO Quick Wins ✅, UX Refresh ✅
+Gatekeeper, ISO Quick Wins, UX
 Phase 2
 Месяцы 4-6
-🔄 In Progress
-AI Predictive, TCO, Voice-to-Report, Atlas integration
+✅ Done
+Atlas, Predictions, TCO, Voice
 Phase 3
 Месяцы 7-9
-Pending
-ServiceNow/Jira Adapters, Self-Healing, NATS Event Bus
+🔄 Current
+ServiceNow/Jira/Toir, NATS, Self-Healing
 Phase 4
 Месяцы 10-15
 Pending
-SaaS Multi-tenant, AR Remote Expert, ISO Certification
-10. Technology Stack (полный)
-Layer
-Technology
-Version
-Backend
-Go
-1.25
-Router
-chi/v5
-5.2.1
-Database
-pgx/v5
-5.10.0
-WebSocket
-gorilla/websocket
-1.5.3
-JWT
-golang-jwt/v5
-5.3.1
-TOTP
-pquerna/otp
-1.5.0
-Config
-spf13/viper
-1.21.0
-Logging
-slog + lumberjack
-—
-Frontend
-React
-19.2.0
-Build
-Vite
-8.0.16
-CSS
-Tailwind
-4.1.18
-i18n
-i18next
-26.3.1
-Charts
-FullCalendar
-6.1.20
-Mobile
-React Native
-0.76.0
-Mobile FW
-Expo
-52.0
-State (mobile)
-Zustand
-5.0
-Data (mobile)
-React Query
-5.60
-Analytics
-Python
-3.11
-ML
-XGBoost
-2.0+
-LLM
-DeepSeek API
-—
-11. File Structure (актуальная, ~210 файлов)
-смотри /home/viruz/cctv-monitoring/project-structure.txt
+SaaS, AR, ISO Certification
+7. API Adapter Reference (для разработчиков)
+Atlas CMMS (✅ Production)
+Docs: https://docs.atlas-cmms.com/api
+Auth: OAuth2 (client_credentials)
+Rate Limit: 100 req/min
+Key Endpoints:
+POST /api/v2/workorders — create WO
+PATCH /api/v2/workorders/{id} — update WO
+GET /api/v2/assets — sync assets
+POST /webhooks/cmms — inbound sync
+ServiceNow (Phase 3)
+Docs: https://developer.servicenow.com/dev.do
+Auth: OAuth2 + Basic Auth fallback
+Rate Limit: 1000 req/min (instance-dependent)
+Key Endpoints:
+POST /api/now/table/incident — create incident
+PATCH /api/now/table/incident/{sys_id}
+GET /api/now/cmdb/instance/{class} — CMDB sync
+Webhooks: Scripted REST API для inbound sync
+Jira Service Management (Phase 3)
+Docs: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
+Auth: OAuth 2.0 (3LO) или API Token
+Rate Limit: зависит от плана Atlassian
+Key Endpoints:
+POST /rest/api/3/issue — create issue
+PUT /rest/api/3/issue/{id} — update
+GET /rest/servicedeskapi/request/{id} — service request
+1С:ТОИР (Phase 3, РФ-специфика)
+Docs: https://toir.ru/docs/api
+Auth: Basic Auth + 152-ФЗ compliance
+Rate Limit: 60 req/min
+Key Endpoints:
+POST /hs/TOIR_API/v1/requests — заявка
+GET /hs/TOIR_API/v1/equipment — оборудование
+Особенности: кириллица в JSON, ГОСТ форматы дат
+8. File Structure (актуальная, ~230 файлов)
+├── backend/
+│   ├── internal/
+│   │   ├── api/          # + atlas, predictions, tco, voice handlers
+│   │   ├── cmms/         # + atlas_client.go, atlas_sync.go, fallback_queue.go
+│   │   ├── crypto/       # AES-256-GCM ✅
+│   │   ├── gatekeeper/   # ✅ production-ready
+│   │   ├── predictions/  # ✅ XGBoost wrapper
+│   │   ├── tco/          # ✅ calculator + aggregator
+│   │   ├── voice/        # ✅ Whisper + DeepSeek NLP
+│   │   ├── protocols/    # 8 protocols
+│   │   ├── sip/          # GB28181
+│   │   └── ws/           # WebSocket hub
+│   └── analytics/        # Python ML
+├── frontend/
+│   ├── src/pages/        # + TCO.tsx, Predictions.tsx, Integrations.tsx
+│   └── src/components/ui/
+├── mobile/
+│   └── src/screens/      # + VoiceReportScreen.tsx
+└── p2p-gateway/
+

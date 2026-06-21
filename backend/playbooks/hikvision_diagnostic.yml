@@ -1,0 +1,64 @@
+# Playbook: hikvision_diagnostic
+# Диагностика и восстановление камер Hikvision через ISAPI.
+name: hikvision_diagnostic
+description: "Hikvision diagnostic and recovery via ISAPI/P2P Gateway"
+version: "1.0"
+max_retries: 2
+cooldown: "10m"
+
+applicable:
+  - vendor_type: "Hikvision"
+    alarm_method: 6
+    device_type: "camera"
+
+steps:
+  - name: "wait_stabilization"
+    action: wait
+    timeout: "30s"
+    params:
+      duration: "10s"
+    on_failure: "continue"
+
+  - name: "isapi_health_check"
+    action: health_check
+    timeout: "15s"
+    retries: 2
+    retry_delay: "5s"
+    on_failure: "continue"
+
+  - name: "isapi_soft_reset"
+    action: isapi_reset
+    timeout: "90s"
+    retries: 1
+    retry_delay: "30s"
+    params:
+      reset_type: "soft"
+    on_failure: "continue"
+
+  - name: "wait_after_reset"
+    action: wait
+    timeout: "120s"
+    params:
+      duration: "60s"
+    on_failure: "continue"
+
+  - name: "isapi_restore_config"
+    action: isapi_restore
+    timeout: "60s"
+    retries: 1
+    retry_delay: "20s"
+    on_failure: "escalate"
+
+  - name: "verify_online"
+    action: health_check
+    timeout: "30s"
+    retries: 3
+    retry_delay: "10s"
+    on_failure: "escalate"
+
+  - name: "notify_success"
+    action: notify
+    timeout: "5s"
+    params:
+      message: "Hikvision camera recovered via ISAPI diagnostic"
+    on_failure: "continue"

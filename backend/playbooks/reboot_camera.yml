@@ -1,0 +1,61 @@
+# Playbook: reboot_camera
+# Автоматический перезапуск камеры при VideoLoss.
+name: reboot_camera
+description: "Reboot camera via ONVIF/ISAPI when video loss detected"
+version: "1.0"
+max_retries: 3
+cooldown: "5m"
+
+applicable:
+  - vendor_type: "Hikvision"
+    alarm_method: 5
+    device_type: "camera"
+  - vendor_type: "Dahua"
+    alarm_method: 5
+    device_type: "camera"
+  - vendor_type: "Dahua/Intelbras"
+    alarm_method: 5
+    device_type: "camera"
+
+steps:
+  - name: "wait_stabilization"
+    action: wait
+    timeout: "30s"
+    params:
+      duration: "15s"
+    on_failure: "continue"
+
+  - name: "check_device_status"
+    action: health_check
+    timeout: "10s"
+    retries: 2
+    retry_delay: "5s"
+    on_failure: "continue"
+
+  - name: "onvif_reboot"
+    action: onvif_reboot
+    timeout: "60s"
+    retries: 2
+    retry_delay: "10s"
+    on_failure: "escalate"
+
+  - name: "wait_reboot"
+    action: wait
+    timeout: "120s"
+    params:
+      duration: "60s"
+    on_failure: "continue"
+
+  - name: "verify_online"
+    action: health_check
+    timeout: "30s"
+    retries: 3
+    retry_delay: "10s"
+    on_failure: "escalate"
+
+  - name: "notify_success"
+    action: notify
+    timeout: "5s"
+    params:
+      message: "Camera rebooted successfully via ONVIF"
+    on_failure: "continue"

@@ -170,6 +170,14 @@ func (db *DB) initSchema() error {
 		return fmt.Errorf("failed to create devices table: %w", err)
 	}
 
+	// 4.1. Asset Classification (ISO 27001)
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE devices ADD COLUMN IF NOT EXISTS asset_class TEXT DEFAULT 'internal'
+			CHECK (asset_class IN ('critical', 'confidential', 'internal', 'public'));
+	`); err != nil {
+		db.Logger.Warn("Failed to add asset_class column to devices", "error", err)
+	}
+
 	// 5. Telemetry (hypertable)
 	if _, err := tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS telemetry (
@@ -357,7 +365,7 @@ func (db *DB) initSchema() error {
 		return fmt.Errorf("failed to initialize system_settings: %w", err)
 	}
 
-	// 14. Audit log
+	// 14. Audit log (с HMAC-подписью для целостности — ISO 27001 A.12.4)
 	if _, err := tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS audit_log (
 			id BIGSERIAL PRIMARY KEY,
@@ -369,10 +377,16 @@ func (db *DB) initSchema() error {
 			old_value JSONB,
 			new_value JSONB,
 			ip_address TEXT,
-			user_agent TEXT
+			user_agent TEXT,
+			hmac_signature TEXT
 		);
 	`); err != nil {
 		return fmt.Errorf("failed to create audit_log table: %w", err)
+	}
+
+	// 14.1. Добавляем hmac_signature если таблица уже существовала
+	if _, err := tx.Exec(ctx, `ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS hmac_signature TEXT;`); err != nil {
+		db.Logger.Warn("Failed to add hmac_signature column to audit_log", "error", err)
 	}
 
 	// 15. API keys
@@ -642,6 +656,44 @@ func (db *DB) initSchema() error {
 	for _, idx := range cmmsIndexes {
 		if _, err := tx.Exec(ctx, idx); err != nil {
 			db.Logger.Warn("Failed to create CMMS index", "sql", idx, "error", err)
+		}
+	}
+
+	// 23.1. External Work Order Status (для bi-directional ITSM sync)
+	if _, err := tx.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS external_work_order_status (
+			id BIGSERIAL PRIMARY KEY,
+			external_id TEXT NOT NULL,
+			source TEXT NOT NULL CHECK (source IN ('servicenow', 'jira', 'toir')),
+			status TEXT,
+			priority TEXT,
+			summary TEXT,
+			external_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			changes JSONB DEFAULT '{}',
+			created_at TIMESTAMPTZ DEFAULT NOW(),
+			updated_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create external_work_order_status table: %w", err)
+	}
+
+	// 23.2. External ID columns on work_orders
+	if _, err := tx.Exec(ctx, `
+		ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS external_id TEXT;
+		ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS external_source TEXT CHECK (external_source IN ('servicenow', 'jira', 'toir')) DEFAULT NULL;
+	`); err != nil {
+		db.Logger.Warn("Failed to add external_id columns to work_orders", "error", err)
+	}
+
+	// External work order status indexes
+	extIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_ext_wo_status_external ON external_work_order_status(external_id, source);`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_wo_status_changed ON external_work_order_status(external_changed_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_work_orders_external ON work_orders(external_id, external_source);`,
+	}
+	for _, idx := range extIndexes {
+		if _, err := tx.Exec(ctx, idx); err != nil {
+			db.Logger.Warn("Failed to create external sync index", "sql", idx, "error", err)
 		}
 	}
 

@@ -9,6 +9,8 @@ import (
 
 	"gb-telemetry-collector/internal/crypto"
 	"gb-telemetry-collector/internal/models"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1158,4 +1160,88 @@ func (db *DB) GetTechnicianMonthlyStats(userID string) (*models.TechnicianMonthl
 		return nil, fmt.Errorf("get technician monthly stats for user %s: %w", userID, err)
 	}
 	return &stats, nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// External Work Order Sync (Bi-directional ITSM)
+// ═══════════════════════════════════════════════════════════════════════
+
+// ExternalWorkOrderStatus — внешний статус WorkOrder (из CMMS).
+type ExternalWorkOrderStatus struct {
+	ID                int                    `json:"id"`
+	ExternalID        string                 `json:"external_id"`
+	Source            string                 `json:"source"`
+	Status            string                 `json:"status"`
+	Priority          string                 `json:"priority"`
+	Summary           string                 `json:"summary"`
+	ExternalChangedAt time.Time              `json:"external_changed_at"`
+	Changes           map[string]interface{} `json:"changes"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
+}
+
+// GetExternalWorkOrderStatus возвращает последний внешний статус для WorkOrder по его локальному ID.
+// Ищет через связку external_id/external_source в work_orders → external_work_order_status.
+func (db *DB) GetExternalWorkOrderStatus(ctx context.Context, workOrderID string) (*ExternalWorkOrderStatus, error) {
+	var ext ExternalWorkOrderStatus
+	err := db.Pool.QueryRow(ctx, `
+		SELECT ews.id, ews.external_id, ews.source, ews.status, ews.priority,
+			ews.summary, ews.external_changed_at, ews.changes, ews.created_at, ews.updated_at
+		FROM external_work_order_status ews
+		JOIN work_orders wo ON wo.external_id = ews.external_id AND wo.external_source = ews.source
+		WHERE wo.id = $1
+		ORDER BY ews.external_changed_at DESC
+		LIMIT 1
+	`, workOrderID).Scan(
+		&ext.ID, &ext.ExternalID, &ext.Source, &ext.Status, &ext.Priority,
+		&ext.Summary, &ext.ExternalChangedAt, &ext.Changes, &ext.CreatedAt, &ext.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get external work order status for %s: %w", workOrderID, err)
+	}
+	return &ext, nil
+}
+
+// UpsertExternalWorkOrderStatus вставляет или обновляет внешний статус WorkOrder.
+func (db *DB) UpsertExternalWorkOrderStatus(ctx context.Context, ext *ExternalWorkOrderStatus) error {
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO external_work_order_status (external_id, source, status, priority, summary, external_changed_at, changes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT DO NOTHING
+	`, ext.ExternalID, ext.Source, ext.Status, ext.Priority, ext.Summary, ext.ExternalChangedAt, ext.Changes)
+	if err != nil {
+		return fmt.Errorf("upsert external work order status: %w", err)
+	}
+	return nil
+}
+
+// GetWorkOrderByExternalID ищет локальный WorkOrder по внешнему ID и источнику.
+func (db *DB) GetWorkOrderByExternalID(ctx context.Context, source, externalID string) (*models.WorkOrder, error) {
+	var wo models.WorkOrder
+	err := db.Pool.QueryRow(ctx, `
+		SELECT wo.id, wo.schedule_id, wo.device_id, wo.type, wo.status, wo.priority,
+			wo.assigned_to, wo.sla_deadline, wo.checklist, wo.started_at, wo.completed_at,
+			wo.notes, wo.photos, wo.parts_used, wo.created_by, wo.created_at, wo.updated_at,
+			COALESCE(d.name, d.device_id) as device_name,
+			COALESCE(u.username, '') as assignee_name
+		FROM work_orders wo
+		LEFT JOIN devices d ON wo.device_id = d.device_id
+		LEFT JOIN users u ON wo.assigned_to = u.id
+		WHERE wo.external_id = $1 AND wo.external_source = $2
+	`, externalID, source).Scan(
+		&wo.ID, &wo.ScheduleID, &wo.DeviceID, &wo.Type, &wo.Status, &wo.Priority,
+		&wo.AssignedTo, &wo.SLADeadline, &wo.Checklist, &wo.StartedAt, &wo.CompletedAt,
+		&wo.Notes, &wo.Photos, &wo.PartsUsed, &wo.CreatedBy, &wo.CreatedAt, &wo.UpdatedAt,
+		&wo.DeviceName, &wo.AssigneeName,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get work order by external id %s/%s: %w", source, externalID, err)
+	}
+	return &wo, nil
 }

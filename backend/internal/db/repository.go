@@ -85,13 +85,15 @@ func (db *DB) GetDeviceByID(deviceID string) (*models.Device, error) {
 		SELECT device_id, owner_id, name, location, vendor_type, status,
 			   last_seen, registered_at, heartbeat_interval, user_agent,
 			   connection_type, p2p_brand, p2p_serial, cloud_status,
-			   gb28181_device_id, gb28181_parent_id, gb28181_channel_count
+			   gb28181_device_id, gb28181_parent_id, gb28181_channel_count,
+			   COALESCE(asset_class, 'internal')
 		FROM devices WHERE device_id = $1
 	`, deviceID).Scan(
 		&dev.DeviceID, &dev.OwnerID, &dev.Name, &dev.Location, &dev.VendorType, &dev.Status,
 		&dev.LastSeen, &dev.RegisteredAt, &dev.HeartbeatInterval, &dev.UserAgent,
 		nil, &dev.P2PBrand, &dev.P2PSerial, &dev.CloudStatus,
 		nil, nil, nil,
+		&dev.AssetClass,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {

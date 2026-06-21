@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/models"
 )
@@ -985,13 +986,20 @@ func (s *Server) logAudit(userID, action, entityType, entityID string, oldValue,
 		newJSON, _ = json.Marshal(newValue)
 	}
 
+	// HMAC-подпись для целостности журнала аудита (ISO 27001 A.12.4)
+	var hmacSig string
+	if s.auditSigner != nil {
+		data := audit.SignAuditEntry(userID, action, entityType, entityID, oldJSON, newJSON)
+		hmacSig = s.auditSigner.Sign(data)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value, new_value)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
-	`, userID, action, entityType, entityID, oldJSON, newJSON)
+		INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_value, new_value, hmac_signature)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
+	`, userID, action, entityType, entityID, oldJSON, newJSON, hmacSig)
 	if err != nil {
 		s.logger.Error("Failed to log audit", "error", err)
 	}

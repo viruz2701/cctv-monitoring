@@ -13,6 +13,7 @@ import (
 	"gb-telemetry-collector/internal/protocols"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
+	"gb-telemetry-collector/internal/sync"
 	"gb-telemetry-collector/internal/telegram"
 	"log/slog"
 	"net/http"
@@ -259,8 +260,27 @@ func main() {
 	}
 	defer protocolManager.StopAll()
 
+	// --- Bi-directional ITSM Sync Engine ---
+	var syncEng *sync.SyncEngine
+	if cfg.ITSMSyncInterval != "" {
+		syncInterval, err := time.ParseDuration(cfg.ITSMSyncInterval)
+		if err != nil {
+			syncInterval = 5 * time.Minute
+		}
+		syncEng = sync.NewSyncEngine(
+			database, logger,
+			cfg.ServiceNowWebhookSecret,
+			cfg.JiraWebhookSecret,
+			cfg.TOIRWebhookSecret,
+			syncInterval,
+		)
+		syncEng.Start(ctx)
+		logger.Info("ITSM sync engine started", "interval", syncInterval)
+		defer syncEng.Stop()
+	}
+
 	// --- API-сервер ---
-	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler)
+	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler, syncEng)
 	stateWrapper.broadcastFn = apiServer.BroadcastAlarm
 
 	// --- Telegram бот ---

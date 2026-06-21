@@ -1,0 +1,122 @@
+// Package agent — CMMS integration: auto-ticket creation/closure, audit trail.
+package agent
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"gb-telemetry-collector/internal/cmms"
+	"gb-telemetry-collector/internal/models"
+)
+
+// CMMSIntegrator — интеграция Self-Healing Agent с CMMS.
+type CMMSIntegrator struct {
+	adapter cmms.CMMSAdapter
+	logger  *slog.Logger
+
+	// Маппинг deviceID → ticketID для отслеживания открытых тикетов
+	ticketMap map[string]string // deviceID → workOrderID
+}
+
+// NewCMMSIntegrator создаёт новый интегратор.
+func NewCMMSIntegrator(adapter cmms.CMMSAdapter, logger *slog.Logger) *CMMSIntegrator {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &CMMSIntegrator{
+		adapter:   adapter,
+		logger:    logger,
+		ticketMap: make(map[string]string),
+	}
+}
+
+// AutoCreateTicket создаёт тикет при тревоге.
+func (ci *CMMSIntegrator) AutoCreateTicket(ctx context.Context, deviceID, deviceName, alarmType, severity, description string) (string, error) {
+	priority := mapSeverityToPriority(severity)
+
+	wo := &models.WorkOrder{
+		DeviceID:  deviceID,
+		Type:      "corrective",
+		Priority:  priority,
+		Status:    "open",
+		Notes:     fmt.Sprintf("[Self-Healing][%s] %s severity alarm on %s (%s). Details: %s", alarmType, severity, deviceName, deviceID, description),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := ci.adapter.CreateWorkOrder(ctx, wo); err != nil {
+		ci.logger.Error("auto-create ticket failed", "device", deviceID, "error", err)
+		return "", fmt.Errorf("create ticket: %w", err)
+	}
+
+	ci.ticketMap[deviceID] = wo.ID
+	ci.logger.Info("auto-ticket created",
+		"device_id", deviceID,
+		"ticket_id", wo.ID,
+		"priority", priority,
+		"type", alarmType,
+	)
+
+	return wo.ID, nil
+}
+
+// AutoCloseTicket закрывает тикет после успешного self-healing.
+func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketID, resolution string) error {
+	if ticketID == "" {
+		// Пробуем найти по deviceID
+		var ok bool
+		ticketID, ok = ci.ticketMap[deviceID]
+		if !ok {
+			ci.logger.Warn("no ticket found for device", "device_id", deviceID)
+			return nil
+		}
+	}
+
+	updates := map[string]interface{}{
+		"status":    "completed",
+		"completed": true,
+		"notes":     fmt.Sprintf("[Self-Healing] %s\nAuto-closed by agent after successful remediation.", resolution),
+	}
+
+	updates["completed_at"] = time.Now()
+	if err := ci.adapter.UpdateWorkOrder(ctx, ticketID, updates); err != nil {
+		ci.logger.Error("auto-close ticket failed", "ticket_id", ticketID, "error", err)
+		return fmt.Errorf("close ticket %s: %w", ticketID, err)
+	}
+
+	delete(ci.ticketMap, deviceID)
+	ci.logger.Info("auto-ticket closed", "device_id", deviceID, "ticket_id", ticketID)
+	return nil
+}
+
+// AddAuditNote добавляет audit-заметку к существующему тикету.
+func (ci *CMMSIntegrator) AddAuditNote(ctx context.Context, ticketID, action, details string) error {
+	note := fmt.Sprintf("[%s] %s: %s", time.Now().Format(time.RFC3339), action, details)
+	updates := map[string]interface{}{
+		"notes": note,
+	}
+	return ci.adapter.UpdateWorkOrder(ctx, ticketID, updates)
+}
+
+// GetTicketForDevice возвращает ID тикета для устройства.
+func (ci *CMMSIntegrator) GetTicketForDevice(deviceID string) (string, bool) {
+	id, ok := ci.ticketMap[deviceID]
+	return id, ok
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+
+func mapSeverityToPriority(severity string) string {
+	switch severity {
+	case "critical":
+		return "P1"
+	case "high":
+		return "P2"
+	case "medium":
+		return "P3"
+	default:
+		return "P4"
+	}
+}

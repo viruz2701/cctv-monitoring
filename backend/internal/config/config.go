@@ -31,13 +31,54 @@ type Config struct {
 	P2PAPIKey     string `mapstructure:"p2p_api_key"`
 
 	// CMMS Adapter configuration
-	CMMSAdapter       string `mapstructure:"cmms_adapter"` // "internal" (default) | "atlas"
+	CMMSAdapter       string `mapstructure:"cmms_adapter"` // "internal" (default) | "atlas" | "servicenow" | "toir" | "jira"
 	AtlasURL          string `mapstructure:"atlas_url"`
 	AtlasAPIKey       string `mapstructure:"atlas_api_key"`
 	AtlasClientID     string `mapstructure:"atlas_client_id"`
 	AtlasClientSecret string `mapstructure:"atlas_client_secret"`
 	AtlasTokenURL     string `mapstructure:"atlas_token_url"`
 	AtlasFallbackDir  string `mapstructure:"atlas_fallback_dir"`
+
+	// ServiceNow adapter
+	ServiceNowInstanceURL  string `mapstructure:"servicenow_instance_url"`
+	ServiceNowClientID     string `mapstructure:"servicenow_client_id"`
+	ServiceNowClientSecret string `mapstructure:"servicenow_client_secret"`
+	ServiceNowTokenURL     string `mapstructure:"servicenow_token_url"`
+	ServiceNowUsername     string `mapstructure:"servicenow_username"`
+	ServiceNowPassword     string `mapstructure:"servicenow_password"`
+	ServiceNowFallbackDir  string `mapstructure:"servicenow_fallback_dir"`
+
+	// 1С:ТОИР adapter
+	TOIRBaseURL     string `mapstructure:"toir_base_url"`
+	TOIRUsername    string `mapstructure:"toir_username"`
+	TOIRPassword    string `mapstructure:"toir_password"`
+	TOIRFallbackDir string `mapstructure:"toir_fallback_dir"`
+
+	// Jira adapter
+	JiraBaseURL     string `mapstructure:"jira_base_url"`
+	JiraEmail       string `mapstructure:"jira_email"`
+	JiraAPIToken    string `mapstructure:"jira_api_token"`
+	JiraFallbackDir string `mapstructure:"jira_fallback_dir"`
+
+	// NATS Event Bus
+	NATSEmbedded bool   `mapstructure:"nats_embedded"`
+	NATSURL      string `mapstructure:"nats_url"`
+	NATSCreds    string `mapstructure:"nats_creds"`
+	NATSTLS      bool   `mapstructure:"nats_tls"`
+
+	// Webhook secrets for bi-directional ITSM sync
+	ServiceNowWebhookSecret string `mapstructure:"servicenow_webhook_secret"`
+	JiraWebhookSecret       string `mapstructure:"jira_webhook_secret"`
+	TOIRWebhookSecret       string `mapstructure:"toir_webhook_secret"`
+
+	// Sync interval for bi-directional ITSM state machine (default 5m)
+	ITSMSyncInterval string `mapstructure:"itsm_sync_interval"`
+
+	// CORS allowed origins (ISO 27001 MT-4)
+	CORSAllowedOrigins []string `mapstructure:"cors_allowed_origins"`
+
+	// Audit log HMAC signing key (ISO 27001 MT-3)
+	AuditHMACKey string `mapstructure:"audit_hmac_key"`
 
 	// Новые настройки для HTTP-приёма событий
 	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`
@@ -161,6 +202,24 @@ func Load() *Config {
 	viper.SetDefault("cmms_adapter", "internal")
 	viper.SetDefault("atlas_fallback_dir", "/var/lib/gb-telemetry/fallback")
 
+	// ServiceNow defaults
+	viper.SetDefault("servicenow_fallback_dir", "/var/lib/gb-telemetry/fallback/servicenow")
+
+	// 1С:ТОИР defaults
+	viper.SetDefault("toir_fallback_dir", "/var/lib/gb-telemetry/fallback/toir")
+
+	// Jira defaults
+	viper.SetDefault("jira_fallback_dir", "/var/lib/gb-telemetry/fallback/jira")
+
+	// NATS defaults
+	viper.SetDefault("nats_embedded", false)
+	viper.SetDefault("nats_url", "nats://localhost:4222")
+	viper.SetDefault("nats_tls", false)
+
+	// ITSM Sync defaults
+	viper.SetDefault("itsm_sync_interval", "5m")
+	viper.SetDefault("cors_allowed_origins", []string{"*"})
+
 	// Новые настройки
 	viper.SetDefault("http_xml_enabled", true)
 	viper.SetDefault("vigi_enabled", true)
@@ -265,6 +324,42 @@ func Load() *Config {
 	bindEnv("atlas_token_url", "GB_ATLAS_TOKEN_URL")
 	bindEnv("atlas_fallback_dir", "GB_ATLAS_FALLBACK_DIR")
 
+	// ServiceNow
+	bindEnv("servicenow_instance_url", "GB_SERVICENOW_INSTANCE_URL")
+	bindEnv("servicenow_client_id", "GB_SERVICENOW_CLIENT_ID")
+	bindEnv("servicenow_client_secret", "GB_SERVICENOW_CLIENT_SECRET")
+	bindEnv("servicenow_token_url", "GB_SERVICENOW_TOKEN_URL")
+	bindEnv("servicenow_username", "GB_SERVICENOW_USERNAME")
+	bindEnv("servicenow_password", "GB_SERVICENOW_PASSWORD")
+	bindEnv("servicenow_fallback_dir", "GB_SERVICENOW_FALLBACK_DIR")
+
+	// 1С:ТОИР
+	bindEnv("toir_base_url", "GB_TOIR_BASE_URL")
+	bindEnv("toir_username", "GB_TOIR_USERNAME")
+	bindEnv("toir_password", "GB_TOIR_PASSWORD")
+	bindEnv("toir_fallback_dir", "GB_TOIR_FALLBACK_DIR")
+
+	// Jira
+	bindEnv("jira_base_url", "GB_JIRA_BASE_URL")
+	bindEnv("jira_email", "GB_JIRA_EMAIL")
+	bindEnv("jira_api_token", "GB_JIRA_API_TOKEN")
+	bindEnv("jira_fallback_dir", "GB_JIRA_FALLBACK_DIR")
+
+	// NATS
+	bindEnv("nats_embedded", "GB_NATS_EMBEDDED")
+	bindEnv("nats_url", "GB_NATS_URL")
+	bindEnv("nats_creds", "GB_NATS_CREDS")
+	bindEnv("nats_tls", "GB_NATS_TLS")
+
+	// ITSM Webhook secrets
+	bindEnv("servicenow_webhook_secret", "GB_SERVICENOW_WEBHOOK_SECRET")
+	bindEnv("jira_webhook_secret", "GB_JIRA_WEBHOOK_SECRET")
+	bindEnv("toir_webhook_secret", "GB_TOIR_WEBHOOK_SECRET")
+
+	// ITSM Sync
+	bindEnv("itsm_sync_interval", "GB_ITSM_SYNC_INTERVAL")
+	bindEnv("audit_hmac_key", "GB_AUDIT_HMAC_KEY")
+
 	// Telegram
 	bindEnv("telegram.enabled", "GB_TELEGRAM_ENABLED")
 	bindEnv("telegram.token", "GB_TELEGRAM_TOKEN")
@@ -353,15 +448,40 @@ func Load() *Config {
 			MaxSubChannels:    viper.GetInt("gb28181.max_sub_channels"),
 			LogSIPMessages:    viper.GetBool("gb28181.log_sip_messages"),
 		},
-		P2PGatewayURL:     viper.GetString("p2p_gateway_url"),
-		P2PAPIKey:         viper.GetString("p2p_api_key"),
-		CMMSAdapter:       viper.GetString("cmms_adapter"),
-		AtlasURL:          viper.GetString("atlas_url"),
-		AtlasAPIKey:       viper.GetString("atlas_api_key"),
-		AtlasClientID:     viper.GetString("atlas_client_id"),
-		AtlasClientSecret: viper.GetString("atlas_client_secret"),
-		AtlasTokenURL:     viper.GetString("atlas_token_url"),
-		AtlasFallbackDir:  viper.GetString("atlas_fallback_dir"),
+		P2PGatewayURL:           viper.GetString("p2p_gateway_url"),
+		P2PAPIKey:               viper.GetString("p2p_api_key"),
+		CMMSAdapter:             viper.GetString("cmms_adapter"),
+		AtlasURL:                viper.GetString("atlas_url"),
+		AtlasAPIKey:             viper.GetString("atlas_api_key"),
+		AtlasClientID:           viper.GetString("atlas_client_id"),
+		AtlasClientSecret:       viper.GetString("atlas_client_secret"),
+		AtlasTokenURL:           viper.GetString("atlas_token_url"),
+		AtlasFallbackDir:        viper.GetString("atlas_fallback_dir"),
+		ServiceNowInstanceURL:   viper.GetString("servicenow_instance_url"),
+		ServiceNowClientID:      viper.GetString("servicenow_client_id"),
+		ServiceNowClientSecret:  viper.GetString("servicenow_client_secret"),
+		ServiceNowTokenURL:      viper.GetString("servicenow_token_url"),
+		ServiceNowUsername:      viper.GetString("servicenow_username"),
+		ServiceNowPassword:      viper.GetString("servicenow_password"),
+		ServiceNowFallbackDir:   viper.GetString("servicenow_fallback_dir"),
+		TOIRBaseURL:             viper.GetString("toir_base_url"),
+		TOIRUsername:            viper.GetString("toir_username"),
+		TOIRPassword:            viper.GetString("toir_password"),
+		TOIRFallbackDir:         viper.GetString("toir_fallback_dir"),
+		JiraBaseURL:             viper.GetString("jira_base_url"),
+		JiraEmail:               viper.GetString("jira_email"),
+		JiraAPIToken:            viper.GetString("jira_api_token"),
+		JiraFallbackDir:         viper.GetString("jira_fallback_dir"),
+		NATSEmbedded:            viper.GetBool("nats_embedded"),
+		NATSURL:                 viper.GetString("nats_url"),
+		NATSCreds:               viper.GetString("nats_creds"),
+		NATSTLS:                 viper.GetBool("nats_tls"),
+		ServiceNowWebhookSecret: viper.GetString("servicenow_webhook_secret"),
+		JiraWebhookSecret:       viper.GetString("jira_webhook_secret"),
+		TOIRWebhookSecret:       viper.GetString("toir_webhook_secret"),
+		ITSMSyncInterval:        viper.GetString("itsm_sync_interval"),
+		CORSAllowedOrigins:      viper.GetStringSlice("cors_allowed_origins"),
+		AuditHMACKey:            viper.GetString("audit_hmac_key"),
 		Telegram: TelegramConfig{
 			Enabled: viper.GetBool("telegram.enabled"),
 			Token:   viper.GetString("telegram.token"),

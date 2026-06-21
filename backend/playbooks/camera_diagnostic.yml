@@ -1,0 +1,61 @@
+# Playbook: camera_diagnostic
+# Универсальная диагностика (ONVIF + SNMP) для любых камер.
+name: camera_diagnostic
+description: "Universal camera diagnostic via ONVIF and SNMP"
+version: "1.0"
+max_retries: 3
+cooldown: "5m"
+
+applicable:
+  - alarm_method: 6
+    device_type: "camera"
+
+steps:
+  - name: "wait_stabilization"
+    action: wait
+    timeout: "30s"
+    params:
+      duration: "10s"
+    on_failure: "continue"
+
+  - name: "onvif_ptz_home"
+    action: onvif_ptz_home
+    timeout: "30s"
+    retries: 1
+    retry_delay: "5s"
+    on_failure: "continue"
+
+  - name: "snmp_check"
+    action: snmp_reset
+    timeout: "45s"
+    retries: 2
+    retry_delay: "15s"
+    on_failure: "continue"
+
+  - name: "onvif_reboot"
+    action: onvif_reboot
+    timeout: "90s"
+    retries: 2
+    retry_delay: "15s"
+    on_failure: "escalate"
+
+  - name: "wait_reboot"
+    action: wait
+    timeout: "120s"
+    params:
+      duration: "60s"
+    on_failure: "continue"
+
+  - name: "verify_online"
+    action: health_check
+    timeout: "30s"
+    retries: 3
+    retry_delay: "10s"
+    on_failure: "escalate"
+
+  - name: "notify_success"
+    action: notify
+    timeout: "5s"
+    params:
+      message: "Camera recovered via ONVIF/SNMP diagnostic"
+    on_failure: "continue"

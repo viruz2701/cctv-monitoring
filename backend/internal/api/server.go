@@ -24,13 +24,16 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/pquerna/otp/totp"
 
+	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/cmms"
+	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
+	syncengine "gb-telemetry-collector/internal/sync"
 	"gb-telemetry-collector/internal/telegram"
 	"gb-telemetry-collector/internal/ws"
 )
@@ -48,6 +51,12 @@ type Server struct {
 
 	// CMMS adapter — абстракция над Internal/Atlas CMMS
 	cmmsRouter *cmms.CMMSRouter
+
+	// Bi-directional ITSM sync engine
+	syncEngine *syncengine.SyncEngine
+
+	// Audit log HMAC signer (ISO 27001 A.12.4)
+	auditSigner *audit.Signer
 
 	// P2P gateway integration
 	p2pGatewayURL string
@@ -126,15 +135,19 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler) *Server {
+func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler, syncEng *syncengine.SyncEngine) *Server {
 	r := chi.NewRouter()
 
 	// Security headers — must be first
 	r.Use(securityHeadersMiddleware)
 
-	// CORS middleware
+	// CORS middleware (ISO 27001 A.13.2 — whitelist, не wildcard)
+	allowedOrigins := cfg.CORSAllowedOrigins
+	if len(allowedOrigins) == 0 || (len(allowedOrigins) == 1 && allowedOrigins[0] == "*") {
+		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -146,7 +159,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	r.Use(middleware.Recoverer)
 
 	// Инициализация CMMS Router
-	cmmsRouter := cmms.NewCMMSRouterFromConfig(cfg, database)
+	cmmsRouter := factory.NewCMMSRouterFromConfig(cfg, database)
 
 	s := &Server{
 		stateManager:  stateMgr,
@@ -157,6 +170,8 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		sipHandler:    sipHandler,
 		wsHub:         ws.NewHub(),
 		cmmsRouter:    cmmsRouter,
+		syncEngine:    syncEng,
+		auditSigner:   audit.NewSigner(cfg.AuditHMACKey),
 		p2pGatewayURL: cfg.P2PGatewayURL,
 		p2pAPIKey:     cfg.P2PAPIKey,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},
@@ -289,6 +304,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Get("/api/v1/reports/maintenance", s.getMaintenanceReport)
 		r.Get("/api/v1/reports/sla-compliance", s.getSLAComplianceReport)
 
+		// Audit Log Integrity Verification (ISO 27001 A.12.4)
+		r.Get("/api/v1/audit/verify", s.handleAuditVerify)
+
 		// Atlas CMMS Integration
 		r.Get("/api/v1/atlas/health", s.atlasHealthCheck)
 		r.Get("/api/v1/atlas/fallback/status", s.atlasFallbackStatus)
@@ -323,6 +341,15 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// Public password reset endpoints
 	r.Post("/api/v1/auth/forgot-password", s.handleForgotPassword)
 	r.Post("/api/v1/auth/reset-password", s.handleResetPasswordWithToken)
+
+	// ═══════════════════════════════════════════════════════════════════
+	// Bi-directional ITSM Sync Webhooks (HMAC-authenticated)
+	// ═══════════════════════════════════════════════════════════════════
+	if s.syncEngine != nil {
+		r.Post("/api/v1/webhooks/servicenow", s.syncEngine.ServiceNowWebhookHandler().ServeHTTP)
+		r.Post("/api/v1/webhooks/jira", s.syncEngine.JiraWebhookHandler().ServeHTTP)
+		r.Post("/api/v1/webhooks/toir", s.syncEngine.TOIRWebhookHandler().ServeHTTP)
+	}
 
 	s.httpServer = &http.Server{
 		Addr:    addr,
@@ -1865,4 +1892,68 @@ func (s *Server) atlasSyncAsset(w http.ResponseWriter, r *http.Request) {
 	_ = s.db.SaveAudit(claims.UserID, "ATLAS_SYNC_ASSET", "device", deviceID, nil, nil)
 
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "synced"})
+}
+
+// handleAuditVerify проверяет целостность журнала аудита через HMAC-верификацию (ISO 27001 A.12.4).
+func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
+	if s.auditSigner == nil {
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
+			"status":  "skipped",
+			"message": "HMAC signing not configured",
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	rows, err := s.db.Pool.Query(ctx, `
+		SELECT id, user_id, action, entity_type, entity_id,
+			COALESCE(old_value::text, 'null'), COALESCE(new_value::text, 'null'),
+			COALESCE(hmac_signature, '')
+		FROM audit_log
+		ORDER BY id DESC
+		LIMIT 1000
+	`)
+	if err != nil {
+		s.logger.Error("audit verify: query failed", "error", err)
+		http.Error(w, "query error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var total int
+	corrupted := 0
+	corruptedIDs := []int64{}
+
+	for rows.Next() {
+		var id int64
+		var userID, action, entityType, entityID, oldStr, newStr, hmacSig string
+		if err := rows.Scan(&id, &userID, &action, &entityType, &entityID, &oldStr, &newStr, &hmacSig); err != nil {
+			continue
+		}
+
+		data := audit.SignAuditEntry(userID, action, entityType, entityID, []byte(oldStr), []byte(newStr))
+		if !s.auditSigner.Verify(data, hmacSig) {
+			corrupted++
+			corruptedIDs = append(corruptedIDs, id)
+		}
+		total++
+	}
+
+	status := "ok"
+	if corrupted > 0 {
+		status = "corrupted"
+		s.logger.Warn("audit verify: integrity check failed",
+			"total", total, "corrupted", corrupted,
+			"corrupted_ids", corruptedIDs,
+		)
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"status":        status,
+		"total_checked": total,
+		"corrupted":     corrupted,
+		"corrupted_ids": corruptedIDs,
+	})
 }
