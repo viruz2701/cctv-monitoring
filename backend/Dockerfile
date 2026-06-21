@@ -1,0 +1,49 @@
+# =============================================================================
+# Stage 1: Build
+# =============================================================================
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+# Cache dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source and build
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.Version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
+    -o /build/bin/server ./cmd/server/
+
+# =============================================================================
+# Stage 2: Runtime
+# =============================================================================
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata curl \
+    && addgroup -g 1000 app \
+    && adduser -D -u 1000 -G app app
+
+WORKDIR /app
+
+# Copy binary
+COPY --from=builder /build/bin/server /app/server
+
+# Copy migrations (for golang-migrate)
+COPY --from=builder /build/internal/db/migrations/ /app/internal/db/migrations/
+
+# Copy config template
+COPY config.yaml /app/config.yaml
+
+# Security: non-root user
+USER app:app
+
+# Health check
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/api/v1/health || exit 1
+
+EXPOSE 8080 5060 1514 2121
+
+ENTRYPOINT ["/app/server"]

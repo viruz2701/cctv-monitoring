@@ -1,28 +1,27 @@
 listen_addr: ":8082"
 backend_api_url: "http://localhost:8080"
-backend_api_key: "your-secret-key"
+backend_api_key: ""  # use P2P_BACKEND_API_KEY env var
 proxy_base_rtsp_port: 8554
 proxy_base_onvif_port: 8002
 device_status_interval_sec: 60
 
-#Reolink
+# Reolink
 proxy_bin_path: "./bin/neolink"
 
-
 # Hikvision
-hikvision_username: "your_email@example.com"
-hikvision_password: "your_password"
+hikvision_username: ""  # use P2P_HIKVISION_USERNAME env var
+hikvision_password: ""  # use P2P_HIKVISION_PASSWORD env var
 ffmpeg_path: "/usr/bin/ffmpeg"
 
 # Dahua
 dahua_python_path: "/usr/bin/python3"
 dahua_script_path: "./bin/dh-p2p/main.py"
 
-# Xiongmai
+# Xiongmai (Jftech)
 jftech:
-  uuid: "your-uuid-here"
-  app_key: "your-appkey-here"
-  app_secret: "your-appsecret-here"
+  uuid: ""         # use P2P_JFTECH_UUID env var
+  app_key: ""      # use P2P_JFTECH_APP_KEY env var
+  app_secret: ""   # use P2P_JFTECH_APP_SECRET env var
   move_card: 2
-  endpoint: "api-cn.jftechws.com"   # для России можно оставить CN или указать другой
-  region: "RU"                   # или "RU" (подставьте нужный)
+  endpoint: "api-cn.jftechws.com"
+  region: "RU"

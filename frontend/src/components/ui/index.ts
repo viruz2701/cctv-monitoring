@@ -8,6 +8,7 @@ export { Modal, ConfirmModal } from './Modal';
 export { Input, SearchInput, Select, Textarea } from './Input';
 export { ToastProvider, useToast } from './Toast';
 export { DataGrid } from './DataGrid';
+export { VirtualTable } from './VirtualTable';
 export { PartCard } from './PartCard';
 export { Gauge } from './Gauge';
 export { SLAProgress } from './SLAProgress';

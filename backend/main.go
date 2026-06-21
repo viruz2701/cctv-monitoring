@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"gb-telemetry-collector/internal/api"
-	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/cron"
 	"gb-telemetry-collector/internal/db"
@@ -151,6 +150,13 @@ func main() {
 		DBName:   getEnv("DB_NAME", "gb_telemetry"),
 		SSLMode:  "disable",
 	}
+
+	// Run golang-migrate migrations (replaces initSchema)
+	if err := db.RunMigrations(dbCfg.DSN(), logger); err != nil {
+		logger.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+
 	database, err := db.New(dbCfg, logger)
 	if err != nil {
 		logger.Error("Failed to connect to database", "error", err)
@@ -158,12 +164,9 @@ func main() {
 	}
 	defer database.Close()
 
-	// Создание пользователя admin@example.com
-	_, err = database.GetUserByUsername("admin@example.com")
-	if err != nil {
-		hashed, _ := auth.HashPassword("admin123")
-		database.CreateUser("admin@example.com", hashed, "admin", "admin@example.com", nil)
-		logger.Info("Created admin user: admin@example.com / admin123")
+	// Seed default admin if no users exist
+	if err := database.SeedDefaultAdmin(); err != nil {
+		logger.Warn("Failed to seed default admin", "error", err)
 	}
 
 	dbWriter := NewDBWriter(database, 1000)

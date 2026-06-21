@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     AlertTriangle,
     AlertCircle,
@@ -10,7 +10,7 @@ import {
     Check,
     CheckCircle
 } from 'lucide-react';
-import { Card, CardBody, Table, Pagination, Badge, Button, Select, SearchInput, ConfirmModal } from '../components/ui';
+import { Card, CardBody, VirtualTable, Badge, Button, Select, SearchInput, ConfirmModal } from '../components/ui';
 import { useAlerts } from '../context/DataContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
@@ -23,12 +23,9 @@ export function Alerts() {
     const [typeFilter, setTypeFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [showFilters, setShowFilters] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
     const [sortColumn, setSortColumn] = useState<string>('timestamp');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
-
-    const ITEMS_PER_PAGE = 10;
 
     const handleAction = (alertId: string, action: 'acknowledge' | 'resolve') => {
         const newStatus = action === 'acknowledge' ? 'acknowledged' : 'resolved';
@@ -77,18 +74,6 @@ export function Alerts() {
         });
         return counts;
     }, [filteredAlerts]);
-
-    const totalPages = Math.ceil(filteredAlerts.length / ITEMS_PER_PAGE);
-    const paginatedAlerts = filteredAlerts.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    useEffect(() => {
-        if (totalPages > 0 && currentPage > totalPages) {
-            setCurrentPage(Math.max(1, totalPages));
-        }
-    }, [totalPages, currentPage]);
 
     const columns = [
         {
@@ -228,11 +213,17 @@ export function Alerts() {
                 </div>
             )}
 
-            <Card><CardBody className="p-0"><Table data={paginatedAlerts} columns={columns} keyExtractor={(item) => item.id} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} emptyMessage={t('no_alerts')} /></CardBody></Card>
-
-            {filteredAlerts.length > ITEMS_PER_PAGE && (
-                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredAlerts.length} itemsPerPage={ITEMS_PER_PAGE} />
-            )}
+            <VirtualTable
+                data={filteredAlerts}
+                columns={columns}
+                keyExtractor={(item) => item.id}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                emptyMessage={t('no_alerts')}
+                maxHeight={600}
+                estimateRowHeight={64}
+            />
 
             <ConfirmModal
                 isOpen={deleteConfirm.isOpen}

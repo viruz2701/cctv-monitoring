@@ -47,6 +47,38 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	var cfg Config
-	err = yaml.Unmarshal(data, &cfg)
-	return &cfg, err
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	// Env vars override секретов (безопасность: никогда не хардкодить)
+	if v := os.Getenv("P2P_BACKEND_API_KEY"); v != "" {
+		cfg.BackendAPIKey = v
+	}
+	if v := os.Getenv("P2P_HIKVISION_USERNAME"); v != "" {
+		cfg.HikvisionUsername = v
+	}
+	if v := os.Getenv("P2P_HIKVISION_PASSWORD"); v != "" {
+		cfg.HikvisionPassword = v
+	}
+	if v := os.Getenv("P2P_JFTECH_APP_KEY"); v != "" {
+		if cfg.Jftech == nil {
+			cfg.Jftech = &JftechConfig{}
+		}
+		cfg.Jftech.AppKey = v
+	}
+	if v := os.Getenv("P2P_JFTECH_APP_SECRET"); v != "" {
+		if cfg.Jftech == nil {
+			cfg.Jftech = &JftechConfig{}
+		}
+		cfg.Jftech.AppSecret = v
+	}
+	if v := os.Getenv("P2P_JFTECH_UUID"); v != "" {
+		if cfg.Jftech == nil {
+			cfg.Jftech = &JftechConfig{}
+		}
+		cfg.Jftech.UUID = v
+	}
+
+	return &cfg, nil
 }

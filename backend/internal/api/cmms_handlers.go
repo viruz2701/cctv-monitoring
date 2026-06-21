@@ -51,7 +51,7 @@ func (s *Server) listMaintenanceSchedules(w http.ResponseWriter, r *http.Request
 	schedules, err := s.cmmsRouter.GetMaintenanceSchedules(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get maintenance schedules", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -75,27 +75,27 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 		Notes            string          `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if raw.DeviceID == "" {
-		http.Error(w, "device_id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 	if raw.ScheduleType == "" {
-		http.Error(w, "schedule_type is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("schedule_type is required"))
 		return
 	}
 	if raw.NextDue == "" {
-		http.Error(w, "next_due is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("next_due is required"))
 		return
 	}
 
 	// Парсим дату в нескольких форматах (RFC3339, YYYY-MM-DD)
 	nextDue, err := parseFlexibleDate(raw.NextDue)
 	if err != nil {
-		http.Error(w, "invalid next_due format, use RFC3339 or YYYY-MM-DD", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("invalid next_due format, use RFC3339 or YYYY-MM-DD"))
 		return
 	}
 
@@ -123,7 +123,7 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 	if err := s.cmmsRouter.CreateMaintenanceSchedule(r.Context(), &schedule); err != nil {
 		s.logger.Error("Failed to create maintenance schedule", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -138,7 +138,7 @@ func (s *Server) getMaintenanceSchedule(w http.ResponseWriter, r *http.Request) 
 	id := chi.URLParam(r, "id")
 	schedule, err := s.cmmsRouter.GetMaintenanceSchedule(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Schedule not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Schedule not found"))
 		return
 	}
 	respondJSON(w, http.StatusOK, schedule)
@@ -149,7 +149,7 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
@@ -167,7 +167,7 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 	if err := s.cmmsRouter.UpdateMaintenanceSchedule(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update maintenance schedule", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -182,7 +182,7 @@ func (s *Server) deleteMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 	if err := s.cmmsRouter.DeleteMaintenanceSchedule(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete maintenance schedule", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -196,7 +196,7 @@ func (s *Server) getDueSchedules(w http.ResponseWriter, r *http.Request) {
 	schedules, err := s.cmmsRouter.GetDueSchedules(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get due schedules", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if schedules == nil {
@@ -210,7 +210,7 @@ func (s *Server) completeMaintenanceSchedule(w http.ResponseWriter, r *http.Requ
 
 	if err := s.cmmsRouter.CompleteMaintenanceSchedule(r.Context(), id); err != nil {
 		s.logger.Error("Failed to complete maintenance schedule", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -279,7 +279,7 @@ func (s *Server) listWorkOrders(w http.ResponseWriter, r *http.Request) {
 	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get work orders", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -292,16 +292,16 @@ func (s *Server) listWorkOrders(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	var wo models.WorkOrder
 	if err := json.NewDecoder(r.Body).Decode(&wo); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if wo.DeviceID == "" {
-		http.Error(w, "device_id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 	if wo.Type == "" {
-		http.Error(w, "type is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("type is required"))
 		return
 	}
 	if wo.Checklist == nil {
@@ -326,7 +326,7 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.CreateWorkOrder(r.Context(), &wo); err != nil {
 		s.logger.Error("Failed to create work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -338,7 +338,7 @@ func (s *Server) getWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Work order not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Work order not found"))
 		return
 	}
 	respondJSON(w, http.StatusOK, wo)
@@ -349,7 +349,7 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
@@ -365,7 +365,7 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -379,7 +379,7 @@ func (s *Server) deleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"status": "cancelled"}); err != nil {
 		s.logger.Error("Failed to delete work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -395,13 +395,13 @@ func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
 		UserID string `json:"user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("user_id is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.AssignWorkOrder(r.Context(), id, req.UserID); err != nil {
 		s.logger.Error("Failed to assign work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -415,7 +415,7 @@ func (s *Server) startWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.StartWorkOrder(r.Context(), id); err != nil {
 		s.logger.Error("Failed to start work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -433,14 +433,14 @@ func (s *Server) completeWorkOrder(w http.ResponseWriter, r *http.Request) {
 		Parts  []models.PartUsage `json:"parts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	userID := getUserIDFromContext(r.Context())
 	if err := s.cmmsRouter.CompleteWorkOrder(r.Context(), id, req.Notes, req.Photos, req.Parts, userID); err != nil {
 		s.logger.Error("Failed to complete work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -460,7 +460,7 @@ func (s *Server) cancelWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.CancelWorkOrder(r.Context(), id, req.Reason); err != nil {
 		s.logger.Error("Failed to cancel work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -474,13 +474,13 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 
 	// Parse multipart form (max 10MB)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Failed to parse multipart form"))
 		return
 	}
 
 	files := r.MultipartForm.File["photos"]
 	if len(files) == 0 {
-		http.Error(w, "No photos provided", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("No photos provided"))
 		return
 	}
 
@@ -507,7 +507,7 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 	// Update work order photos
 	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Work order not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Work order not found"))
 		return
 	}
 
@@ -520,7 +520,7 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 	photosJSON, _ := json.Marshal(existingPhotos)
 	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, map[string]interface{}{"photos": photosJSON}); err != nil {
 		s.logger.Error("Failed to update work order photos", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -534,7 +534,7 @@ func (s *Server) addWorkOrderParts(w http.ResponseWriter, r *http.Request) {
 		Parts []models.PartUsage `json:"parts"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Parts) == 0 {
-		http.Error(w, "parts array is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("parts array is required"))
 		return
 	}
 
@@ -542,7 +542,7 @@ func (s *Server) addWorkOrderParts(w http.ResponseWriter, r *http.Request) {
 	for _, part := range req.Parts {
 		if err := s.cmmsRouter.UsePartInWorkOrder(r.Context(), id, part.PartID, part.Quantity, userID); err != nil {
 			s.logger.Error("Failed to use part in work order", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			respondError(w, r, NewInternalError("operation failed", err))
 			return
 		}
 	}
@@ -577,7 +577,7 @@ func (s *Server) listSpareParts(w http.ResponseWriter, r *http.Request) {
 	parts, err := s.cmmsRouter.GetSpareParts(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get spare parts", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -590,18 +590,18 @@ func (s *Server) listSpareParts(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createSparePart(w http.ResponseWriter, r *http.Request) {
 	var part models.SparePart
 	if err := json.NewDecoder(r.Body).Decode(&part); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if part.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("name is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.CreateSparePart(r.Context(), &part); err != nil {
 		s.logger.Error("Failed to create spare part", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -614,7 +614,7 @@ func (s *Server) getSparePart(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	part, err := s.cmmsRouter.GetSparePart(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Spare part not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Spare part not found"))
 		return
 	}
 	respondJSON(w, http.StatusOK, part)
@@ -625,7 +625,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
@@ -642,7 +642,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.UpdateSparePart(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update spare part", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -656,7 +656,7 @@ func (s *Server) deleteSparePart(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.DeleteSparePart(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete spare part", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -669,7 +669,7 @@ func (s *Server) getLowStockParts(w http.ResponseWriter, r *http.Request) {
 	parts, err := s.cmmsRouter.GetLowStockParts(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get low stock parts", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if parts == nil {
@@ -685,13 +685,13 @@ func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
 		Quantity int `json:"quantity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateSparePartStock(r.Context(), id, req.Quantity); err != nil {
 		s.logger.Error("Failed to adjust spare part stock", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -708,7 +708,7 @@ func (s *Server) getAllTechnicianWorkloads(w http.ResponseWriter, r *http.Reques
 	workloads, err := s.cmmsRouter.GetAllTechnicianWorkloads(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get technician workloads", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if workloads == nil {
@@ -721,7 +721,7 @@ func (s *Server) getTechnicianWorkload(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	workload, err := s.cmmsRouter.GetTechnicianWorkload(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Technician not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Technician not found"))
 		return
 	}
 	respondJSON(w, http.StatusOK, workload)
@@ -735,13 +735,13 @@ func (s *Server) updateTechnicianSkills(w http.ResponseWriter, r *http.Request) 
 		Certifications []string `json:"certifications"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateTechnicianSkills(r.Context(), id, req.Skills, req.Certifications); err != nil {
 		s.logger.Error("Failed to update technician skills", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -758,7 +758,7 @@ func (s *Server) getSLAConfig(w http.ResponseWriter, r *http.Request) {
 	configs, err := s.cmmsRouter.GetAllSLAConfigs(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get SLA configs", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if configs == nil {
@@ -775,18 +775,18 @@ func (s *Server) updateSLAConfig(w http.ResponseWriter, r *http.Request) {
 		ResolutionTimeMinutes int `json:"resolution_time_minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if req.ResponseTimeMinutes <= 0 || req.ResolutionTimeMinutes <= 0 {
-		http.Error(w, "Times must be positive", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Times must be positive"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateSLAConfig(r.Context(), priority, req.ResponseTimeMinutes, req.ResolutionTimeMinutes); err != nil {
 		s.logger.Error("Failed to update SLA config", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -799,7 +799,7 @@ func (s *Server) getMaintenanceReport(w http.ResponseWriter, r *http.Request) {
 	report, err := s.cmmsRouter.GetMaintenanceReport(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get maintenance report", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if report == nil {
@@ -812,7 +812,7 @@ func (s *Server) getSLAComplianceReport(w http.ResponseWriter, r *http.Request) 
 	report, err := s.cmmsRouter.GetSLAComplianceReport(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get SLA compliance report", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 	if report == nil {
@@ -841,7 +841,7 @@ func (s *Server) listTechnicianSiteAssignments(w http.ResponseWriter, r *http.Re
 	assignments, err := s.cmmsRouter.GetTechnicianSiteAssignments(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get technician site assignments", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -854,16 +854,16 @@ func (s *Server) listTechnicianSiteAssignments(w http.ResponseWriter, r *http.Re
 func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
 	var assignment models.TechnicianSiteAssignment
 	if err := json.NewDecoder(r.Body).Decode(&assignment); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if assignment.TechnicianID == "" {
-		http.Error(w, "technician_id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("technician_id is required"))
 		return
 	}
 	if assignment.SiteID == "" {
-		http.Error(w, "site_id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("site_id is required"))
 		return
 	}
 
@@ -877,7 +877,7 @@ func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 
 	if err := s.cmmsRouter.CreateTechnicianSiteAssignment(r.Context(), &assignment); err != nil {
 		s.logger.Error("Failed to create technician site assignment", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -891,13 +891,13 @@ func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
@@ -908,13 +908,13 @@ func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 	}
 
 	if len(allowedUpdates) == 0 {
-		http.Error(w, "No valid fields to update", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("No valid fields to update"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateTechnicianSiteAssignment(r.Context(), id, allowedUpdates); err != nil {
 		s.logger.Error("Failed to update technician site assignment", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -928,13 +928,13 @@ func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 func (s *Server) deleteTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "id is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.DeleteTechnicianSiteAssignment(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete technician site assignment", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 

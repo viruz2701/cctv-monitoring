@@ -14,8 +14,7 @@ import {
     Select,
     TicketStatusBadge,
     PriorityBadge,
-    Table,
-    Pagination,
+    VirtualTable,
     Modal,
     ConfirmModal,
     SearchInput
@@ -24,8 +23,6 @@ import { useTickets, useDevicesSites } from '../context/DataContext';
 import { Ticket as TicketType } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
-
-const ITEMS_PER_PAGE = 10;
 
 export function Tickets() {
     const { t } = useTranslation();
@@ -38,7 +35,6 @@ export function Tickets() {
     const [priorityFilter, setPriorityFilter] = useState<string>('all');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-    const [currentPage, setCurrentPage] = useState(1);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
 
     React.useEffect(() => {
@@ -108,18 +104,6 @@ export function Tickets() {
             return matchesSearch && matchesStatus && matchesPriority;
         });
     }, [tickets, searchTerm, statusFilter, priorityFilter]);
-
-    const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE);
-    const paginatedTickets = filteredTickets.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    useEffect(() => {
-        if (totalPages > 0 && currentPage > totalPages) {
-            setCurrentPage(Math.max(1, totalPages));
-        }
-    }, [totalPages, currentPage]);
 
     const columns = [
         {
@@ -253,23 +237,15 @@ export function Tickets() {
                 </div>
             )}
 
-            <Table
-                data={paginatedTickets}
+            <VirtualTable
+                data={filteredTickets}
                 columns={columns}
                 keyExtractor={(ticket) => ticket.id}
                 onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
                 emptyMessage={t('no_tickets')}
+                maxHeight={600}
+                estimateRowHeight={64}
             />
-
-            {filteredTickets.length > ITEMS_PER_PAGE && (
-                <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    totalItems={filteredTickets.length}
-                    itemsPerPage={ITEMS_PER_PAGE}
-                />
-            )}
 
             <Modal
                 isOpen={showCreateModal}

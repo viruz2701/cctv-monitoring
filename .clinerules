@@ -1,340 +1,86 @@
-# .clinerules — AI Assistant Rules for CCTV Intelligence Platform v6.0
-
-**Обновлено:** 2026-06-21
-**Фаза:** 3 (Universal CMMS Gateway + Self-Healing)
-
----
-
-## 1. РОЛЬ И КОНТЕКСТ
-
-Ты — senior full-stack architect.
-
-**Стек:** Go 1.25 (chi, pgx/v5), React 19, React Native/Expo 52, Python 3.11, PostgreSQL + TimescaleDB.
-
-**Состояние:** ЗРЕЛОЕ enterprise-решение. Фазы 0, 1, 1.5, 2 выполнены.
-- ✅ CMMS Adapter Pattern (Internal + Atlas + Router + Fallback)
-- ✅ Gatekeeper Service (GPS/EXIF/AI)
-- ✅ ISO 27001 Quick Wins
-- ✅ UX Refresh
-- ✅ Atlas Integration (OAuth2 + bi-directional sync)
-- ✅ Predictive Maintenance (XGBoost + auto-create PM)
-- ✅ TCO Calculator
-- ✅ Voice-to-Report (Whisper + DeepSeek NLP)
-
-**Твоя задача в Phase 3:**
-1. Enterprise adapters (ServiceNow, Jira, 1С:ТОИР)
-2. NATS Event Bus с JetStream
-3. Agentic Self-Healing AI
-4. Bi-directional ITSM sync
-
----
-
----
-
-### 2. `.clinerules` — добавить секцию TOKEN ECONOMY
-
-В начало файла (после раздела 1) добавить:
-
-```markdown
-## 0. TOKEN ECONOMY (CRITICAL)
-
-**Эти правила ОБЯЗАТЕЛЬНЫ для экономии токенов:**
-
-1. **LAZY READS:** 
-   - НЕ читай файлы >200 строк целиком
-   - Используй `sed -n 'X,Yp' file` или grep для извлечения нужных частей
-   - Читай tree из `.roo-context.txt`, не сканируй директории
-
-2. **MINIMAL WRITES:**
-   - НИКОГДА не переписывай файл целиком
-   - Используй format: `// ... existing code ...` + только изменённые части
-   - Для новых файлов — пиши сразу полностью (только они новые)
-
-3. **BATCH OPERATIONS:**
-   - Группируй 3-5 связанных изменений в один ответ
-   - Используй один `Plan` блок для группы задач
-
-4. **NO REPETITION:**
-   - Не пересказывай существующий код в своём ответе
-   - Не копируй правила из этого файла в ответ
-   - Не объясняй базовые паттерны (adapter, repository, JWT)
-
-5. **SHORT OUTPUT FORMAT:**
-Plan: [1-2 строки]
-Files: [список]
-Code: [diffs/snippets]
-Next? [1 вопрос]
-БЕЗ блоков: "Analysis", "Warnings", "Commands", "Risks" — если не критично
-
-6. **SKIP OBVIOUS:**
-- Не добавляй комментарии к очевидному коду
-- Не пиши boilerplate тесты "should return nil on nil input"
-- Не создавай README для внутренних пакетов
-
-7. **SMART CONTEXT:**
-- При работе с handler'ом читай только его + `adapter.go`
-- При работе с UI читай только страницу + `api.ts`
-- При работе с миграцией читай только схему + предыдущую миграцию
-
-8. **REFERENCE SHORTCUTS:**
-- `@arch` = прочитай ARCHITECTURE.md секцию 1-2
-- `@todo` = прочитай TODO.md текущую фазу
-- `@tree` = прочитай .roo-context.txt
-
-
-## 2. СТРОГИЕ ЗАПРЕТЫ
-
-- ❌ **НЕ ПИШИ** мобильное приложение с нуля
-- ❌ **НЕ УДАЛЯЙ** существующие контексты (WorkOrdersContext, SparePartsContext, etc.)
-- ❌ **НЕ УДАЛЯЙ** Atlas adapter — он production-ready, использует OAuth2
-- ❌ **НЕ ЛОМАЙ** CMMS Adapter interface — 33 метода, все обязательны в каждом адаптере
-- ❌ **НЕ ХАРДКОДЬ** секреты (JWT, API Keys, OAuth client secrets)
-- ❌ **НЕ ЛОГИРУЙ** sensitive data (push_token, password, totp_secret, OAuth tokens)
-- ❌ **НЕ ИГНОРИРУЙ** ISO 27001 controls для новых интеграций
-- ❌ **НЕ ДЕЛАЙ** прямые HTTP-вызовы к внешним CMMS — только через adapter pattern
-- ✅ **ВСЕГДА** проверяй RBAC (`claims.Role`) в новых хендлерах
-- ✅ **ВСЕГДА** используй `context.WithTimeout` для внешних API calls
-- ✅ **ВСЕГДА** добавляй audit log для write-операций
-- ✅ **ВСЕГДА** реализуй fallback queue для внешних интеграций
-- ✅ **ВСЕГДА** добавляй conflict resolution стратегию для bi-directional sync
-- ✅ **ВСЕГДА** поддерживай i18n: `t('key')`
-
----
-
-## 3. АРХИТЕКТУРНЫЕ ПАТТЕРНЫ
-
-### 3.1 CMMS Router Pattern (ADR-002)
-
-Handler → CMMSRouter → CMMSAdapter → [Internal | Atlas | ServiceNow | Jira | Toir]
-↓
-Fallback Queue (если external unavailable)
-↓
-Internal DB + async retry (NATS-driven in Phase 3)
-
-**Правила:**
-1. Handlers НИКОГДА не вызывают `db.DB` для CMMS-операций
-2. Каждый adapter обязан реализовать все 33 метода
-3. Все external adapters обязаны иметь fallback
-4. Conflict resolution — часть adapter-контракта
-
-### 3.2 Gatekeeper Pattern (ADR-004) — ✅ Production
-
-Не модифицировать без крайней необходимости.
-
-### 3.3 Event Bus Pattern (ADR-003) — Phase 3
-
-Publisher (Backend) → NATS JetStream → Subscribers:
-├── WebSocket Hub
-├── Mobile push
-├── Worker pool
-└── Analytics service
-
-**Правила для publishers:**
-- Используй `events.Publish(ctx, topic, payload)`
-- Payload — всегда struct с JSON тегами
-- Schema version в каждом сообщении (`schema_version: "1.0"`)
-
-**Правила для subscribers:**
-- Idempotent handlers (deduplication по `msg_id`)
-- Dead-letter queue для failed messages
-- Metrics: `events_processed`, `events_failed`, `processing_latency`
-
-### 3.4 Agentic Self-Healing (Phase 3)
-
-Alarm → AI Agent → Decision Tree → Action:
-├── Auto-fix (P2P Gateway)
-├── Human approval (Telegram/Mobile)
-└── Escalate to CMMS
-
-**Правила:**
-- Playbooks в YAML, не в коде
-- Audit log ВСЕХ agentic действий
-- Human-in-the-loop для критичных операций
-- Timeout → fallback to manual
-
----
-
-## 4. ISO 27001 — ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ
-
-### 4.1 Реализовано ✅
-- A.9.1 RBAC (6 ролей)
-- A.10.1 TOTP 2FA
-- A.10.2 API Keys (bcrypt + prefix)
-- A.10.3 Push Tokens (AES-256-GCM)
-- A.10.4 JWT Secret (env var)
-- A.12.4 Audit Log
-- A.13.2 Security Headers
-- A.13.3 Rate Limiting
-
-### 4.2 Правила для новых интеграций
-
-**ServiceNow / Jira / 1С:ТОИР:**
-- OAuth client secrets — только через env vars или Vault
-- Access tokens — AES-256-GCM в БД
-- Webhook endpoints — signature verification (HMAC-SHA256)
-- Rate limiting на inbound webhooks
-- Audit log для всех sync операций
-
-**NATS:**
-- TLS 1.3 для NATS connections
-- JWT-based authentication для NATS clients
-- Per-topic ACL (publish/subscribe permissions)
-- JetStream encryption at rest
-
-**Self-Healing Agent:**
-- Least privilege: agent имеет только необходимые ISAPI/ONVIF commands
-- Blast radius control: max N devices per action
-- Rollback capability для destructive actions
-- Audit log с full command history
-
----
-
-## 5. ПРАВИЛА ДЛЯ GO (Backend)
-
-### 5.1 CMMS Adapters
-
-**Новый adapter должен:**
-backend/internal/cmms/<name>/
-├── adapter.go # реализация 33 методов
-├── client.go # HTTP/OAuth client
-├── mapper.go # field mapping
-├── webhook.go # inbound webhook handlers
-├── adapter_test.go # unit tests
-└── integration_test.go # tests против sandbox
-
-**Обязательно:**
-- Implement `HealthCheck(ctx) error`
-- Implement `ValidateConfig(cfg) error`
-- Circuit breaker pattern для external calls
-- Retry с exponential backoff (max 5 attempts)
-- Request/response logging (без sensitive data)
-
-### 5.2 NATS Integration
-
-backend/internal/events/
-├── publisher.go # Publish(topic, payload)
-├── subscriber.go # Subscribe(topic, handler)
-├── schema.go # message schemas
-└── metrics.go # Prometheus metrics
-
-**Правила:**
-- Каждый topic — отдельный schema file
-- Publisher возвращает error только если NATS недоступен
-- Subscriber обрабатывает errors локально (не паникует)
-- JetStream для persistence (не in-memory)
-
-### 5.3 Self-Healing Agent
-
-backend/internal/agent/
-├── agent.go # main orchestrator
-├── analyzer.go # topology analysis
-├── playbook.go # YAML playbook engine
-├── actions/ # action implementations
-│ ├── isapi.go
-│ ├── onvif.go
-│ └── snmp.go
-└── approval.go # human-in-the-loop
-
----
-
-## 6. ПРАВИЛА ДЛЯ FRONTEND
-
-### 6.1 Integrations Page
-- `Integrations.tsx` уже существует — расширять для новых adapters
-- Card per adapter с health status
-- Test connection button
-- Field mapping UI (drag-and-drop)
-- Sync history view
-
-### 6.2 Real-time UI (NATS-driven)
-- Subscribe через WebSocket Hub
-- Auto-reconnect с exponential backoff
-- Optimistic updates для known-safe operations
-- Loading states для async operations
-
----
-
-## 7. ЧЕК-ЛИСТ ПЕРЕД КОММИТОМ
-
-### Backend
-- [ ] Нет хардкод-секретов
-- [ ] Нет sensitive data в логах
-- [ ] RBAC проверен для новых endpoints
-- [ ] `context.WithTimeout` для всех внешних I/O
-- [ ] Audit log добавлен для write-операций
-- [ ] Error messages: `fmt.Errorf("op %s: %w", id, err)`
-- [ ] Adapter реализует ВСЕ 33 метода (не только нужные)
-- [ ] Fallback queue для внешних adapters
-- [ ] Conflict resolution для bi-directional sync
-- [ ] Schema versioning для NATS messages
-
-### Frontend
-- [ ] Все новые строки через `t('key')`
-- [ ] `dark:` prefix для всех Tailwind классов
-- [ ] Loading/empty/error/success состояния
-- [ ] WebSocket subscription cleanup на unmount
-- [ ] Accessibility: `aria-label`, `role`, focus states
-
-### Mobile
-- [ ] Offline queue для новых operations
-- [ ] Push notifications registered
-- [ ] Biometric auth для критичных actions
-
----
-
-## 8. ФОРМАТ ОТВЕТА AI
-
-1. **Анализ** (2-3 предложения)
-2. **План** (список файлов)
-3. **Код** (точные diff'и)
-4. **Команды** (build/test/migrate)
-5. **Предупреждения** (risks, breaking changes)
-6. **Вопрос:** «Что дальше: продолжаем по плану или нужна корректировка?»
-
----
-
-## 9. КРИТИЧЕСКИ ВАЖНЫЕ МОДУЛИ
-
-### НЕ ТРОГАТЬ:
-- `backend/internal/gatekeeper/` — production-ready
-- `backend/internal/crypto/aes.go` — AES-256-GCM
-- `backend/internal/cmms/adapter.go` — 33-методный интерфейс
-- `backend/internal/cmms/internal_adapter.go`
-- `backend/internal/cmms/atlas_adapter.go` — OAuth2 production
-- `backend/internal/cmms/fallback_queue.go`
-- `backend/internal/predictions/` — XGBoost wrapper
-- `backend/internal/tco/` — calculator + aggregator
-- `backend/internal/voice/` — Whisper + NLP
-- `backend/internal/protocols/*` — 8 protocol handlers
-- `backend/internal/sip/handler.go` — GB28181
-
-### Frontend:
-- `frontend/src/context/*` — 12 React contexts
-- `frontend/src/components/ui/*` — DataGrid, PartCard, Gauge, etc.
-- `frontend/src/pages/WorkOrderDetail.tsx` — three-column layout
-- `frontend/src/pages/Integrations.tsx` — Atlas config (expandable)
-
-### Mobile:
-- `mobile/src/screens/VerificationScreen.tsx` — Gatekeeper
-- `mobile/src/screens/VoiceReportScreen.tsx` — Voice-to-Report
-- `mobile/src/store/syncStore.ts` — offline queue
-
----
-
-## 10. API REFERENCE ССЫЛКИ
-
-### Production Adapters (✅)
-- **Atlas CMMS:** https://docs.atlas-cmms.com/api
-- **DeepSeek Vision:** https://platform.deepseek.com/api-docs
-- **Whisper (OpenAI):** https://platform.openai.com/docs/api-reference/audio
-
-### Planned Adapters (Phase 3)
-- **ServiceNow:** https://developer.servicenow.com/dev.do
-- **Jira Service Management:** https://developer.atlassian.com/cloud/jira/platform/rest/v3/
-- **1С:ТОИР:** https://toir.ru/docs/api
-- **NATS JetStream:** https://docs.nats.io/nats-concepts/jetstream
-
-### Security References
-- **OAuth 2.0:** RFC 6749 (https://datatracker.ietf.org/doc/html/rfc6749)
-- **ISO 27001:2022:** Annex A controls
-- **152-ФЗ:** https://pravo.gov.ru (персональные данные в РФ)
+Security (CRITICAL)
+NEVER use os/exec с паролями → используй golang.org/x/crypto/ssh
+NEVER хардкодить секреты в config → env vars only
+NEVER 'unsafe-inline' в CSP → nonce-based CSP
+ALWAYS валидация input, parameterized SQL, rate limiting на auth
+Architecture
+Backend: Разбивай handlers на доменные роутеры (не monolithic server.go)
+Database: golang-migrate для версионирования (не CREATE TABLE IF NOT EXISTS)
+Errors: Централизованная обработка respondError(w, r, err) с traceID
+Files: Разбивай >500 строк на модули
+Testing
+Backend: table-driven tests, testcontainers-go для интеграционных
+Coverage target: 70% Go, 50% React
+Mock external dependencies
+Code Style
+Go: golangci-lint, gofmt, godoc comments
+TypeScript: ESLint + Prettier, strict mode, functional components
+SQL: snake_case, индексы для частых запросов, transactions для multi-step
+Common Pitfalls
+❌ God Objects → ✅ Domain routers
+❌ Magic numbers → ✅ Named constants
+❌ Deep nesting → ✅ Helper functions
+❌ Commented code → ✅ Remove or document
+❌ Console.log → ✅ Proper logging
+❌ any type → ✅ Proper interfaces
+Quick Wins Priority
+Security fixes (sshpass, CSP, secrets)
+Architecture refactoring (server.go, migrations, errors)
+Mobile improvements (refresh token, parallel uploads, EXIF)
+Performance (Excel backend, virtualization)
+Infrastructure (Dockerfile, docker-compose, tests)</content>
+</write_to_file>
+<write_to_file>
+<path>.roo-context.txt</path>
+<content># Roo Context v7.0
+
+Project
+CCTV Intelligence Platform — enterprise CCTV monitoring + predictive maintenance + IT/OT convergence.
+Current Phase
+Quick Wins (P0) → Phase 3.5 (Edge Agent + QR)
+Key Files
+TODO.md — задачи (Quick Wins + Phase 3.5)
+ARCHITECTURE.md — архитектура, ADRs, стек
+.clinerules — правила для AI
+Stack
+Backend: Go 1.25 (chi, pgx/v5, nats.go)
+Frontend: React 19, Vite 8, Tailwind 4
+Mobile: React Native / Expo 52
+Edge Agent: Go 1.25 на OpenWrt (MQTT + WireGuard)
+Data: PostgreSQL + TimescaleDB
+Quick Wins (P0) — 2 недели
+Security: sshpass → crypto/ssh, CSP nonce, secrets → env
+Architecture: server.go → доменные роутеры, golang-migrate, respondError()
+Mobile: Refresh token, parallel uploads, real EXIF
+Performance: Excel/PDF на Backend, виртуализация списков
+Infra: Dockerfile, docker-compose, интеграционные тесты
+Phase 3.5 — 3 месяца
+Edge Agent (OpenWrt)
+Go binary ~5MB, ~30MB RAM
+Control Plane: MQTT 5.0 + mTLS 1.3 (телеметрия, команды)
+Media Plane: WireGuard on-demand (доступ к LAN клиента)
+wgdashboard для управления WG
+Hardware: Wiflyer 4G / GL-XE300 / HDRM200
+QR-паспортизация
+Scope: NVR, switch, rack, UPS (НЕ уличные камеры)
+Payload: https://cctv.company.com/q/{base62_id}?h={hmac_16}
+Print: Bluetooth thermal printer ИЛИ enterprise batch (A4)
+Lifecycle: DRAFT → PRINTED → ACTIVE → REVOKED
+CMMS UI
+Settings → Integrations (Atlas/SN/Jira/TOIR)
+Per-adapter config, live test, sync dashboard
+Security Rules
+NEVER os/exec с паролями → golang.org/x/crypto/ssh
+NEVER хардкодить секреты → env vars
+NEVER 'unsafe-inline' в CSP → nonce
+ALWAYS валидация input, parameterized SQL
+Metrics
+Coverage: 70% Go, 50% React
+API p95: <100ms
+Edge Agents: 5+
+QR Objects: 95%
+QR Scan: <2s
+Deferred (Phase 4)
+Multi-tenant SaaS
+AR Remote Expert
+ISO 27001 Certification</content>

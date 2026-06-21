@@ -23,7 +23,7 @@ import (
 func (s *Server) listMobileWorkOrders(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
@@ -39,7 +39,7 @@ func (s *Server) listMobileWorkOrders(w http.ResponseWriter, r *http.Request) {
 	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get mobile work orders", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -117,7 +117,7 @@ func (s *Server) getMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Work order not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Work order not found"))
 		return
 	}
 
@@ -215,7 +215,7 @@ func (s *Server) startMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.StartWorkOrder(r.Context(), id); err != nil {
 		s.logger.Error("Failed to start mobile work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -242,24 +242,24 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 		} `json:"location"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	// Gatekeeper: проверяем verification token
 	if req.VerificationToken == "" {
-		http.Error(w, `{"error":"verification_token is required. Call POST /verify first."}`, http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("verification_token is required. Call POST /verify first."))
 		return
 	}
 
 	vClaims, err := gatekeeper.ValidateVerificationToken(req.VerificationToken)
 	if err != nil {
-		http.Error(w, `{"error":"invalid or expired verification_token"}`, http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("invalid or expired verification_token"))
 		return
 	}
 
 	if vClaims.WorkOrderID != id {
-		http.Error(w, `{"error":"verification_token does not match this work order"}`, http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("verification_token does not match this work order"))
 		return
 	}
 
@@ -295,7 +295,7 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 	userID := getUserIDFromContext(r.Context())
 	if err := s.cmmsRouter.CompleteWorkOrder(r.Context(), id, notes, req.Photos, req.PartsUsed, userID); err != nil {
 		s.logger.Error("Failed to complete mobile work order", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -316,13 +316,13 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 	workOrderID := chi.URLParam(r, "id")
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Failed to parse form"))
 		return
 	}
 
 	file, header, err := r.FormFile("photo")
 	if err != nil {
-		http.Error(w, "Failed to get file", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Failed to get file"))
 		return
 	}
 	defer file.Close()
@@ -332,7 +332,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 
 	if err := saveUploadedFile(file, dst); err != nil {
 		s.logger.Error("Failed to save mobile photo", "error", err)
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("Failed to save file", nil))
 		return
 	}
 
@@ -341,7 +341,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 	// Обновляем work order photos
 	wo, err := s.cmmsRouter.GetWorkOrder(r.Context(), workOrderID)
 	if err != nil {
-		http.Error(w, "Work order not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("Work order not found"))
 		return
 	}
 
@@ -354,7 +354,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 	photosJSON, _ := json.Marshal(existingPhotos)
 	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), workOrderID, map[string]interface{}{"photos": photosJSON}); err != nil {
 		s.logger.Error("Failed to update work order photos", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -370,7 +370,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
@@ -379,12 +379,12 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 		Platform string `json:"platform"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if req.Token == "" {
-		http.Error(w, "token is required", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("token is required"))
 		return
 	}
 
@@ -395,7 +395,7 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 	// Сохраняем push-токен в БД
 	if err := s.cmmsRouter.SavePushToken(r.Context(), claims.UserID, req.Token, req.Platform); err != nil {
 		s.logger.Error("Failed to save push token", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -408,7 +408,7 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
@@ -417,7 +417,7 @@ func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Reque
 		// Возвращаем базовый профиль если workload не найден
 		user, err := s.db.GetUserByID(claims.UserID)
 		if err != nil {
-			http.Error(w, "User not found", http.StatusNotFound)
+			respondError(w, r, NewNotFoundError("User not found"))
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -438,7 +438,7 @@ func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Reque
 func (s *Server) getMobileTechnicianStats(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 

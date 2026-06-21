@@ -22,7 +22,7 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		}
 
 		if apiKey == "" {
-			http.Error(w, "API key required", http.StatusUnauthorized)
+			respondError(w, r, NewUnauthorizedError("API key required"))
 			return
 		}
 
@@ -35,7 +35,7 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		// Look up keys by prefix
 		keys, err := s.db.GetAPIKeysByPrefix(prefix)
 		if err != nil || len(keys) == 0 {
-			http.Error(w, "Invalid API key", http.StatusUnauthorized)
+			respondError(w, r, NewUnauthorizedError("Invalid API key"))
 			return
 		}
 
@@ -49,13 +49,13 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		}
 
 		if matchedKey == nil {
-			http.Error(w, "Invalid API key", http.StatusUnauthorized)
+			respondError(w, r, NewUnauthorizedError("Invalid API key"))
 			return
 		}
 
 		// Check if key is expired
 		if matchedKey.ExpiresAt != nil && matchedKey.ExpiresAt.Before(time.Now()) {
-			http.Error(w, "API key expired", http.StatusUnauthorized)
+			respondError(w, r, NewUnauthorizedError("API key expired"))
 			return
 		}
 

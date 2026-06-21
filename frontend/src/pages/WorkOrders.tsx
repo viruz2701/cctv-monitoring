@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { WorkOrder } from '../services/workOrdersApi';
-import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
+import { Button, Card, VirtualTable, Badge, Modal, Input } from '../components/ui';
 import { Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 
 export const WorkOrders: React.FC = () => {
@@ -151,7 +151,7 @@ export const WorkOrders: React.FC = () => {
           </select>
         </div>
 
-        <DataGrid
+        <VirtualTable
           data={filtered}
           columns={columns}
           keyExtractor={(item) => item.id}
@@ -161,6 +161,8 @@ export const WorkOrders: React.FC = () => {
           exportFilename="work-orders.csv"
           selectable
           onRowClick={(item) => navigate(`/work-orders/${item.id}`)}
+          maxHeight={600}
+          estimateRowHeight={64}
         />
       </Card>
 

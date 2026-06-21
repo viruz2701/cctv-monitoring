@@ -14,7 +14,7 @@ import (
 func (s *Server) handleTelegramGenerateLink(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
@@ -22,7 +22,7 @@ func (s *Server) handleTelegramGenerateLink(w http.ResponseWriter, r *http.Reque
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		s.logger.Error("failed to generate token", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 	token := hex.EncodeToString(tokenBytes)
@@ -31,7 +31,7 @@ func (s *Server) handleTelegramGenerateLink(w http.ResponseWriter, r *http.Reque
 	expiresAt := time.Now().Add(5 * time.Minute)
 	if err := s.db.SaveTelegramLinkToken(token, claims.UserID, expiresAt); err != nil {
 		s.logger.Error("failed to save telegram link token", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -45,7 +45,7 @@ func (s *Server) handleTelegramGenerateLink(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleTelegramUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
@@ -54,13 +54,13 @@ func (s *Server) handleTelegramUpdateSettings(w http.ResponseWriter, r *http.Req
 		TFA    bool `json:"tfa"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("invalid request"))
 		return
 	}
 
 	if err := s.db.UpdateTelegramSettings(claims.UserID, req.Alerts, req.TFA); err != nil {
 		s.logger.Error("failed to update telegram settings", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -71,14 +71,14 @@ func (s *Server) handleTelegramUpdateSettings(w http.ResponseWriter, r *http.Req
 func (s *Server) handleTelegramStatus(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
 	user, err := s.db.GetUserByID(claims.UserID)
 	if err != nil {
 		s.logger.Error("failed to get user", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -95,23 +95,23 @@ func (s *Server) handleTelegramRequestCode(w http.ResponseWriter, r *http.Reques
 		Username string `json:"username"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("invalid request"))
 		return
 	}
 
 	user, err := s.db.GetUserByUsername(req.Username)
 	if err != nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("user not found"))
 		return
 	}
 
 	if user.TelegramChatID == "" {
-		http.Error(w, "telegram not linked", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("telegram not linked"))
 		return
 	}
 
 	if s.telegramBot == nil {
-		http.Error(w, "telegram bot not configured", http.StatusServiceUnavailable)
+		respondError(w, r, NewExternalServiceError("telegram bot not configured"))
 		return
 	}
 
@@ -119,7 +119,7 @@ func (s *Server) handleTelegramRequestCode(w http.ResponseWriter, r *http.Reques
 	code, err := s.telegramBot.GenerateLoginCodeByUserID(user.ID)
 	if err != nil {
 		s.logger.Error("failed to generate telegram login code", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -137,25 +137,25 @@ func (s *Server) handleTelegramVerify(w http.ResponseWriter, r *http.Request) {
 		Code     string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		respondError(w, r, NewBadRequestError("invalid request"))
 		return
 	}
 
 	user, err := s.db.GetUserByUsername(req.Username)
 	if err != nil {
-		http.Error(w, "user not found", http.StatusNotFound)
+		respondError(w, r, NewNotFoundError("user not found"))
 		return
 	}
 
 	valid, err := s.db.ValidateTelegramLoginCode(user.ID, req.Code)
 	if err != nil {
 		s.logger.Error("failed to validate telegram code", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
 	if !valid {
-		http.Error(w, "invalid or expired code", http.StatusUnauthorized)
+		respondError(w, r, NewUnauthorizedError("invalid or expired code"))
 		return
 	}
 
@@ -163,7 +163,7 @@ func (s *Server) handleTelegramVerify(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GenerateJWT(user.ID, user.Username, user.Role)
 	if err != nil {
 		s.logger.Error("failed to generate JWT", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 

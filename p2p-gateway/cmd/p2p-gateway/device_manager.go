@@ -80,6 +80,25 @@ func (dm *DeviceManager) StopDevice(deviceID string) error {
 	return nil
 }
 
+// ShutdownAll останавливает все устройства в порядке, обратном регистрации.
+// Возвращает слайс ошибок (nil при успешном shutdown).
+func (dm *DeviceManager) ShutdownAll() []error {
+	dm.mu.RLock()
+	ids := make([]string, 0, len(dm.devices))
+	for id := range dm.devices {
+		ids = append(ids, id)
+	}
+	dm.mu.RUnlock()
+
+	var errs []error
+	for _, id := range ids {
+		if err := dm.StopDevice(id); err != nil {
+			errs = append(errs, fmt.Errorf("stop %s: %w", id, err))
+		}
+	}
+	return errs
+}
+
 func (dm *DeviceManager) GetDevice(deviceID string) (*models.Device, bool) {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()

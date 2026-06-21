@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 	"github.com/icholy/digest"
+	"golang.org/x/crypto/ssh"
 )
 
 // ActionExecutor выполняет remediation-действия на устройствах.
@@ -331,45 +332,59 @@ type SSHCommandResult struct {
 	ExitCode int
 }
 
-// SSHRestartDevice перезагружает устройство по SSH.
-// Требует доступные SSH-клиенты на системе.
-// Использует os/exec для вызова ssh.
-func (e *ActionExecutor) SSHRestartDevice(ctx context.Context, deviceIP, username, password string, sshPort int) error {
-	cmd := buildSSHCommand(deviceIP, username, password, sshPort, "reboot")
-	return e.runSSHCommand(ctx, cmd)
-}
-
-// SSHServiceRestart перезапускает сервис на устройстве по SSH.
-func (e *ActionExecutor) SSHServiceRestart(ctx context.Context, deviceIP, username, password, serviceName string, sshPort int) error {
-	cmd := buildSSHCommand(deviceIP, username, password, sshPort, fmt.Sprintf("systemctl restart %s || service %s restart", serviceName, serviceName))
-	return e.runSSHCommand(ctx, cmd)
-}
-
-func buildSSHCommand(host, username, password string, port int, remoteCmd string) []string {
-	// sshpass + ssh для неинтерактивной аутентификации
-	args := []string{
-		"sshpass", "-p", password,
-		"ssh",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=10",
-		"-p", fmt.Sprintf("%d", port),
-		fmt.Sprintf("%s@%s", username, host),
-		remoteCmd,
+// sshClientConfig создаёт конфигурацию SSH клиента с password auth.
+func sshClientConfig(username, password string, timeout time.Duration) *ssh.ClientConfig {
+	return &ssh.ClientConfig{
+		User: username,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         timeout,
 	}
-	return args
 }
 
-func (e *ActionExecutor) runSSHCommand(ctx context.Context, args []string) error {
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+// SSHRestartDevice перезагружает устройство по SSH (crypto/ssh).
+func (e *ActionExecutor) SSHRestartDevice(ctx context.Context, deviceIP, username, password string, sshPort int) error {
+	return e.runSSHSession(ctx, deviceIP, username, password, sshPort, "reboot")
+}
+
+// SSHServiceRestart перезапускает сервис на устройстве по SSH (crypto/ssh).
+func (e *ActionExecutor) SSHServiceRestart(ctx context.Context, deviceIP, username, password, serviceName string, sshPort int) error {
+	remoteCmd := fmt.Sprintf("systemctl restart %s || service %s restart", serviceName, serviceName)
+	return e.runSSHSession(ctx, deviceIP, username, password, sshPort, remoteCmd)
+}
+
+// runSSHSession выполняет команду через нативный SSH (crypto/ssh).
+func (e *ActionExecutor) runSSHSession(ctx context.Context, host, username, password string, port int, remoteCmd string) error {
+	if port == 0 {
+		port = 22
+	}
+
+	config := sshClientConfig(username, password, 10*time.Second)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+
+	conn, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		e.logger.Error("ssh dial failed", "host", addr, "error", err)
+		return fmt.Errorf("ssh dial %s: %w", addr, err)
+	}
+	defer conn.Close()
+
+	session, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("ssh new session: %w", err)
+	}
+	defer session.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	session.Stdout = &stdout
+	session.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := session.Run(remoteCmd); err != nil {
 		e.logger.Error("ssh command failed",
-			"args", strings.Join(args, " "),
+			"host", host,
+			"command", remoteCmd,
 			"stdout", stdout.String(),
 			"stderr", stderr.String(),
 			"error", err,
@@ -377,7 +392,7 @@ func (e *ActionExecutor) runSSHCommand(ctx context.Context, args []string) error
 		return fmt.Errorf("ssh command failed: %w (stderr: %s)", err, stderr.String())
 	}
 
-	e.logger.Info("ssh command succeeded", "args", strings.Join(args[:len(args)-1], " "), "output", stdout.String())
+	e.logger.Info("ssh command succeeded", "host", host, "command", remoteCmd, "output", stdout.String())
 	return nil
 }
 
