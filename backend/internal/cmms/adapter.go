@@ -5,6 +5,7 @@ package cmms
 
 import (
 	"context"
+	"log/slog"
 
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
@@ -90,13 +91,31 @@ func NewCMMSRouter(adapter CMMSAdapter) *CMMSRouter {
 	return &CMMSRouter{adapter: adapter}
 }
 
+// Adapter возвращает базовый адаптер. Используется для доступа
+// к специфичным методам адаптера (например, AtlasAdapter.HealthCheck).
+func (r *CMMSRouter) Adapter() CMMSAdapter {
+	return r.adapter
+}
+
 // NewCMMSRouterFromConfig создаёт CMMSRouter на основе конфигурации.
 // При cmms_adapter = "atlas" используется AtlasAdapter (внешний CMMS API),
 // иначе — InternalAdapter (существующая БД).
 func NewCMMSRouterFromConfig(cfg *config.Config, database *db.DB) *CMMSRouter {
 	switch cfg.CMMSAdapter {
 	case "atlas":
-		return NewCMMSRouter(NewAtlasAdapter(cfg.AtlasURL, cfg.AtlasAPIKey))
+		adapter, err := NewAtlasAdapter(AtlasAdapterConfig{
+			BaseURL:      cfg.AtlasURL,
+			ClientID:     cfg.AtlasClientID,
+			ClientSecret: cfg.AtlasClientSecret,
+			TokenURL:     cfg.AtlasTokenURL,
+			APIKey:       cfg.AtlasAPIKey,
+			FallbackDir:  cfg.AtlasFallbackDir,
+		})
+		if err != nil {
+			slog.Error("failed to create Atlas adapter, falling back to internal", "error", err)
+			return NewCMMSRouter(NewInternalAdapter(database))
+		}
+		return NewCMMSRouter(adapter)
 	default:
 		return NewCMMSRouter(NewInternalAdapter(database))
 	}

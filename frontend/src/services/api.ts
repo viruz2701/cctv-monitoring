@@ -839,4 +839,26 @@ export const api = {
             method: 'DELETE',
         });
     },
+
+    // ── Atlas CMMS Integration ─────────────────────────────────
+
+    async atlasHealthCheck(): Promise<{ status: string; error?: string; message?: string }> {
+        return request<{ status: string; error?: string; message?: string }>('/atlas/health');
+    },
+
+    async atlasFallbackStatus(): Promise<{ queue_size: number; message?: string }> {
+        return request<{ queue_size: number; message?: string }>('/atlas/fallback/status');
+    },
+
+    async atlasRetryFallback(): Promise<{ success: number; failed: number; message?: string }> {
+        return request<{ success: number; failed: number; message?: string }>('/atlas/fallback/retry', {
+            method: 'POST',
+        });
+    },
+
+    async atlasSyncAsset(deviceId: string): Promise<{ status: string; error?: string; message?: string }> {
+        return request<{ status: string; error?: string; message?: string }>(`/atlas/sync-asset/${deviceId}`, {
+            method: 'POST',
+        });
+    },
 };

@@ -1,13 +1,8 @@
 
----
-
-## 3. `TODO.md` (~350 строк)
-
-```markdown
-# TODO.md — Task Tracker for CCTV Intelligence Platform v4.0
+# TODO.md — Task Tracker for CCTV Intelligence Platform v5.0
 
 **Обновлено:** 2026-06-21
-**Текущая фаза:** 1.5 (Gatekeeper + ISO Quick Wins + UX Refresh)
+**Текущая фаза:** 2 (AI Intelligence & Atlas Integration)
 
 ---
 
@@ -17,10 +12,10 @@
 |------|-------|----------|--------|----------|
 | Foundation & Analysis | Phase 0 | P0 | ✅ Done | 100% |
 | Headless CMMS & Adapter | Phase 1 | P0 | ✅ Done | 100% |
-| Gatekeeper Service | Phase 1.5 | P0 | 🔴 Not Started | 0% |
-| ISO 27001 Quick Wins | Phase 1.5 | P0 | 🔴 Not Started | 0% |
-| UX Refresh (Desktop) | Phase 1.5 | P1 | 🔴 Not Started | 0% |
-| Atlas CMMS Integration | Phase 2 | P1 | ⚠️ Stub | 10% |
+| Gatekeeper Service | Phase 1.5 | P0 | ✅ Done | 100% |
+| ISO 27001 Quick Wins | Phase 1.5 | P0 | ✅ Done | 100% |
+| UX Refresh (Desktop) | Phase 1.5 | P1 | ✅ Done | 100% |
+| Atlas CMMS Integration | Phase 2 | P1 | ✅ Done | 100% |
 | AI Intelligence & TCO | Phase 2 | P1 | 🔴 Not Started | 0% |
 | Universal CMMS Gateway | Phase 3 | P1 | 🔴 Not Started | 0% |
 | Enterprise Scale & ISO Cert | Phase 4 | P2 | 🔴 Not Started | 0% |
@@ -50,7 +45,7 @@
 
 ---
 
-## ✅ PHASE 1: Headless CMMS (DONE — 75%)
+## ✅ PHASE 1: Headless CMMS (DONE)
 
 ### Epic 1.1: CMMS Adapter Framework ✅
 - [x] **1.1.1** `CMMSAdapter` interface (33 methods) → `backend/internal/cmms/adapter.go`
@@ -59,13 +54,13 @@
 - [x] **1.1.4** `CMMSRouter` delegate → `backend/internal/cmms/adapter.go`
 - [x] **1.1.5** Integration in handlers → `cmms_handlers.go`, `mobile_handlers.go`
 
-### Epic 1.2: Gatekeeper Service ❌ → MOVED TO PHASE 1.5
-- [ ] **1.2.1** Go Backend: `/api/v1/mobile/work-orders/{id}/verify`
-- [ ] **1.2.2** Go Backend: GPS geofence validation (sites.geofence_polygon)
-- [ ] **1.2.3** Go Backend: EXIF validation (time, device, gallery block)
-- [ ] **1.2.4** Go Backend: AI before/after (DeepSeek Vision)
-- [ ] **1.2.5** Mobile: Verification screen (post-PhotoCapture, pre-Signature)
-- [ ] **1.2.6** Mobile: Live camera only (no gallery for Gatekeeper)
+### Epic 1.2: Gatekeeper Service ✅ (moved from Phase 1 to 1.5)
+- [x] **1.2.1** Go Backend: `/api/v1/mobile/work-orders/{id}/verify`
+- [x] **1.2.2** Go Backend: GPS geofence validation (Haversine distance)
+- [x] **1.2.3** Go Backend: EXIF validation (time, device, gallery block)
+- [x] **1.2.4** Go Backend: AI before/after (DeepSeek Vision, graceful skip)
+- [x] **1.2.5** Mobile: VerificationScreen (post-PhotoCapture, pre-Signature)
+- [x] **1.2.6** Mobile: Live camera only (no gallery for Gatekeeper)
 
 ### Epic 1.3: Maintenance Schedules & Cron ✅
 - [x] **1.3.1** Maintenance schedules CRUD → `cmms_handlers.go`
@@ -80,122 +75,62 @@
 
 ---
 
-## 🆕 PHASE 1.5: Gatekeeper + ISO + UX Refresh (CURRENT)
+## ✅ PHASE 1.5: Gatekeeper + ISO + UX Refresh (DONE)
 
-**Срок:** Месяц 3 (4 недели)
-**Цель:** Завершить Phase 1, устранить критические security gaps, обновить UI
+### Epic 1.5.1: Gatekeeper Service [P0] ✅
+- [x] **1.5.1.1** Создан пакет `backend/internal/gatekeeper/`
+- [x] **1.5.1.2** Endpoint `POST /api/v1/mobile/work-orders/{id}/verify`
+- [x] **1.5.1.3** GPS: Haversine distance to site geofence
+- [x] **1.5.1.4** EXIF: timestamp validation (started_at < photo_time < now)
+- [x] **1.5.1.5** EXIF: device model matching
+- [x] **1.5.1.6** AI: DeepSeek Vision integration (before/after comparison, graceful skip)
+- [x] **1.5.1.7** Verification token (JWT, TTL 10min)
+- [x] **1.5.1.8** Audit log: `gatekeeper_verify` action
+- [x] **1.5.1.9** Mobile: VerificationScreen (между PhotoCapture и Signature)
+- [x] **1.5.1.10** Mobile: Block gallery upload for Gatekeeper photos
+- [x] **1.5.1.11** Update `CompleteWorkOrder` to require verification_token
+- [x] **1.5.1.12** Frontend: Verification status in WorkOrderDetail
 
-### Epic 1.5.1: Gatekeeper Service [P0] 🔴
-- [ ] **1.5.1.1** Создать `backend/internal/gatekeeper/` пакет
-- [ ] **1.5.1.2** Endpoint `POST /api/v1/mobile/work-orders/{id}/verify`
-- [ ] **1.5.1.3** GPS: Haversine distance to site geofence
-- [ ] **1.5.1.4** EXIF: timestamp validation (started_at < photo_time < now)
-- [ ] **1.5.1.5** EXIF: device model matching
-- [ ] **1.5.1.6** AI: DeepSeek Vision integration (before/after comparison)
-- [ ] **1.5.1.7** Verification token (JWT, TTL 10min)
-- [ ] **1.5.1.8** Audit log: `gatekeeper_verify` action
-- [ ] **1.5.1.9** Mobile: VerificationScreen (между PhotoCapture и Signature)
-- [ ] **1.5.1.10** Mobile: Block gallery upload for Gatekeeper photos
-- [ ] **1.5.1.11** Update `CompleteWorkOrder` to require verification_token
-- [ ] **1.5.1.12** Frontend: Verification status in WorkOrderDetail
+### Epic 1.5.2: ISO 27001 Quick Wins [P0] ✅
+- [x] **QW-1** JWT Secret: `os.Getenv("JWT_SECRET")` с panic → `auth/jwt.go`
+- [x] **QW-2** API Keys: SHA-256 → bcrypt(cost=12) с prefix lookup → `apikey_handlers.go`
+- [x] **QW-3** Push Tokens: AES-256-GCM encryption → `crypto/aes.go`, `cmms_repository.go`
+- [x] **QW-4** Config secrets → env vars → `.env.example`
+- [x] **QW-5** Rate limiting на login (5 req/min) → `server.go`
+- [x] **QW-6** Security headers (CSP, X-Frame-Options, HSTS) → `server.go`
 
-**Файлы для создания:**
-- `backend/internal/gatekeeper/verifier.go`
-- `backend/internal/gatekeeper/gps.go`
-- `backend/internal/gatekeeper/exif.go`
-- `backend/internal/gatekeeper/ai.go`
-- `mobile/src/screens/VerificationScreen.tsx`
-- `mobile/src/hooks/useGatekeeper.ts`
-
-### Epic 1.5.2: ISO 27001 Quick Wins [P0] 🔴
-
-**QW-1: JWT Secret (10 min)**
-- [ ] **1.5.2.1** `auth/jwt.go`: `getJWTSecret()` → `os.Getenv("JWT_SECRET")` с panic
-- [ ] **1.5.2.2** Docker: добавить `JWT_SECRET` в docker-compose
-- [ ] **1.5.2.3** Docs: обновить README с env vars
-
-**QW-2: API Keys bcrypt (1 hour)**
-- [ ] **1.5.2.4** `apikey_handlers.go`: SHA-256 → bcrypt(cost=12)
-- [ ] **1.5.2.5** `apikey_middleware.go`: bcrypt.CompareHashAndPassword
-- [ ] **1.5.2.6** Migration: пересоздать существующие API keys (notify users)
-
-**QW-3: Push Token Encryption (2 hours)**
-- [ ] **1.5.2.7** `crypto/aes` GCM wrapper в `internal/crypto/`
-- [ ] **1.5.2.8** `cmms_repository.go`: encrypt before save, decrypt on read
-- [ ] **1.5.2.9** Migration script для existing tokens
-
-**QW-4: Config Secrets → env vars (1 hour)**
-- [ ] **1.5.2.10** `config.yaml`: убрать `p2p_api_key`, FTP password, Hikvision passwords
-- [ ] **1.5.2.11** `config/config.go`: читать из `os.Getenv()`
-- [ ] **1.5.2.12** `.env.example` файл
-
-**QW-5: Rate Limiting (1 hour)**
-- [ ] **1.5.2.13** Добавить `github.com/go-chi/httprate` в go.mod
-- [ ] **1.5.2.14** Middleware на `/api/v1/auth/login` (5 req/min)
-- [ ] **1.5.2.15** Middleware на `/api/v1/mobile/*` (60 req/min)
-
-**QW-6: Security Headers (30 min)**
-- [ ] **1.5.2.16** Middleware: CSP, X-Frame-Options, X-Content-Type-Options
-- [ ] **1.5.2.17** CORS: whitelist из конфига (не "*")
-
-### Epic 1.5.3: UX Refresh (Desktop) [P1] 🔴
-
-**1.5.3.1 WorkOrders → Snipe-IT DataGrid**
-- [ ] **1.5.3.1.1** Создать `components/ui/DataGrid.tsx` (фильтры в заголовках, bulk actions)
-- [ ] **1.5.3.1.2** Bulk Actions Toolbar: assign, change status, cancel, change priority
-- [ ] **1.5.3.1.3** Quick Filters: My Orders, Overdue, Unassigned, Critical, Today
-- [ ] **1.5.3.1.4** Inline status change (dropdown в ячейке)
-- [ ] **1.5.3.1.5** Кастомизируемые колонки (visibility toggle)
-- [ ] **1.5.3.1.6** Обновить `WorkOrders.tsx` на DataGrid
-
-**1.5.3.2 SpareParts → Shelf.nu Card Grid**
-- [ ] **1.5.3.2.1** Создать `components/ui/PartCard.tsx` (изображение, SKU, stock, QR)
-- [ ] **1.5.3.2.2** Stock indicator: красный если `stock <= min_stock`
-- [ ] **1.5.3.2.3** QR code generation (`qrcode.react`)
-- [ ] **1.5.3.2.4** Grid layout (responsive: 1/2/3/4 columns)
-- [ ] **1.5.3.2.5** Обновить `SpareParts.tsx` на Card Grid + toggle Table/Cards
-
-**1.5.3.3 SLADashboard → Atlas CMMS Visuals**
-- [ ] **1.5.3.3.1** Создать `components/ui/Gauge.tsx` (круговая метрика)
-- [ ] **1.5.3.3.2** Создать `components/ui/SLAProgress.tsx` (progress bar с таймером)
-- [ ] **1.5.3.3.3** Создать `components/ui/Timeline.tsx` (SLA breach timeline)
-- [ ] **1.5.3.3.4** Обновить `SLADashboard.tsx`: gauge per priority, compliance chart
-
-**1.5.3.4 WorkOrderDetail (новая страница)**
-- [ ] **1.5.3.4.1** Создать `pages/WorkOrderDetail.tsx`
-- [ ] **1.5.3.4.2** Three-column layout: Status/SLA | Checklist/Photos | Device/Parts
-- [ ] **1.5.3.4.3** SLA countdown timer
-- [ ] **1.5.3.4.4** Audit timeline (из audit_log)
-- [ ] **1.5.3.4.5** Before/After photo comparison
-- [ ] **1.5.3.4.6** Route: `/work-orders/:id`
-
-**1.5.3.5 Settings → Tabs**
-- [ ] **1.5.3.5.1** Создать `components/ui/Tabs.tsx`
-- [ ] **1.5.3.5.2** Разделить `Settings.tsx` на вкладки:
-  - General, Services, Integrations, Security, Notifications, Logging
-- [ ] **1.5.3.5.3** Integrations tab: CMMS adapter selector (Internal/Atlas)
-
-**1.5.3.6 Новые UI компоненты**
-- [ ] **1.5.3.6.1** `components/ui/Tabs.tsx`
-- [ ] **1.5.3.6.2** `components/ui/DataGrid.tsx`
-- [ ] **1.5.3.6.3** `components/ui/Gauge.tsx`
-- [ ] **1.5.3.6.4** `components/ui/SLAProgress.tsx`
-- [ ] **1.5.3.6.5** `components/ui/Timeline.tsx`
-- [ ] **1.5.3.6.6** `components/ui/QRCode.tsx`
-- [ ] **1.5.3.6.7** `components/ui/FileUpload.tsx` (drag-and-drop)
+### Epic 1.5.3: UX Refresh (Desktop) [P1] ✅
+- [x] **1.5.3.1** `DataGrid.tsx` (Snipe-IT style) → `components/ui/DataGrid.tsx`
+- [x] **1.5.3.2** `PartCard.tsx` (Shelf.nu style) → `components/ui/PartCard.tsx`
+- [x] **1.5.3.3** `Gauge.tsx` (circular metric) → `components/ui/Gauge.tsx`
+- [x] **1.5.3.4** `SLAProgress.tsx` (progress bar with timer) → `components/ui/SLAProgress.tsx`
+- [x] **1.5.3.5** `Timeline.tsx` (audit log) → `components/ui/Timeline.tsx`
+- [x] **1.5.3.6** `Tabs.tsx` (tabbed interface) → `components/ui/Tabs.tsx`
+- [x] **1.5.3.7** `QRCode.tsx` (QR code generator) → `components/ui/QRCode.tsx`
+- [x] **1.5.3.8** `FileUpload.tsx` (drag-and-drop) → `components/ui/FileUpload.tsx`
+- [x] **1.5.3.9** `WorkOrderDetail.tsx` (three-column layout) → `pages/WorkOrderDetail.tsx`
+- [x] **1.5.3.10** `WorkOrders.tsx` → использует DataGrid
+- [x] **1.5.3.11** `SpareParts.tsx` → использует PartCard (card grid)
+- [x] **1.5.3.12** `SLADashboard.tsx` → использует Gauge
+- [x] **1.5.3.13** `Settings.tsx` → использует Tabs
 
 ---
 
-## 📍 PHASE 2: AI Intelligence & Atlas Integration (Месяцы 4-6)
+## 🔄 PHASE 2: AI Intelligence & Atlas Integration (CURRENT)
 
-### Epic 2.1: Atlas CMMS Integration [P1]
-- [ ] **2.1.1** AtlasAdapter: REST API client (OAuth2)
-- [ ] **2.1.2** AtlasAdapter: CreateWorkOrder (mapping fields)
-- [ ] **2.1.3** AtlasAdapter: UpdateWorkOrder (status sync)
-- [ ] **2.1.4** AtlasAdapter: SyncAsset (device → CMMS asset)
-- [ ] **2.1.5** Fallback queue: если Atlas недоступен → Internal DB + retry
-- [ ] **2.1.6** Settings → Integrations: Atlas URL, API Key, field mapping
-- [ ] **2.1.7** Health check endpoint для Atlas
+**Срок:** Месяцы 4-6
+**Цель:** Интеграция с Atlas CMMS, предиктивная аналитика, TCO калькулятор, голосовые отчёты
+
+### Epic 2.1: Atlas CMMS Integration [P1] ✅ Done
+- [x] **2.1.1** AtlasAdapter: REST API client (OAuth2) → `backend/internal/cmms/atlas_client.go`
+- [x] **2.1.2** AtlasAdapter: CreateWorkOrder, UpdateWorkOrder, все 33 метода → `backend/internal/cmms/atlas_adapter.go`
+- [x] **2.1.3** AtlasAdapter: WorkOrder status sync (assign/start/complete/cancel)
+- [x] **2.1.4** AtlasAdapter: SyncAsset (device → CMMS asset) → `POST /api/v1/atlas/sync-asset/{deviceId}`
+- [x] **2.1.5** Fallback queue: персистентная очередь на ФС + retry → `backend/internal/cmms/fallback_queue.go`
+- [x] **2.1.6** Settings → Integrations: AtlasCMSPanel с health-check, fallback queue, конфигурацией → `frontend/src/pages/Settings.tsx`
+- [x] **2.1.7** Health check endpoint → `GET /api/v1/atlas/health`
+- [x] **2.1.8** Config: OAuth2 client credentials (client_id, client_secret, token_url) → `backend/internal/config/config.go`
+- [x] **2.1.9** Frontend API: atlasHealthCheck, atlasFallbackStatus, atlasRetryFallback, atlasSyncAsset → `frontend/src/services/api.ts`
 
 ### Epic 2.2: Predictive Maintenance [P1]
 - [ ] **2.2.1** Расширить `predict.py`: HDD, PoE, Temperature features
@@ -250,7 +185,7 @@
 ### Epic 4.1: Multi-tenant SaaS [P2]
 - [ ] **4.1.1** Row-level security (PostgreSQL RLS)
 - [ ] **4.1.2** Billing tiers (Community/Pro/Enterprise)
-- [ ] **4.1.3** 
+- [ ] **4.1.3** Stripe integration
 - [ ] **4.1.4** Tenant isolation в WebSocket Hub
 
 ### Epic 4.2: AR Remote Expert [P2]
@@ -281,27 +216,24 @@
 
 ---
 
-## 🎯 Success Criteria (Phase 1.5)
+## 🎯 Success Criteria (Phase 2)
 
-- [ ] Gatekeeper блокирует закрытие наряда без GPS/EXIF/AI верификации
-- [ ] JWT secret — только из env var (panic если нет)
-- [ ] API keys хешируются bcrypt (не SHA-256)
-- [ ] Push tokens зашифрованы AES-256-GCM
-- [ ] Rate limiting на login и mobile endpoints
-- [ ] WorkOrders: DataGrid с bulk actions и quick filters
-- [ ] SpareParts: Card Grid с stock indicators
-- [ ] SLADashboard: Gauge charts и progress bars
-- [ ] WorkOrderDetail: Three-column layout с SLA timer
+- [ ] Atlas CMMS integration работает (создание/обновление нарядов)
+- [ ] Predictive Maintenance: авто-создание PM-задач из XGBoost predictions
+- [ ] TCO Calculator: расчёт стоимости владения per device/site
+- [ ] Voice-to-Report: голосовые отчёты через Whisper API
+- [ ] Frontend: Predictions page с explanations от DeepSeek
 
 ---
 
 ## 📈 Metrics
 
-| Metric | Current | Target (Phase 1.5) | Target (Phase 4) |
+| Metric | Current | Target (Phase 2) | Target (Phase 4) |
 |--------|---------|--------------------|--------------------|
-| Code Coverage (Go) | ~15% | 40% | 80% |
-| Code Coverage (React) | ~5% | 20% | 60% |
-| API Response Time (p95) | ~200ms | <150ms | <100ms |
-| ISO 27001 Gaps Open | 17 | 6 | 0 |
-| Lighthouse Score | ~75 | 90+ | 95+ |
+| Code Coverage (Go) | ~15% | 50% | 80% |
+| Code Coverage (React) | ~5% | 30% | 60% |
+| API Response Time (p95) | ~200ms | <120ms | <100ms |
+| ISO 27001 Gaps Open | 6 | 3 | 0 |
+| Lighthouse Score | ~75 | 92+ | 95+ |
 | Mobile Crash Rate | N/A | <0.1% | <0.05% |
+| Atlas Integration Uptime | N/A | 99% | 99.9% |

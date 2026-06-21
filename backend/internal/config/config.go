@@ -31,9 +31,13 @@ type Config struct {
 	P2PAPIKey     string `mapstructure:"p2p_api_key"`
 
 	// CMMS Adapter configuration
-	CMMSAdapter string `mapstructure:"cmms_adapter"` // "internal" (default) | "atlas"
-	AtlasURL    string `mapstructure:"atlas_url"`
-	AtlasAPIKey string `mapstructure:"atlas_api_key"`
+	CMMSAdapter       string `mapstructure:"cmms_adapter"` // "internal" (default) | "atlas"
+	AtlasURL          string `mapstructure:"atlas_url"`
+	AtlasAPIKey       string `mapstructure:"atlas_api_key"`
+	AtlasClientID     string `mapstructure:"atlas_client_id"`
+	AtlasClientSecret string `mapstructure:"atlas_client_secret"`
+	AtlasTokenURL     string `mapstructure:"atlas_token_url"`
+	AtlasFallbackDir  string `mapstructure:"atlas_fallback_dir"`
 
 	// Новые настройки для HTTP-приёма событий
 	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`
@@ -153,6 +157,10 @@ func Load() *Config {
 	viper.SetDefault("log_compress", true)
 	viper.SetDefault("log_server_port", 515)
 
+	// CMMS Atlas defaults
+	viper.SetDefault("cmms_adapter", "internal")
+	viper.SetDefault("atlas_fallback_dir", "/var/lib/gb-telemetry/fallback")
+
 	// Новые настройки
 	viper.SetDefault("http_xml_enabled", true)
 	viper.SetDefault("vigi_enabled", true)
@@ -252,6 +260,10 @@ func Load() *Config {
 	bindEnv("cmms_adapter", "GB_CMMS_ADAPTER")
 	bindEnv("atlas_url", "GB_ATLAS_URL")
 	bindEnv("atlas_api_key", "GB_ATLAS_API_KEY")
+	bindEnv("atlas_client_id", "GB_ATLAS_CLIENT_ID")
+	bindEnv("atlas_client_secret", "GB_ATLAS_CLIENT_SECRET")
+	bindEnv("atlas_token_url", "GB_ATLAS_TOKEN_URL")
+	bindEnv("atlas_fallback_dir", "GB_ATLAS_FALLBACK_DIR")
 
 	// Telegram
 	bindEnv("telegram.enabled", "GB_TELEGRAM_ENABLED")
@@ -341,11 +353,15 @@ func Load() *Config {
 			MaxSubChannels:    viper.GetInt("gb28181.max_sub_channels"),
 			LogSIPMessages:    viper.GetBool("gb28181.log_sip_messages"),
 		},
-		P2PGatewayURL: viper.GetString("p2p_gateway_url"),
-		P2PAPIKey:     viper.GetString("p2p_api_key"),
-		CMMSAdapter:   viper.GetString("cmms_adapter"),
-		AtlasURL:      viper.GetString("atlas_url"),
-		AtlasAPIKey:   viper.GetString("atlas_api_key"),
+		P2PGatewayURL:     viper.GetString("p2p_gateway_url"),
+		P2PAPIKey:         viper.GetString("p2p_api_key"),
+		CMMSAdapter:       viper.GetString("cmms_adapter"),
+		AtlasURL:          viper.GetString("atlas_url"),
+		AtlasAPIKey:       viper.GetString("atlas_api_key"),
+		AtlasClientID:     viper.GetString("atlas_client_id"),
+		AtlasClientSecret: viper.GetString("atlas_client_secret"),
+		AtlasTokenURL:     viper.GetString("atlas_token_url"),
+		AtlasFallbackDir:  viper.GetString("atlas_fallback_dir"),
 		Telegram: TelegramConfig{
 			Enabled: viper.GetBool("telegram.enabled"),
 			Token:   viper.GetString("telegram.token"),
