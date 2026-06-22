@@ -21,6 +21,7 @@ project-structure.txt
 
 # Compiled binaries
 backend/tmp/
+backend/gb-server
 backend/gb-telemetry-collector
 p2p-gateway/p2p-gateway
 p2p-gateway/bin/neolink
