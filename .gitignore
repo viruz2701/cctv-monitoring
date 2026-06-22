@@ -3,6 +3,13 @@
 
 # Nested git repos (not proper submodules)
 neolink/
+neolink/target/
+
+# Agent documentation / coding-agent docs (not project code)
+.claude/
+coding-agent-docs/
+docker-compose.yml
+docker-compose.nats.yml
 
 # Agent/IDE files (not project code)
 .agents/
