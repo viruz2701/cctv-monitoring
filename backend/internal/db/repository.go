@@ -456,6 +456,43 @@ type UserSession struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func (db *DB) CreateUserSession(userID, tokenHash, ipAddress, userAgent string, expiresAt time.Time) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var id string
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO user_sessions (id, user_id, token_hash, ip_address, user_agent, expires_at, created_at)
+		VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW())
+		RETURNING id
+	`, userID, tokenHash, ipAddress, userAgent, expiresAt).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (db *DB) GetUserByRefreshTokenHash(tokenHash string) (*models.User, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var u models.User
+	var sessionID string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT u.id, u.username, u.password_hash, u.role, u.owner_id, u.created_at,
+		       COALESCE(u.totp_secret, ''), COALESCE(u.totp_enabled, false),
+		       COALESCE(u.telegram_chat_id, ''), COALESCE(u.telegram_alerts, false), COALESCE(u.telegram_2fa, false),
+		       s.id
+		FROM user_sessions s
+		JOIN users u ON u.id = s.user_id
+		WHERE s.token_hash = $1 AND s.expires_at > NOW() AND u.status = 'active'
+	`, tokenHash).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &sessionID)
+	if err != nil {
+		return nil, "", err
+	}
+	return &u, sessionID, nil
+}
+
 func (db *DB) GetUserSessions(userID string) ([]UserSession, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

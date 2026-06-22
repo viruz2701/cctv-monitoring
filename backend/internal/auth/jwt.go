@@ -2,6 +2,10 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"os"
 	"time"
@@ -82,4 +86,21 @@ func ValidateTempToken(tokenString string) (*Claims, error) {
 		return claims, nil
 	}
 	return nil, errors.New("invalid temp token")
+}
+
+const RefreshTokenTTL = 30 * 24 * time.Hour
+
+func GenerateRefreshToken() (string, string, time.Time, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", "", time.Time{}, err
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	expiresAt := time.Now().Add(RefreshTokenTTL)
+	return token, HashRefreshToken(token), expiresAt, nil
+}
+
+func HashRefreshToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

@@ -58,7 +58,7 @@ func (s *Server) listMaintenanceSchedules(w http.ResponseWriter, r *http.Request
 	if schedules == nil {
 		schedules = []models.MaintenanceSchedule{}
 	}
-	respondJSON(w, http.StatusOK, schedules)
+	jsonResponse(w, http.StatusOK, schedules)
 }
 
 func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
@@ -92,10 +92,9 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Парсим дату в нескольких форматах (RFC3339, YYYY-MM-DD)
-	nextDue, err := parseFlexibleDate(raw.NextDue)
+	nextDue, err := parseFutureDate(raw.NextDue, "next_due")
 	if err != nil {
-		respondError(w, r, NewBadRequestError("invalid next_due format, use RFC3339 or YYYY-MM-DD"))
+		respondError(w, r, NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -131,7 +130,7 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "create_maintenance_schedule", "maintenance_schedule", schedule.ID, nil, schedule)
 
-	respondJSON(w, http.StatusCreated, schedule)
+	jsonResponse(w, http.StatusCreated, schedule)
 }
 
 func (s *Server) getMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +140,7 @@ func (s *Server) getMaintenanceSchedule(w http.ResponseWriter, r *http.Request) 
 		respondError(w, r, NewNotFoundError("Schedule not found"))
 		return
 	}
-	respondJSON(w, http.StatusOK, schedule)
+	jsonResponse(w, http.StatusOK, schedule)
 }
 
 func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +163,10 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 			delete(updates, key)
 		}
 	}
+	if err := normalizeDateUpdate(updates, "next_due", true); err != nil {
+		respondError(w, r, NewBadRequestError(err.Error()))
+		return
+	}
 
 	if err := s.cmmsRouter.UpdateMaintenanceSchedule(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update maintenance schedule", "error", err)
@@ -174,7 +177,7 @@ func (s *Server) updateMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_maintenance_schedule", "maintenance_schedule", id, nil, updates)
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (s *Server) deleteMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +192,7 @@ func (s *Server) deleteMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "delete_maintenance_schedule", "maintenance_schedule", id, nil, nil)
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (s *Server) getDueSchedules(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +205,7 @@ func (s *Server) getDueSchedules(w http.ResponseWriter, r *http.Request) {
 	if schedules == nil {
 		schedules = []models.MaintenanceSchedule{}
 	}
-	respondJSON(w, http.StatusOK, schedules)
+	jsonResponse(w, http.StatusOK, schedules)
 }
 
 func (s *Server) completeMaintenanceSchedule(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +243,7 @@ func (s *Server) completeMaintenanceSchedule(w http.ResponseWriter, r *http.Requ
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "complete_maintenance_schedule", "maintenance_schedule", id, nil, nil)
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "completed"})
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -286,7 +289,7 @@ func (s *Server) listWorkOrders(w http.ResponseWriter, r *http.Request) {
 	if workOrders == nil {
 		workOrders = []models.WorkOrder{}
 	}
-	respondJSON(w, http.StatusOK, workOrders)
+	jsonResponse(w, http.StatusOK, workOrders)
 }
 
 func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +316,10 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	if wo.Status == "" {
 		wo.Status = "open"
 	}
+	if wo.SLADeadline != nil && !isFutureDate(*wo.SLADeadline) {
+		respondError(w, r, NewBadRequestError("sla_deadline must be in the future"))
+		return
+	}
 
 	// Устанавливаем SLA deadline
 	if sla, err := s.cmmsRouter.GetSLAConfig(r.Context(), wo.Priority); err == nil {
@@ -331,7 +338,7 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logAudit(userID, "create_work_order", "work_order", wo.ID, nil, wo)
-	respondJSON(w, http.StatusCreated, wo)
+	jsonResponse(w, http.StatusCreated, wo)
 }
 
 func (s *Server) getWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +348,7 @@ func (s *Server) getWorkOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, NewNotFoundError("Work order not found"))
 		return
 	}
-	respondJSON(w, http.StatusOK, wo)
+	jsonResponse(w, http.StatusOK, wo)
 }
 
 func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -362,6 +369,10 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 			delete(updates, key)
 		}
 	}
+	if err := normalizeDateUpdate(updates, "sla_deadline", true); err != nil {
+		respondError(w, r, NewBadRequestError(err.Error()))
+		return
+	}
 
 	if err := s.cmmsRouter.UpdateWorkOrder(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update work order", "error", err)
@@ -371,7 +382,7 @@ func (s *Server) updateWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_work_order", "work_order", id, nil, updates)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (s *Server) deleteWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -385,7 +396,7 @@ func (s *Server) deleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "delete_work_order", "work_order", id, nil, nil)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +418,7 @@ func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "assign_work_order", "work_order", id, nil, map[string]string{"assigned_to": req.UserID})
-	respondJSON(w, http.StatusOK, map[string]string{"status": "assigned"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "assigned"})
 }
 
 func (s *Server) startWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -421,7 +432,7 @@ func (s *Server) startWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "start_work_order", "work_order", id, nil, nil)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "started"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
 func (s *Server) completeWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -445,7 +456,7 @@ func (s *Server) completeWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logAudit(userID, "complete_work_order", "work_order", id, nil, req)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "completed"})
 }
 
 func (s *Server) cancelWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -466,7 +477,7 @@ func (s *Server) cancelWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "cancel_work_order", "work_order", id, nil, map[string]string{"reason": req.Reason})
-	respondJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
 func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
@@ -524,7 +535,7 @@ func (s *Server) uploadWorkOrderPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{"photos": existingPhotos})
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"photos": existingPhotos})
 }
 
 func (s *Server) addWorkOrderParts(w http.ResponseWriter, r *http.Request) {
@@ -547,7 +558,7 @@ func (s *Server) addWorkOrderParts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "parts_added"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "parts_added"})
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -584,7 +595,7 @@ func (s *Server) listSpareParts(w http.ResponseWriter, r *http.Request) {
 	if parts == nil {
 		parts = []models.SparePart{}
 	}
-	respondJSON(w, http.StatusOK, parts)
+	jsonResponse(w, http.StatusOK, parts)
 }
 
 func (s *Server) createSparePart(w http.ResponseWriter, r *http.Request) {
@@ -607,7 +618,7 @@ func (s *Server) createSparePart(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "create_spare_part", "spare_part", part.ID, nil, part)
-	respondJSON(w, http.StatusCreated, part)
+	jsonResponse(w, http.StatusCreated, part)
 }
 
 func (s *Server) getSparePart(w http.ResponseWriter, r *http.Request) {
@@ -617,7 +628,7 @@ func (s *Server) getSparePart(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, NewNotFoundError("Spare part not found"))
 		return
 	}
-	respondJSON(w, http.StatusOK, part)
+	jsonResponse(w, http.StatusOK, part)
 }
 
 func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
@@ -648,7 +659,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_spare_part", "spare_part", id, nil, updates)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (s *Server) deleteSparePart(w http.ResponseWriter, r *http.Request) {
@@ -662,7 +673,7 @@ func (s *Server) deleteSparePart(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "delete_spare_part", "spare_part", id, nil, nil)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (s *Server) getLowStockParts(w http.ResponseWriter, r *http.Request) {
@@ -675,7 +686,7 @@ func (s *Server) getLowStockParts(w http.ResponseWriter, r *http.Request) {
 	if parts == nil {
 		parts = []models.SparePart{}
 	}
-	respondJSON(w, http.StatusOK, parts)
+	jsonResponse(w, http.StatusOK, parts)
 }
 
 func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
@@ -697,7 +708,7 @@ func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "adjust_spare_part_stock", "spare_part", id, nil, map[string]int{"quantity": req.Quantity})
-	respondJSON(w, http.StatusOK, map[string]string{"status": "adjusted"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "adjusted"})
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -714,7 +725,7 @@ func (s *Server) getAllTechnicianWorkloads(w http.ResponseWriter, r *http.Reques
 	if workloads == nil {
 		workloads = []models.TechnicianWorkload{}
 	}
-	respondJSON(w, http.StatusOK, workloads)
+	jsonResponse(w, http.StatusOK, workloads)
 }
 
 func (s *Server) getTechnicianWorkload(w http.ResponseWriter, r *http.Request) {
@@ -724,7 +735,7 @@ func (s *Server) getTechnicianWorkload(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, NewNotFoundError("Technician not found"))
 		return
 	}
-	respondJSON(w, http.StatusOK, workload)
+	jsonResponse(w, http.StatusOK, workload)
 }
 
 func (s *Server) updateTechnicianSkills(w http.ResponseWriter, r *http.Request) {
@@ -747,7 +758,7 @@ func (s *Server) updateTechnicianSkills(w http.ResponseWriter, r *http.Request) 
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_technician_skills", "user", id, nil, req)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -764,7 +775,7 @@ func (s *Server) getSLAConfig(w http.ResponseWriter, r *http.Request) {
 	if configs == nil {
 		configs = []models.SLAConfig{}
 	}
-	respondJSON(w, http.StatusOK, configs)
+	jsonResponse(w, http.StatusOK, configs)
 }
 
 func (s *Server) updateSLAConfig(w http.ResponseWriter, r *http.Request) {
@@ -792,7 +803,7 @@ func (s *Server) updateSLAConfig(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_sla_config", "sla_config", priority, nil, req)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (s *Server) getMaintenanceReport(w http.ResponseWriter, r *http.Request) {
@@ -805,7 +816,7 @@ func (s *Server) getMaintenanceReport(w http.ResponseWriter, r *http.Request) {
 	if report == nil {
 		report = []models.MaintenanceReport{}
 	}
-	respondJSON(w, http.StatusOK, report)
+	jsonResponse(w, http.StatusOK, report)
 }
 
 func (s *Server) getSLAComplianceReport(w http.ResponseWriter, r *http.Request) {
@@ -818,7 +829,7 @@ func (s *Server) getSLAComplianceReport(w http.ResponseWriter, r *http.Request) 
 	if report == nil {
 		report = []models.SLAComplianceReport{}
 	}
-	respondJSON(w, http.StatusOK, report)
+	jsonResponse(w, http.StatusOK, report)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -848,7 +859,7 @@ func (s *Server) listTechnicianSiteAssignments(w http.ResponseWriter, r *http.Re
 	if assignments == nil {
 		assignments = []models.TechnicianSiteAssignment{}
 	}
-	respondJSON(w, http.StatusOK, assignments)
+	jsonResponse(w, http.StatusOK, assignments)
 }
 
 func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
@@ -885,7 +896,7 @@ func (s *Server) createTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "create_technician_site_assignment", "technician_site_assignment", assignment.ID, nil, assignment)
 
-	respondJSON(w, http.StatusCreated, assignment)
+	jsonResponse(w, http.StatusCreated, assignment)
 }
 
 func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
@@ -922,7 +933,7 @@ func (s *Server) updateTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "update_technician_site_assignment", "technician_site_assignment", id, nil, allowedUpdates)
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (s *Server) deleteTechnicianSiteAssignment(w http.ResponseWriter, r *http.Request) {
@@ -942,18 +953,12 @@ func (s *Server) deleteTechnicianSiteAssignment(w http.ResponseWriter, r *http.R
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "delete_technician_site_assignment", "technician_site_assignment", id, nil, nil)
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // Helper Functions
 // ═══════════════════════════════════════════════════════════════════════
-
-func respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
 
 func getUserIDFromContext(ctx context.Context) string {
 	if userID, ok := ctx.Value("user_id").(string); ok {
@@ -962,19 +967,68 @@ func getUserIDFromContext(ctx context.Context) string {
 	return "system"
 }
 
-// parseFlexibleDate парсит дату в форматах RFC3339, YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS
-func parseFlexibleDate(s string) (time.Time, error) {
+func normalizeDateUpdate(updates map[string]interface{}, field string, requireFuture bool) error {
+	value, ok := updates[field]
+	if !ok || value == nil {
+		return nil
+	}
+
+	raw, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%s must be a string", field)
+	}
+
+	parsed, err := parseValidatedDate(raw, field)
+	if err != nil {
+		return err
+	}
+	if requireFuture && !isFutureDate(parsed) {
+		return fmt.Errorf("%s must be in the future", field)
+	}
+
+	updates[field] = parsed
+	return nil
+}
+
+func parseFutureDate(value, field string) (time.Time, error) {
+	parsed, err := parseValidatedDate(value, field)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !isFutureDate(parsed) {
+		return time.Time{}, fmt.Errorf("%s must be in the future", field)
+	}
+	return parsed, nil
+}
+
+func parseValidatedDate(value, field string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, fmt.Errorf("%s is required", field)
+	}
+	if len(value) > 64 {
+		return time.Time{}, fmt.Errorf("%s is too long", field)
+	}
+
 	formats := []string{
 		time.RFC3339,
+		time.RFC3339Nano,
 		"2006-01-02T15:04:05",
 		"2006-01-02",
 	}
-	for _, f := range formats {
-		if t, err := time.Parse(f, s); err == nil {
-			return t, nil
+	for _, format := range formats {
+		if parsed, err := time.Parse(format, value); err == nil {
+			if parsed.IsZero() {
+				return time.Time{}, fmt.Errorf("%s must be a valid date", field)
+			}
+			return parsed.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("cannot parse date: %s", s)
+
+	return time.Time{}, fmt.Errorf("%s must use RFC3339 or YYYY-MM-DD format", field)
+}
+
+func isFutureDate(value time.Time) bool {
+	return value.After(time.Now().UTC())
 }
 
 func (s *Server) logAudit(userID, action, entityType, entityID string, oldValue, newValue interface{}) {

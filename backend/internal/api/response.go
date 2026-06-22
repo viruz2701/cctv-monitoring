@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -118,8 +119,8 @@ func NewInternalError(msg string, err error) *APIError {
 // respondError отправляет стандартизированный JSON-ответ об ошибке с traceID.
 // Заменяет все http.Error(w, ...) в проекте.
 func respondError(w http.ResponseWriter, r *http.Request, err error) {
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		apiErr = &APIError{
 			Status:  http.StatusInternalServerError,
 			Code:    ErrCodeInternal,

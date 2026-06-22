@@ -1,0 +1,5 @@
+# Файлы >500 строк — Roo будет видеть только структуру
+frontend/src/pages/Settings.tsx
+frontend/src/i18n.ts
+frontend/src/pages/WorkOrderDetail.tsx
+backend/internal/api/server.go

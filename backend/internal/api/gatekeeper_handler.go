@@ -67,5 +67,5 @@ func (s *Server) handleVerifyWorkOrder(w http.ResponseWriter, r *http.Request) {
 	// Логируем результат верификации
 	s.logAudit(claims.UserID, "gatekeeper_verify", "work_order", workOrderID, nil, resp)
 
-	respondJSON(w, http.StatusOK, resp)
+	jsonResponse(w, http.StatusOK, resp)
 }

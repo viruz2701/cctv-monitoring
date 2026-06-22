@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -121,6 +122,26 @@ func getEnv(key, def string) string {
 	return def
 }
 
+func getEnvInt32(key string, def int32) int32 {
+	if v := os.Getenv(key); v != "" {
+		parsed, err := strconv.ParseInt(v, 10, 32)
+		if err == nil {
+			return int32(parsed)
+		}
+	}
+	return def
+}
+
+func getEnvDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		parsed, err := time.ParseDuration(v)
+		if err == nil {
+			return parsed
+		}
+	}
+	return def
+}
+
 func main() {
 	// Загружаем .env файл перед чтением конфигурации
 	_ = godotenv.Load()
@@ -143,12 +164,17 @@ func main() {
 	})
 
 	dbCfg := db.Config{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     5432,
-		User:     getEnv("DB_USER", "gb_user"),
-		Password: getEnv("DB_PASSWORD", "gb_password"),
-		DBName:   getEnv("DB_NAME", "gb_telemetry"),
-		SSLMode:  "disable",
+		Host:              getEnv("DB_HOST", "localhost"),
+		Port:              5432,
+		User:              getEnv("DB_USER", "gb_user"),
+		Password:          getEnv("DB_PASSWORD", "gb_password"),
+		DBName:            getEnv("DB_NAME", "gb_telemetry"),
+		SSLMode:           getEnv("DB_SSLMODE", "disable"),
+		MaxConns:          getEnvInt32("DB_MAX_CONNS", 25),
+		MinConns:          getEnvInt32("DB_MIN_CONNS", 2),
+		MaxConnLifetime:   getEnvDuration("DB_MAX_CONN_LIFETIME", time.Hour),
+		MaxConnIdleTime:   getEnvDuration("DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		HealthCheckPeriod: getEnvDuration("DB_HEALTH_CHECK_PERIOD", time.Minute),
 	}
 
 	// Run golang-migrate migrations (replaces initSchema)
@@ -303,13 +329,13 @@ func main() {
 		}
 	}
 
+	serverErrCh := make(chan error, 1)
 	go func() {
 		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
-			logger.Error("API server failed", "error", err)
-			cancel()
+			serverErrCh <- err
 		}
+		close(serverErrCh)
 	}()
-	defer apiServer.Stop()
 
 	if telegramBot != nil {
 		defer telegramBot.Stop()
@@ -339,15 +365,27 @@ func main() {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	defer signal.Stop(sigChan)
+
+	select {
+	case sig := <-sigChan:
+		logger.Info("Shutdown signal received", "signal", sig.String())
+	case err := <-serverErrCh:
+		if err != nil {
+			logger.Error("API server failed", "error", err)
+		}
+	}
 
 	logger.Info("Shutting down...")
 	cancel()
-	_, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
+	if err := apiServer.Stop(shutdownCtx); err != nil {
+		logger.Error("API server graceful shutdown failed", "error", err)
+	}
 
 	sipHandler.Stop()
-	apiServer.Stop()
 	reaper.Stop()
 	close(dbWriter.ch)
 }

@@ -1,19 +1,32 @@
-# Системные и скрытые
-.git/
-.idea/
-.vscode/
-.DS_Store
-
-# Зависимости и сборка
+# ═══ Бинарники и зависимости ═══
 node_modules/
 vendor/
+*.exe
+*.dll
+*.so
+*.dylib
+*.o
+*.a
+p2p-gateway/p2p-gateway
+backend/tmp/
+*.test
+*.out
+
+# ═══ Сборка и кэш ═══
 dist/
 build/
 out/
-bin/
-obj/
+.next/
+.turbo/
+.parcel-cache/
+.vite/
+frontend/dist/
+mobile/.expo/
+mobile/node_modules/
+mobile/ios/
+mobile/android/
 
-# Логи и сетевые данные (CCTV/Network специфика)
+# ═══ Данные и логи (CCTV специфика) ═══
 *.log
 *.pcap
 *.pcapng
@@ -21,10 +34,64 @@ captures/
 logs/
 tmp/
 temp/
+data/
+backend/data/
+*.sqlite
+*.db
 
-# Секреты
+# ═══ Секреты (НИКОГДА не в контекст) ═══
 .env
 .env.local
+.env.production
 *.pem
 *.key
+*.p12
+*.pfx
 secrets.json
+credentials.json
+**/service-account*.json
+
+# ═══ IDE и системные ═══
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ═══ Документация (слишком много для контекста) ═══
+# Оставляем только ADR и compliance, остальное игнорируем
+docs/ux/*.md
+docs/**/*.png
+docs/**/*.jpg
+docs/**/*.svg
+*.pdf
+
+# ═══ Python ML (не нужен для Go/React работы) ═══
+backend/analytics/models/
+*.pkl
+__pycache__/
+venv/
+.venv/
+
+# ═══ Тестовые данные и моки ═══
+**/testdata/
+**/fixtures/
+**/__mocks__/
+**/*.snap
+coverage/
+
+# ═══ Rust/neolink (отдельный проект) ═══
+neolink/
+
+# ═══ Git ═══
+.git/
+.gitattributes
+
+# ═══ Large generated files ═══
+**/go.sum
+frontend/package-lock.json
+mobile/package-lock.json
+**/*.min.js
+**/*.min.css

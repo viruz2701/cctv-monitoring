@@ -9,12 +9,14 @@ export const authApi = {
       password,
     });
     await storage.setToken(response.data.token);
+    await storage.setRefreshToken(response.data.refresh_token);
     await storage.setUser(JSON.stringify(response.data.user));
     return response.data;
   },
 
   logout: async (): Promise<void> => {
     await storage.removeToken();
+    await storage.removeRefreshToken();
     await storage.removeUser();
   },
 

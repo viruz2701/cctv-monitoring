@@ -6,8 +6,15 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 )
+
+// ErrKeyTooShort возвращается, если HMAC-ключ короче 16 байт.
+var ErrKeyTooShort = errors.New("audit HMAC key must be at least 16 bytes (128 bits)")
+
+// MinKeyLength — минимальная длина ключа в байтах для HMAC-SHA256.
+const MinKeyLength = 16
 
 // Signer подписывает и верифицирует записи аудита с помощью HMAC-SHA256.
 type Signer struct {
@@ -15,8 +22,12 @@ type Signer struct {
 }
 
 // NewSigner создаёт новый Signer с заданным ключом.
-func NewSigner(key string) *Signer {
-	return &Signer{key: []byte(key)}
+// Возвращает ошибку, если ключ короче MinKeyLength байт.
+func NewSigner(key string) (*Signer, error) {
+	if len(key) < MinKeyLength {
+		return nil, fmt.Errorf("%w: got %d bytes", ErrKeyTooShort, len(key))
+	}
+	return &Signer{key: []byte(key)}, nil
 }
 
 // Sign вычисляет HMAC-SHA256 подпись для переданной строки данных.

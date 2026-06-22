@@ -1,10 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"strings"
-	"sync"
+	"os"
 	"time"
 
 	"log/slog"
@@ -25,6 +26,17 @@ import (
 	"gb-telemetry-collector/internal/telegram"
 	"gb-telemetry-collector/internal/ws"
 )
+
+// mustNewAuditSigner создаёт Signer и паникует при ошибке (фатально для старта).
+func mustNewAuditSigner(key string, logger *slog.Logger) *audit.Signer {
+	signer, err := audit.NewSigner(key)
+	if err != nil {
+		logger.Error("invalid audit HMAC key, refusing to start", "error", err)
+		fmt.Fprintf(os.Stderr, "FATAL: %v\n", err)
+		os.Exit(1)
+	}
+	return signer
+}
 
 // Server объединяет все зависимости HTTP-сервера.
 type Server struct {
@@ -53,71 +65,6 @@ type Server struct {
 	httpClient    *http.Client
 }
 
-// rateLimiter — in-memory rate limiter per IP
-type rateLimiter struct {
-	mu      sync.Mutex
-	entries map[string][]time.Time
-	limit   int
-	window  time.Duration
-}
-
-func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	return &rateLimiter{
-		entries: make(map[string][]time.Time),
-		limit:   limit,
-		window:  window,
-	}
-}
-
-func (rl *rateLimiter) allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-rl.window)
-
-	// Filter old entries
-	entries := rl.entries[ip]
-	filtered := entries[:0]
-	for _, t := range entries {
-		if t.After(cutoff) {
-			filtered = append(filtered, t)
-		}
-	}
-
-	if len(filtered) >= rl.limit {
-		rl.entries[ip] = filtered
-		return false
-	}
-
-	filtered = append(filtered, now)
-	rl.entries[ip] = filtered
-	return true
-}
-
-// rateLimitMiddleware wraps the rate limiter for login endpoint (5 req/min).
-func (s *Server) rateLimitMiddleware(next http.Handler) http.Handler {
-	return s.newRateLimiterMiddleware(5, time.Minute)(next)
-}
-
-// newRateLimiterMiddleware создаёт middleware с заданным лимитом и окном.
-func (s *Server) newRateLimiterMiddleware(limit int, window time.Duration) func(http.Handler) http.Handler {
-	rl := newRateLimiter(limit, window)
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
-			if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-				ip = strings.Split(forwarded, ",")[0]
-			}
-			if !rl.allow(ip) {
-				respondError(w, r, NewRateLimitError("too many requests"))
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +85,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 	// TraceID — must be first for audit trail
 	r.Use(TraceIDMiddleware)
+
+	// CSP nonce generation (for HTML pages)
+	r.Use(CSPNonceMiddleware)
 
 	// Security headers
 	r.Use(securityHeadersMiddleware)
@@ -172,7 +122,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		wsHub:         ws.NewHub(),
 		cmmsRouter:    cmmsRouter,
 		syncEngine:    syncEng,
-		auditSigner:   audit.NewSigner(cfg.AuditHMACKey),
+		auditSigner:   mustNewAuditSigner(cfg.AuditHMACKey, logger),
 		p2pGatewayURL: cfg.P2PGatewayURL,
 		p2pAPIKey:     cfg.P2PAPIKey,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},
@@ -180,7 +130,11 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	go s.wsHub.Run()
 
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
+	s.mountHealthRoutes(r)
 	s.mountAuthRoutes(r)
+
+	// External alarm routes (P2P alarm with API key, etc.)
+	s.mountExternalAlarmRoutes(r)
 
 	// Legacy XML/Vigi alarm endpoints
 	if cfg.HTTPXMLEnabled {
@@ -233,9 +187,9 @@ func (s *Server) Start() error {
 	return s.httpServer.ListenAndServe()
 }
 
-// Stop останавливает HTTP-сервер.
-func (s *Server) Stop() error {
-	return s.httpServer.Close()
+// Stop gracefully останавливает HTTP-сервер, давая активным запросам завершиться.
+func (s *Server) Stop(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
 }
 
 // SetTelegramBot устанавливает экземпляр Telegram-бота для сервера.

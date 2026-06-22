@@ -28,7 +28,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       const response = await authApi.login(username, password);
-      await setAuth(response.token, response.user);
+      await setAuth(response.token, response.refresh_token, response.user);
     } catch (error: any) {
       Alert.alert(
         'Ошибка входа',

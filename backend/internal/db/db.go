@@ -18,25 +18,72 @@ type DB struct {
 }
 
 type Config struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	Host              string
+	Port              int
+	User              string
+	Password          string
+	DBName            string
+	SSLMode           string
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
 }
 
 func New(cfg Config, logger *slog.Logger) (*DB, error) {
+	cfg = cfg.withDefaults()
+	if cfg.MinConns > cfg.MaxConns {
+		return nil, fmt.Errorf("database min connections (%d) cannot exceed max connections (%d)", cfg.MinConns, cfg.MaxConns)
+	}
+
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
 
-	pool, err := pgxpool.New(context.Background(), connStr)
+	poolConfig, err := pgxpool.ParseConfig(connStr)
 	if err != nil {
+		return nil, fmt.Errorf("parse database config: %w", err)
+	}
+	poolConfig.MaxConns = cfg.MaxConns
+	poolConfig.MinConns = cfg.MinConns
+	poolConfig.MaxConnLifetime = cfg.MaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.MaxConnIdleTime
+	poolConfig.HealthCheckPeriod = cfg.HealthCheckPeriod
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create database pool: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("unable to connect to database: %w", err)
 	}
 
+	logger.Info("database pool initialized", "max_conns", cfg.MaxConns, "min_conns", cfg.MinConns)
 	// Миграции выполняются отдельно — вызов db.RunMigrations() перед New()
 	return &DB{Pool: pool, Logger: logger}, nil
+}
+
+func (cfg Config) withDefaults() Config {
+	if cfg.MaxConns <= 0 {
+		cfg.MaxConns = 25
+	}
+	if cfg.MinConns < 0 {
+		cfg.MinConns = 0
+	}
+	if cfg.MaxConnLifetime <= 0 {
+		cfg.MaxConnLifetime = time.Hour
+	}
+	if cfg.MaxConnIdleTime <= 0 {
+		cfg.MaxConnIdleTime = 30 * time.Minute
+	}
+	if cfg.HealthCheckPeriod <= 0 {
+		cfg.HealthCheckPeriod = time.Minute
+	}
+	return cfg
 }
 
 // DSN возвращает строку DSN для golang-migrate.
@@ -73,7 +120,6 @@ func (db *DB) SeedDefaultAdmin() error {
 	db.Logger.Info("Default admin user created: admin / admin123")
 	return nil
 }
-
 
 // initSchema удалён — replaced by golang-migrate in internal/db/migrate.go.
 // См. backend/internal/db/migrations/001_initial_schema.up.sql

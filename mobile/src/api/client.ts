@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { storage } from '../utils/storage';
 import { useAuthStore } from '../store/authStore';
+import { LoginResponse } from '../types';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -13,6 +14,8 @@ export const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+let refreshPromise: Promise<LoginResponse> | null = null;
 
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
@@ -28,10 +31,44 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      await storage.removeToken();
-      useAuthStore.getState().logout();
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status !== 401 || originalRequest._retry) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    const refreshToken = await storage.getRefreshToken();
+    if (!refreshToken) {
+      await useAuthStore.getState().logout();
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+    try {
+      refreshPromise = refreshPromise ?? axios
+        .post<LoginResponse>(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 })
+        .then((response) => response.data)
+        .finally(() => {
+          refreshPromise = null;
+        });
+
+      const refreshed = await refreshPromise;
+      await storage.setToken(refreshed.token);
+      await storage.setRefreshToken(refreshed.refresh_token);
+      await storage.setUser(JSON.stringify(refreshed.user));
+      useAuthStore.setState({
+        token: refreshed.token,
+        refreshToken: refreshed.refresh_token,
+        user: refreshed.user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+
+      originalRequest.headers.Authorization = `Bearer ${refreshed.token}`;
+      return apiClient(originalRequest);
+    } catch (refreshError) {
+      await useAuthStore.getState().logout();
+      return Promise.reject(refreshError);
+    }
   },
 );

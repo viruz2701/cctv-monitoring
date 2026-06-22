@@ -1,86 +1,38 @@
-Security (CRITICAL)
-NEVER use os/exec с паролями → используй golang.org/x/crypto/ssh
-NEVER хардкодить секреты в config → env vars only
-NEVER 'unsafe-inline' в CSP → nonce-based CSP
-ALWAYS валидация input, parameterized SQL, rate limiting на auth
-Architecture
-Backend: Разбивай handlers на доменные роутеры (не monolithic server.go)
-Database: golang-migrate для версионирования (не CREATE TABLE IF NOT EXISTS)
-Errors: Централизованная обработка respondError(w, r, err) с traceID
-Files: Разбивай >500 строк на модули
-Testing
-Backend: table-driven tests, testcontainers-go для интеграционных
-Coverage target: 70% Go, 50% React
-Mock external dependencies
-Code Style
-Go: golangci-lint, gofmt, godoc comments
-TypeScript: ESLint + Prettier, strict mode, functional components
-SQL: snake_case, индексы для частых запросов, transactions для multi-step
-Common Pitfalls
-❌ God Objects → ✅ Domain routers
-❌ Magic numbers → ✅ Named constants
-❌ Deep nesting → ✅ Helper functions
-❌ Commented code → ✅ Remove or document
-❌ Console.log → ✅ Proper logging
-❌ any type → ✅ Proper interfaces
-Quick Wins Priority
-Security fixes (sshpass, CSP, secrets)
-Architecture refactoring (server.go, migrations, errors)
-Mobile improvements (refresh token, parallel uploads, EXIF)
-Performance (Excel backend, virtualization)
-Infrastructure (Dockerfile, docker-compose, tests)</content>
-</write_to_file>
-<write_to_file>
-<path>.roo-context.txt</path>
-<content># Roo Context v7.0
+# CCTV Monitor — Rules
 
-Project
-CCTV Intelligence Platform — enterprise CCTV monitoring + predictive maintenance + IT/OT convergence.
-Current Phase
-Quick Wins (P0) → Phase 3.5 (Edge Agent + QR)
-Key Files
-TODO.md — задачи (Quick Wins + Phase 3.5)
-ARCHITECTURE.md — архитектура, ADRs, стек
-.clinerules — правила для AI
-Stack
-Backend: Go 1.25 (chi, pgx/v5, nats.go)
-Frontend: React 19, Vite 8, Tailwind 4
-Mobile: React Native / Expo 52
-Edge Agent: Go 1.25 на OpenWrt (MQTT + WireGuard)
-Data: PostgreSQL + TimescaleDB
-Quick Wins (P0) — 2 недели
-Security: sshpass → crypto/ssh, CSP nonce, secrets → env
-Architecture: server.go → доменные роутеры, golang-migrate, respondError()
-Mobile: Refresh token, parallel uploads, real EXIF
-Performance: Excel/PDF на Backend, виртуализация списков
-Infra: Dockerfile, docker-compose, интеграционные тесты
-Phase 3.5 — 3 месяца
-Edge Agent (OpenWrt)
-Go binary ~5MB, ~30MB RAM
-Control Plane: MQTT 5.0 + mTLS 1.3 (телеметрия, команды)
-Media Plane: WireGuard on-demand (доступ к LAN клиента)
-wgdashboard для управления WG
-Hardware: Wiflyer 4G / GL-XE300 / HDRM200
-QR-паспортизация
-Scope: NVR, switch, rack, UPS (НЕ уличные камеры)
-Payload: https://cctv.company.com/q/{base62_id}?h={hmac_16}
-Print: Bluetooth thermal printer ИЛИ enterprise batch (A4)
-Lifecycle: DRAFT → PRINTED → ACTIVE → REVOKED
-CMMS UI
-Settings → Integrations (Atlas/SN/Jira/TOIR)
-Per-adapter config, live test, sync dashboard
-Security Rules
-NEVER os/exec с паролями → golang.org/x/crypto/ssh
-NEVER хардкодить секреты → env vars
-NEVER 'unsafe-inline' в CSP → nonce
-ALWAYS валидация input, parameterized SQL
-Metrics
-Coverage: 70% Go, 50% React
-API p95: <100ms
-Edge Agents: 5+
-QR Objects: 95%
-QR Scan: <2s
-Deferred (Phase 4)
-Multi-tenant SaaS
-AR Remote Expert
-ISO 27001 Certification</content>
+## Stack
+- Backend: Go 1.25, Chi, pgx/v5, NATS
+- Frontend: React 19, Vite 8, TailwindCSS v4, TypeScript 5.9
+- Mobile: React Native + Expo 52
+- DB: PostgreSQL + TimescaleDB
+
+## Security (CRITICAL — всегда проверяй)
+- НИКОГДА: os/exec с паролями, хардкод секретов, unsafe-inline в CSP
+- ВСЕГДА: parameterized SQL, rate limiting, respondError(w, r, err) с traceID
+- Crypto: СТБ belt/bign/bash для РБ, AES-256-GCM для international
+
+## Architecture
+- Backend: доменные роутеры (auth_routes, cmms_routes, device_routes)
+- DB: golang-migrate (НЕ CREATE TABLE IF NOT EXISTS)
+- Files >500 строк → разбивать
+- Handlers: централизованный respondError()
+
+## Code Style
+- Go: golangci-lint, gofmt, table-driven tests
+- TS: ESLint strict, functional components, Zod validation
+- SQL: snake_case, индексы, transactions
+
+## Testing
+- Coverage: 70% Go, 50% React
+- Backend: testcontainers-go для интеграционных
+- Frontend: vitest + testing-library
+
+## Compliance (auto-loaded from skills)
+- СТБ IEC 62443, ISO 27001, ISO 27019
+- СТБ 34.101.30 (crypto), СТБ 34.101.27 (cybersecurity)
+- OWASP ASVS L3, Приказ ОАЦ №66
+## Large Files
+При работе с файлами >500 строк:
+1. Сначала прочитай структуру (функции, типы)
+2. Запроси конкретные секции
+3. НЕ загружай весь файл

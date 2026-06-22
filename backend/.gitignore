@@ -39,3 +39,12 @@ analytics/models/*.pkl
 # Data files
 *.db
 *.sqlite
+
+# Skills (installed locally, not committed)
+.agents/
+.roo/skills/
+.cline/rules/
+.cursor/rules/
+
+# KEEP custom project skills (optional)
+# !.agents/skills/cctv-*/

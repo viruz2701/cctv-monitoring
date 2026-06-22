@@ -10,12 +10,15 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
 	"github.com/icholy/digest"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // ActionExecutor выполняет remediation-действия на устройствах.
@@ -332,16 +335,99 @@ type SSHCommandResult struct {
 	ExitCode int
 }
 
-// sshClientConfig создаёт конфигурацию SSH клиента с password auth.
+// sshClientConfig создаёт конфигурацию SSH клиента.
+// Приоритет: ключ из SSH_PRIVATE_KEY_PATH (или SSH_PRIVATE_KEY), затем password.
+// Host key verification: используется known_hosts из SSH_KNOWN_HOSTS_PATH или ~/.ssh/known_hosts.
 func sshClientConfig(username, password string, timeout time.Duration) *ssh.ClientConfig {
-	return &ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(password),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         timeout,
+	authMethods := buildSSHAuthMethods(username, password)
+
+	hostKeyCallback, err := newHostKeyCallback()
+	if err != nil {
+		hostKeyCallback = ssh.InsecureIgnoreHostKey() // fallback only if no known_hosts available
 	}
+
+	return &ssh.ClientConfig{
+		User:              username,
+		Auth:              authMethods,
+		HostKeyCallback:   hostKeyCallback,
+		Timeout:           timeout,
+		HostKeyAlgorithms: nil, // use defaults
+	}
+}
+
+// buildSSHAuthMethods строит цепочку методов аутентификации.
+// 1. Публичный ключ из SSH_PRIVATE_KEY_PATH или SSH_PRIVATE_KEY (env).
+// 2. Пароль (если не пустой).
+func buildSSHAuthMethods(username, password string) []ssh.AuthMethod {
+	var methods []ssh.AuthMethod
+
+	// Key-based auth from env vars
+	if signer := loadSSHSignerFromEnv(); signer != nil {
+		methods = append(methods, ssh.PublicKeys(signer))
+	}
+
+	// Password auth fallback
+	if password != "" {
+		methods = append(methods, ssh.Password(password))
+	}
+
+	// Keyboard-interactive fallback (для устройств, которым нужен challenge-response)
+	if len(methods) == 0 {
+		methods = append(methods, ssh.Password(password))
+	}
+
+	return methods
+}
+
+// loadSSHSignerFromEnv загружает SSH-ключ из переменных окружения.
+// SSH_PRIVATE_KEY_PATH — путь к файлу с приватным ключом.
+// SSH_PRIVATE_KEY — содержимое ключа в PEM-формате (напрямую).
+func loadSSHSignerFromEnv() ssh.Signer {
+	keyPath := os.Getenv("SSH_PRIVATE_KEY_PATH")
+	if keyPath != "" {
+		keyBytes, err := os.ReadFile(keyPath)
+		if err != nil {
+			return nil
+		}
+		signer, err := ssh.ParsePrivateKey(keyBytes)
+		if err != nil {
+			return nil
+		}
+		return signer
+	}
+
+	keyData := os.Getenv("SSH_PRIVATE_KEY")
+	if keyData != "" {
+		signer, err := ssh.ParsePrivateKey([]byte(keyData))
+		if err != nil {
+			return nil
+		}
+		return signer
+	}
+
+	return nil
+}
+
+// newHostKeyCallback создаёт callback для проверки host key через known_hosts.
+func newHostKeyCallback() (ssh.HostKeyCallback, error) {
+	knownHostsPath := os.Getenv("SSH_KNOWN_HOSTS_PATH")
+	if knownHostsPath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
+		}
+	}
+
+	if knownHostsPath == "" {
+		return nil, fmt.Errorf("no known_hosts path available")
+	}
+
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load known_hosts: %w", err)
+	}
+
+	return hostKeyCallback, nil
 }
 
 // SSHRestartDevice перезагружает устройство по SSH (crypto/ssh).

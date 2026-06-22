@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEYS = {
   TOKEN: 'token',
+  REFRESH_TOKEN: 'refreshToken',
   USER: 'user',
   SYNC_QUEUE: 'syncQueue',
   PUSH_TOKEN: 'pushToken',
@@ -18,6 +19,18 @@ export const storage = {
 
   async removeToken(): Promise<void> {
     return AsyncStorage.removeItem(KEYS.TOKEN);
+  },
+
+  async getRefreshToken(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.REFRESH_TOKEN);
+  },
+
+  async setRefreshToken(token: string): Promise<void> {
+    return AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+  },
+
+  async removeRefreshToken(): Promise<void> {
+    return AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
   },
 
   async getUser(): Promise<string | null> {

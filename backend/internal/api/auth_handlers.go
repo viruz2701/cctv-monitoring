@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 
 	"github.com/pquerna/otp/totp"
@@ -50,16 +51,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateJWT(user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
 	if err != nil {
-		s.logger.Error("failed to generate JWT", "error", err)
+		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 	user.PasswordHash = ""
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"token": token,
-		"user":  user,
+		"token":         token,
+		"refresh_token": refreshToken,
+		"user":          user,
 	})
 }
 
@@ -96,9 +98,9 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateJWT(user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
 	if err != nil {
-		s.logger.Error("failed to generate JWT", "error", err)
+		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
@@ -106,8 +108,9 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 	user.PasswordHash = ""
 	user.TOTPSecret = ""
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"token": token,
-		"user":  user,
+		"token":         token,
+		"refresh_token": refreshToken,
+		"user":          user,
 	})
 }
 
@@ -262,4 +265,76 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user.PasswordHash = ""
 	jsonResponse(w, http.StatusOK, user)
+}
+
+func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
+		respondError(w, r, NewBadRequestError("invalid request"))
+		return
+	}
+
+	user, sessionID, err := s.db.GetUserByRefreshTokenHash(auth.HashRefreshToken(req.RefreshToken))
+	if err != nil {
+		respondError(w, r, NewUnauthorizedError("invalid or expired refresh token"))
+		return
+	}
+
+	if err := s.db.RevokeSession(sessionID); err != nil {
+		s.logger.Error("failed to rotate refresh session", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
+	if err != nil {
+		s.logger.Error("failed to issue refreshed tokens", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	user.PasswordHash = ""
+	user.TOTPSecret = ""
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"token":         token,
+		"refresh_token": refreshToken,
+		"user":          user,
+	})
+}
+
+func (s *Server) issueTokenPair(r *http.Request, userID, username, role string) (string, string, error) {
+	token, err := auth.GenerateJWT(userID, username, role)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken, tokenHash, expiresAt, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return "", "", err
+	}
+
+	if _, err := s.db.CreateUserSession(userID, tokenHash, clientIP(r), r.UserAgent(), expiresAt); err != nil {
+		return "", "", err
+	}
+
+	return token, refreshToken, nil
+}
+
+func clientIP(r *http.Request) string {
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		if host, _, err := net.SplitHostPort(forwardedFor); err == nil {
+			return host
+		}
+		return forwardedFor
+	}
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return realIP
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

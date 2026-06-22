@@ -26,7 +26,4 @@ func (s *Server) mountAgentRoutes(r chi.Router) {
 func (s *Server) mountExternalAlarmRoutes(r chi.Router) {
 	// P2P alarm (protected by API key, not JWT)
 	r.Post("/api/v1/external/alarm/p2p", s.handleP2PAlarm)
-
-	// Protected external alarm (JWT)
-	r.Post("/api/v1/external/alarm", s.handleExternalAlarm)
 }

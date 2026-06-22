@@ -159,10 +159,9 @@ func (s *Server) handleTelegramVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT
-	token, err := auth.GenerateJWT(user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
 	if err != nil {
-		s.logger.Error("failed to generate JWT", "error", err)
+		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
@@ -170,7 +169,8 @@ func (s *Server) handleTelegramVerify(w http.ResponseWriter, r *http.Request) {
 	user.PasswordHash = ""
 	user.TOTPSecret = ""
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"token": token,
-		"user":  user,
+		"token":         token,
+		"refresh_token": refreshToken,
+		"user":          user,
 	})
 }

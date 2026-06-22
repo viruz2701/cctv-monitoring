@@ -5,14 +5,34 @@ import (
 )
 
 func TestNewSigner(t *testing.T) {
-	s := NewSigner("test-key-12345")
+	s, err := NewSigner("test-key-12345678")
+	if err != nil {
+		t.Fatalf("NewSigner returned error: %v", err)
+	}
 	if s == nil {
 		t.Fatal("NewSigner returned nil")
 	}
 }
 
+func TestNewSignerKeyTooShort(t *testing.T) {
+	_, err := NewSigner("short")
+	if err == nil {
+		t.Fatal("NewSigner should return error for key < 16 bytes")
+	}
+}
+
+func TestNewSignerEmptyKey(t *testing.T) {
+	_, err := NewSigner("")
+	if err == nil {
+		t.Fatal("NewSigner should return error for empty key")
+	}
+}
+
 func TestSignAndVerify(t *testing.T) {
-	s := NewSigner("my-secret-key")
+	s, err := NewSigner("my-secret-key!!!")
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
 
 	data := "user1|create_wo|work_order|wo-001|{}|{}"
 	signature := s.Sign(data)
@@ -30,7 +50,10 @@ func TestSignAndVerify(t *testing.T) {
 }
 
 func TestVerifyTamperedData(t *testing.T) {
-	s := NewSigner("my-secret-key")
+	s, err := NewSigner("my-secret-key!!!")
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
 
 	data := "user1|create_wo|work_order|wo-001|{}|{}"
 	signature := s.Sign(data)
@@ -42,7 +65,10 @@ func TestVerifyTamperedData(t *testing.T) {
 }
 
 func TestVerifyWrongSignature(t *testing.T) {
-	s := NewSigner("my-secret-key")
+	s, err := NewSigner("my-secret-key!!!")
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
 
 	data := "user1|create_wo|work_order|wo-001|{}|{}"
 	s.Sign(data)
@@ -53,8 +79,14 @@ func TestVerifyWrongSignature(t *testing.T) {
 }
 
 func TestSignDifferentKeys(t *testing.T) {
-	s1 := NewSigner("key-alpha")
-	s2 := NewSigner("key-beta")
+	s1, err := NewSigner("key-alpha-1234567")
+	if err != nil {
+		t.Fatalf("NewSigner s1: %v", err)
+	}
+	s2, err := NewSigner("key-beta-12345678")
+	if err != nil {
+		t.Fatalf("NewSigner s2: %v", err)
+	}
 
 	data := "user1|action|entity|id|{}|{}"
 	sig1 := s1.Sign(data)
@@ -65,7 +97,10 @@ func TestSignDifferentKeys(t *testing.T) {
 }
 
 func TestSignDeterministic(t *testing.T) {
-	s := NewSigner("consistent-key")
+	s, err := NewSigner("consistent-key!!!")
+	if err != nil {
+		t.Fatalf("NewSigner: %v", err)
+	}
 
 	data := "user1|action|entity|id|{}|{}"
 	sig1 := s.Sign(data)
@@ -90,20 +125,5 @@ func TestSignAuditEntryEmpty(t *testing.T) {
 	expected := "|||||"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
-	}
-}
-
-func TestSignEmptyKey(t *testing.T) {
-	s := NewSigner("")
-
-	data := "test|data"
-	sig := s.Sign(data)
-
-	if sig == "" {
-		t.Fatal("Sign with empty key should still produce a signature")
-	}
-
-	if !s.Verify(data, sig) {
-		t.Error("Verify should return true for empty-key signature")
 	}
 }

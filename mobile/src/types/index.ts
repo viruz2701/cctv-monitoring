@@ -56,6 +56,7 @@ export interface CompleteWorkOrderPayload {
 
 export interface LoginResponse {
   token: string;
+  refresh_token: string;
   user: User;
 }
 

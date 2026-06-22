@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 function cspPlugin(): Plugin {
   const prodCSP = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' blob:",
+    "script-src 'self' 'strict-dynamic' blob:",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",

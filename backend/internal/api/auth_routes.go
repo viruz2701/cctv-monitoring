@@ -9,6 +9,7 @@ import (
 func (s *Server) mountAuthRoutes(r chi.Router) {
 	// Публичные (rate-limited: 5 req/min)
 	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/login", s.handleLogin)
+	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/refresh", s.handleRefreshToken)
 
 	// 2FA login
 	r.Post("/api/v1/auth/login/2fa", s.handleLogin2FA)

@@ -109,7 +109,7 @@ func (s *Server) listMobileWorkOrders(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	respondJSON(w, http.StatusOK, result)
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // getMobileWorkOrder возвращает детали наряда для мобильного
@@ -185,7 +185,7 @@ func (s *Server) getMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 		completedAt = &s
 	}
 
-	respondJSON(w, http.StatusOK, mobileWorkOrderDetail{
+	jsonResponse(w, http.StatusOK, mobileWorkOrderDetail{
 		ID:           wo.ID,
 		ScheduleID:   wo.ScheduleID,
 		DeviceID:     wo.DeviceID,
@@ -221,7 +221,7 @@ func (s *Server) startMobileWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "mobile_start_work_order", "work_order", id, nil, nil)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "started"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "started"})
 }
 
 // completeMobileWorkOrder — завершить наряд с расширенным payload.
@@ -300,7 +300,7 @@ func (s *Server) completeMobileWorkOrder(w http.ResponseWriter, r *http.Request)
 	}
 
 	s.logAudit(userID, "mobile_complete_work_order", "work_order", id, nil, req)
-	respondJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "completed"})
 }
 
 // boolToStr converts bool to "true"/"false" string.
@@ -358,7 +358,7 @@ func (s *Server) uploadMobileWorkOrderPhoto(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{
+	jsonResponse(w, http.StatusOK, map[string]string{
 		"url":      photoURL,
 		"filename": filename,
 	})
@@ -399,7 +399,7 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, map[string]string{"status": "registered"})
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "registered"})
 }
 
 // ---------- Mobile Technician Profile ----------
@@ -420,7 +420,7 @@ func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Reque
 			respondError(w, r, NewNotFoundError("User not found"))
 			return
 		}
-		respondJSON(w, http.StatusOK, map[string]interface{}{
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"user_id":          user.ID,
 			"user_name":        user.Username,
 			"current_workload": 0,
@@ -431,7 +431,7 @@ func (s *Server) getMobileTechnicianProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	respondJSON(w, http.StatusOK, workload)
+	jsonResponse(w, http.StatusOK, workload)
 }
 
 // getMobileTechnicianStats возвращает статистику техника за месяц
@@ -447,7 +447,7 @@ func (s *Server) getMobileTechnicianStats(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		s.logger.Error("Failed to get technician stats", "error", err)
 		// Возвращаем нулевую статистику
-		respondJSON(w, http.StatusOK, map[string]interface{}{
+		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"completed_this_month": 0,
 			"total_work_orders":    0,
 			"on_time_percent":      0,
@@ -456,7 +456,7 @@ func (s *Server) getMobileTechnicianStats(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	respondJSON(w, http.StatusOK, stats)
+	jsonResponse(w, http.StatusOK, stats)
 }
 
 // ---------- Helpers ----------
