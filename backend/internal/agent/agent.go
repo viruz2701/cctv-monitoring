@@ -467,7 +467,9 @@ func (a *Agent) dispatchSSHRestart(ctx context.Context, step PlaybookStep, devic
 		return "", fmt.Errorf("action executor not configured")
 	}
 	ip := a.resolveDeviceIP(step, deviceID)
-	return "ssh restart sent", a.executor.SSHRestartDevice(ctx, ip, step.Params["username"], step.Params["password"], 22)
+	// Password-based auth удалён (ISO 27001 A.9.4.3, СТБ 34.101.27 п. 5.1)
+	// Только key-based authentication через SSH_PRIVATE_KEY/SSH_PRIVATE_KEY_PATH
+	return "ssh restart sent", a.executor.SSHRestartDevice(ctx, ip, step.Params["username"], 22)
 }
 
 func (a *Agent) dispatchSSHServiceRestart(ctx context.Context, step PlaybookStep, deviceID string) (string, error) {
@@ -479,7 +481,9 @@ func (a *Agent) dispatchSSHServiceRestart(ctx context.Context, step PlaybookStep
 	if svc == "" {
 		svc = "camera-service"
 	}
-	return "ssh service restart sent", a.executor.SSHServiceRestart(ctx, ip, step.Params["username"], step.Params["password"], svc, 22)
+	// Password-based auth удалён (ISO 27001 A.9.4.3, СТБ 34.101.27 п. 5.1)
+	// Только key-based authentication через SSH_PRIVATE_KEY/SSH_PRIVATE_KEY_PATH
+	return "ssh service restart sent", a.executor.SSHServiceRestart(ctx, ip, step.Params["username"], svc, 22)
 }
 
 func (a *Agent) dispatchCreateTicket(ctx context.Context, step PlaybookStep, deviceID string) (string, error) {

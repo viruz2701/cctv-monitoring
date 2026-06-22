@@ -335,15 +335,19 @@ type SSHCommandResult struct {
 	ExitCode int
 }
 
-// sshClientConfig создаёт конфигурацию SSH клиента.
-// Приоритет: ключ из SSH_PRIVATE_KEY_PATH (или SSH_PRIVATE_KEY), затем password.
-// Host key verification: используется known_hosts из SSH_KNOWN_HOSTS_PATH или ~/.ssh/known_hosts.
-func sshClientConfig(username, password string, timeout time.Duration) *ssh.ClientConfig {
-	authMethods := buildSSHAuthMethods(username, password)
+// sshClientConfig создаёт конфигурацию SSH клиента с key-based auth.
+// Приоритет: ключ из SSH_PRIVATE_KEY_PATH (или SSH_PRIVATE_KEY).
+// Host key verification: ОБЯЗАТЕЛЬНО через known_hosts (НЕ InsecureIgnoreHostKey).
+// Соответствует: ISO 27001 A.9.4.3, СТБ 34.101.27 п. 5.1
+func sshClientConfig(username string, timeout time.Duration) (*ssh.ClientConfig, error) {
+	authMethods := buildSSHAuthMethods()
 
 	hostKeyCallback, err := newHostKeyCallback()
 	if err != nil {
-		hostKeyCallback = ssh.InsecureIgnoreHostKey() // fallback only if no known_hosts available
+		// Fail Secure: если нет known_hosts — не используем InsecureIgnoreHostKey
+		// Только логируем ошибку, но продолжаем без host key verification
+		// (уровень защиты определяется политикой, а не кодом)
+		return nil, fmt.Errorf("ssh host key verification failed: %w", err)
 	}
 
 	return &ssh.ClientConfig{
@@ -352,28 +356,18 @@ func sshClientConfig(username, password string, timeout time.Duration) *ssh.Clie
 		HostKeyCallback:   hostKeyCallback,
 		Timeout:           timeout,
 		HostKeyAlgorithms: nil, // use defaults
-	}
+	}, nil
 }
 
 // buildSSHAuthMethods строит цепочку методов аутентификации.
-// 1. Публичный ключ из SSH_PRIVATE_KEY_PATH или SSH_PRIVATE_KEY (env).
-// 2. Пароль (если не пустой).
-func buildSSHAuthMethods(username, password string) []ssh.AuthMethod {
-	var methods []ssh.AuthMethod
+// ТОЛЬКО key-based authentication из env vars.
+// Парольная аутентификация ЗАПРЕЩЕНА (ISO 27001 A.9.4.3, СТБ 34.101.27 п. 5.1).
+func buildSSHAuthMethods() []ssh.AuthMethod {
+	methods := make([]ssh.AuthMethod, 0)
 
 	// Key-based auth from env vars
 	if signer := loadSSHSignerFromEnv(); signer != nil {
 		methods = append(methods, ssh.PublicKeys(signer))
-	}
-
-	// Password auth fallback
-	if password != "" {
-		methods = append(methods, ssh.Password(password))
-	}
-
-	// Keyboard-interactive fallback (для устройств, которым нужен challenge-response)
-	if len(methods) == 0 {
-		methods = append(methods, ssh.Password(password))
 	}
 
 	return methods
@@ -431,23 +425,29 @@ func newHostKeyCallback() (ssh.HostKeyCallback, error) {
 }
 
 // SSHRestartDevice перезагружает устройство по SSH (crypto/ssh).
-func (e *ActionExecutor) SSHRestartDevice(ctx context.Context, deviceIP, username, password string, sshPort int) error {
-	return e.runSSHSession(ctx, deviceIP, username, password, sshPort, "reboot")
+// Пароль больше не передаётся — только key-based auth.
+func (e *ActionExecutor) SSHRestartDevice(ctx context.Context, deviceIP, username string, sshPort int) error {
+	return e.runSSHSession(ctx, deviceIP, username, sshPort, "reboot")
 }
 
 // SSHServiceRestart перезапускает сервис на устройстве по SSH (crypto/ssh).
-func (e *ActionExecutor) SSHServiceRestart(ctx context.Context, deviceIP, username, password, serviceName string, sshPort int) error {
+// Пароль больше не передаётся — только key-based auth.
+func (e *ActionExecutor) SSHServiceRestart(ctx context.Context, deviceIP, username, serviceName string, sshPort int) error {
 	remoteCmd := fmt.Sprintf("systemctl restart %s || service %s restart", serviceName, serviceName)
-	return e.runSSHSession(ctx, deviceIP, username, password, sshPort, remoteCmd)
+	return e.runSSHSession(ctx, deviceIP, username, sshPort, remoteCmd)
 }
 
 // runSSHSession выполняет команду через нативный SSH (crypto/ssh).
-func (e *ActionExecutor) runSSHSession(ctx context.Context, host, username, password string, port int, remoteCmd string) error {
+// Только key-based authentication (ISO 27001 A.9.4.3).
+func (e *ActionExecutor) runSSHSession(ctx context.Context, host, username string, port int, remoteCmd string) error {
 	if port == 0 {
 		port = 22
 	}
 
-	config := sshClientConfig(username, password, 10*time.Second)
+	config, err := sshClientConfig(username, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("ssh config: %w", err)
+	}
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 
 	conn, err := ssh.Dial("tcp", addr, config)

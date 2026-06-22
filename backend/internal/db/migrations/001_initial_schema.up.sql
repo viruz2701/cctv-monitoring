@@ -259,21 +259,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS certifications TEXT[] DEFAULT '{}';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS push_platform TEXT;
 
-CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+CREATE TABLE telegram_link_tokens (
     token TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS telegram_login_codes (
+CREATE TABLE telegram_login_codes (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     code TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
+CREATE TABLE password_reset_tokens (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     token TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,

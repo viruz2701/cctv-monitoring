@@ -28,13 +28,16 @@ func getJWTSecret() []byte {
 	return []byte(secret)
 }
 
+// AccessTokenTTL — время жизни access token (15 минут, OWASP ASVS V3.3.1).
+const AccessTokenTTL = 15 * time.Minute
+
 func GenerateJWT(userID, username, role string) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

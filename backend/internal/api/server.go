@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/nats-io/nats.go"
 
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
@@ -63,16 +64,38 @@ type Server struct {
 	p2pGatewayURL string
 	p2pAPIKey     string
 	httpClient    *http.Client
+
+	// NATS connection for health checks
+	natsConn *nats.Conn
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
+// Соответствует: OWASP ASVS V5.3.3, ISO 27001 A.13.2.3, СТБ 34.101.27 п. 6.3
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Получаем nonce из контекста (устанавливается CSPNonceMiddleware)
+		nonce := NonceFromContext(r.Context())
+
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+
+		// CSP with nonce (OWASP ASVS V5.3.3)
+		// strict-dynamic отключает fallback к 'self' в старых браузерах — это нормально
+		csp := fmt.Sprintf(
+			"default-src 'self'; "+
+				"script-src 'self' 'nonce-%s' 'strict-dynamic'; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"font-src 'self' https://fonts.gstatic.com; "+
+				"img-src 'self' data: https:; "+
+				"connect-src 'self'; "+
+				"frame-ancestors 'none'; "+
+				"base-uri 'self'; "+
+				"form-action 'self'",
+			nonce,
+		)
+		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
 		next.ServeHTTP(w, r)
 	})
@@ -195,6 +218,11 @@ func (s *Server) Stop(ctx context.Context) error {
 // SetTelegramBot устанавливает экземпляр Telegram-бота для сервера.
 func (s *Server) SetTelegramBot(bot *telegram.Bot) {
 	s.telegramBot = bot
+}
+
+// SetNATSConn устанавливает NATS соединение для health checks.
+func (s *Server) SetNATSConn(conn *nats.Conn) {
+	s.natsConn = conn
 }
 
 // ---------- Вспомогательные ----------

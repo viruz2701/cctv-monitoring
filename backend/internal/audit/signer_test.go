@@ -4,8 +4,15 @@ import (
 	"testing"
 )
 
+// ── S1-07 Compliance Tests: Key Validation (ISO 27001 A.12.4.2, СТБ 34.101.30) ──
+
+// validKey возвращает ключ длиной >= 32 байта для тестов.
+func validKey() string {
+	return "audit-hmac-key-32-bytes-12345678901" // 32 bytes
+}
+
 func TestNewSigner(t *testing.T) {
-	s, err := NewSigner("test-key-12345678")
+	s, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner returned error: %v", err)
 	}
@@ -15,9 +22,9 @@ func TestNewSigner(t *testing.T) {
 }
 
 func TestNewSignerKeyTooShort(t *testing.T) {
-	_, err := NewSigner("short")
+	_, err := NewSigner("short-key-16-bytes") // 16 bytes < 32
 	if err == nil {
-		t.Fatal("NewSigner should return error for key < 16 bytes")
+		t.Fatal("NewSigner should return error for key < 32 bytes")
 	}
 }
 
@@ -28,8 +35,28 @@ func TestNewSignerEmptyKey(t *testing.T) {
 	}
 }
 
+func TestNewSigner31BytesKey(t *testing.T) {
+	// 31 bytes < 32 — должно быть ошибкой
+	_, err := NewSigner("31-byte-key-1234567890abcd") // 31 bytes
+	if err == nil {
+		t.Fatal("NewSigner should return error for 31-byte key (need 32)")
+	}
+}
+
+func TestNewSigner32BytesKey(t *testing.T) {
+	// 32 bytes — минимально допустимо
+	key := "this-is-a-32-byte-key-1234567890!" // 32 bytes
+	s, err := NewSigner(key)
+	if err != nil {
+		t.Fatalf("NewSigner should accept 32-byte key: %v", err)
+	}
+	if s == nil {
+		t.Fatal("NewSigner returned nil")
+	}
+}
+
 func TestSignAndVerify(t *testing.T) {
-	s, err := NewSigner("my-secret-key!!!")
+	s, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner: %v", err)
 	}
@@ -50,7 +77,7 @@ func TestSignAndVerify(t *testing.T) {
 }
 
 func TestVerifyTamperedData(t *testing.T) {
-	s, err := NewSigner("my-secret-key!!!")
+	s, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner: %v", err)
 	}
@@ -65,7 +92,7 @@ func TestVerifyTamperedData(t *testing.T) {
 }
 
 func TestVerifyWrongSignature(t *testing.T) {
-	s, err := NewSigner("my-secret-key!!!")
+	s, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner: %v", err)
 	}
@@ -79,11 +106,11 @@ func TestVerifyWrongSignature(t *testing.T) {
 }
 
 func TestSignDifferentKeys(t *testing.T) {
-	s1, err := NewSigner("key-alpha-1234567")
+	s1, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner s1: %v", err)
 	}
-	s2, err := NewSigner("key-beta-12345678")
+	s2, err := NewSigner("another-32-byte-key-for-test-123456") // 32 bytes
 	if err != nil {
 		t.Fatalf("NewSigner s2: %v", err)
 	}
@@ -97,7 +124,7 @@ func TestSignDifferentKeys(t *testing.T) {
 }
 
 func TestSignDeterministic(t *testing.T) {
-	s, err := NewSigner("consistent-key!!!")
+	s, err := NewSigner(validKey())
 	if err != nil {
 		t.Fatalf("NewSigner: %v", err)
 	}

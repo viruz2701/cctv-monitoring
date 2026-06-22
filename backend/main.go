@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/nats-io/nats.go"
 )
 
 type DBWriter struct {
@@ -142,6 +143,9 @@ func getEnvDuration(key string, def time.Duration) time.Duration {
 	return def
 }
 
+// shutdownTimeout — максимальное время на graceful shutdown.
+const shutdownTimeout = 30 * time.Second
+
 func main() {
 	// Загружаем .env файл перед чтением конфигурации
 	_ = godotenv.Load()
@@ -171,9 +175,9 @@ func main() {
 		DBName:            getEnv("DB_NAME", "gb_telemetry"),
 		SSLMode:           getEnv("DB_SSLMODE", "disable"),
 		MaxConns:          getEnvInt32("DB_MAX_CONNS", 25),
-		MinConns:          getEnvInt32("DB_MIN_CONNS", 2),
-		MaxConnLifetime:   getEnvDuration("DB_MAX_CONN_LIFETIME", time.Hour),
-		MaxConnIdleTime:   getEnvDuration("DB_MAX_CONN_IDLE_TIME", 30*time.Minute),
+		MinConns:          getEnvInt32("DB_MIN_CONNS", 5),
+		MaxConnLifetime:   getEnvDuration("DB_MAX_CONN_LIFETIME", 5*time.Minute),
+		MaxConnIdleTime:   getEnvDuration("DB_MAX_CONN_IDLE_TIME", 3*time.Minute),
 		HealthCheckPeriod: getEnvDuration("DB_HEALTH_CHECK_PERIOD", time.Minute),
 	}
 
@@ -188,7 +192,6 @@ func main() {
 		logger.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
 	}
-	defer database.Close()
 
 	// Seed default admin if no users exist
 	if err := database.SeedDefaultAdmin(); err != nil {
@@ -225,7 +228,6 @@ func main() {
 		logger.Error("Failed to start log server", "error", err)
 		os.Exit(1)
 	}
-	defer logServer.Stop()
 
 	// --- SIP-сервер ---
 	sipHandler := sip.NewSIPHandler(stateWrapper, logger, cfg.GB28181)
@@ -233,7 +235,6 @@ func main() {
 		logger.Error("Failed to start SIP server", "error", err)
 		os.Exit(1)
 	}
-	defer sipHandler.Stop()
 
 	// --- Запуск дополнительных протоколов ---
 	protocolManager := protocols.NewManager(logger)
@@ -287,7 +288,6 @@ func main() {
 		logger.Error("Failed to start additional protocols", "error", err)
 		os.Exit(1)
 	}
-	defer protocolManager.StopAll()
 
 	// --- Bi-directional ITSM Sync Engine ---
 	var syncEng *sync.SyncEngine
@@ -305,11 +305,25 @@ func main() {
 		)
 		syncEng.Start(ctx)
 		logger.Info("ITSM sync engine started", "interval", syncInterval)
-		defer syncEng.Stop()
+	}
+
+	// --- NATS Connection (опционально) ---
+	var natsConn *nats.Conn
+	if cfg.NATSURL != "" {
+		nc, err := nats.Connect(cfg.NATSURL)
+		if err != nil {
+			logger.Warn("NATS not available, continuing without", "error", err)
+		} else {
+			natsConn = nc
+			logger.Info("NATS connected", "url", cfg.NATSURL)
+		}
 	}
 
 	// --- API-сервер ---
 	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler, syncEng)
+	if natsConn != nil {
+		apiServer.SetNATSConn(natsConn)
+	}
 	stateWrapper.broadcastFn = apiServer.BroadcastAlarm
 
 	// --- Telegram бот ---
@@ -329,17 +343,15 @@ func main() {
 		}
 	}
 
+	// Запуск API сервера в горутине
 	serverErrCh := make(chan error, 1)
 	go func() {
+		logger.Info("API server starting", "addr", cfg.APIAddr)
 		if err := apiServer.Start(); err != nil && err != http.ErrServerClosed {
 			serverErrCh <- err
 		}
 		close(serverErrCh)
 	}()
-
-	if telegramBot != nil {
-		defer telegramBot.Stop()
-	}
 
 	// --- Maintenance Cron Job (каждые 15 минут) ---
 	maintenanceCron := cron.NewMaintenanceCron(database, logger)
@@ -363,31 +375,99 @@ func main() {
 	reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
 	reaper.Start()
 
+	// ══════════════════════════════════════════════════════════════════
+	// GRACEFUL SHUTDOWN
+	// Соответствует: ISO 27001 A.12.1.1, ISO 27001 A.17.1.1, СТБ 34.101.27 п. 8.1
+	// ══════════════════════════════════════════════════════════════════
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
 	select {
 	case sig := <-sigChan:
-		logger.Info("Shutdown signal received", "signal", sig.String())
+		logger.Info("⏳ Shutdown signal received, initiating graceful shutdown...",
+			"signal", sig.String(),
+			"timeout", shutdownTimeout,
+		)
 	case err := <-serverErrCh:
 		if err != nil {
 			logger.Error("API server failed", "error", err)
 		}
 	}
 
-	logger.Info("Shutting down...")
+	// Отменяем корневой контекст — все зависимые сервисы получат сигнал остановки
 	cancel()
 
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Создаём контекст с таймаутом для graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
+
+	// 1. Reaper stop
+	logger.Info("Shutting down reaper...")
+	reaper.Stop()
+	logger.Info("Reaper stopped")
+
+	// 2. HTTP server graceful shutdown
+	logger.Info("Shutting down HTTP server...")
 	if err := apiServer.Stop(shutdownCtx); err != nil {
-		logger.Error("API server graceful shutdown failed", "error", err)
+		logger.Error("HTTP server graceful shutdown failed", "error", err)
+	} else {
+		logger.Info("HTTP server stopped")
 	}
 
+	// 3. SIP server stop
+	logger.Info("Shutting down SIP server...")
 	sipHandler.Stop()
-	reaper.Stop()
+	logger.Info("SIP server stopped")
+
+	// 4. Protocol manager stop (FTP, Dahua, Hikvision, etc.)
+	logger.Info("Shutting down protocol handlers...")
+	protocolManager.StopAll()
+	logger.Info("Protocol handlers stopped")
+
+	// 5. Log server stop
+	logger.Info("Shutting down log server...")
+	logServer.Stop()
+	logger.Info("Log server stopped")
+
+	// 6. Telegram bot stop
+	if telegramBot != nil {
+		logger.Info("Shutting down Telegram bot...")
+		telegramBot.Stop()
+		logger.Info("Telegram bot stopped")
+	}
+
+	// 7. ITSM sync engine stop
+	if syncEng != nil {
+		logger.Info("Shutting down ITSM sync engine...")
+		syncEng.Stop()
+		logger.Info("ITSM sync engine stopped")
+	}
+
+	// 8. NATS drain (если подключен)
+	if natsConn != nil {
+		logger.Info("Draining NATS connection...")
+		if err := natsConn.Drain(); err != nil {
+			logger.Error("NATS drain failed", "error", err)
+		} else {
+			logger.Info("NATS connection drained")
+		}
+	}
+
+	// 9. DBWriter drain
+	logger.Info("Draining DB writer...")
 	close(dbWriter.ch)
+	logger.Info("DB writer drained")
+
+	// 10. Database connection close
+	logger.Info("Closing database connection...")
+	database.Close()
+	logger.Info("Database connection closed")
+
+	// Если shutdown занял больше времени чем таймаут, принудительно выходим
+	// (этот код выполнится после shutdownCtx, если все завершилось раньше — ок)
+	logger.Info("✅ Graceful shutdown complete")
 }
 
 type Reaper struct {

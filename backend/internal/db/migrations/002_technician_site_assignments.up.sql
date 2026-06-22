@@ -1,7 +1,7 @@
 -- Migration 002: Technician Site Assignments
 -- +migrate Up
 
-CREATE TABLE IF NOT EXISTS technician_site_assignments (
+CREATE TABLE technician_site_assignments (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     technician_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,

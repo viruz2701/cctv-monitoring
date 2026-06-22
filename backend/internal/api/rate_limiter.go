@@ -1,32 +1,42 @@
 // Package api — rate limiter middleware.
+// Соответствует: ISO 27001 A.12.1.2, OWASP ASVS V2.2.1, СТБ 34.101.27 п. 6.1
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // rateLimiter — in-memory rate limiter per IP with automatic cleanup.
 type rateLimiter struct {
-	mu      sync.Mutex
-	entries map[string][]time.Time
-	limit   int
-	window  time.Duration
-	stopCh  chan struct{}
+	mu          sync.Mutex
+	entries     map[string][]time.Time
+	limit       int
+	window      time.Duration
+	cancel      context.CancelFunc
+	activeCount atomic.Int64 // метрика: количество активных entries
 }
 
 // newRateLimiter создаёт rate limiter и запускает фоновую очистку.
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	ctx, cancel := context.WithCancel(context.Background())
 	rl := &rateLimiter{
 		entries: make(map[string][]time.Time),
 		limit:   limit,
 		window:  window,
-		stopCh:  make(chan struct{}),
+		cancel:  cancel,
 	}
-	go rl.cleanup()
+	go rl.cleanup(ctx)
 	return rl
+}
+
+// ActiveEntriesCount возвращает количество активных IP в map (для метрик).
+func (rl *rateLimiter) ActiveEntriesCount() int64 {
+	return rl.activeCount.Load()
 }
 
 // allow проверяет, не превышен ли лимит для данного IP.
@@ -52,42 +62,53 @@ func (rl *rateLimiter) allow(ip string) bool {
 
 	filtered = append(filtered, now)
 	rl.entries[ip] = filtered
+	// Обновляем метрику при добавлении новой записи
+	rl.activeCount.Store(int64(len(rl.entries)))
 	return true
 }
 
+// cleanupExpired удаляет просроченные записи (публичный метод для тестов).
+func (rl *rateLimiter) cleanupExpired() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+	for ip, entries := range rl.entries {
+		filtered := entries[:0]
+		for _, t := range entries {
+			if t.After(cutoff) {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(rl.entries, ip)
+		} else {
+			rl.entries[ip] = filtered
+		}
+	}
+	// Обновляем метрику после очистки
+	rl.activeCount.Store(int64(len(rl.entries)))
+}
+
 // cleanup периодически удаляет просроченные записи и пустые IP.
-func (rl *rateLimiter) cleanup() {
-	ticker := time.NewTicker(rl.window)
+// Каждые 5 минут (ISO 27001 A.12.1.2 — resource management).
+func (rl *rateLimiter) cleanup(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			rl.mu.Lock()
-			now := time.Now()
-			cutoff := now.Add(-rl.window)
-			for ip, entries := range rl.entries {
-				filtered := entries[:0]
-				for _, t := range entries {
-					if t.After(cutoff) {
-						filtered = append(filtered, t)
-					}
-				}
-				if len(filtered) == 0 {
-					delete(rl.entries, ip)
-				} else {
-					rl.entries[ip] = filtered
-				}
-			}
-			rl.mu.Unlock()
-		case <-rl.stopCh:
+			rl.cleanupExpired()
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-// stop останавливает фоновую очистку.
+// stop останавливает фоновую очистку через context cancellation.
 func (rl *rateLimiter) stop() {
-	close(rl.stopCh)
+	rl.cancel()
 }
 
 // extractClientIP извлекает IP клиента с учётом заголовков прокси.

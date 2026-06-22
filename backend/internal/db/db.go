@@ -67,21 +67,23 @@ func New(cfg Config, logger *slog.Logger) (*DB, error) {
 	return &DB{Pool: pool, Logger: logger}, nil
 }
 
+// withDefaults устанавливает значения по умолчанию для пула соединений.
+// Соответствует: ISO 27001 A.12.1.2 (Change management), ISO 27001 A.12.6.1 (Technical vulnerabilities)
 func (cfg Config) withDefaults() Config {
 	if cfg.MaxConns <= 0 {
 		cfg.MaxConns = 25
 	}
-	if cfg.MinConns < 0 {
-		cfg.MinConns = 0
+	if cfg.MinConns <= 0 {
+		cfg.MinConns = 5
 	}
 	if cfg.MaxConnLifetime <= 0 {
-		cfg.MaxConnLifetime = time.Hour
+		cfg.MaxConnLifetime = 5 * time.Minute
 	}
 	if cfg.MaxConnIdleTime <= 0 {
-		cfg.MaxConnIdleTime = 30 * time.Minute
+		cfg.MaxConnIdleTime = 3 * time.Minute
 	}
 	if cfg.HealthCheckPeriod <= 0 {
-		cfg.HealthCheckPeriod = time.Minute
+		cfg.HealthCheckPeriod = 1 * time.Minute
 	}
 	return cfg
 }

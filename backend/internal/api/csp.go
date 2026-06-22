@@ -29,11 +29,12 @@ func NonceFromContext(ctx context.Context) string {
 }
 
 // generateNonce создаёт криптографически безопасный nonce (16 байт, base64).
+// Fail Secure: при ошибке crypto/rand паникуем (P2 из compliance framework).
 func generateNonce() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// fallback: panic недопустим, возвращаем пустую строку
-		return ""
+		// Fail Secure: crypto/rand failure — критическая ошибка
+		panic("crypto/rand.Read failed: " + err.Error())
 	}
 	return base64.StdEncoding.EncodeToString(b)
 }

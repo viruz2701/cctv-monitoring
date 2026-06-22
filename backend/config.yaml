@@ -56,6 +56,11 @@ ftp:
 hikvision:
   enabled: false
 
+# Audit log HMAC signing key (ISO 27001 A.12.4.2, СТБ 34.101.30)
+# ВНИМАНИЕ: в production mode ключ ОБЯЗАТЕЛЕН (32+ байта)
+# Задаётся через GB_AUDIT_HMAC_KEY (env var) или здесь.
+# audit_hmac_key: "your-32-byte-minimum-hmac-key-here"
+
 # SNMP trap receiver
 snmp:
   enabled: true

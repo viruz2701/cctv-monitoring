@@ -94,8 +94,19 @@ func (s *Server) createMaintenanceSchedule(w http.ResponseWriter, r *http.Reques
 
 	nextDue, err := parseFutureDate(raw.NextDue, "next_due")
 	if err != nil {
-		respondError(w, r, NewBadRequestError(err.Error()))
-		return
+		// Если дата в прошлом — не ошибка, но warning (ISO 27001 A.14.2.5)
+		if parsed, pErr := parseValidatedDate(raw.NextDue, "next_due"); pErr == nil && parsed.Before(time.Now().UTC()) {
+			s.logger.Warn("maintenance schedule next_due is in the past",
+				"next_due", raw.NextDue,
+				"device_id", raw.DeviceID,
+				"schedule_type", raw.ScheduleType,
+			)
+			// Разрешено, но с предупреждением
+			nextDue = parsed
+		} else {
+			respondError(w, r, NewBadRequestError(err.Error()))
+			return
+		}
 	}
 
 	schedule := models.MaintenanceSchedule{
@@ -1001,6 +1012,8 @@ func parseFutureDate(value, field string) (time.Time, error) {
 	return parsed, nil
 }
 
+// parseValidatedDate парсит дату и проверяет диапазон year >= 2020 && year <= 2035.
+// Соответствует: OWASP ASVS V5.1.1 (Input validation), ISO 27001 A.14.2.5, СТБ 34.101.27 п. 6.2
 func parseValidatedDate(value, field string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, fmt.Errorf("%s is required", field)
@@ -1019,6 +1032,11 @@ func parseValidatedDate(value, field string) (time.Time, error) {
 		if parsed, err := time.Parse(format, value); err == nil {
 			if parsed.IsZero() {
 				return time.Time{}, fmt.Errorf("%s must be a valid date", field)
+			}
+			// Валидация диапазона года (OWASP ASVS V5.1.1)
+			year := parsed.Year()
+			if year < 2020 || year > 2035 {
+				return time.Time{}, fmt.Errorf("%s year %d is out of range (must be 2020-2035)", field, year)
 			}
 			return parsed.UTC(), nil
 		}

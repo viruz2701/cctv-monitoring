@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 function cspPlugin(): Plugin {
+  // Production CSP — без 'unsafe-inline' в script-src (OWASP ASVS V5.3.3)
+  // strict-dynamic отключает fallback к 'self' в старых браузерах
+  // Для SSR/SPA nonce будет вставляться сервером Go
   const prodCSP = [
     "default-src 'self'",
     "script-src 'self' 'strict-dynamic' blob:",
@@ -11,8 +14,13 @@ function cspPlugin(): Plugin {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
     "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
   ].join('; ')
 
+  // Dev CSP — нужен 'unsafe-inline' для HMR и 'wasm-unsafe-eval' для Vite
+  // Это приемлемо только для разработки
   const devCSP = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
@@ -21,6 +29,9 @@ function cspPlugin(): Plugin {
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
     "connect-src 'self' http://localhost:8080 ws: wss:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
   ].join('; ')
 
   return {

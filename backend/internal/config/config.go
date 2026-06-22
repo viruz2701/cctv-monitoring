@@ -175,6 +175,37 @@ type SNMPConfig struct {
 	ContextName     string `mapstructure:"contextName"`
 }
 
+// ValidateAuditHMACKey проверяет audit_hmac_key в зависимости от режима.
+// Соответствует: ISO 27001 A.12.4.2, СТБ 34.101.30, СТБ 34.101.27 п. 7.2
+func ValidateAuditHMACKey(key string, debug bool, logger interface {
+	Error(string, ...interface{})
+	Warn(string, ...interface{})
+}) {
+	const minKeyLength = 32 // 256 бит (СТБ 34.101.30)
+
+	if debug {
+		// Development mode: warn + dev-default
+		if key == "" {
+			logger.Warn("audit_hmac_key not set in development mode, using dev-default (INSECURE)")
+		} else if len(key) < minKeyLength {
+			logger.Warn("audit_hmac_key too short in development mode", "got_bytes", len(key), "min_bytes", minKeyLength)
+		}
+		return
+	}
+
+	// Production mode: log.Fatal если ключ отсутствует или слишком короткий
+	if key == "" {
+		logger.Error("FATAL: audit_hmac_key is required in production mode (ISO 27001 A.12.4.2)")
+		fmt.Fprintf(os.Stderr, "FATAL: audit_hmac_key is required in production mode\n")
+		os.Exit(1)
+	}
+	if len(key) < minKeyLength {
+		logger.Error("FATAL: audit_hmac_key too short", "got_bytes", len(key), "min_bytes", minKeyLength)
+		fmt.Fprintf(os.Stderr, "FATAL: audit_hmac_key must be at least %d bytes (got %d)\n", minKeyLength, len(key))
+		os.Exit(1)
+	}
+}
+
 func Load() *Config {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
