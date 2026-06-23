@@ -133,3 +133,94 @@ func TestCheckDiskWritable(t *testing.T) {
 		t.Logf("expected possible error for non-existent dir: %v", err)
 	}
 }
+
+func TestHandleStartup_NoDB(t *testing.T) {
+	s := &Server{}
+	r := chi.NewRouter()
+	r.Get("/health/startup", s.handleStartup)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/startup", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503 without DB, got %d", w.Code)
+	}
+
+	var resp healthResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "not_ready" {
+		t.Errorf("expected status 'not_ready', got '%s'", resp.Status)
+	}
+}
+
+func TestHandleDBHealth_NoDB(t *testing.T) {
+	s := &Server{}
+	r := chi.NewRouter()
+	r.Get("/health/db", s.handleDBHealth)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/db", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503 without DB, got %d", w.Code)
+	}
+
+	var resp healthResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Status != "unavailable" {
+		t.Errorf("expected status 'unavailable', got '%s'", resp.Status)
+	}
+}
+
+func TestHealthResponse_WithPoolStats(t *testing.T) {
+	// Verify the response structure handles pool_stats correctly
+	response := healthResponse{
+		Status:    "ok",
+		Timestamp: time.Now().UTC(),
+		PoolStats: &poolStats{
+			MaxConns:        25,
+			AcquiredConns:   3,
+			IdleConns:       7,
+			TotalConns:      10,
+			ConstructingConns: 0,
+		},
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	stats, ok := decoded["pool_stats"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected pool_stats in response")
+	}
+	if stats["max_conns"] != float64(25) {
+		t.Errorf("expected max_conns=25, got %v", stats["max_conns"])
+	}
+}
+
+func TestHealthEndpointNotFound(t *testing.T) {
+	s := &Server{}
+	r := chi.NewRouter()
+	r.Get("/health/live", s.handleLiveness)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/nonexistent", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}

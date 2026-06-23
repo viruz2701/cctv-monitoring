@@ -5,6 +5,7 @@ import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, Table, Badge, Modal, Input } from '../components/ui';
 import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
 import FullCalendar from '@fullcalendar/react';
+import type { DatesSetArg } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventClickArg } from '@fullcalendar/core';
@@ -20,7 +21,7 @@ const PRIORITY_COLORS: Record<string, { bg: string; border: string }> = {
 
 export const MaintenanceSchedules: React.FC = () => {
   const { t } = useTranslation();
-  const { schedules, loading, completeSchedule, deleteSchedule } = useMaintenance();
+  const { schedules, loading, completeSchedule, deleteSchedule, updateSchedule } = useMaintenance();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -210,21 +211,32 @@ export const MaintenanceSchedules: React.FC = () => {
               <div className="flex items-center justify-center h-96 text-slate-400">{t('no_events')}</div>
             ) : (
               <FullCalendar
-                plugins={[dayGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                events={calendarEvents}
-                eventClick={handleEventClick}
-                height="auto"
-                headerToolbar={{
-                  left: 'prev,next today',
-                  center: 'title',
-                  right: 'dayGridMonth,dayGridWeek',
-                }}
-                buttonText={{
-                  today: t('today'),
-                  month: t('month'),
-                  week: t('week'),
-                }}
+                  plugins={[dayGridPlugin, interactionPlugin]}
+                  initialView="dayGridMonth"
+                  events={calendarEvents}
+                  eventClick={handleEventClick}
+                  editable={true}
+                  eventDrop={async (info) => {
+                      const schedule = info.event.extendedProps.schedule as MaintenanceSchedule;
+                      const newDate = info.event.startStr;
+                      try {
+                          await updateSchedule(schedule.id, { next_due: newDate });
+                          info.el.style.opacity = '1';
+                      } catch {
+                          info.revert();
+                      }
+                  }}
+                  height="auto"
+                  headerToolbar={{
+                      left: 'prev,next today',
+                      center: 'title',
+                      right: 'dayGridMonth,dayGridWeek',
+                  }}
+                  buttonText={{
+                      today: t('today'),
+                      month: t('month'),
+                      week: t('week'),
+                  }}
               />
             )}
           </div>

@@ -1,19 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpareParts } from '../context/SparePartsContext';
-import { Button, PartCard, Modal, Input } from '../components/ui';
-import { Plus, Search } from 'lucide-react';
+import { Button, PartCard, Modal, Input, Badge } from '../components/ui';
+import { Plus, Search, AlertTriangle, RefreshCw, ShoppingCart } from 'lucide-react';
 
 export const SpareParts: React.FC = () => {
   const { t } = useTranslation();
   const { spareParts, loading, createSparePart } = useSpareParts();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
   const [search, setSearch] = useState('');
 
   const filtered = spareParts.filter((p) => {
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.sku.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  // Stock alerts — parts below minimum stock
+  const lowStockParts = useMemo(() => spareParts.filter(p => p.stock <= p.min_stock), [spareParts]);
+
+  // Auto-reorder suggestions
+  const autoReorderSuggestions = useMemo(() => {
+    return lowStockParts.map(p => ({
+      ...p,
+      suggested_order: Math.max(p.min_stock * 2 - p.stock, p.min_stock),
+    })).filter(p => p.suggested_order > 0);
+  }, [lowStockParts]);
 
   const mapToPartCard = (p: typeof spareParts[0]) => ({
     id: p.id,
@@ -31,7 +43,18 @@ export const SpareParts: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">{t('spare_parts')}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">{t('spare_parts')}</h1>
+          {lowStockParts.length > 0 && (
+            <button
+              onClick={() => setShowAlertsModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-amber-700 dark:text-amber-400 text-sm font-medium hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              {lowStockParts.length} {t('low_stock_alerts')}
+            </button>
+          )}
+        </div>
         <Button onClick={() => setShowCreateModal(true)} icon={<Plus size={20} />}>
           {t('add_part')}
         </Button>
@@ -58,9 +81,22 @@ export const SpareParts: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((part) => (
-            <PartCard key={part.id} part={mapToPartCard(part)} />
-          ))}
+          {filtered.map((part) => {
+            const isLowStock = part.stock <= part.min_stock;
+            return (
+              <div key={part.id} className="relative">
+                {isLowStock && (
+                  <div className="absolute -top-2 -right-2 z-10">
+                    <span className="flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full shadow-sm">
+                      <AlertTriangle className="w-3 h-3" />
+                      Low
+                    </span>
+                  </div>
+                )}
+                <PartCard key={part.id} part={mapToPartCard(part)} />
+              </div>
+            );
+          })}
           {filtered.length === 0 && (
             <div className="col-span-full text-center py-12 text-slate-500 dark:text-slate-400">
               {search ? 'No parts match your search' : t('no_parts')}
@@ -68,6 +104,69 @@ export const SpareParts: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Stock Alerts Modal */}
+      <Modal isOpen={showAlertsModal} onClose={() => setShowAlertsModal(false)} title={t('stock_alerts')} size="lg">
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="w-5 h-5" />
+            <span className="font-medium">
+              {lowStockParts.length} {t('parts_below_minimum')}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {lowStockParts.map((part) => (
+              <div
+                key={part.id}
+                className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-slate-900 dark:text-white">{part.name}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">SKU: {part.sku}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-sm">
+                      {t('stock')}: <span className="font-mono font-bold text-red-600 dark:text-red-400">{part.stock}</span>
+                      {' / '}
+                      <span className="font-mono text-slate-500">{part.min_stock} min</span>
+                    </span>
+                    {part.supplier && (
+                      <span className="text-xs text-slate-400">{t('supplier')}: {part.supplier}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Auto-reorder suggestion */}
+                <div className="text-right ml-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{t('reorder')}</p>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="warning">
+                      <ShoppingCart className="w-3 h-3 inline mr-1" />
+                      +{Math.max(part.min_stock * 2 - part.stock, part.min_stock)}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {autoReorderSuggestions.length > 0 && (
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-3">
+                <RefreshCw className="w-4 h-4" />
+                <span className="font-medium text-sm">{t('auto_reorder_suggestions')}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {autoReorderSuggestions.map((part) => (
+                  <span key={part.id} className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm border border-emerald-200 dark:border-emerald-800">
+                    {part.name} <strong>+{part.suggested_order}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title={t('add_part')}>
         <CreatePartForm onClose={() => setShowCreateModal(false)} />

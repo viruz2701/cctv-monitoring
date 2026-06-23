@@ -76,34 +76,6 @@ func (db *DB) SaveDevice(dev *models.Device) error {
 	return err
 }
 
-func (db *DB) GetDeviceByID(deviceID string) (*models.Device, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var dev models.Device
-	err := db.Pool.QueryRow(ctx, `
-		SELECT device_id, owner_id, name, location, vendor_type, status,
-			   last_seen, registered_at, heartbeat_interval, user_agent,
-			   connection_type, p2p_brand, p2p_serial, cloud_status,
-			   gb28181_device_id, gb28181_parent_id, gb28181_channel_count,
-			   COALESCE(asset_class, 'internal')
-		FROM devices WHERE device_id = $1
-	`, deviceID).Scan(
-		&dev.DeviceID, &dev.OwnerID, &dev.Name, &dev.Location, &dev.VendorType, &dev.Status,
-		&dev.LastSeen, &dev.RegisteredAt, &dev.HeartbeatInterval, &dev.UserAgent,
-		nil, &dev.P2PBrand, &dev.P2PSerial, &dev.CloudStatus,
-		nil, nil, nil,
-		&dev.AssetClass,
-	)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("device %q not found", deviceID)
-		}
-		return nil, err
-	}
-	return &dev, nil
-}
-
 func (db *DB) GetDevicesByGB28181Parent(parentID string) ([]models.Device, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

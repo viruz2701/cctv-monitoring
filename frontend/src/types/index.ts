@@ -330,6 +330,41 @@ export interface DashboardLayoutConfig {
     showRecentAlerts: boolean;
     showLatestTickets: boolean;
     showQuickActions: boolean;
+    // Grid layout positions for react-grid-layout
+    gridLayouts?: Record<string, { x: number; y: number; w: number; h: number; minW?: number; minH?: number }>;
+    // Extended stat cards visibility
+    showSparklines?: boolean;
+    showDeviceHealthChart?: boolean;
+    showAlertTrendChart?: boolean;
+    showTicketTrendChart?: boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Maintenance Insights Types
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface MTTRMetrics {
+    avg_minutes: number;
+    by_device: Record<string, number>;
+    by_type: Record<string, number>;
+    trend_7d: { date: string; avg_minutes: number }[];
+    trend_30d: { date: string; avg_minutes: number }[];
+}
+
+export interface MTBFMetrics {
+    avg_hours: number;
+    by_device: Record<string, number>;
+    trend_7d: { date: string; avg_hours: number }[];
+    trend_30d: { date: string; avg_hours: number }[];
+}
+
+export interface InventoryAlert {
+    part_id: string;
+    part_name: string;
+    current_stock: number;
+    min_stock: number;
+    reorder_qty: number;
+    supplier: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

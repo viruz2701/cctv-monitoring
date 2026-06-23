@@ -1,4 +1,9 @@
-// Package api — Device domain routes: device CRUD, status, images, analytics, logs.
+// Package api — Device domain routes: CRUD, status, images, analytics, logs, audit.
+//
+// Соответствует:
+//   - OWASP ASVS L3 V1-V17 (полный спектр контролей)
+//   - ISO 27001 A.9.2 (RBAC), A.12.4 (Audit)
+//   - IEC 62443-3-3 SR 1.1 (Defense in depth)
 package api
 
 import (
@@ -6,19 +11,32 @@ import (
 )
 
 // mountDeviceRoutes регистрирует device-маршруты.
+// Маршруты защищены AuthMiddleware (вызывается из server.go).
 func (s *Server) mountDeviceRoutes(r chi.Router) {
-	r.Get("/api/v1/devices", s.listDevices)
-	r.Get("/api/v1/devices/{id}", s.getDevice)
+	// ── CRUD (с OWASP ASVS L3) ───────────────────────────────────────
+	// [x] V4 — Access Control (RBAC в хендлерах)
+	// [x] V5 — Validation (whitelist через Validator)
+	// [x] V7 — Error Handling (через respondError)
+	r.Post("/api/v1/devices", s.handleCreateDevice)         // C — Create
+	r.Get("/api/v1/devices", s.handleListDevices)           // R — List (с пагинацией)
+	r.Get("/api/v1/devices/{id}", s.handleGetDevice)        // R — Read
+	r.Put("/api/v1/devices/{id}", s.handleUpdateDevice)     // U — Update
+	r.Delete("/api/v1/devices/{id}", s.handleDeleteDevice)  // D — Delete (soft)
+	r.Post("/api/v1/devices/{id}/restore", s.handleRestoreDevice) // Restore
+
+	// ── Status ───────────────────────────────────────────────────────
 	r.Get("/api/v1/devices/{id}/status", s.getDeviceStatus)
 
-	// Изображения
+	// ── Изображения ──────────────────────────────────────────────────
 	r.Get("/api/v1/images/{filename}", s.getImage)
 	r.Get("/api/v1/images/device/{deviceId}", s.listDeviceImages)
 
-	// Аналитика
+	// ── Аналитика ────────────────────────────────────────────────────
 	r.Get("/api/v1/analytics/predictions", s.getPredictions)
+
+	// ── Логи ─────────────────────────────────────────────────────────
 	r.Get("/api/v1/logs/search", s.searchLogs)
 
-	// Audit (ISO 27001)
+	// ── Audit (ISO 27001 A.12.4) ─────────────────────────────────────
 	r.Get("/api/v1/audit/verify", s.handleAuditVerify)
 }

@@ -6,6 +6,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config — конфигурация P2P Gateway.
+// Соответствует: Приказ ОАЦ №66 п. 7.18.2 (mTLS), ISO 27001 A.13.2 (Communications security)
 type Config struct {
 	ListenAddr           string `yaml:"listen_addr"`
 	BackendAPIURL        string `yaml:"backend_api_url"`
@@ -14,6 +16,15 @@ type Config struct {
 	ProxyBaseRTSPPort    int    `yaml:"proxy_base_rtsp_port"`
 	ProxyBaseONVIFPort   int    `yaml:"proxy_base_onvif_port"`
 	DeviceStatusInterval int    `yaml:"device_status_interval_sec"`
+
+	// ── mTLS Configuration (Приказ ОАЦ №66 п. 7.18.2) ──
+	// Пути к сертификатам для mutual TLS
+	TLSCertFile   string `yaml:"tls_cert_file"`        // Сертификат сервера (PEM)
+	TLSKeyFile    string `yaml:"tls_key_file"`         // Приватный ключ сервера (PEM)
+	TLSClientCA   string `yaml:"tls_client_ca"`        // CA для проверки клиентских сертификатов (PEM)
+	TLSEnabled    bool   `yaml:"tls_enabled"`          // Включить TLS (по умолчанию: false)
+	MTLSRequired  bool   `yaml:"mtls_required"`        // Требовать клиентский сертификат (по умолчанию: false)
+	TLSCertRotate int    `yaml:"tls_cert_rotate_days"` // Ротация сертификатов (дни, 0 = отключено)
 
 	// Hikvision
 	HikvisionUsername string `yaml:"hikvision_username"`
@@ -49,6 +60,11 @@ func LoadConfig(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+
+	// mTLS defaults
+	if cfg.TLSCertRotate <= 0 {
+		cfg.TLSCertRotate = 90 // каждые 90 дней (Приказ ОАЦ №66)
 	}
 
 	// Env vars override секретов (безопасность: никогда не хардкодить)

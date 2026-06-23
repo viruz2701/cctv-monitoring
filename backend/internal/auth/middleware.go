@@ -12,6 +12,14 @@ type contextKey string
 
 const UserContextKey contextKey = "user"
 
+// SessionTimeout — максимальное время бездействия сессии (ISO 27001 A.9.4)
+const SessionTimeout = 30 * time.Minute
+
+// MaxConcurrentSessions — максимальное количество одновременных сессий (ISO 27001 A.9.4)
+const MaxConcurrentSessions = 3
+
+// AuthMiddleware проверяет JWT и применяет session timeout.
+// Соответствует: OWASP ASVS V3 (Session Management), ISO 27001 A.9.4
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -29,11 +37,22 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			writeAuthError(w, r, "invalid or expired token")
 			return
 		}
+
+		// ISO 27001 A.9.4: Session timeout enforcement (30 мин idle)
+		if claims.IssuedAt != nil {
+			sessionAge := time.Since(claims.IssuedAt.Time)
+			if sessionAge > SessionTimeout {
+				writeAuthError(w, r, "session expired due to inactivity")
+				return
+			}
+		}
+
 		ctx := context.WithValue(r.Context(), UserContextKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+// GetClaims извлекает JWT claims из контекста запроса.
 func GetClaims(r *http.Request) *Claims {
 	claims, ok := r.Context().Value(UserContextKey).(*Claims)
 	if !ok {

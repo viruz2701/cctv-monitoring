@@ -18,6 +18,7 @@ import (
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/cmms"
+	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
@@ -67,6 +68,9 @@ type Server struct {
 
 	// NATS connection for health checks
 	natsConn *nats.Conn
+
+	// Device service with audit trail (ISO 27001 A.12.4)
+	deviceService *service.DeviceService
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -150,6 +154,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		p2pAPIKey:     cfg.P2PAPIKey,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},
 	}
+	// ── Device Service ────────────────────────────────────────────────
+	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
+
 	go s.wsHub.Run()
 
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,6 +14,9 @@ import { workOrdersApi, WorkOrder, PartUsage } from '../services/workOrdersApi';
 import { sparePartsApi, SparePart } from '../services/sparePartsApi';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { PhotoAnnotation } from '../components/work-orders/PhotoAnnotation';
+import { BeforeAfterSlider } from '../components/work-orders/BeforeAfterSlider';
 
 const priorityVariant: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
   critical: 'danger',
@@ -332,7 +335,7 @@ export const WorkOrderDetail: React.FC = () => {
               </CardBody>
             </Card>
 
-            {/* Checklist */}
+            {/* Checklist — Drag-and-Drop (@hello-pangea/dnd) */}
             {workOrder.checklist?.length > 0 && (
               <Card>
                 <CardHeader className="flex items-center gap-2">
@@ -340,25 +343,66 @@ export const WorkOrderDetail: React.FC = () => {
                   <span>Чеклист</span>
                 </CardHeader>
                 <CardBody>
-                  <div className="space-y-2">
-                    {workOrder.checklist.map((item, i) => (
-                      <div
-                        key={i}
-                        className={`flex items-center gap-3 p-2 rounded-lg text-sm ${
-                          item.completed
-                            ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        {item.completed ? (
-                          <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                        ) : (
-                          <div className="w-4 h-4 rounded-full border-2 border-slate-300 dark:border-slate-600 flex-shrink-0" />
-                        )}
-                        {item.task}
-                      </div>
-                    ))}
-                  </div>
+                  <DragDropContext
+                    onDragEnd={(result: DropResult) => {
+                      if (!result.destination || !workOrder) return;
+                      const items = Array.from(workOrder.checklist);
+                      const [reordered] = items.splice(result.source.index, 1);
+                      items.splice(result.destination.index, 0, reordered);
+                      setWorkOrder({ ...workOrder, checklist: items });
+                    }}
+                  >
+                    <Droppable droppableId="checklist">
+                      {(provided) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="space-y-2"
+                        >
+                          {workOrder.checklist.map((item, i) => (
+                            <Draggable key={`checklist-${i}`} draggableId={`checklist-${i}`} index={i}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={`flex items-center gap-3 p-3 rounded-lg text-sm transition-all ${
+                                    snapshot.isDragging
+                                      ? 'bg-blue-50 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-400'
+                                      : item.completed
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                                        : 'bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300'
+                                  } ${
+                                    snapshot.isDragging ? 'rotate-2' : ''
+                                  }`}
+                                  onClick={() => {
+                                    if (workOrder.status === 'in_progress' || workOrder.status === 'open') {
+                                      const updated = { ...workOrder };
+                                      updated.checklist = updated.checklist.map((ci, idx) =>
+                                        idx === i ? { ...ci, completed: !ci.completed } : ci
+                                      );
+                                      setWorkOrder(updated);
+                                    }
+                                  }}
+                                >
+                                  {item.completed ? (
+                                    <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center">
+                                      <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                                    </div>
+                                  )}
+                                  <span className="flex-1">{item.task}</span>
+                                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">☰</span>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 </CardBody>
               </Card>
             )}
@@ -391,7 +435,7 @@ export const WorkOrderDetail: React.FC = () => {
               </CardBody>
             </Card>
 
-            {/* Photos */}
+            {/* Photos with Annotation & Before/After */}
             {workOrder.photos?.length > 0 && (
               <Card>
                 <CardHeader className="flex items-center gap-2">
@@ -399,22 +443,51 @@ export const WorkOrderDetail: React.FC = () => {
                   <span>Фотографии ({workOrder.photos.length})</span>
                 </CardHeader>
                 <CardBody>
-                  <div className="grid grid-cols-2 gap-2">
-                    {workOrder.photos.map((photo, i) => (
-                      <a
-                        key={i}
-                        href={photo}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-blue-500 transition-all"
-                      >
-                        <img
-                          src={photo}
-                          alt={`Фото ${i + 1}`}
-                          className="w-full h-full object-cover"
+                  <div className="space-y-4">
+                    {/* Photo Annotation for first photo */}
+                    <div>
+                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                        Аннотация на фото
+                      </p>
+                      <PhotoAnnotation
+                        imageUrl={workOrder.photos[0]}
+                        readOnly={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                      />
+                    </div>
+
+                    {/* Before/After slider if 2+ photos */}
+                    {workOrder.photos.length >= 2 && (
+                      <div>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                          Сравнение «До/После»
+                        </p>
+                        <BeforeAfterSlider
+                          beforeImage={workOrder.photos[0]}
+                          afterImage={workOrder.photos[workOrder.photos.length - 1]}
+                          beforeLabel="До"
+                          afterLabel="После"
                         />
-                      </a>
-                    ))}
+                      </div>
+                    )}
+
+                    {/* All photos grid */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {workOrder.photos.map((photo, i) => (
+                        <a
+                          key={i}
+                          href={photo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 hover:ring-2 hover:ring-blue-500 transition-all"
+                        >
+                          <img
+                            src={photo}
+                            alt={`Фото ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </CardBody>
               </Card>
