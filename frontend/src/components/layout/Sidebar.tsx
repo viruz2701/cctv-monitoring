@@ -15,7 +15,6 @@ import {
     Shield,
     X,
     TrendingUp,
-    Key,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,7 +46,6 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
         // Admin Only
         { path: '/users', label: t('users'), icon: Users, roles: ['admin'] },
-        { path: '/api-keys', label: t('api_keys'), icon: Key, roles: ['admin'] },
         { path: '/settings', label: t('settings'), icon: Settings, roles: ['admin'] },
         { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
         { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },

@@ -19,7 +19,7 @@ import { AtlasCMSPanel } from './settings/AtlasCMSPanel';
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, updateSettings, servicesSettings, servicesLoading, updateServicesSettings, saveServicesSettings } = useSettings();
+  const { settings, updateSettings, servicesSettings, servicesLoading, servicesStatus, servicesStatusLoading, updateServicesSettings, saveServicesSettings, refreshServicesStatus } = useSettings();
   const toast = useToast();
 
   const [formData, setFormData] = useState(settings);
@@ -145,9 +145,12 @@ export function Settings() {
             servicesSettings={servicesSettings}
             servicesLoading={servicesLoading}
             servicesSaving={servicesSaving}
+            servicesStatus={servicesStatus}
+            servicesStatusLoading={servicesStatusLoading}
             onGB28181Change={handleGB28181Change}
             onServiceChange={handleServiceChange}
             onSave={handleSaveServices}
+            onRefreshStatus={refreshServicesStatus}
             validateServerID={validateServerID}
             parseGB28181ID={parseGB28181ID}
           />

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -31,6 +32,39 @@ func RunMigrations(dsn string, logger *slog.Logger) error {
 	}
 	defer m.Close()
 
+	// === Dirty state recovery ===
+	// Если FORCE_MIGRATION_VERSION установлен — сбрасываем dirty state
+	// перед запуском миграций. Используется для восстановления после
+	// неудачной миграции (например, "Dirty database version 5").
+	// Установите FORCE_MIGRATION_VERSION=<последняя_чистая_версия>
+	if forceVerStr := os.Getenv("FORCE_MIGRATION_VERSION"); forceVerStr != "" {
+		forceVer, err := strconv.Atoi(forceVerStr)
+		if err != nil {
+			return fmt.Errorf("invalid FORCE_MIGRATION_VERSION: must be integer, got %q", forceVerStr)
+		}
+		logger.Warn("forcing migration version (dirty state recovery)",
+			"force_version", forceVer,
+			"source", sourceURL,
+		)
+		if err := m.Force(forceVer); err != nil {
+			return fmt.Errorf("failed to force migration version %d: %w", forceVer, err)
+		}
+		logger.Info("migration version forced", "version", forceVer)
+	}
+
+	// === Check for dirty state (preventive diagnostics) ===
+	currentVer, dirty, verErr := m.Version()
+	if verErr != nil && verErr != migrate.ErrNilVersion {
+		logger.Warn("failed to check migration version", "error", verErr)
+	} else if dirty {
+		logger.Error("database is in dirty state",
+			"version", currentVer,
+			"action", "set FORCE_MIGRATION_VERSION=<last_clean_version> to recover",
+		)
+		return fmt.Errorf("dirty database version %d. Set FORCE_MIGRATION_VERSION=<last_clean_version> and restart", currentVer)
+	}
+
+	// === Run pending migrations ===
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migration failed: %w", err)
 	}

@@ -18,7 +18,6 @@ import { SparePartsProvider } from './context/SparePartsContext';
 import { ToastProvider } from './components/ui';
 import { Analytics } from './pages/Analytics';
 import { Logs } from './pages/Logs';
-import { APIKeys } from './pages/APIKeys';
 import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
 import { WorkOrders } from './pages/WorkOrders';
 import { SpareParts } from './pages/SpareParts';
@@ -97,7 +96,7 @@ function App() {
                               {/* Admin Only Routes */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
                                 <Route path="/users" element={<Users />} />
-                                <Route path="/api-keys" element={<APIKeys />} />
+                                <Route path="/api-keys" element={<Navigate to="/settings" replace />} />
                               </Route>
 
                               {/* Admin Only Routes - Settings */}

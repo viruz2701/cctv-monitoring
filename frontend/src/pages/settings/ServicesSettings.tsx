@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Save, Radio, Server, Network, Wifi, Shield, Lock, Globe, Database, Monitor,
-  Loader2, CheckCircle2, AlertCircle,
+  Loader2, CheckCircle2, AlertCircle, AudioWaveform, Bug, Activity, RefreshCw,
 } from 'lucide-react';
-import { Card, CardHeader, CardBody, Button, Input, Select } from '../../components/ui';
+import { Card, CardHeader, CardBody, Button, Input, Select, Tabs } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import type { ServicesSettings as ServicesSettingsType, GB28181Settings } from '../../types';
 
@@ -11,12 +11,32 @@ interface Props {
   servicesSettings: ServicesSettingsType | null;
   servicesLoading: boolean;
   servicesSaving: boolean;
+  servicesStatus: Record<string, { status: string; port: number; message?: string }>;
+  servicesStatusLoading: boolean;
   onGB28181Change: (field: string, value: any) => void;
   onServiceChange: (serviceKey: string, field: string, value: any) => void;
   onSave: () => void;
+  onRefreshStatus: () => void;
   validateServerID: (id: string) => boolean;
   parseGB28181ID: (id: string) => { type: string; region: string; industry: string; network: string; serial: string } | null;
 }
+
+// ── StatusDot — цветной индикатор состояния сервиса ──────────────
+const StatusDot: React.FC<{ status?: string; loading?: boolean }> = ({ status, loading }) => {
+  if (loading) {
+    return <Loader2 className="w-3 h-3 animate-spin text-slate-400" />;
+  }
+  switch (status) {
+    case 'running':
+      return <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-400/50" title="Running" />;
+    case 'stopped':
+      return <span className="w-3 h-3 rounded-full bg-red-500 inline-block shadow-sm shadow-red-400/50" title="Stopped" />;
+    case 'error':
+      return <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-400/50" title="Error" />;
+    default:
+      return <span className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600 inline-block" title="Disabled" />;
+  }
+};
 
 const ServiceToggle: React.FC<{
   serviceKey: string;
@@ -25,10 +45,15 @@ const ServiceToggle: React.FC<{
   title: string;
   description: string;
   servicesSettings: ServicesSettingsType;
+  servicesStatus: Record<string, { status: string; port: number; message?: string }>;
+  servicesStatusLoading: boolean;
   onServiceChange: (serviceKey: string, field: string, value: any) => void;
-}> = ({ serviceKey, icon: Icon, iconColor, title, description, servicesSettings, onServiceChange }) => {
+}> = ({ serviceKey, icon: Icon, iconColor, title, description, servicesSettings, servicesStatus, servicesStatusLoading, onServiceChange }) => {
   const service = servicesSettings[serviceKey as keyof ServicesSettingsType] as any;
   if (!service) return null;
+
+  const svcName = serviceKey.replace('services_', '');
+  const st = servicesStatus[svcName];
 
   return (
     <div className="flex items-center gap-3">
@@ -36,8 +61,19 @@ const ServiceToggle: React.FC<{
         <Icon className={`w-5 h-5 text-${iconColor}-600 dark:text-${iconColor}-400`} />
       </div>
       <div className="flex-1">
-        <h4 className="font-medium text-slate-900 dark:text-white">{title}</h4>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-slate-900 dark:text-white">{title}</h4>
+          <StatusDot status={st?.status} loading={servicesStatusLoading} />
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {description}
+          {st?.status === 'stopped' && st?.message && (
+            <span className="text-red-500 ml-1">({st.message})</span>
+          )}
+          {st?.status === 'running' && (
+            <span className="text-emerald-500 ml-1">:{st.port}</span>
+          )}
+        </p>
       </div>
       <label className="relative inline-flex items-center cursor-pointer">
         <input
@@ -52,30 +88,201 @@ const ServiceToggle: React.FC<{
   );
 };
 
+// ── SNMP Multi-Version Panel ──────────────────────────────────────
+const SNMPVersionPanel: React.FC<{
+  snmp: any;
+  onSNMPChange: (field: string, value: any) => void;
+  version: 'v1_config' | 'v2c_config' | 'v3_config';
+  label: string;
+}> = ({ snmp, onSNMPChange, version, label }) => {
+  const { t } = useTranslation();
+  const cfg = snmp?.[version] || {};
+  const isV3 = version === 'v3_config';
+
+  return (
+    <div className="space-y-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</h5>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={cfg.enabled}
+            onChange={(e) => onSNMPChange(`${version}.enabled`, e.target.checked)}
+          />
+          <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:ring-2 peer-focus:ring-amber-500 rounded-full peer peer-checked:bg-amber-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+        </label>
+      </div>
+
+      {cfg.enabled && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Input
+            label="Port"
+            type="number"
+            value={cfg.port}
+            onChange={(e) => onSNMPChange(`${version}.port`, parseInt(e.target.value) || 162)}
+          />
+          {!isV3 ? (
+            <Input
+              label="Community String"
+              type="password"
+              value={cfg.community}
+              onChange={(e) => onSNMPChange(`${version}.community`, e.target.value)}
+            />
+          ) : (
+            <>
+              <Input
+                label="User (Security Name)"
+                value={cfg.user}
+                onChange={(e) => onSNMPChange(`${version}.user`, e.target.value)}
+              />
+              <Select
+                label="Auth Protocol"
+                options={[
+                  { value: 'MD5', label: 'MD5' },
+                  { value: 'SHA', label: 'SHA' },
+                  { value: 'SHA256', label: 'SHA-256' },
+                ]}
+                value={cfg.auth_protocol || 'SHA'}
+                onChange={(e) => onSNMPChange(`${version}.auth_protocol`, e.target.value)}
+              />
+              <Input
+                label="Auth Password"
+                type="password"
+                value={cfg.auth_password}
+                onChange={(e) => onSNMPChange(`${version}.auth_password`, e.target.value)}
+              />
+              <Select
+                label="Privacy Protocol"
+                options={[
+                  { value: 'DES', label: 'DES' },
+                  { value: 'AES', label: 'AES' },
+                  { value: 'AES192', label: 'AES-192' },
+                  { value: 'AES256', label: 'AES-256' },
+                ]}
+                value={cfg.priv_protocol || 'AES'}
+                onChange={(e) => onSNMPChange(`${version}.priv_protocol`, e.target.value)}
+              />
+              <Input
+                label="Privacy Password"
+                type="password"
+                value={cfg.priv_password}
+                onChange={(e) => onSNMPChange(`${version}.priv_password`, e.target.value)}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── P2P Gateway per-vendor panels ─────────────────────────────────
+const P2PVendorPanel: React.FC<{
+  vendor: string;
+  title: string;
+  icon: React.FC<{ className?: string }>;
+  iconColor: string;
+  fields: { key: string; label: string; type: string; options?: { value: string; label: string }[] }[];
+  values: Record<string, any>;
+  onChange: (field: string, value: any) => void;
+}> = ({ vendor, title, icon: Icon, iconColor, fields, values, onChange }) => {
+  return (
+    <div className="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`p-1.5 bg-${iconColor}-50 dark:bg-${iconColor}-900/20 rounded`}>
+          <Icon className={`w-4 h-4 text-${iconColor}-600 dark:text-${iconColor}-400`} />
+        </div>
+        <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300">{title}</h5>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {fields.map((f) =>
+          f.type === 'select' ? (
+            <Select
+              key={f.key}
+              label={f.label}
+              options={f.options || []}
+              value={values?.[f.key] || ''}
+              onChange={(e) => onChange(`${vendor}.${f.key}`, e.target.value)}
+            />
+          ) : (
+            <Input
+              key={f.key}
+              label={f.label}
+              type={f.type === 'password' ? 'password' : 'text'}
+              value={values?.[f.key] || ''}
+              onChange={(e) =>
+                onChange(`${vendor}.${f.key}`, f.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)
+              }
+            />
+          )
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const ServicesSettings: React.FC<Props> = ({
   servicesSettings,
   servicesLoading,
   servicesSaving,
+  servicesStatus,
+  servicesStatusLoading,
   onGB28181Change,
   onServiceChange,
   onSave,
+  onRefreshStatus,
   validateServerID,
   parseGB28181ID,
 }) => {
   const { t } = useTranslation();
+  const [snmpTab, setSnmpTab] = useState('v1');
+
+  const snmpTabs = [
+    { id: 'v1', label: 'SNMP v1', icon: <Bug className="w-4 h-4" /> },
+    { id: 'v2c', label: 'SNMP v2c', icon: <Bug className="w-4 h-4" /> },
+    { id: 'v3', label: 'SNMP v3', icon: <Shield className="w-4 h-4" /> },
+  ];
+
+  // Обработчик для вложенных SNMP полей
+  const handleSNMPChange = (field: string, value: any) => {
+    // Парсим version.enabled, version.port, etc.
+    const parts = field.split('.');
+    if (parts.length === 2) {
+      const [ver, f] = parts;
+      const snmp = (servicesSettings?.services_snmp as any) || {};
+      onServiceChange('services_snmp', ver, { ...snmp[ver], [f]: value });
+    }
+  };
+
+  // Обработчик для вложенных P2P полей
+  const handleP2PChange = (field: string, value: any) => {
+    const parts = field.split('.');
+    if (parts.length === 2) {
+      const [vendor, f] = parts;
+      const p2p = servicesSettings?.services_p2p_gateway as any;
+      onServiceChange('services_p2p_gateway', vendor, { ...p2p[vendor], [f]: value });
+    }
+  };
 
   return (
     <div className="space-y-6">
       {/* GB/T 28181 SIP SERVER */}
       <Card>
-        <CardHeader className="flex items-center gap-2">
-          <Radio className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-          <div>
-            <span>{t('gb28181_settings') || 'GB/T 28181 (China National Standard)'}</span>
-            <p className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5">
-              {t('gb28181_desc') || 'SIP-based protocol for CCTV interoperability. Used by Hikvision, Dahua, Uniview NVRs.'}
-            </p>
+        <CardHeader className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Radio className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <div>
+              <span>{t('gb28181_settings') || 'GB/T 28181 (China National Standard)'}</span>
+              <p className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5">
+                {t('gb28181_desc') || 'SIP-based protocol for CCTV interoperability. Used by Hikvision, Dahua, Uniview NVRs.'}
+              </p>
+            </div>
           </div>
+          <StatusDot status={servicesStatus['gb28181']?.status} loading={servicesStatusLoading} />
         </CardHeader>
         <CardBody>
           {servicesLoading ? (
@@ -90,13 +297,21 @@ export const ServicesSettings: React.FC<Props> = ({
                   <div className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-sm">
                     <Server className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900 dark:text-white">
-                      {t('enable') || 'Enable'} GB28181 SIP Server
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      UDP/TCP Port {servicesSettings.services_gb28181.port}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <p className="font-medium text-slate-900 dark:text-white">
+                        {t('enable') || 'Enable'} GB28181 SIP Server
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        UDP/TCP Port {servicesSettings.services_gb28181.port}
+                        {servicesStatus['gb28181']?.status === 'running' && (
+                          <span className="text-emerald-500 ml-1">· Online</span>
+                        )}
+                        {servicesStatus['gb28181']?.status === 'stopped' && (
+                          <span className="text-red-500 ml-1">· Offline</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -235,11 +450,29 @@ export const ServicesSettings: React.FC<Props> = ({
 
       {/* NETWORK SERVICES & PROTOCOLS */}
       <Card>
-        <CardHeader className="flex items-center gap-2">
-          <Network className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <div>
-            <span>{t('network_services') || 'Network Services & Protocols'}</span>
-            <p className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5">Configure protocol receivers and external service connections</p>
+        <CardHeader className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Network className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div>
+              <span>{t('network_services') || 'Network Services & Protocols'}</span>
+              <p className="text-xs font-normal text-slate-500 dark:text-slate-400 mt-0.5">Configure protocol receivers and external service connections</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Status legend */}
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Running</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Stopped</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Disabled</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefreshStatus}
+              disabled={servicesStatusLoading}
+              icon={servicesStatusLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              title="Refresh service status"
+            />
           </div>
         </CardHeader>
         <CardBody>
@@ -253,12 +486,10 @@ export const ServicesSettings: React.FC<Props> = ({
               {[
                 { key: 'services_syslog', icon: Server, color: 'blue', title: 'Syslog Receiver', desc: 'UDP/TCP syslog messages from devices', fields: [{ key: 'udp_port', label: 'Syslog UDP Port', type: 'number' }, { key: 'tcp_port', label: 'Syslog TCP Port', type: 'number' }] },
                 { key: 'services_ftp', icon: Database, color: 'emerald', title: 'FTP Server', desc: 'Receive snapshots and logs via FTP', fields: [{ key: 'port', label: 'FTP Port', type: 'number' }, { key: 'root_path', label: 'Root Path', type: 'text' }, { key: 'user', label: 'Username', type: 'text' }, { key: 'password', label: 'Password', type: 'password' }] },
-                { key: 'services_snmp', icon: Shield, color: 'amber', title: 'SNMP Trap Receiver', desc: 'Receive SNMP traps from network devices', fields: [{ key: 'port', label: 'SNMP Port', type: 'number' }, { key: 'version', label: 'SNMP Version', type: 'select', options: [{ value: 'v1', label: 'SNMP v1' }, { value: 'v2c', label: 'SNMP v2c' }, { value: 'v3', label: 'SNMP v3' }] }, { key: 'community', label: 'Community String', type: 'text' }] },
                 { key: 'services_http', icon: Globe, color: 'purple', title: 'HTTP Log Receiver', desc: 'Receive logs via HTTP POST', fields: [{ key: 'port', label: 'HTTP Port', type: 'number' }] },
                 { key: 'services_dahua', icon: Monitor, color: 'cyan', title: 'Dahua Private Protocol', desc: 'Proprietary Dahua protocol for events', fields: [{ key: 'ports', label: 'Ports (comma-separated)', type: 'text' }] },
                 { key: 'services_hisilicon', icon: Monitor, color: 'indigo', title: 'Hisilicon Protocol', desc: 'Hisilicon-based devices events', fields: [{ key: 'port', label: 'Port', type: 'number' }] },
                 { key: 'services_tvt', icon: Monitor, color: 'pink', title: 'TVT Protocol', desc: 'TVT-based devices events', fields: [{ key: 'port', label: 'Port', type: 'number' }] },
-                { key: 'services_sip', icon: Globe, color: 'teal', title: 'SIP / GB28181 (Legacy)', desc: 'SIP signaling for GB28181 devices', fields: [{ key: 'port', label: 'SIP Port', type: 'number' }, { key: 'host', label: 'Host', type: 'text', placeholder: '0.0.0.0' }] },
               ].map((svc) => (
                 <div key={svc.key} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                   <ServiceToggle
@@ -268,6 +499,8 @@ export const ServicesSettings: React.FC<Props> = ({
                     title={svc.title}
                     description={svc.desc}
                     servicesSettings={servicesSettings}
+                    servicesStatus={servicesStatus}
+                    servicesStatusLoading={servicesStatusLoading}
                     onServiceChange={onServiceChange}
                   />
                   {(servicesSettings[svc.key as keyof ServicesSettingsType] as any)?.enabled && (
@@ -298,20 +531,167 @@ export const ServicesSettings: React.FC<Props> = ({
                 </div>
               ))}
 
-              {/* P2P Gateway */}
+              {/* ── SNMP Trap Receiver — Multi-Version ─────────────── */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                    <Shield className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <h4 className="font-medium text-slate-900 dark:text-white">SNMP Trap Receiver</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Receive SNMP traps from network devices. Each SNMP version (v1/v2c/v3) can run concurrently with its own port and credentials.
+                      </p>
+                    </div>
+                    <StatusDot status={servicesStatus['snmp']?.status} loading={servicesStatusLoading} />
+                  </div>
+                </div>
+
+                {servicesSettings.services_snmp && (
+                  <div className="space-y-4">
+                    <Tabs
+                      tabs={snmpTabs}
+                      activeTab={snmpTab}
+                      onChange={setSnmpTab}
+                      variant="pills"
+                      className="mb-3"
+                    >
+                      <div />
+                    </Tabs>
+
+                    {snmpTab === 'v1' && (
+                      <SNMPVersionPanel
+                        snmp={servicesSettings.services_snmp}
+                        onSNMPChange={handleSNMPChange}
+                        version="v1_config"
+                        label="SNMP v1 — для старых устройств (community string)"
+                      />
+                    )}
+                    {snmpTab === 'v2c' && (
+                      <SNMPVersionPanel
+                        snmp={servicesSettings.services_snmp}
+                        onSNMPChange={handleSNMPChange}
+                        version="v2c_config"
+                        label="SNMP v2c — для большинства современных устройств"
+                      />
+                    )}
+                    {snmpTab === 'v3' && (
+                      <SNMPVersionPanel
+                        snmp={servicesSettings.services_snmp}
+                        onSNMPChange={handleSNMPChange}
+                        version="v3_config"
+                        label="SNMP v3 — для устройств с повышенными требованиями безопасности"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── P2P Gateway — Per-Vendor ──────────────────────── */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                     <Network className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                   </div>
-                  <div>
-                    <h4 className="font-medium text-slate-900 dark:text-white">P2P Gateway</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Connection to P2P gateway service</p>
+                  <div className="flex items-center gap-2">
+                    <div>
+                      <h4 className="font-medium text-slate-900 dark:text-white">P2P Gateway</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Connection to P2P gateway service. Each vendor has its own P2P cloud API settings.
+                      </p>
+                    </div>
+                    <StatusDot status={servicesStatus['p2p_gateway']?.status} loading={servicesStatusLoading} />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <Input label="Gateway URL" value={servicesSettings.services_p2p_gateway.url} onChange={(e) => onServiceChange('services_p2p_gateway', 'url', e.target.value)} placeholder="http://localhost:8082" />
-                  <Input label="API Key" type="password" value={servicesSettings.services_p2p_gateway.api_key} onChange={(e) => onServiceChange('services_p2p_gateway', 'api_key', e.target.value)} />
+
+                {/* General P2P settings */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <Input
+                    label="Gateway URL"
+                    value={servicesSettings.services_p2p_gateway.url}
+                    onChange={(e) => onServiceChange('services_p2p_gateway', 'url', e.target.value)}
+                    placeholder="http://localhost:8082"
+                  />
+                  <Input
+                    label="Gateway API Key"
+                    type="password"
+                    value={servicesSettings.services_p2p_gateway.api_key}
+                    onChange={(e) => onServiceChange('services_p2p_gateway', 'api_key', e.target.value)}
+                  />
+                </div>
+
+                {/* Per-vendor P2P cloud API settings */}
+                <div className="space-y-3">
+                  <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <AudioWaveform className="w-4 h-4" />
+                    Vendor P2P Cloud APIs
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <P2PVendorPanel
+                      vendor="hikvision"
+                      title="Hikvision P2P Cloud"
+                      icon={Monitor}
+                      iconColor="blue"
+                      fields={[
+                        { key: 'username', label: 'Hik-Connect Username', type: 'text' },
+                        { key: 'password', label: 'Hik-Connect Password', type: 'password' },
+                      ]}
+                      values={servicesSettings.services_p2p_gateway.hikvision}
+                      onChange={handleP2PChange}
+                    />
+                    <P2PVendorPanel
+                      vendor="dahua"
+                      title="Dahua P2P Cloud"
+                      icon={Monitor}
+                      iconColor="cyan"
+                      fields={[
+                        { key: 'python_path', label: 'Python Path', type: 'text' },
+                        { key: 'script_path', label: 'DH-P2P Script Path', type: 'text' },
+                      ]}
+                      values={servicesSettings.services_p2p_gateway.dahua}
+                      onChange={handleP2PChange}
+                    />
+                    <P2PVendorPanel
+                      vendor="reolink"
+                      title="Reolink P2P Cloud"
+                      icon={Monitor}
+                      iconColor="green"
+                      fields={[
+                        { key: 'proxy_bin_path', label: 'Neolink Proxy Binary', type: 'text' },
+                      ]}
+                      values={servicesSettings.services_p2p_gateway.reolink}
+                      onChange={handleP2PChange}
+                    />
+                    <P2PVendorPanel
+                      vendor="xiongmai"
+                      title="Xiongmai (Jftech) P2P Cloud"
+                      icon={Monitor}
+                      iconColor="purple"
+                      fields={[
+                        { key: 'uuid', label: 'UUID', type: 'text' },
+                        { key: 'app_key', label: 'App Key', type: 'password' },
+                        { key: 'app_secret', label: 'App Secret', type: 'password' },
+                        { key: 'endpoint', label: 'API Endpoint', type: 'text' },
+                        { key: 'region', label: 'Region', type: 'text' },
+                        { key: 'move_card', label: 'Move Card', type: 'number' },
+                      ]}
+                      values={servicesSettings.services_p2p_gateway.xiongmai}
+                      onChange={handleP2PChange}
+                    />
+                    <P2PVendorPanel
+                      vendor="ezviz"
+                      title="EZVIZ P2P Cloud"
+                      icon={Monitor}
+                      iconColor="teal"
+                      fields={[
+                        { key: 'app_key', label: 'App Key', type: 'password' },
+                        { key: 'app_secret', label: 'App Secret', type: 'password' },
+                      ]}
+                      values={servicesSettings.services_p2p_gateway.ezviz}
+                      onChange={handleP2PChange}
+                    />
+                  </div>
                 </div>
               </div>
 

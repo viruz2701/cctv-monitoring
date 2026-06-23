@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -146,6 +147,73 @@ func getEnvDuration(key string, def time.Duration) time.Duration {
 // shutdownTimeout — максимальное время на graceful shutdown.
 const shutdownTimeout = 30 * time.Second
 
+// extractPort извлекает номер порта из ошибки вида "listen udp 0.0.0.0:515: bind: permission denied"
+func extractPort(errStr string) string {
+	parts := strings.Split(errStr, ":")
+	if len(parts) >= 2 {
+		return strings.TrimSpace(parts[len(parts)-3])
+	}
+	return "unknown"
+}
+
+// retryStart запускает сервис с экспоненциальной задержкой при ошибках порта.
+// Не блокирует startup — возвращает функцию отмены.
+// Используется для: logServer, sipHandler, protocolManager.
+func retryStart(ctx context.Context, name string, logger *slog.Logger, fn func(context.Context) error) func() {
+	stopCh := make(chan struct{})
+	go func() {
+		backoff := 1 * time.Second
+		maxBackoff := 60 * time.Second
+		attempt := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stopCh:
+				return
+			default:
+			}
+			attempt++
+			err := fn(ctx)
+			if err == nil {
+				logger.Info("Service started successfully", "service", name)
+				return
+			}
+			errStr := err.Error()
+			// Retry только на "address already in use" (порт освободится)
+			// "permission denied" (порт <1024) не решается ожиданием — не retry
+			if strings.Contains(errStr, "bind: permission denied") {
+				logger.Warn("Port requires elevated privileges, service unavailable",
+					"service", name, "port", extractPort(errStr), "error", err,
+				)
+				return
+			}
+			if !strings.Contains(errStr, "address already in use") &&
+				!strings.Contains(errStr, "cannot assign requested address") {
+				logger.Error("Service failed with non-retryable error", "service", name, "error", err)
+				return
+			}
+			logger.Warn("Port busy, will retry",
+				"service", name,
+				"attempt", attempt,
+				"backoff", backoff,
+			)
+			select {
+			case <-ctx.Done():
+				return
+			case <-stopCh:
+				return
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}()
+	return func() { close(stopCh) }
+}
+
 func main() {
 	// Загружаем .env файл перед чтением конфигурации
 	_ = godotenv.Load()
@@ -224,17 +292,19 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := logServer.Start(ctx); err != nil {
-		logger.Error("Failed to start log server", "error", err)
-		os.Exit(1)
-	}
+	// Goroutine retry: если порт 515 занят — ждём и перезапускаем
+	stopLogServer := retryStart(ctx, "syslog", logger, func(ctx context.Context) error {
+		return logServer.Start(ctx)
+	})
+	defer stopLogServer()
 
 	// --- SIP-сервер ---
 	sipHandler := sip.NewSIPHandler(stateWrapper, logger, cfg.GB28181)
-	if err := sipHandler.Start(ctx); err != nil {
-		logger.Error("Failed to start SIP server", "error", err)
-		os.Exit(1)
-	}
+	// Goroutine retry: если порт 5060 занят — ждём и перезапускаем
+	stopSIP := retryStart(ctx, "gb28181/sip", logger, func(ctx context.Context) error {
+		return sipHandler.Start(ctx)
+	})
+	defer stopSIP()
 
 	// --- Запуск дополнительных протоколов ---
 	protocolManager := protocols.NewManager(logger)
@@ -284,10 +354,13 @@ func main() {
 		logger.Info("SNMP handler registered", "port", cfg.SNMP.Port, "version", cfg.SNMP.Version)
 	}
 
-	if err := protocolManager.StartAll(ctx); err != nil {
-		logger.Error("Failed to start additional protocols", "error", err)
-		os.Exit(1)
-	}
+	// Goroutine retry для protocolManager (dahua, hisilicon, tvt, ftp, snmp)
+	// StartAll не возвращает ошибку (логирует внутри), но retry нужен на случай
+	// если порты освободятся позже
+	stopProtocols := retryStart(ctx, "protocols", logger, func(ctx context.Context) error {
+		return protocolManager.StartAll(ctx)
+	})
+	defer stopProtocols()
 
 	// --- Bi-directional ITSM Sync Engine ---
 	var syncEng *sync.SyncEngine
@@ -312,7 +385,7 @@ func main() {
 	if cfg.NATSURL != "" {
 		nc, err := nats.Connect(cfg.NATSURL)
 		if err != nil {
-			logger.Warn("NATS not available, continuing without", "error", err)
+			logger.Debug("NATS not available, continuing without", "error", err)
 		} else {
 			natsConn = nc
 			logger.Info("NATS connected", "url", cfg.NATSURL)

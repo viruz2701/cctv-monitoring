@@ -30,7 +30,7 @@ import {
     LineChart, Line, AreaChart, Area, BarChart, Bar,
     XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import type { LayoutItem } from 'react-grid-layout';
+import type { Layout } from 'react-grid-layout';
 
 const sparklineData = [
     { name: 'Mon', value: 40 }, { name: 'Tue', value: 55 },
@@ -49,7 +49,7 @@ const ticketTrendData = [
     { name: 'Sun', critical: 8, high: 14, medium: 21, low: 38 },
 ];
 
-const defaultLayout: LayoutItem[] = [
+const defaultLayout: Layout = [
     { i: 'statsRow', x: 0, y: 0, w: 12, h: 1, minH: 1 },
     { i: 'ticketStats', x: 0, y: 1, w: 12, h: 1, minH: 1 },
     { i: 'deviceHealthChart', x: 0, y: 2, w: 6, h: 2, minH: 1 },
@@ -74,7 +74,7 @@ export function Dashboard() {
     const [selectedStatus, setSelectedStatus] = React.useState('all');
 
     // Grid layout state
-    const [layout, setLayout] = React.useState<LayoutItem[]>(() => {
+    const [layout, setLayout] = React.useState<Layout>(() => {
         const saved = localStorage.getItem('dashboardGridLayout');
         if (saved) {
             try {
@@ -85,7 +85,7 @@ export function Dashboard() {
         return defaultLayout;
     });
 
-    const onLayoutChange = React.useCallback((newLayout: LayoutItem[]) => {
+    const onLayoutChange = React.useCallback((newLayout: Layout) => {
         setLayout(newLayout);
         localStorage.setItem('dashboardGridLayout', JSON.stringify(newLayout));
     }, []);

@@ -227,7 +227,7 @@ func Load() *Config {
 	viper.SetDefault("log_max_backups", 7)
 	viper.SetDefault("log_max_age_days", 30)
 	viper.SetDefault("log_compress", true)
-	viper.SetDefault("log_server_port", 515)
+	viper.SetDefault("log_server_port", 1514)
 
 	// CMMS Atlas defaults
 	viper.SetDefault("cmms_adapter", "internal")
@@ -270,7 +270,7 @@ func Load() *Config {
 	viper.SetDefault("ftp.allowFiles", true)
 	viper.SetDefault("hikvision.enabled", false)
 	viper.SetDefault("snmp.enabled", false)
-	viper.SetDefault("snmp.port", 162)
+	viper.SetDefault("snmp.port", 1162)
 	viper.SetDefault("snmp.community", "public")
 	viper.SetDefault("snmp.version", "v2c")
 

@@ -2,16 +2,27 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"p2p-gateway/pkg/adapters"
+	"p2p-gateway/pkg/jftech"
 )
 
 func NewRouter(dm *DeviceManager) *chi.Mux {
 	r := chi.NewRouter()
+
+	// Health check endpoint
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusOK, map[string]string{
+			"status":    "ok",
+			"service":   "p2p-gateway",
+			"adapters":  dm.GetAdapterCounts(),
+		})
+	})
 
 	// Регистрация устройства
 	r.Post("/p2p/register", func(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +128,54 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	// Обновить конфигурацию Jftech (Xiongmai) — из фронтенда
+	r.Post("/p2p/config/jftech", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			UUID      string `json:"uuid"`
+			AppKey    string `json:"app_key"`
+			AppSecret string `json:"app_secret"`
+			Endpoint  string `json:"endpoint"`
+			Region    string `json:"region"`
+			MoveCard  int    `json:"move_card"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid request: "+err.Error())
+			return
+		}
+		if req.UUID == "" || req.AppKey == "" || req.AppSecret == "" {
+			jsonError(w, http.StatusBadRequest, "uuid, app_key and app_secret are required")
+			return
+		}
+		region := req.Region
+		if region == "" {
+			region = "Local"
+		}
+		endpoint := req.Endpoint
+		if endpoint == "" {
+			endpoint = "api-cn.jftechws.com"
+		}
+		moveCard := req.MoveCard
+		if moveCard <= 0 {
+			moveCard = 2
+		}
+
+		jfCfg := &jftech.Config{
+			UUID:      req.UUID,
+			AppKey:    req.AppKey,
+			AppSecret: req.AppSecret,
+			MoveCard:  moveCard,
+			Endpoint:  endpoint,
+		}
+		dm.RegisterAdapter("xiongmai", adapters.NewXiongmaiAdapter(jfCfg, region))
+		dm.RegisterAdapter("jftech", adapters.NewXiongmaiAdapter(jfCfg, region))
+		log.Println("Xiongmai (Jftech) adapter registered via API")
+
+		jsonResponse(w, http.StatusOK, map[string]string{
+			"status":  "ok",
+			"message": "Xiongmai adapter registered",
+		})
+	})
+
 	// Снимок (только для Xiongmai)
 	r.Get("/p2p/snapshot/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -190,4 +249,10 @@ func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+func jsonError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

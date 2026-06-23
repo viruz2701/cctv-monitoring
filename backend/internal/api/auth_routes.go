@@ -61,4 +61,7 @@ func (s *Server) mountProtectedAuthRoutes(r chi.Router) {
 	// Settings
 	r.Get("/api/v1/settings/services", s.getServicesSettings)
 	r.Put("/api/v1/settings/services", s.updateServicesSettings)
+
+	// Service status (health check on each protocol port)
+	s.mountServicesStatusRoute(r)
 }

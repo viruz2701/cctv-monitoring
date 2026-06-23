@@ -207,6 +207,28 @@ export interface FTPSettings {
     root_path: string;
 }
 
+export interface SNMPV1Config {
+    enabled: boolean;
+    port: number;
+    community: string;
+}
+
+export interface SNMPV2cConfig {
+    enabled: boolean;
+    port: number;
+    community: string;
+}
+
+export interface SNMPV3Config {
+    enabled: boolean;
+    port: number;
+    user: string;
+    auth_protocol: 'MD5' | 'SHA' | 'SHA256';
+    auth_password: string;
+    priv_protocol: 'DES' | 'AES' | 'AES192' | 'AES256';
+    priv_password: string;
+}
+
 export interface SNMPSettings {
     enabled: boolean;
     port: number;
@@ -217,6 +239,9 @@ export interface SNMPSettings {
     auth_password?: string;
     priv_protocol?: 'DES' | 'AES' | 'AES192' | 'AES256';
     priv_password?: string;
+    v1_config: SNMPV1Config;
+    v2c_config: SNMPV2cConfig;
+    v3_config: SNMPV3Config;
 }
 
 export interface HTTPSettings {
@@ -239,6 +264,7 @@ export interface TVTSettings {
     port: number;
 }
 
+// SIPSettings moved to GB28181 — legacy removed
 export interface SIPSettings {
     enabled: boolean;
     port: number;
@@ -263,10 +289,43 @@ export interface GB28181Settings {
     log_sip_messages: boolean;
 }
 
+export interface P2PHikvisionSettings {
+    username: string;
+    password: string;
+}
+
+export interface P2PDahuaSettings {
+    python_path: string;
+    script_path: string;
+}
+
+export interface P2PReolinkSettings {
+    proxy_bin_path: string;
+}
+
+export interface P2PXiongmaiSettings {
+    uuid: string;
+    app_key: string;
+    app_secret: string;
+    endpoint: string;
+    region: string;
+    move_card: number;
+}
+
+export interface P2PEZVIZSettings {
+    app_key: string;
+    app_secret: string;
+}
+
 export interface P2PGatewaySettings {
     url: string;
     api_key: string;
     enabled?: boolean;
+    hikvision: P2PHikvisionSettings;
+    dahua: P2PDahuaSettings;
+    reolink: P2PReolinkSettings;
+    xiongmai: P2PXiongmaiSettings;
+    ezviz: P2PEZVIZSettings;
 }
 
 export interface ServicesSettings {
@@ -277,8 +336,7 @@ export interface ServicesSettings {
     services_dahua: DahuaSettings;
     services_hisilicon: HisiliconSettings;
     services_tvt: TVTSettings;
-    services_sip: SIPSettings;
-    services_gb28181?: GB28181Settings;
+    services_gb28181: GB28181Settings;
     services_p2p_gateway: P2PGatewaySettings;
 }
 
@@ -698,6 +756,10 @@ export const api = {
             method: 'PUT',
             body: JSON.stringify(settings),
         });
+    },
+
+    async getServicesStatus(): Promise<{ services: Record<string, { status: string; port: number; message?: string }> }> {
+        return request<{ services: Record<string, { status: string; port: number; message?: string }> }>('/settings/services/status');
     },
 
     // ── P2P Gateway Management ─────────────────────────────────────────

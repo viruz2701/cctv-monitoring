@@ -122,3 +122,16 @@ func (dm *DeviceManager) GetAdapter(brand string) (adapters.DeviceAdapter, bool)
 	adapter, ok := dm.adapters[brand]
 	return adapter, ok
 }
+
+func (dm *DeviceManager) GetAdapterCounts() string {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	total := len(dm.adapters)
+	active := 0
+	for _, a := range dm.adapters {
+		if a != nil {
+			active++
+		}
+	}
+	return fmt.Sprintf("%d registered, %d devices", total, len(dm.devices))
+}
