@@ -28,6 +28,19 @@ const (
 	DeviceTypeSwitch DeviceType = "switch"
 )
 
+// ── Hierarchy Level (AH-5.2.1) ─────────────────────────────────────────
+
+// HierarchyLevel определяет уровень устройства в иерархии:
+// Site → Switch → NVR → Camera
+type HierarchyLevel int
+
+const (
+	HierarchySite   HierarchyLevel = 0
+	HierarchySwitch HierarchyLevel = 1
+	HierarchyNVR    HierarchyLevel = 2
+	HierarchyCamera HierarchyLevel = 3
+)
+
 // ValidDeviceTypes для whitelist validation (OWASP ASVS V5.1)
 var ValidDeviceTypes = []string{
 	string(DeviceTypeCamera),
@@ -41,13 +54,13 @@ var ValidDeviceTypes = []string{
 type ConnectionType string
 
 const (
-	ConnIP       ConnectionType = "ip"
-	ConnP2P      ConnectionType = "p2p"
-	ConnSNMP     ConnectionType = "snmp"
-	ConnSyslog   ConnectionType = "syslog"
-	ConnAlarm    ConnectionType = "alarm"
-	ConnGB28181  ConnectionType = "gb28181"
-	ConnONVIF    ConnectionType = "onvif"
+	ConnIP      ConnectionType = "ip"
+	ConnP2P     ConnectionType = "p2p"
+	ConnSNMP    ConnectionType = "snmp"
+	ConnSyslog  ConnectionType = "syslog"
+	ConnAlarm   ConnectionType = "alarm"
+	ConnGB28181 ConnectionType = "gb28181"
+	ConnONVIF   ConnectionType = "onvif"
 )
 
 // ── Asset Class ────────────────────────────────────────────────────────
@@ -97,11 +110,15 @@ type Device struct {
 	Health      HealthStatus `json:"health" validate:"required,oneof=healthy faulty degraded"`
 	AssetClass  AssetClass   `json:"asset_class" validate:"required,oneof=critical confidential internal public"`
 
+	// Hierarchy (AH-5.2.1)
+	ParentDeviceID *string        `json:"parent_device_id,omitempty" validate:"omitempty,uuid"`
+	HierarchyLevel HierarchyLevel `json:"hierarchy_level,omitempty"`
+
 	// Timestamps
-	LastSeen     time.Time `json:"last_seen" validate:"required"`
-	RegisteredAt time.Time `json:"registered_at" validate:"required"`
-	CreatedAt    time.Time `json:"created_at,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	LastSeen     time.Time  `json:"last_seen" validate:"required"`
+	RegisteredAt time.Time  `json:"registered_at" validate:"required"`
+	CreatedAt    time.Time  `json:"created_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at,omitempty"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"` // soft delete
 
 	// Connectivity
@@ -131,24 +148,26 @@ type Device struct {
 // CreateDeviceRequest — структура запроса на создание устройства.
 // Whitelist validation через validate теги (OWASP ASVS V5.1).
 type CreateDeviceRequest struct {
-	DeviceID       string         `json:"device_id" validate:"required,uuid"`
-	Name           string         `json:"name" validate:"required,min=1,max=255"`
-	Location       string         `json:"location,omitempty" validate:"max=500"`
-	Latitude       float64        `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
-	Longitude      float64        `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
-	VendorType     string         `json:"vendor_type,omitempty" validate:"max=100"`
-	DeviceType     string         `json:"device_type" validate:"required,oneof=camera nvr dvr switch"`
-	Status         string         `json:"status" validate:"required,oneof=ONLINE OFFLINE WARNING"`
-	ConnectionType string         `json:"connection_type" validate:"required,oneof=ip p2p snmp syslog alarm gb28181 onvif"`
-	AssetClass     string         `json:"asset_class" validate:"required,oneof=critical confidential internal public"`
-	Manufacturer   string         `json:"manufacturer,omitempty" validate:"max=200"`
-	SerialNumber   string         `json:"serial_number,omitempty" validate:"max=200"`
-	MacAddress     string         `json:"mac_address,omitempty" validate:"omitempty,mac"`
-	FirmwareVersion string        `json:"firmware_version,omitempty" validate:"max=50"`
-	SiteID         *string        `json:"site_id,omitempty" validate:"omitempty,uuid"`
-	P2PBrand       string         `json:"p2p_brand,omitempty" validate:"max=100"`
-	P2PSerial      string         `json:"p2p_serial,omitempty" validate:"max=100"`
-	UserAgent      string         `json:"user_agent,omitempty" validate:"max=500"`
+	DeviceID        string  `json:"device_id" validate:"required,uuid"`
+	Name            string  `json:"name" validate:"required,min=1,max=255"`
+	Location        string  `json:"location,omitempty" validate:"max=500"`
+	Latitude        float64 `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
+	Longitude       float64 `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
+	VendorType      string  `json:"vendor_type,omitempty" validate:"max=100"`
+	DeviceType      string  `json:"device_type" validate:"required,oneof=camera nvr dvr switch"`
+	Status          string  `json:"status" validate:"required,oneof=ONLINE OFFLINE WARNING"`
+	ConnectionType  string  `json:"connection_type" validate:"required,oneof=ip p2p snmp syslog alarm gb28181 onvif"`
+	AssetClass      string  `json:"asset_class" validate:"required,oneof=critical confidential internal public"`
+	Manufacturer    string  `json:"manufacturer,omitempty" validate:"max=200"`
+	SerialNumber    string  `json:"serial_number,omitempty" validate:"max=200"`
+	MacAddress      string  `json:"mac_address,omitempty" validate:"omitempty,mac"`
+	FirmwareVersion string  `json:"firmware_version,omitempty" validate:"max=50"`
+	SiteID          *string `json:"site_id,omitempty" validate:"omitempty,uuid"`
+	P2PBrand        string  `json:"p2p_brand,omitempty" validate:"max=100"`
+	P2PSerial       string  `json:"p2p_serial,omitempty" validate:"max=100"`
+	UserAgent       string  `json:"user_agent,omitempty" validate:"max=500"`
+	// Hierarchy (AH-5.2.1)
+	ParentDeviceID *string `json:"parent_device_id,omitempty" validate:"omitempty,uuid"`
 }
 
 // ── UpdateDeviceRequest (для PUT /api/v1/devices/{id}) ─────────────────
@@ -156,24 +175,26 @@ type CreateDeviceRequest struct {
 // UpdateDeviceRequest — структура для частичного обновления устройства.
 // Все поля опциональны (omitvalidate для частичного обновления).
 type UpdateDeviceRequest struct {
-	Name           *string  `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
-	Location       *string  `json:"location,omitempty" validate:"omitempty,max=500"`
-	Latitude       *float64 `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
-	Longitude      *float64 `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
-	VendorType     *string  `json:"vendor_type,omitempty" validate:"omitempty,max=100"`
-	DeviceType     *string  `json:"device_type,omitempty" validate:"omitempty,oneof=camera nvr dvr switch"`
-	Status         *string  `json:"status,omitempty" validate:"omitempty,oneof=ONLINE OFFLINE WARNING"`
-	ConnectionType *string  `json:"connection_type,omitempty" validate:"omitempty,oneof=ip p2p snmp syslog alarm gb28181 onvif"`
-	AssetClass     *string  `json:"asset_class,omitempty" validate:"omitempty,oneof=critical confidential internal public"`
-	Manufacturer   *string  `json:"manufacturer,omitempty" validate:"omitempty,max=200"`
-	SerialNumber   *string  `json:"serial_number,omitempty" validate:"omitempty,max=200"`
-	MacAddress     *string  `json:"mac_address,omitempty" validate:"omitempty,mac"`
-	FirmwareVersion *string `json:"firmware_version,omitempty" validate:"omitempty,max=50"`
-	SiteID         *string  `json:"site_id,omitempty" validate:"omitempty,uuid"`
-	P2PBrand       *string  `json:"p2p_brand,omitempty" validate:"omitempty,max=100"`
-	P2PSerial      *string  `json:"p2p_serial,omitempty" validate:"omitempty,max=100"`
-	UserAgent      *string  `json:"user_agent,omitempty" validate:"omitempty,max=500"`
-	Health         *string  `json:"health,omitempty" validate:"omitempty,oneof=healthy faulty degraded"`
+	Name            *string  `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
+	Location        *string  `json:"location,omitempty" validate:"omitempty,max=500"`
+	Latitude        *float64 `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
+	Longitude       *float64 `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
+	VendorType      *string  `json:"vendor_type,omitempty" validate:"omitempty,max=100"`
+	DeviceType      *string  `json:"device_type,omitempty" validate:"omitempty,oneof=camera nvr dvr switch"`
+	Status          *string  `json:"status,omitempty" validate:"omitempty,oneof=ONLINE OFFLINE WARNING"`
+	ConnectionType  *string  `json:"connection_type,omitempty" validate:"omitempty,oneof=ip p2p snmp syslog alarm gb28181 onvif"`
+	AssetClass      *string  `json:"asset_class,omitempty" validate:"omitempty,oneof=critical confidential internal public"`
+	Manufacturer    *string  `json:"manufacturer,omitempty" validate:"omitempty,max=200"`
+	SerialNumber    *string  `json:"serial_number,omitempty" validate:"omitempty,max=200"`
+	MacAddress      *string  `json:"mac_address,omitempty" validate:"omitempty,mac"`
+	FirmwareVersion *string  `json:"firmware_version,omitempty" validate:"omitempty,max=50"`
+	SiteID          *string  `json:"site_id,omitempty" validate:"omitempty,uuid"`
+	P2PBrand        *string  `json:"p2p_brand,omitempty" validate:"omitempty,max=100"`
+	P2PSerial       *string  `json:"p2p_serial,omitempty" validate:"omitempty,max=100"`
+	UserAgent       *string  `json:"user_agent,omitempty" validate:"omitempty,max=500"`
+	Health          *string  `json:"health,omitempty" validate:"omitempty,oneof=healthy faulty degraded"`
+	// Hierarchy (AH-5.2.1)
+	ParentDeviceID *string `json:"parent_device_id,omitempty" validate:"omitempty,uuid"`
 }
 
 // ── DeviceListResponse (для GET /api/v1/devices) ───────────────────────
@@ -204,15 +225,16 @@ type DeviceSummary struct {
 // ── ListDevicesFilter (для фильтрации и пагинации) ─────────────────────
 
 type ListDevicesFilter struct {
-	Page         int
-	PageSize     int
-	Status       string
-	DeviceType   string
-	VendorType   string
-	SiteID       string
-	Search       string // поиск по имени или device_id
-	AssetClass   string
-	WithDeleted  bool // включать soft-deleted записи
+	Page           int
+	PageSize       int
+	Status         string
+	DeviceType     string
+	VendorType     string
+	SiteID         string
+	Search         string // поиск по имени или device_id
+	AssetClass     string
+	ParentDeviceID string // фильтр по parent_device_id (AH-5.2.1)
+	WithDeleted    bool   // включать soft-deleted записи
 }
 
 // DefaultPageSize — размер страницы по умолчанию.

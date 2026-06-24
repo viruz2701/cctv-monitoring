@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/layout';
-import { Login, Dashboard, Sites, Devices, DeviceDetail, Tickets, TicketDetail, Reports, Users, Settings, Alerts, Profile, Notifications } from './pages';
+import { Login, Dashboard, Sites, Devices, DeviceDetail, Tickets, TicketDetail, Reports, Users, Settings, Alerts, Profile, Notifications, TotalCostDashboard, ManagerDashboard, AssetOverview } from './pages';
 
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './hooks/useAuth';
@@ -117,8 +117,11 @@ function App() {
                               </Route>
 
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>
+                                <Route path="/manager-dashboard" element={<ManagerDashboard />} />
+                                <Route path="/asset-overview" element={<AssetOverview />} />
                                 <Route path="/sla" element={<SLADashboard />} />
                                 <Route path="/maintenance-reports" element={<MaintenanceReports />} />
+                                <Route path="/cost-dashboard" element={<TotalCostDashboard />} />
                               </Route>
                             </Route>
 

@@ -16,7 +16,18 @@ import (
 // ═══════════════════════════════════════════════════════════════════════
 
 func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
-	sites, err := s.cmmsRouter.GetSites(r.Context())
+	filters := make(map[string]interface{})
+	if name := r.URL.Query().Get("name"); name != "" {
+		filters["name"] = name
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		filters["status"] = status
+	}
+	if city := r.URL.Query().Get("city"); city != "" {
+		filters["city"] = city
+	}
+
+	sites, err := s.cmmsRouter.GetSites(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get sites", "error", err)
 		respondError(w, r, NewInternalError("operation failed", err))

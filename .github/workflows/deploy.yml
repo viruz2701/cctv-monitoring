@@ -1,0 +1,144 @@
+# =============================================================================
+# Deploy Pipeline — CCTV Health Monitor
+# =============================================================================
+# Compliance: ISO 27001 A.12.6 (Deployment Security Review)
+# IEC 62443-3-3 SR 7.8 (Security Function Verification)
+# NOTE: Actual deployment targets are placeholders.
+# Actual deployment requires:
+#   - secrets.DOCKER_REGISTRY — container registry URL
+#   - secrets.DEPLOY_HOST — target host/namespace
+#   - secrets.DEPLOY_KEY — deployment credentials
+# =============================================================================
+
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
+  BACKEND_IMAGE: cctv-monitoring-backend
+  FRONTEND_IMAGE: cctv-monitoring-frontend
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # ── Build & Push Backend ──────────────────────────────────────
+  backend-build:
+    name: Build Backend Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Build & Push Frontend ─────────────────────────────────────
+  frontend-build:
+    name: Build Frontend Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Deploy (Placeholder) ──────────────────────────────────────
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'staging' }}
+    needs: [backend-build, frontend-build]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure deployment context
+        run: |
+          echo "::notice::Deploying to ${{ github.event.inputs.environment || 'staging' }}"
+          echo "::notice::Backend image: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}"
+          echo "::notice::Frontend image: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}"
+
+      # ── Placeholder: Replace with actual deploy logic ────────
+      # Examples:
+      # - SSH deploy: ssh ${{ secrets.DEPLOY_HOST }} "docker compose pull && docker compose up -d"
+      # - Kubernetes: kubectl set image deployment/backend backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}
+      # - Helm: helm upgrade --install cctv-monitoring ./charts/cctv-monitoring --set image.tag=${{ env.IMAGE_TAG }}
+
+      - name: Deploy (Placeholder)
+        run: |
+          echo "============================================"
+          echo "  DEPLOY PLACEHOLDER"
+          echo "============================================"
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
+          echo "Backend:     ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }}"
+          echo "Frontend:    ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }}"
+          echo "Commit:      ${{ github.sha }}"
+          echo "============================================"
+          echo ""
+          echo "Replace this step with actual deployment:"
+          echo "  1. SSH to target host"
+          echo "  2. docker compose pull"
+          echo "  3. docker compose up -d"
+          echo "  4. Health check verification"
+          echo "============================================"
+
+      - name: Post-deploy notification (Placeholder)
+        run: |
+          echo "::notice::Deployment to ${{ github.event.inputs.environment || 'staging' }} completed (placeholder)"

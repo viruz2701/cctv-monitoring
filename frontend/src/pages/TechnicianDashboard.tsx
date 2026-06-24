@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
-import { Card, Table, Badge } from '../components/ui';
-import { CheckCircle, Clock, AlertTriangle, Users } from 'lucide-react';
+import { Card, DataGrid, Badge } from '../components/ui';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle, Clock, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+import { Button } from '../components/ui';
 
 interface TechnicianWorkload {
   user_id: string;
@@ -15,6 +17,7 @@ interface TechnicianWorkload {
 
 export const TechnicianDashboard: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [workloads, setWorkloads] = useState<TechnicianWorkload[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -34,10 +37,11 @@ export const TechnicianDashboard: React.FC = () => {
   }, []);
 
   const columns = [
-    { key: 'user_name', header: t('technician') },
+    { key: 'user_name', header: t('technician'), sortable: true },
     {
       key: 'workload',
       header: t('workload'),
+      sortable: true,
       render: (item: TechnicianWorkload) => {
         const percent = item.max_workload > 0 ? (item.current_workload / item.max_workload) * 100 : 0;
         const color = percent > 80 ? 'bg-red-500' : percent > 50 ? 'bg-yellow-500' : 'bg-green-500';
@@ -62,15 +66,24 @@ export const TechnicianDashboard: React.FC = () => {
         </div>
       ),
     },
-    { key: 'base_location', header: t('location') },
+    { key: 'base_location', header: t('location'), sortable: true },
   ];
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Users size={24} />
-        {t('technician_dashboard')}
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Users size={24} />
+          {t('technician_dashboard')}
+        </h1>
+        <Button
+          icon={<TrendingUp className="w-4 h-4" />}
+          onClick={() => navigate('/analytics')}
+          variant="outline"
+        >
+          {t('analytics') || 'Analytics'}
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
@@ -109,12 +122,16 @@ export const TechnicianDashboard: React.FC = () => {
       </div>
 
       <Card>
-        <Table
+        <DataGrid
           data={workloads}
           columns={columns}
           keyExtractor={(item) => item.user_id}
           loading={loading}
           emptyMessage={t('no_technicians')}
+          variant="striped"
+          defaultDensity="standard"
+          pageSize={10}
+          exportFilename="technician-workload.csv"
         />
       </Card>
     </div>

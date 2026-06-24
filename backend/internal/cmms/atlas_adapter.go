@@ -541,7 +541,7 @@ func (a *AtlasAdapter) FallbackQueueSize() int {
 // ── Sites ────────────────────────────────────────────────────────
 // External adapter — not implemented, delegated to InternalAdapter
 
-func (a *AtlasAdapter) GetSites(_ context.Context) ([]models.Site, error) {
+func (a *AtlasAdapter) GetSites(_ context.Context, _ map[string]interface{}) ([]models.Site, error) {
 	return nil, fmt.Errorf("get sites not implemented for Atlas adapter")
 }
 
@@ -577,6 +577,72 @@ func (a *AtlasAdapter) UpdateCategory(_ context.Context, _ string, _ map[string]
 
 func (a *AtlasAdapter) DeleteCategory(_ context.Context, _ string) error {
 	return fmt.Errorf("delete category not implemented for Atlas adapter")
+}
+
+// ── Work Requests (not supported for external CMMS) ─────────────
+
+func (a *AtlasAdapter) CreateWorkRequest(_ context.Context, _ *models.WorkRequest) error {
+	return fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetWorkRequests(_ context.Context, _ map[string]interface{}) ([]models.WorkRequest, error) {
+	return nil, fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetWorkRequest(_ context.Context, _ string) (*models.WorkRequest, error) {
+	return nil, fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) ApproveWorkRequest(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) RejectWorkRequest(_ context.Context, _, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) ConvertWorkRequestToWO(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Atlas adapter")
+}
+
+// ── WorkOrder ↔ Alert (DM-1.3.1 — not supported for external CMMS) ─
+
+func (a *AtlasAdapter) LinkAlertToWorkOrder(_ context.Context, _, _, _ string) error {
+	return fmt.Errorf("work order alerts not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) UnlinkAlertFromWorkOrder(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work order alerts not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetAlertsForWorkOrder(_ context.Context, _ string) ([]models.WorkOrderAlert, error) {
+	return nil, fmt.Errorf("work order alerts not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetWorkOrdersForAlert(_ context.Context, _ string) ([]models.WorkOrderAlert, error) {
+	return nil, fmt.Errorf("work order alerts not supported for Atlas adapter")
+}
+
+// ── Vendors (INV-7.2.1 — not supported for external CMMS) ────────
+
+func (a *AtlasAdapter) CreateVendor(_ context.Context, _ *models.Vendor) error {
+	return fmt.Errorf("vendors not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetVendors(_ context.Context, _ map[string]interface{}) ([]models.Vendor, error) {
+	return nil, fmt.Errorf("vendors not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetVendor(_ context.Context, _ string) (*models.Vendor, error) {
+	return nil, fmt.Errorf("vendors not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) UpdateVendor(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("vendors not supported for Atlas adapter")
+}
+
+func (a *AtlasAdapter) DeleteVendor(_ context.Context, _ string) error {
+	return fmt.Errorf("vendors not supported for Atlas adapter")
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

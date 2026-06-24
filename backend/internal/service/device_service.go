@@ -125,6 +125,8 @@ func (s *DeviceService) CreateDevice(ctx context.Context, userID, userRole strin
 		SiteID:            req.SiteID,
 		P2PBrand:          req.P2PBrand,
 		P2PSerial:         req.P2PSerial,
+		ParentDeviceID:    req.ParentDeviceID,
+		HierarchyLevel:    deriveHierarchyLevel(req.DeviceType),
 	}
 
 	// Сохраняем в БД
@@ -262,6 +264,12 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, userID, userRole strin
 	if req.Health != nil {
 		updates["health"] = *req.Health
 	}
+	if req.ParentDeviceID != nil {
+		updates["parent_device_id"] = *req.ParentDeviceID
+	}
+	if req.DeviceType != nil {
+		updates["hierarchy_level"] = deriveHierarchyLevel(*req.DeviceType)
+	}
 
 	if len(updates) == 0 {
 		return oldDev, nil // ничего не изменилось
@@ -379,6 +387,21 @@ func (s *DeviceService) logAudit(ctx context.Context, userID, action, entityType
 	// В текущей реализации SaveAudit не сохраняет hmac_signature
 	// Это будет добавлено в следующем релизе
 	_ = signature
+}
+
+// deriveHierarchyLevel определяет уровень иерархии по типу устройства (AH-5.2.1).
+// Маппинг: camera→3, nvr→2, dvr→2, switch→1, по умолчанию→0 (site).
+func deriveHierarchyLevel(deviceType string) models.HierarchyLevel {
+	switch deviceType {
+	case string(models.DeviceTypeCamera):
+		return models.HierarchyCamera
+	case string(models.DeviceTypeNVR), string(models.DeviceTypeDVR):
+		return models.HierarchyNVR
+	case string(models.DeviceTypeSwitch):
+		return models.HierarchySwitch
+	default:
+		return models.HierarchySite
+	}
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────

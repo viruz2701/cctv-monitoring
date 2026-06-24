@@ -62,6 +62,35 @@ export function Users() {
         status: 'active' as UserStatus
     });
 
+    // ═══ Password Strength ═══
+    const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | ''>('');
+
+    const calculatePasswordStrength = (password: string): 'weak' | 'medium' | 'strong' | '' => {
+        if (!password) return '';
+        if (password.length < 8) return 'weak';
+
+        const hasUpper = /[A-Z]/.test(password);
+        const hasLower = /[a-z]/.test(password);
+        const hasDigit = /\d/.test(password);
+        const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-~`\[\]\\';\/]/.test(password);
+
+        if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) return 'weak';
+
+        let score = 0;
+        if (password.length >= 12) score++;
+        if (hasUpper && hasLower && hasDigit && hasSpecial) score++;
+        if (password.length >= 16) score++;
+
+        if (score >= 3) return 'strong';
+        return 'medium';
+    };
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const pwd = e.target.value;
+        setFormData({ ...formData, password: pwd });
+        setPasswordStrength(calculatePasswordStrength(pwd));
+    };
+
     const resetForm = () => {
         setFormData({
             username: '',
@@ -145,6 +174,13 @@ export function Users() {
                 }
                 if (!formData.username) {
                     toast.error(t('username_required') || 'Username is required for login');
+                    setSubmitting(false);
+                    return;
+                }
+                // OWASP ASVS V2: Password strength validation — блокируем слабые пароли
+                const strength = calculatePasswordStrength(formData.password);
+                if (strength === 'weak') {
+                    toast.error(t('password_too_weak') || 'Password is too weak. Minimum 8 chars with uppercase, lowercase, digit, and special character.');
                     setSubmitting(false);
                     return;
                 }
@@ -338,7 +374,31 @@ export function Users() {
                         <Input label={t('full_name')} placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
                         <Input label={t('primary_email')} type="email" placeholder="john@company.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                         {!selectedUser && (
-                            <Input label={t('password')} type="password" placeholder="••••••••" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required />
+                            <div>
+                                <Input label={t('password')} type="password" placeholder="••••••••" value={formData.password} onChange={handlePasswordChange} required />
+                                {passwordStrength && (
+                                    <div className="mt-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full transition-all duration-300 ${
+                                                    passwordStrength === 'weak' ? 'w-1/3 bg-red-500' :
+                                                    passwordStrength === 'medium' ? 'w-2/3 bg-amber-500' :
+                                                    'w-full bg-emerald-500'
+                                                }`} />
+                                            </div>
+                                            <span className={`text-xs font-medium min-w-[48px] text-right ${
+                                                passwordStrength === 'weak' ? 'text-red-500' :
+                                                passwordStrength === 'medium' ? 'text-amber-500' :
+                                                'text-emerald-500'
+                                            }`}>
+                                                {passwordStrength === 'weak' ? (t('weak') || 'Weak') :
+                                                 passwordStrength === 'medium' ? (t('medium') || 'Medium') :
+                                                 (t('strong') || 'Strong')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                         <Select
                             label={t('role')}

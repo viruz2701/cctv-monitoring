@@ -1,6 +1,8 @@
 package api
 
 import (
+	"sync"
+
 	"gb-telemetry-collector/internal/db"
 	"net/http"
 	"strings"
@@ -9,7 +11,26 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// API key rate limiter (INT-13.2.3)
+var apiKeyRateLimiters sync.Map // map[string]*rateLimiter (key_id → limiter)
+
+const (
+	apiKeyRateLimit    = 100  // 100 requests
+	apiKeyRateWindow   = 1 * time.Minute // per minute
+)
+
+// getAPIKeyRateLimiter возвращает rate limiter для API key.
+func getAPIKeyRateLimiter(keyID string) *rateLimiter {
+	if limiter, ok := apiKeyRateLimiters.Load(keyID); ok {
+		return limiter.(*rateLimiter)
+	}
+	limiter := newRateLimiter(apiKeyRateLimit, apiKeyRateWindow)
+	apiKeyRateLimiters.Store(keyID, limiter)
+	return limiter
+}
+
 // APIKeyMiddleware validates API keys from X-API-Key header
+// и применяет rate limiting per key (INT-13.2.3).
 func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.Header.Get("X-API-Key")
@@ -56,6 +77,13 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		// Check if key is expired
 		if matchedKey.ExpiresAt != nil && matchedKey.ExpiresAt.Before(time.Now()) {
 			respondError(w, r, NewUnauthorizedError("API key expired"))
+			return
+		}
+
+		// INT-13.2.3: Rate limiting per API key
+		limiter := getAPIKeyRateLimiter(matchedKey.ID)
+		if !limiter.allow(matchedKey.ID) {
+			respondError(w, r, NewRateLimitError("API key rate limit exceeded (100 req/min)"))
 			return
 		}
 

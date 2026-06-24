@@ -451,8 +451,16 @@ func toTechnicianWorkload(issue jiraIssue) models.TechnicianWorkload {
 		CurrentWorkload: m.int(fieldCurrentWorkload),
 		MaxWorkload:     m.int(fieldMaxWorkload),
 		Skills:          m.strSlice(fieldSkills),
-		BaseLocation:    m.str(fieldBaseLocation),
+		BaseLocation:    strPtr(m.str(fieldBaseLocation)),
 	}
+}
+
+// strPtr возвращает *string, или nil если строка пустая.
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func toTechnicianMonthlyStats(issue jiraIssue) models.TechnicianMonthlyStats {

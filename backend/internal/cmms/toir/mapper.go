@@ -337,8 +337,16 @@ func toTechnicianWorkload(raw map[string]interface{}) models.TechnicianWorkload 
 		CurrentWorkload: m.int("current_workload"),
 		MaxWorkload:     m.int("max_workload"),
 		Skills:          m.strSlice("skills"),
-		BaseLocation:    m.str("base_location"),
+		BaseLocation:    strPtr(m.str("base_location")),
 	}
+}
+
+// strPtr возвращает *string, или nil если строка пустая.
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func toTechnicianMonthlyStats(raw map[string]interface{}) models.TechnicianMonthlyStats {

@@ -15,6 +15,7 @@ import (
 
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
 )
 
@@ -318,6 +319,21 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, NewBadRequestError("type is required"))
 		return
 	}
+
+	// Проверка существования device_id перед INSERT (work_orders FK fix)
+	// Предотвращает 500 ошибку при FOREIGN KEY violation
+	// Сначала проверяем БД, потом stateManager (in-memory device может прийти через P2P)
+	ctx := r.Context()
+	var devExists bool
+	dbErr := s.db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM devices WHERE device_id = $1)`, wo.DeviceID).Scan(&devExists)
+	if dbErr != nil || !devExists {
+		// Fallback: проверяем stateManager (устройства, зарегистрированные через P2P/GB28181)
+		if _, ok := s.stateManager.Get(wo.DeviceID); !ok {
+			respondError(w, r, NewBadRequestError("device_id not found: "+wo.DeviceID))
+			return
+		}
+	}
+
 	if wo.Checklist == nil {
 		wo.Checklist = json.RawMessage("[]")
 	}
@@ -333,16 +349,16 @@ func (s *Server) createWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Устанавливаем SLA deadline
-	if sla, err := s.cmmsRouter.GetSLAConfig(r.Context(), wo.Priority); err == nil {
+	if sla, err := s.cmmsRouter.GetSLAConfig(ctx, wo.Priority); err == nil {
 		deadline := time.Now().Add(time.Duration(sla.ResolutionTimeMinutes) * time.Minute)
 		wo.SLADeadline = &deadline
 	}
 
 	// Set created_by from context
-	userID := getUserIDFromContext(r.Context())
+	userID := getUserIDFromContext(ctx)
 	wo.CreatedBy = &userID
 
-	if err := s.cmmsRouter.CreateWorkOrder(r.Context(), &wo); err != nil {
+	if err := s.cmmsRouter.CreateWorkOrder(ctx, &wo); err != nil {
 		s.logger.Error("Failed to create work order", "error", err)
 		respondError(w, r, NewInternalError("operation failed", err))
 		return
@@ -408,6 +424,90 @@ func (s *Server) deleteWorkOrder(w http.ResponseWriter, r *http.Request) {
 	userID := getUserIDFromContext(r.Context())
 	s.logAudit(userID, "delete_work_order", "work_order", id, nil, nil)
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ── Bulk Actions (WO-4.2.1) ─────────────────────────────────────────
+
+// bulkBulkWorkOrdersRequest — запрос на массовую операцию.
+type bulkWorkOrdersRequest struct {
+	Action string   `json:"action"` // "status_change", "assign", "delete", "priority_change"
+	IDs    []string `json:"ids"`
+	Value  string   `json:"value"` // новый статус / user_id / priority
+}
+
+// handleBulkWorkOrders выполняет массовые операции над Work Orders.
+//
+// Соответствует:
+//   - ISO 27001 A.12.4.1 (Event logging)
+//   - OWASP ASVS V5.1 (Input validation)
+//   - IEC 62443 SR 3.1 (Data integrity)
+func (s *Server) handleBulkWorkOrders(w http.ResponseWriter, r *http.Request) {
+	var req bulkWorkOrdersRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	// Whitelist validation: action
+	validActions := map[string]bool{
+		"status_change": true, "assign": true,
+		"delete": true, "priority_change": true,
+	}
+	if !validActions[req.Action] {
+		respondError(w, r, NewBadRequestError("Unsupported action: "+req.Action))
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		respondError(w, r, NewBadRequestError("ids must be a non-empty array"))
+		return
+	}
+
+	if len(req.IDs) > 100 {
+		respondError(w, r, NewBadRequestError("max 100 ids per bulk request"))
+		return
+	}
+
+	results, err := s.db.BulkWorkOrders(db.BulkActionType(req.Action), req.IDs, req.Value)
+	if err != nil {
+		s.logger.Error("Bulk action failed", "action", req.Action, "error", err)
+		respondError(w, r, NewInternalError("bulk operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "bulk_"+req.Action, "work_order", "", nil, map[string]interface{}{
+		"ids":     req.IDs,
+		"value":   req.Value,
+		"results": results,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"results": results,
+		"total":   len(results),
+		"success": countSuccess(results),
+		"failed":  countFailed(results),
+	})
+}
+
+func countSuccess(results []db.BulkActionResult) int {
+	count := 0
+	for _, r := range results {
+		if r.Status == "success" {
+			count++
+		}
+	}
+	return count
+}
+
+func countFailed(results []db.BulkActionResult) int {
+	count := 0
+	for _, r := range results {
+		if r.Status == "error" {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Server) assignWorkOrder(w http.ResponseWriter, r *http.Request) {
@@ -654,7 +754,7 @@ func (s *Server) updateSparePart(w http.ResponseWriter, r *http.Request) {
 	allowedFields := map[string]bool{
 		"name": true, "sku": true, "category": true, "stock": true,
 		"min_stock": true, "location": true, "compatible_devices": true,
-		"cost": true, "supplier": true,
+		"cost": true, "supplier": true, "custom_fields": true,
 	}
 	for key := range updates {
 		if !allowedFields[key] {
@@ -700,26 +800,103 @@ func (s *Server) getLowStockParts(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, parts)
 }
 
+// adjustSparePartStock корректирует остаток запчасти с audit trail (INV-7.1.4).
+//
+// Читает текущий остаток, обновляет его, создаёт запись в stock_adjustments.
+// Все изменения логируются в audit_log с HMAC-подписью.
+//
+// POST /api/v1/spare-parts/{id}/adjust
+//
+// Compliance:
+//   - IEC 62443 SL-3 (Zone 3 — Application integrity)
+//   - ISO 27001 A.12.4.1 (Event logging — stock adjustment audit trail)
+//   - ISO/IEC 27019 PCC.A.12 (Operations security — inventory changes)
+//   - СТБ 34.101.27 (Защита информации — фиксация складских операций)
+//   - OWASP ASVS V5.1 (Input validation — whitelist reason)
 func (s *Server) adjustSparePartStock(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		Quantity int `json:"quantity"`
+		Quantity int    `json:"quantity"`
+		Reason   string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
+	if req.Quantity < 0 {
+		respondError(w, r, NewBadRequestError("quantity must be >= 0"))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+
+	// Получаем текущий spare part для previous_stock
+	part, err := s.cmmsRouter.GetSparePart(r.Context(), id)
+	if err != nil {
+		s.logger.Error("Failed to get spare part for adjustment", "id", id, "error", err)
+		respondError(w, r, NewNotFoundError("Spare part not found"))
+		return
+	}
+
+	previousStock := part.Stock
+	delta := req.Quantity - previousStock
+
+	// Обновляем остаток
 	if err := s.cmmsRouter.UpdateSparePartStock(r.Context(), id, req.Quantity); err != nil {
 		s.logger.Error("Failed to adjust spare part stock", "error", err)
 		respondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
-	userID := getUserIDFromContext(r.Context())
-	s.logAudit(userID, "adjust_spare_part_stock", "spare_part", id, nil, map[string]int{"quantity": req.Quantity})
+	// Создаём запись в stock_adjustments (audit trail)
+	adj := &models.StockAdjustment{
+		PartID:        id,
+		PreviousStock: previousStock,
+		NewStock:      req.Quantity,
+		Delta:         delta,
+		Reason:        req.Reason,
+		AdjustedBy:    userID,
+	}
+	if err := s.db.CreateStockAdjustment(adj); err != nil {
+		s.logger.Error("Failed to create stock adjustment record", "error", err)
+		// Не возвращаем ошибку — stock уже обновлён, только audit запись не создалась
+	}
+
+	// Audit log (ISO 27001 A.12.4)
+	s.logAudit(userID, "adjust_spare_part_stock", "spare_part", id, nil, map[string]interface{}{
+		"previous_stock": previousStock,
+		"new_stock":      req.Quantity,
+		"delta":          delta,
+		"reason":         req.Reason,
+		"adjustment_id":  adj.ID,
+	})
+
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "adjusted"})
+}
+
+// listSparePartStockAdjustments возвращает историю корректировок остатка запчасти (INV-7.1.4).
+//
+// GET /api/v1/spare-parts/{id}/adjustments
+//
+// Compliance:
+//   - IEC 62443 SL-3 (Zone 3 — Read access control)
+//   - OWASP ASVS V5.1 (Parameterized query — в DB слое)
+func (s *Server) listSparePartStockAdjustments(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	adjustments, err := s.db.GetStockAdjustments(id)
+	if err != nil {
+		s.logger.Error("Failed to get stock adjustments", "part_id", id, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	if adjustments == nil {
+		adjustments = []models.StockAdjustment{}
+	}
+	jsonResponse(w, http.StatusOK, adjustments)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1050,6 +1227,11 @@ func isFutureDate(value time.Time) bool {
 }
 
 func (s *Server) logAudit(userID, action, entityType, entityID string, oldValue, newValue interface{}) {
+	// Если userID пустой или не найден — используем 'system' (audit_log_user_id_fkey fix)
+	if userID == "" {
+		userID = "system"
+	}
+
 	var oldJSON, newJSON []byte
 	if oldValue != nil {
 		oldJSON, _ = json.Marshal(oldValue)
@@ -1093,4 +1275,454 @@ func saveUploadedFile(src io.Reader, dst string) error {
 	defer out.Close()
 	_, err = io.Copy(out, src)
 	return err
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Time Entry Handlers (WO-4.4.1)
+// ═══════════════════════════════════════════════════════════════════════
+
+func (s *Server) listTimeEntries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	entries, err := s.db.GetTimeEntries(id)
+	if err != nil {
+		s.logger.Error("Failed to get time entries", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	if entries == nil {
+		entries = []models.TimeEntry{}
+	}
+	jsonResponse(w, http.StatusOK, entries)
+}
+
+func (s *Server) createTimeEntry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID := getUserIDFromContext(r.Context())
+
+	var req struct {
+		Notes      string  `json:"notes"`
+		HourlyRate float64 `json:"hourly_rate"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	entry := &models.TimeEntry{
+		WorkOrderID: id,
+		UserID:      userID,
+		StartTime:   time.Now(),
+		Status:      "running",
+		Notes:       req.Notes,
+		HourlyRate:  req.HourlyRate,
+	}
+
+	if err := s.db.CreateTimeEntry(entry); err != nil {
+		s.logger.Error("Failed to create time entry", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusCreated, entry)
+}
+
+func (s *Server) pauseTimeEntry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	s.handleTimeEntryStatusChange(w, r, id, "paused")
+}
+
+func (s *Server) resumeTimeEntry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	s.handleTimeEntryStatusChange(w, r, id, "running")
+}
+
+func (s *Server) stopTimeEntry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	s.handleTimeEntryStatusChange(w, r, id, "stopped")
+}
+
+func (s *Server) handleTimeEntryStatusChange(w http.ResponseWriter, r *http.Request, id, status string) {
+	if err := s.db.UpdateTimeEntryStatus(id, status); err != nil {
+		s.logger.Error("Failed to update time entry", "id", id, "status", status, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": status})
+}
+
+func (s *Server) deleteTimeEntry(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := s.db.DeleteTimeEntry(id); err != nil {
+		s.logger.Error("Failed to delete time entry", "id", id, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ── Labor Cost (WO-4.4.2) ──────────────────────────────────────────
+
+func (s *Server) getLaborCost(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	lc, err := s.db.GetLaborCost(id)
+	if err != nil {
+		s.logger.Error("Failed to get labor cost", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	jsonResponse(w, http.StatusOK, lc)
+}
+
+// ── Parts Consumption with Cost Snapshot (WO-4.4.4) ────────────────
+
+func (s *Server) addPartWithCost(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID := getUserIDFromContext(r.Context())
+
+	var req struct {
+		PartID   string `json:"part_id"`
+		Quantity int    `json:"quantity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	if req.PartID == "" || req.Quantity <= 0 {
+		respondError(w, r, NewBadRequestError("part_id and quantity > 0 are required"))
+		return
+	}
+
+	if err := s.db.AddPartToWorkOrderWithCost(id, req.PartID, req.Quantity, userID); err != nil {
+		s.logger.Error("Failed to add part with cost", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "added"})
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// WorkOrder ↔ Alert Handlers (DM-1.3.1)
+// ═══════════════════════════════════════════════════════════════════════
+
+// linkAlertToWorkOrder привязывает алерт к WorkOrder.
+//
+// POST /api/v1/work-orders/{id}/alerts
+//
+// Compliance:
+//   - IEC 62443 SL-3 (Zone 3 — Application integrity)
+//   - ISO 27001 A.12.4.1 (Audit trail for linking)
+//   - OWASP ASVS V5.1 (Input validation)
+func (s *Server) linkAlertToWorkOrder(w http.ResponseWriter, r *http.Request) {
+	workOrderID := chi.URLParam(r, "id")
+	userID := getUserIDFromContext(r.Context())
+
+	var req struct {
+		AlertID string `json:"alert_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+	if req.AlertID == "" {
+		respondError(w, r, NewBadRequestError("alert_id is required"))
+		return
+	}
+
+	if err := s.cmmsRouter.LinkAlertToWorkOrder(r.Context(), workOrderID, req.AlertID, userID); err != nil {
+		s.logger.Error("Failed to link alert to work order", "work_order_id", workOrderID, "alert_id", req.AlertID, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	s.logAudit(userID, "link_alert_to_work_order", "work_order_alert", workOrderID, nil, map[string]string{
+		"alert_id": req.AlertID,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "linked"})
+}
+
+// unlinkAlertFromWorkOrder отвязывает алерт от WorkOrder.
+//
+// DELETE /api/v1/work-orders/{id}/alerts/{alertId}
+//
+// Compliance:
+//   - IEC 62443 SL-3 (Zone 3 — Application integrity)
+//   - ISO 27001 A.12.4.1 (Audit trail for unlinking)
+//   - OWASP ASVS V5.1 (Input validation)
+func (s *Server) unlinkAlertFromWorkOrder(w http.ResponseWriter, r *http.Request) {
+	workOrderID := chi.URLParam(r, "id")
+	alertID := chi.URLParam(r, "alertId")
+
+	if alertID == "" {
+		respondError(w, r, NewBadRequestError("alert_id is required"))
+		return
+	}
+
+	if err := s.cmmsRouter.UnlinkAlertFromWorkOrder(r.Context(), workOrderID, alertID); err != nil {
+		s.logger.Error("Failed to unlink alert from work order", "work_order_id", workOrderID, "alert_id", alertID, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "unlink_alert_from_work_order", "work_order_alert", workOrderID, nil, map[string]string{
+		"alert_id": alertID,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "unlinked"})
+}
+
+// listAlertsForWorkOrder возвращает список алертов, привязанных к WorkOrder.
+//
+// GET /api/v1/work-orders/{id}/alerts
+//
+// Compliance:
+//   - IEC 62443 SL-3 (Zone 3 — Read access control)
+//   - OWASP ASVS V5.1 (Input validation)
+func (s *Server) listAlertsForWorkOrder(w http.ResponseWriter, r *http.Request) {
+	workOrderID := chi.URLParam(r, "id")
+
+	alerts, err := s.cmmsRouter.GetAlertsForWorkOrder(r.Context(), workOrderID)
+	if err != nil {
+		s.logger.Error("Failed to get alerts for work order", "work_order_id", workOrderID, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, alerts)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Vendor Handlers (INV-7.2.1)
+// ═══════════════════════════════════════════════════════════════════════
+
+func (s *Server) listVendors(w http.ResponseWriter, r *http.Request) {
+	filters := make(map[string]interface{})
+
+	if status := r.URL.Query().Get("status"); status != "" {
+		filters["status"] = status
+	}
+	if search := r.URL.Query().Get("search"); search != "" {
+		filters["search"] = search
+	}
+	if limit := r.URL.Query().Get("limit"); limit != "" {
+		if l, err := strconv.Atoi(limit); err == nil {
+			filters["limit"] = l
+		}
+	}
+	if offset := r.URL.Query().Get("offset"); offset != "" {
+		if o, err := strconv.Atoi(offset); err == nil {
+			filters["offset"] = o
+		}
+	}
+
+	vendors, err := s.cmmsRouter.GetVendors(r.Context(), filters)
+	if err != nil {
+		s.logger.Error("Failed to get vendors", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	if vendors == nil {
+		vendors = []models.Vendor{}
+	}
+	jsonResponse(w, http.StatusOK, vendors)
+}
+
+func (s *Server) createVendor(w http.ResponseWriter, r *http.Request) {
+	var vendor models.Vendor
+	if err := json.NewDecoder(r.Body).Decode(&vendor); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	if vendor.Name == "" {
+		respondError(w, r, NewBadRequestError("name is required"))
+		return
+	}
+
+	if vendor.Status == "" {
+		vendor.Status = "active"
+	}
+
+	if err := s.cmmsRouter.CreateVendor(r.Context(), &vendor); err != nil {
+		s.logger.Error("Failed to create vendor", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "create_vendor", "vendor", vendor.ID, nil, vendor)
+	jsonResponse(w, http.StatusCreated, vendor)
+}
+
+func (s *Server) getVendor(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	vendor, err := s.cmmsRouter.GetVendor(r.Context(), id)
+	if err != nil {
+		respondError(w, r, NewNotFoundError("Vendor not found"))
+		return
+	}
+	if vendor == nil {
+		respondError(w, r, NewNotFoundError("Vendor not found"))
+		return
+	}
+	jsonResponse(w, http.StatusOK, vendor)
+}
+
+func (s *Server) updateVendor(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	allowedFields := map[string]bool{
+		"name": true, "contact_person": true, "email": true,
+		"phone": true, "address": true, "website": true,
+		"notes": true, "status": true,
+	}
+	for key := range updates {
+		if !allowedFields[key] {
+			delete(updates, key)
+		}
+	}
+
+	if err := s.cmmsRouter.UpdateVendor(r.Context(), id, updates); err != nil {
+		s.logger.Error("Failed to update vendor", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "update_vendor", "vendor", id, nil, updates)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (s *Server) deleteVendor(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	if err := s.cmmsRouter.DeleteVendor(r.Context(), id); err != nil {
+		s.logger.Error("Failed to delete vendor", "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "delete_vendor", "vendor", id, nil, nil)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// WO-4.4.3: AdditionalCost (travel, subcontractor, permits)
+// ═══════════════════════════════════════════════════════════════════════
+
+// listAdditionalCosts возвращает дополнительные затраты для Work Order.
+//
+// GET /api/v1/work-orders/{id}/additional-costs
+//
+// Compliance:
+//   - OWASP ASVS V4.1 (RBAC — admin/manager/technician)
+//   - OWASP ASVS V5.1 (Path parameter validation)
+func (s *Server) listAdditionalCosts(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	costs, err := s.db.GetAdditionalCostsByWorkOrder(r.Context(), id)
+	if err != nil {
+		s.logger.Error("Failed to get additional costs", "work_order_id", id, "error", err)
+		respondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, costs)
+}
+
+// createAdditionalCost создаёт запись дополнительных затрат.
+//
+// POST /api/v1/work-orders/{id}/additional-costs
+//
+// Compliance:
+//   - OWASP ASVS V5.1 (Input validation — whitelist через category enum)
+//   - OWASP ASVS V7.1 (Error handling — no sensitive data)
+func (s *Server) createAdditionalCost(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID := getUserIDFromContext(r.Context())
+
+	var req struct {
+		Category      string  `json:"category"`
+		Description   string  `json:"description"`
+		VendorName    string  `json:"vendor_name"`
+		EstimatedCost float64 `json:"estimated_cost"`
+		ActualCost    float64 `json:"actual_cost"`
+		Currency      string  `json:"currency"`
+		ReceiptURL    string  `json:"receipt_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	// Whitelist validation (OWASP ASVS V5.1)
+	validCategory := false
+	for _, c := range models.ValidAdditionalCostCategories {
+		if req.Category == c {
+			validCategory = true
+			break
+		}
+	}
+	if !validCategory {
+		respondError(w, r, NewBadRequestError("Invalid category: must be one of travel, subcontractor, permit, equipment, other"))
+		return
+	}
+
+	cost := &models.AdditionalCost{
+		CostBase: models.CostBase{
+			EstimatedCost: req.EstimatedCost,
+			ActualCost:    req.ActualCost,
+			Currency:      req.Currency,
+		},
+		ID:          fmt.Sprintf("ac_%s_%d", id, time.Now().UnixNano()),
+		WorkOrderID: id,
+		Category:    req.Category,
+		Description: req.Description,
+		VendorName:  req.VendorName,
+		ReceiptURL:  req.ReceiptURL,
+		CreatedBy:   &userID,
+	}
+
+	if err := s.db.CreateAdditionalCost(r.Context(), cost); err != nil {
+		s.logger.Error("Failed to create additional cost", "error", err)
+		respondError(w, r, NewInternalError("operation failed", nil))
+		return
+	}
+
+	s.logAudit(userID, "create_additional_cost", "work_order", id, nil, map[string]interface{}{
+		"category": req.Category,
+		"cost":     req.ActualCost,
+	})
+	jsonResponse(w, http.StatusCreated, cost)
+}
+
+// deleteAdditionalCost удаляет запись дополнительных затрат.
+//
+// DELETE /api/v1/additional-costs/{id}
+//
+// Compliance:
+//   - OWASP ASVS V4.1 (RBAC — admin only for deletion)
+func (s *Server) deleteAdditionalCost(w http.ResponseWriter, r *http.Request) {
+	costID := chi.URLParam(r, "id")
+	userID := getUserIDFromContext(r.Context())
+
+	if err := s.db.DeleteAdditionalCost(r.Context(), costID); err != nil {
+		s.logger.Error("Failed to delete additional cost", "id", costID, "error", err)
+		respondError(w, r, NewInternalError("operation failed", nil))
+		return
+	}
+
+	s.logAudit(userID, "delete_additional_cost", "additional_cost", costID, nil, nil)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

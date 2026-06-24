@@ -32,7 +32,10 @@ export function DevicesSitesProvider({ children }: { children: ReactNode }) {
                 api.getDevices(),
                 api.getSites(),
             ]);
-            const mapped: Device[] = (devs || []).map((d: any) => ({
+            // OWASP ASVS V5: Input validation — API может вернуть { devices: [...] } вместо прямого массива
+            const devsArray: any[] = Array.isArray(devs) ? devs : (devs && typeof devs === 'object' && 'devices' in devs ? (devs as any).devices : []);
+            const siteArray: any[] = Array.isArray(siteList) ? siteList : (siteList && typeof siteList === 'object' && 'sites' in siteList ? (siteList as any).sites : []);
+            const mapped: Device[] = devsArray.map((d: any) => ({
                 id: d.device_id,
                 name: d.name || d.device_id,
                 siteId: d.site_id || 'site-default',
@@ -50,8 +53,8 @@ export function DevicesSitesProvider({ children }: { children: ReactNode }) {
             const filtered = user?.role === 'owner' ? mapped.filter(d => d.owner_id === user.id) : mapped;
             setDevices(filtered);
 
-            // Map sites from API
-            const mappedSites: Site[] = (siteList || []).map((s: any) => ({
+            // Map sites from API — OWASP ASVS V5: input validation
+            const mappedSites: Site[] = siteArray.map((s: any) => ({
                 id: s.id,
                 name: s.name || 'Unnamed',
                 address: s.address || '',

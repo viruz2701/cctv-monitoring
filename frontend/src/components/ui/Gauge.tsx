@@ -22,7 +22,13 @@ export function Gauge({
   unit = '%',
   className = '',
 }: GaugeProps) {
-  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+  // SLA-6.3.2: CSS transition для smooth animation
+  const [animatedPct, setAnimatedPct] = React.useState(0);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setAnimatedPct(Math.min(100, Math.max(0, (value / max) * 100))), 50);
+    return () => clearTimeout(timer);
+  }, [value, max]);
+  const pct = animatedPct;
   const radius = size === 'lg' ? 52 : size === 'sm' ? 34 : 42;
   const stroke = size === 'lg' ? 10 : size === 'sm' ? 6 : 8;
   const circumference = 2 * Math.PI * radius;

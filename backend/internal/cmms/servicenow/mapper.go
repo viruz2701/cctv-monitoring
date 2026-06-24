@@ -472,8 +472,16 @@ func toTechnicianWorkload(raw map[string]interface{}) models.TechnicianWorkload 
 		CurrentWorkload: m.int("u_current_workload"),
 		MaxWorkload:     m.int("u_max_workload"),
 		Skills:          m.strSlice("u_skills"),
-		BaseLocation:    m.str("u_base_location"),
+		BaseLocation:    strPtr(m.str("u_base_location")),
 	}
+}
+
+// strPtr возвращает *string, или nil если строка пустая.
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // toTechnicianMonthlyStats преобразует ServiceNow-ответ в models.TechnicianMonthlyStats.

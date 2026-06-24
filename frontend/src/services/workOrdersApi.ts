@@ -21,6 +21,9 @@ export interface WorkOrder {
   device_name?: string;
   assignee_name?: string;
   sla_status?: 'on_track' | 'at_risk' | 'breached' | 'completed' | 'no_sla';
+  total_labor_cost?: number;
+  total_parts_cost?: number;
+  total_cost?: number;
 }
 
 export interface ChecklistItem {
@@ -40,6 +43,42 @@ export interface CreateWorkOrderRequest {
   assigned_to?: string;
   checklist?: ChecklistItem[];
   notes?: string;
+}
+
+// ── TimeEntry Types ──────────────────────────────────────────────────
+
+export interface TimeEntry {
+  id: string;
+  work_order_id: string;
+  started_at: string;
+  paused_at?: string;
+  resumed_at?: string;
+  stopped_at?: string;
+  notes?: string;
+  hourly_rate: number;
+  total_seconds: number;
+  status: 'running' | 'paused' | 'stopped';
+}
+
+export interface CreateTimeEntryRequest {
+  notes?: string;
+  hourly_rate: number;
+}
+
+// ── LaborCost Types ──────────────────────────────────────────────────
+
+export interface LaborCost {
+  total_hours: number;
+  hourly_rate: number;
+  total_cost: number;
+  currency: string;
+}
+
+// ── PartWithCost Types ───────────────────────────────────────────────
+
+export interface PartWithCostRequest {
+  part_id: string;
+  quantity: number;
 }
 
 export const workOrdersApi = {
@@ -112,6 +151,72 @@ export const workOrdersApi = {
     return request<{ status: string }>(`/work-orders/${id}/parts`, {
       method: 'POST',
       body: JSON.stringify({ parts }),
+    });
+  },
+
+  // ── Time Entries (WO-5.1) ────────────────────────────────────────
+
+  getTimeEntries: (workOrderId: string) => {
+    return request<TimeEntry[]>(`/work-orders/${workOrderId}/time-entries`);
+  },
+
+  createTimeEntry: (workOrderId: string, data: CreateTimeEntryRequest) => {
+    return request<TimeEntry>(`/work-orders/${workOrderId}/time-entries`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  pauseTimeEntry: (id: string) => {
+    return request<TimeEntry>(`/time-entries/${id}/pause`, {
+      method: 'PUT',
+    });
+  },
+
+  resumeTimeEntry: (id: string) => {
+    return request<TimeEntry>(`/time-entries/${id}/resume`, {
+      method: 'PUT',
+    });
+  },
+
+  stopTimeEntry: (id: string) => {
+    return request<TimeEntry>(`/time-entries/${id}/stop`, {
+      method: 'PUT',
+    });
+  },
+
+  deleteTimeEntry: (id: string) => {
+    return request<{ status: string }>(`/time-entries/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // ── Labor Cost (WO-5.2) ──────────────────────────────────────────
+
+  getLaborCost: (workOrderId: string) => {
+    return request<LaborCost>(`/work-orders/${workOrderId}/labor-cost`);
+  },
+
+  // ── Parts With Cost (WO-5.3) ─────────────────────────────────────
+
+  addPartWithCost: (workOrderId: string, data: PartWithCostRequest) => {
+    return request<{ status: string }>(`/work-orders/${workOrderId}/parts-with-cost`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // ── Bulk Actions (WO-4.2.1) ──────────────────────────────────────
+
+  bulkActions: (action: string, ids: string[], value?: string) => {
+    return request<{
+      results: { id: string; status: 'success' | 'error'; error?: string }[];
+      total: number;
+      success: number;
+      failed: number;
+    }>('/work-orders/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ action, ids, value }),
     });
   },
 };

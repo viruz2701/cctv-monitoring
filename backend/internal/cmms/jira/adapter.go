@@ -478,13 +478,14 @@ func (a *Adapter) GetTechnicianWorkload(ctx context.Context, userID string) (*mo
 		return nil, fmt.Errorf("jira: get technician workload %s: %w", userID, err)
 	}
 	m := newMapper(user)
+	loc := m.str(fieldBaseLocation)
 	return &models.TechnicianWorkload{
 		UserID:          m.str("accountId"),
 		UserName:        m.str("displayName"),
 		CurrentWorkload: m.int(fieldCurrentWorkload),
 		MaxWorkload:     m.int(fieldMaxWorkload),
 		Skills:          m.strSlice(fieldSkills),
-		BaseLocation:    m.str(fieldBaseLocation),
+		BaseLocation:    &loc,
 	}, nil
 }
 
@@ -691,6 +692,7 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 		}
 	})
 }
+
 // FallbackQueueSize возвращает размер очереди.
 func (a *Adapter) FallbackQueueSize() int {
 	count, _ := a.fallbackQueue.Len()
@@ -699,7 +701,7 @@ func (a *Adapter) FallbackQueueSize() int {
 
 // ── Sites ────────────────────────────────────────────────────────
 
-func (a *Adapter) GetSites(_ context.Context) ([]models.Site, error) {
+func (a *Adapter) GetSites(_ context.Context, _ map[string]interface{}) ([]models.Site, error) {
 	return nil, fmt.Errorf("get sites not implemented for Jira adapter")
 }
 
@@ -735,4 +737,70 @@ func (a *Adapter) UpdateCategory(_ context.Context, _ string, _ map[string]inter
 
 func (a *Adapter) DeleteCategory(_ context.Context, _ string) error {
 	return fmt.Errorf("delete category not implemented for Jira adapter")
+}
+
+// ── Work Requests (not supported) ───────────────────────────────
+
+func (a *Adapter) CreateWorkRequest(_ context.Context, _ *models.WorkRequest) error {
+	return fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+func (a *Adapter) GetWorkRequests(_ context.Context, _ map[string]interface{}) ([]models.WorkRequest, error) {
+	return nil, fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+func (a *Adapter) GetWorkRequest(_ context.Context, _ string) (*models.WorkRequest, error) {
+	return nil, fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+func (a *Adapter) ApproveWorkRequest(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+func (a *Adapter) RejectWorkRequest(_ context.Context, _, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+func (a *Adapter) ConvertWorkRequestToWO(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work requests not supported for Jira adapter")
+}
+
+// ── WorkOrder ↔ Alert (DM-1.3.1 — not supported for external CMMS) ─
+
+func (a *Adapter) LinkAlertToWorkOrder(_ context.Context, _, _, _ string) error {
+	return fmt.Errorf("work order alerts not supported for Jira adapter")
+}
+
+func (a *Adapter) UnlinkAlertFromWorkOrder(_ context.Context, _, _ string) error {
+	return fmt.Errorf("work order alerts not supported for Jira adapter")
+}
+
+func (a *Adapter) GetAlertsForWorkOrder(_ context.Context, _ string) ([]models.WorkOrderAlert, error) {
+	return nil, fmt.Errorf("work order alerts not supported for Jira adapter")
+}
+
+func (a *Adapter) GetWorkOrdersForAlert(_ context.Context, _ string) ([]models.WorkOrderAlert, error) {
+	return nil, fmt.Errorf("work order alerts not supported for Jira adapter")
+}
+
+// ── Vendors (INV-7.2.1 — not supported for external CMMS) ────────
+
+func (a *Adapter) CreateVendor(_ context.Context, _ *models.Vendor) error {
+	return fmt.Errorf("vendors not supported for Jira adapter")
+}
+
+func (a *Adapter) GetVendors(_ context.Context, _ map[string]interface{}) ([]models.Vendor, error) {
+	return nil, fmt.Errorf("vendors not supported for Jira adapter")
+}
+
+func (a *Adapter) GetVendor(_ context.Context, _ string) (*models.Vendor, error) {
+	return nil, fmt.Errorf("vendors not supported for Jira adapter")
+}
+
+func (a *Adapter) UpdateVendor(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("vendors not supported for Jira adapter")
+}
+
+func (a *Adapter) DeleteVendor(_ context.Context, _ string) error {
+	return fmt.Errorf("vendors not supported for Jira adapter")
 }

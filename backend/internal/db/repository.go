@@ -1096,3 +1096,43 @@ func (db *DB) DeleteCategory(id string) error {
 	}
 	return nil
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Feature Flags (F-0.2.4)
+// ═══════════════════════════════════════════════════════════════════════
+
+// GetAllFeatureFlags возвращает все фича-флаги из БД.
+// Использует parameterized queries (OWASP ASVS V5.2 — SQL injection prevention).
+func (db *DB) GetAllFeatureFlags(ctx context.Context) ([]models.FeatureFlag, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT key, enabled, COALESCE(description, ''), COALESCE(tenant_id, '*'), created_at, updated_at
+		FROM feature_flags
+		ORDER BY key ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query feature_flags: %w", err)
+	}
+	defer rows.Close()
+
+	var flags []models.FeatureFlag
+	for rows.Next() {
+		var f models.FeatureFlag
+		if err := rows.Scan(&f.Key, &f.Enabled, &f.Description, &f.TenantID, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan feature_flag: %w", err)
+		}
+		flags = append(flags, f)
+	}
+	return flags, rows.Err()
+}
+
+// SetFeatureFlagEnabled обновляет enabled для фича-флага.
+// Использует parameterized queries (OWASP ASVS V5.2 — SQL injection prevention).
+func (db *DB) SetFeatureFlagEnabled(ctx context.Context, key string, enabled bool) error {
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE feature_flags SET enabled = $1, updated_at = NOW() WHERE key = $2
+	`, enabled, key)
+	if err != nil {
+		return fmt.Errorf("update feature_flag %q: %w", key, err)
+	}
+	return nil
+}

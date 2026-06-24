@@ -94,8 +94,32 @@ type Config struct {
 	SNMP      SNMPConfig
 	GB28181   GB28181Config // ДОБАВЛЕНО: GB28181 конфигурация
 
+	// Event Store configuration (DM-1.2.2)
+	EventStore EventStoreConfig
+
 	// Telegram bot configuration
 	Telegram TelegramConfig
+
+	// reCAPTCHA configuration (WO-4.1.1 — public work request submission)
+	RecaptchaSecretKey string `mapstructure:"recaptcha_secret_key"`
+	RecaptchaSiteKey   string `mapstructure:"recaptcha_site_key"`
+	RecaptchaEnabled   bool   `mapstructure:"recaptcha_enabled"`
+}
+
+// EventStoreConfig — настройки Event Store (DM-1.2.2: NATS + S3 Cold Storage)
+type EventStoreConfig struct {
+	Enabled            bool   `mapstructure:"enabled"`
+	NATSURL            string `mapstructure:"nats_url"`
+	NATSCreds          string `mapstructure:"nats_creds"`
+	NATSTLS            bool   `mapstructure:"nats_tls"`
+	S3Endpoint         string `mapstructure:"s3_endpoint"`
+	S3Region           string `mapstructure:"s3_region"`
+	S3Bucket           string `mapstructure:"s3_bucket"`
+	S3AccessKey        string `mapstructure:"s3_access_key"`
+	S3SecretKey        string `mapstructure:"s3_secret_key"`
+	S3UseTLS           bool   `mapstructure:"s3_use_tls"`
+	HotRetentionHours  int    `mapstructure:"hot_retention_hours"`
+	ColdRetentionHours int    `mapstructure:"cold_retention_hours"`
 }
 
 // TelegramConfig — настройки Telegram бота
@@ -291,6 +315,20 @@ func Load() *Config {
 	viper.SetDefault("gb28181.max_sub_channels", 64)
 	viper.SetDefault("gb28181.log_sip_messages", false)
 
+	// Event Store defaults (DM-1.2.2)
+	viper.SetDefault("event_store.enabled", false)
+	viper.SetDefault("event_store.nats_url", "nats://localhost:4222")
+	viper.SetDefault("event_store.nats_creds", "")
+	viper.SetDefault("event_store.nats_tls", false)
+	viper.SetDefault("event_store.s3_endpoint", "")
+	viper.SetDefault("event_store.s3_region", "us-east-1")
+	viper.SetDefault("event_store.s3_bucket", "cctv-event-store")
+	viper.SetDefault("event_store.s3_access_key", "")
+	viper.SetDefault("event_store.s3_secret_key", "")
+	viper.SetDefault("event_store.s3_use_tls", true)
+	viper.SetDefault("event_store.hot_retention_hours", 8760)
+	viper.SetDefault("event_store.cold_retention_hours", 43800)
+
 	bindEnv("debug", "GB_DEBUG")
 	bindEnv("sip_port", "GB_SIP_PORT")
 	bindEnv("sip_host", "GB_SIP_HOST")
@@ -392,8 +430,27 @@ func Load() *Config {
 	bindEnv("audit_hmac_key", "GB_AUDIT_HMAC_KEY")
 
 	// Telegram
+	// Event Store env bindings
+	bindEnv("event_store.enabled", "GB_EVENT_STORE_ENABLED")
+	bindEnv("event_store.nats_url", "GB_EVENT_STORE_NATS_URL")
+	bindEnv("event_store.nats_creds", "GB_EVENT_STORE_NATS_CREDS")
+	bindEnv("event_store.nats_tls", "GB_EVENT_STORE_NATS_TLS")
+	bindEnv("event_store.s3_endpoint", "GB_S3_ENDPOINT")
+	bindEnv("event_store.s3_region", "GB_S3_REGION")
+	bindEnv("event_store.s3_bucket", "GB_S3_BUCKET")
+	bindEnv("event_store.s3_access_key", "GB_S3_ACCESS_KEY")
+	bindEnv("event_store.s3_secret_key", "GB_S3_SECRET_KEY")
+	bindEnv("event_store.s3_use_tls", "GB_S3_USE_TLS")
+	bindEnv("event_store.hot_retention_hours", "GB_EVENT_STORE_HOT_RETENTION")
+	bindEnv("event_store.cold_retention_hours", "GB_EVENT_STORE_COLD_RETENTION")
+
 	bindEnv("telegram.enabled", "GB_TELEGRAM_ENABLED")
 	bindEnv("telegram.token", "GB_TELEGRAM_TOKEN")
+
+	// reCAPTCHA (WO-4.1.1)
+	bindEnv("recaptcha_secret_key", "GB_RECAPTCHA_SECRET_KEY")
+	bindEnv("recaptcha_site_key", "GB_RECAPTCHA_SITE_KEY")
+	bindEnv("recaptcha_enabled", "GB_RECAPTCHA_ENABLED")
 
 	// Database
 	bindEnv("database.url", "DATABASE_URL")
@@ -513,10 +570,27 @@ func Load() *Config {
 		ITSMSyncInterval:        viper.GetString("itsm_sync_interval"),
 		CORSAllowedOrigins:      viper.GetStringSlice("cors_allowed_origins"),
 		AuditHMACKey:            viper.GetString("audit_hmac_key"),
+		EventStore: EventStoreConfig{
+			Enabled:            viper.GetBool("event_store.enabled"),
+			NATSURL:            viper.GetString("event_store.nats_url"),
+			NATSCreds:          viper.GetString("event_store.nats_creds"),
+			NATSTLS:            viper.GetBool("event_store.nats_tls"),
+			S3Endpoint:         viper.GetString("event_store.s3_endpoint"),
+			S3Region:           viper.GetString("event_store.s3_region"),
+			S3Bucket:           viper.GetString("event_store.s3_bucket"),
+			S3AccessKey:        viper.GetString("event_store.s3_access_key"),
+			S3SecretKey:        viper.GetString("event_store.s3_secret_key"),
+			S3UseTLS:           viper.GetBool("event_store.s3_use_tls"),
+			HotRetentionHours:  viper.GetInt("event_store.hot_retention_hours"),
+			ColdRetentionHours: viper.GetInt("event_store.cold_retention_hours"),
+		},
 		Telegram: TelegramConfig{
 			Enabled: viper.GetBool("telegram.enabled"),
 			Token:   viper.GetString("telegram.token"),
 		},
+		RecaptchaSecretKey: viper.GetString("recaptcha_secret_key"),
+		RecaptchaSiteKey:   viper.GetString("recaptcha_site_key"),
+		RecaptchaEnabled:   viper.GetBool("recaptcha_enabled"),
 	}
 
 	if cfg.Hikvision.Enabled {

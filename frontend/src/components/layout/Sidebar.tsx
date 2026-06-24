@@ -42,6 +42,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/maintenance', label: t('maintenance') || 'Maintenance', icon: FileText, roles: ['admin', 'manager', 'technician'] },
         { path: '/work-orders', label: t('work_orders') || 'Work Orders', icon: FileText, roles: ['admin', 'manager', 'technician'] },
         { path: '/spare-parts', label: t('spare_parts') || 'Spare Parts', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
+        { path: '/asset-overview', label: t('asset_overview') || 'Asset Overview', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
+        { path: '/manager-dashboard', label: t('manager_dashboard') || 'Manager Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] },
+        { path: '/cost-dashboard', label: t('cost_dashboard') || 'Cost Dashboard', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
         // Admin Only

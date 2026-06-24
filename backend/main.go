@@ -6,6 +6,8 @@ import (
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/cron"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/events"
+	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/logging"
 	"gb-telemetry-collector/internal/logserver"
 	"gb-telemetry-collector/internal/models"
@@ -392,11 +394,68 @@ func main() {
 		}
 	}
 
+	// --- Event Store (DM-1.2.2: NATS JetStream + S3 Cold Storage) ---
+	var eventStore *events.EventStore
+	if cfg.EventStore.Enabled {
+		esCfg := events.DefaultEventStoreConfig()
+		esCfg.NATSURL = cfg.EventStore.NATSURL
+		esCfg.NATSCreds = cfg.EventStore.NATSCreds
+		esCfg.NATSUseTLS = cfg.EventStore.NATSTLS
+
+		// Cold storage (опционально)
+		if cfg.EventStore.S3Endpoint != "" {
+			esCfg.S3Endpoint = cfg.EventStore.S3Endpoint
+			esCfg.S3Region = cfg.EventStore.S3Region
+			esCfg.S3Bucket = cfg.EventStore.S3Bucket
+			esCfg.S3AccessKey = cfg.EventStore.S3AccessKey
+			esCfg.S3SecretKey = cfg.EventStore.S3SecretKey
+			esCfg.S3UseTLS = cfg.EventStore.S3UseTLS
+		}
+
+		if cfg.EventStore.HotRetentionHours > 0 {
+			esCfg.HotRetention = time.Duration(cfg.EventStore.HotRetentionHours) * time.Hour
+		}
+		if cfg.EventStore.ColdRetentionHours > 0 {
+			esCfg.ColdRetention = time.Duration(cfg.EventStore.ColdRetentionHours) * time.Hour
+		}
+
+		esCfg.Logger = logger
+
+		var err error
+		eventStore, err = events.NewEventStore(esCfg)
+		if err != nil {
+			logger.Warn("Event Store initialization failed, continuing without", "error", err)
+		} else {
+			logger.Info("Event Store initialized",
+				"cold_storage", cfg.EventStore.S3Endpoint != "",
+				"hot_retention", esCfg.HotRetention,
+				"cold_retention", esCfg.ColdRetention,
+			)
+
+			// Публикуем событие запуска системы
+			systemEvent := eventStore.NewRecord(
+				events.SourceSystem,
+				"system.startup",
+				"cctv-backend",
+				map[string]interface{}{
+					"version":    "1.0.0",
+					"hostname":   getEnv("HOSTNAME", "unknown"),
+					"go_version": "1.25",
+				},
+			)
+			_ = eventStore.Store(ctx, systemEvent)
+		}
+	}
+
+	// --- Feature Flag Manager (F-0.2.4) ---
+	ffManager := featureflag.NewManager(database, logger)
+
 	// --- API-сервер ---
 	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler, syncEng)
 	if natsConn != nil {
 		apiServer.SetNATSConn(natsConn)
 	}
+	apiServer.SetFeatureFlagsManager(ffManager)
 	stateWrapper.broadcastFn = apiServer.BroadcastAlarm
 
 	// --- Telegram бот ---
@@ -518,7 +577,35 @@ func main() {
 		logger.Info("ITSM sync engine stopped")
 	}
 
-	// 8. NATS drain (если подключен)
+	// 8. Event Store shutdown (DM-1.2.2)
+	if eventStore != nil {
+		logger.Info("Shutting down Event Store...")
+		// Публикуем событие остановки
+		shutdownEvent := eventStore.NewRecord(
+			events.SourceSystem,
+			"system.shutdown",
+			"cctv-backend",
+			map[string]interface{}{
+				"reason": "graceful_shutdown",
+				"signal": "SIGTERM",
+			},
+		)
+		_ = eventStore.StoreSync(shutdownCtx, shutdownEvent)
+
+		if err := eventStore.Close(); err != nil {
+			logger.Error("Event Store close failed", "error", err)
+		} else {
+			logger.Info("Event Store shut down")
+		}
+	}
+
+	// 9. Feature Flag manager stop
+	if ffManager != nil {
+		logger.Info("Shutting down Feature Flag manager...")
+		ffManager.Stop()
+	}
+
+	// 10. NATS drain (если подключен)
 	if natsConn != nil {
 		logger.Info("Draining NATS connection...")
 		if err := natsConn.Drain(); err != nil {
@@ -528,12 +615,12 @@ func main() {
 		}
 	}
 
-	// 9. DBWriter drain
+	// 10. DBWriter drain
 	logger.Info("Draining DB writer...")
 	close(dbWriter.ch)
 	logger.Info("DB writer drained")
 
-	// 10. Database connection close
+	// 11. Database connection close
 	logger.Info("Closing database connection...")
 	database.Close()
 	logger.Info("Database connection closed")

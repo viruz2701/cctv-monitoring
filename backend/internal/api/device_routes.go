@@ -33,6 +33,9 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 
 	// ── Аналитика ────────────────────────────────────────────────────
 	r.Get("/api/v1/analytics/predictions", s.getPredictions)
+	r.Get("/api/v1/analytics/reliability", s.getReliability)
+	r.Get("/api/v1/analytics/tco", s.getTCOPerDevice)
+	r.Get("/api/v1/analytics/wo-costs", s.getWorkOrderCosts) // WO-4.4.5
 
 	// ── Логи ─────────────────────────────────────────────────────────
 	r.Get("/api/v1/logs/search", s.searchLogs)

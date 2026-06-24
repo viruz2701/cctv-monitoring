@@ -151,6 +151,9 @@ func validateCreateDeviceRequest(req *createDeviceRequestFields) error {
 	if req.SiteID != nil {
 		v.UUID("site_id", *req.SiteID)
 	}
+	if req.ParentDeviceID != nil {
+		v.UUID("parent_device_id", *req.ParentDeviceID)
+	}
 
 	if !v.Valid() {
 		return errors.New(v.Error())
@@ -216,6 +219,9 @@ func validateUpdateDeviceRequest(req *updateDeviceRequestFields) error {
 	if req.UserAgent != nil {
 		v.MaxLength("user_agent", *req.UserAgent, 500)
 	}
+	if req.ParentDeviceID != nil {
+		v.UUID("parent_device_id", *req.ParentDeviceID)
+	}
 
 	if !v.Valid() {
 		return errors.New(v.Error())
@@ -234,43 +240,45 @@ func formatValidationError(err error) string {
 // ── Internal request field structs (для валидации) ─────────────────────
 
 type createDeviceRequestFields struct {
-	DeviceID       string
-	Name           string
-	Location       string
-	Latitude       float64
-	Longitude      float64
-	VendorType     string
-	DeviceType     string
-	Status         string
-	ConnectionType string
-	AssetClass     string
-	Manufacturer   string
-	SerialNumber   string
-	MacAddress     string
+	DeviceID        string
+	Name            string
+	Location        string
+	Latitude        float64
+	Longitude       float64
+	VendorType      string
+	DeviceType      string
+	Status          string
+	ConnectionType  string
+	AssetClass      string
+	Manufacturer    string
+	SerialNumber    string
+	MacAddress      string
 	FirmwareVersion string
-	SiteID         *string
-	P2PBrand       string
-	P2PSerial      string
-	UserAgent      string
+	SiteID          *string
+	P2PBrand        string
+	P2PSerial       string
+	UserAgent       string
+	ParentDeviceID  *string
 }
 
 type updateDeviceRequestFields struct {
-	Name           *string
-	Location       *string
-	Latitude       *float64
-	Longitude      *float64
-	VendorType     *string
-	DeviceType     *string
-	Status         *string
-	ConnectionType *string
-	AssetClass     *string
-	Manufacturer   *string
-	SerialNumber   *string
-	MacAddress     *string
+	Name            *string
+	Location        *string
+	Latitude        *float64
+	Longitude       *float64
+	VendorType      *string
+	DeviceType      *string
+	Status          *string
+	ConnectionType  *string
+	AssetClass      *string
+	Manufacturer    *string
+	SerialNumber    *string
+	MacAddress      *string
 	FirmwareVersion *string
-	SiteID         *string
-	P2PBrand       *string
-	P2PSerial      *string
-	UserAgent      *string
-	Health         *string
+	SiteID          *string
+	P2PBrand        *string
+	P2PSerial       *string
+	UserAgent       *string
+	Health          *string
+	ParentDeviceID  *string
 }

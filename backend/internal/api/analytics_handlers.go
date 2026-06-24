@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/models"
 )
 
 // ---------- Аналитика ----------
@@ -57,4 +58,163 @@ func (s *Server) searchLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, logs)
+}
+
+// ---------- Reliability Metrics (AN-10.1.1) ----------
+
+// getReliability возвращает MTBF/MTTR метрики по vendor_type и device_type.
+//
+// Эндпоинт: GET /api/v1/analytics/reliability
+// Параметры:
+//   - vendor_type (optional): фильтр по вендору
+//   - device_type (optional): фильтр по типу устройства
+//
+// Compliance:
+//   - OWASP ASVS V5.1 (Input validation — whitelist через query params)
+//   - OWASP ASVS V7.1 (Error handling — no information leakage)
+//   - ISO 27001 A.12.6.1 (Capacity management — reliability metrics)
+func (s *Server) getReliability(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
+		respondError(w, r, NewForbiddenError("forbidden"))
+		return
+	}
+
+	vendorType := r.URL.Query().Get("vendor_type")
+	deviceType := r.URL.Query().Get("device_type")
+
+	results, err := s.db.GetDeviceReliability(r.Context(), vendorType, deviceType)
+	if err != nil {
+		s.logger.Error("failed to get device reliability", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	// Конвертируем в response DTO
+	type reliabilityResponse struct {
+		VendorType           string  `json:"vendor_type"`
+		DeviceType           string  `json:"device_type"`
+		DeviceCount          int64   `json:"device_count"`
+		MTBFHours            float64 `json:"mtbf_hours"`
+		MTTRMinutes          float64 `json:"mttr_minutes"`
+		TotalDowntimeMinutes int64   `json:"total_downtime_minutes"`
+		TotalCompletions     int64   `json:"total_completions"`
+	}
+
+	response := make([]reliabilityResponse, 0, len(results))
+	for _, r := range results {
+		response = append(response, reliabilityResponse{
+			VendorType:           r.VendorType,
+			DeviceType:           r.DeviceType,
+			DeviceCount:          r.DeviceCount,
+			MTBFHours:            r.MTBFHours,
+			MTTRMinutes:          r.MTTRMinutes,
+			TotalDowntimeMinutes: r.TotalDowntimeMinutes,
+			TotalCompletions:     r.TotalCompletions,
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, response)
+}
+
+// ---------- TCO Per Device (AN-10.1.3) ----------
+
+// getTCOPerDevice возвращает TCO (Total Cost of Ownership) per device.
+//
+// Эндпоинт: GET /api/v1/analytics/tco
+// Параметры:
+//   - vendor_type (optional): фильтр по вендору
+//   - device_type (optional): фильтр по типу устройства
+//   - device_id (optional): фильтр по ID устройства
+//   - limit (optional): лимит записей (default: 50, max: 500)
+//   - offset (optional): смещение
+//
+// TCO = Purchase + Labor + Parts + Downtime
+// Данные берутся из mv_tco_per_device (материализованное представление,
+// обновляется через REFRESH MATERIALIZED VIEW).
+//
+// Compliance:
+//   - OWASP ASVS V5.1 (Input validation — whitelist через query params)
+//   - OWASP ASVS V7.1 (Error handling — no information leakage)
+//   - ISO 27001 A.12.6.1 (Capacity management — cost tracking)
+//   - IEC 62443 SR 7.1 (Resource availability — asset TCO)
+func (s *Server) getTCOPerDevice(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
+		respondError(w, r, NewForbiddenError("forbidden"))
+		return
+	}
+
+	// Парсим параметры фильтрации
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+	}
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	filter := models.TCOFilter{
+		VendorType: r.URL.Query().Get("vendor_type"),
+		DeviceType: r.URL.Query().Get("device_type"),
+		DeviceID:   r.URL.Query().Get("device_id"),
+		Limit:      limit,
+		Offset:     offset,
+	}
+
+	results, err := s.db.GetTCOPerDevice(r.Context(), filter)
+	if err != nil {
+		s.logger.Error("failed to get TCO per device", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, results)
+}
+
+// ---------- Work Order Cost Summary (WO-4.4.5) ----------
+
+// getWorkOrderCosts возвращает агрегированную сводку затрат по Work Orders.
+//
+// Эндпоинт: GET /api/v1/analytics/wo-costs
+//
+// Compliance:
+//   - OWASP ASVS V4.1 (RBAC — admin/manager/support only)
+//   - OWASP ASVS V5.1 (Input validation — no user input)
+//   - OWASP ASVS V7.1 (Structured response — no sensitive data)
+//   - ISO 27001 A.12.6.1 (Capacity management — cost tracking)
+func (s *Server) getWorkOrderCosts(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
+		respondError(w, r, NewForbiddenError("forbidden"))
+		return
+	}
+
+	summary, err := s.db.GetWorkOrderCostSummary(r.Context())
+	if err != nil {
+		s.logger.Error("failed to get work order cost summary", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	breakdown, err := s.db.GetWorkOrderCostBreakdown(r.Context())
+	if err != nil {
+		s.logger.Warn("failed to get work order cost breakdown", "error", err)
+		breakdown = []models.WorkOrderCostBreakdown{}
+	}
+
+	type costResponse struct {
+		Summary   models.WorkOrderCostSummary   `json:"summary"`
+		Breakdown []models.WorkOrderCostBreakdown `json:"breakdown"`
+	}
+
+	jsonResponse(w, http.StatusOK, costResponse{
+		Summary:   *summary,
+		Breakdown: breakdown,
+	})
 }

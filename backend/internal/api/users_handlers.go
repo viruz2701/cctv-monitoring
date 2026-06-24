@@ -51,6 +51,12 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// OWASP ASVS L3 V2 — Password strength validation
+	if err := auth.MustValidatePasswordStrength(req.Password); err != nil {
+		respondError(w, r, NewBadRequestError("password: "+err.Error()))
+		return
+	}
+
 	hashed, err := auth.HashPassword(req.Password)
 	if err != nil {
 		respondError(w, r, NewInternalError("internal error", nil))

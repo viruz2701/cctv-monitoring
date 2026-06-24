@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -212,6 +214,32 @@ func (s *Server) handleServicesStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	response.Services["p2p_gateway"] = ServiceStatusDetail{Status: p2pStatus, Port: 0, Message: p2pMsg}
 
+	// ── CMMS Adapter (CMMS-3.3.2) ────────────────────────────
+	cmmsAdapterName := s.config.CMMSAdapter
+	if cmmsAdapterName == "" {
+		cmmsAdapterName = "internal"
+	}
+	adapterStatus := "running"
+	adapterMsg := fmt.Sprintf("%s adapter", cmmsAdapterName)
+
+	// Для внешних адаптеров пробуем HealthCheck
+	if cmmsAdapterName != "internal" {
+		type healthChecker interface{ HealthCheck(context.Context) error }
+		if hc, ok := s.cmmsRouter.Adapter().(healthChecker); ok {
+			hcCtx, hcCancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer hcCancel()
+			if err := hc.HealthCheck(hcCtx); err != nil {
+				adapterStatus = "error"
+				adapterMsg = fmt.Sprintf("%s: %v", cmmsAdapterName, err)
+			}
+		}
+	}
+	response.Services["cmms_adapter"] = ServiceStatusDetail{
+		Status:  adapterStatus,
+		Port:    0,
+		Message: adapterMsg,
+	}
+
 	jsonResponse(w, http.StatusOK, response)
 }
 
@@ -221,7 +249,7 @@ func checkServiceStatus(enabled bool, host string, port int, timeout time.Durati
 	if !enabled {
 		return "disabled", ""
 	}
-	target := fmt.Sprintf("%s:%d", host, port)
+	target := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Сначала пробуем TCP
 	conn, err := net.DialTimeout("tcp", target, timeout)

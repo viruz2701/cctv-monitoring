@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, Zap, Key, Plus, Trash2, Copy, Shield, Calendar } from 'lucide-react';
+import { Save, Settings as SettingsIcon, Zap, Key, Plus, Trash2, Copy, Shield, Calendar, DollarSign } from 'lucide-react';
 import { Card, CardHeader, CardBody, CardFooter, Button, Input, Select, Modal, Badge, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
 import type { AppSettings } from '../../types';
+import { CURRENCY_LIST, getCurrencyCode, setCurrencyCode } from '../../utils/currency';
 
 interface Props {
   formData: AppSettings;
@@ -139,6 +140,12 @@ export const GeneralSettings: React.FC<Props> = ({
                 ]}
                 value={formData.dateFormat}
                 onChange={(e) => onTopLevelChange('dateFormat', e.target.value)}
+              />
+              <Select
+                label={t('currency') || 'Currency'}
+                options={CURRENCY_LIST.map(c => ({ value: c.code, label: `${c.symbol} — ${c.name} (${c.code})` }))}
+                value={getCurrencyCode()}
+                onChange={(e) => { setCurrencyCode(e.target.value); window.location.reload(); }}
               />
             </div>
           </div>

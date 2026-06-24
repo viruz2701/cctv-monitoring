@@ -6,7 +6,7 @@ import { useUsers } from '../context/UsersContext';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
-import { Button, Card, Table, Badge, Modal, Input } from '../components/ui';
+import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
 import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
 import FullCalendar from '@fullcalendar/react';
 import type { DatesSetArg } from '@fullcalendar/core';
@@ -81,16 +81,19 @@ export const MaintenanceSchedules: React.FC = () => {
     {
       key: 'device_name',
       header: t('device'),
+      sortable: true,
       render: (item: MaintenanceSchedule) => item.device_name || item.device_id,
     },
     {
       key: 'schedule_type',
       header: t('type'),
+      sortable: true,
       render: (item: MaintenanceSchedule) => t(item.schedule_type),
     },
     {
       key: 'priority',
       header: t('priority'),
+      sortable: true,
       render: (item: MaintenanceSchedule) => (
         <Badge variant={getPriorityVariant(item.priority)}>
           {t(item.priority)}
@@ -100,6 +103,7 @@ export const MaintenanceSchedules: React.FC = () => {
     {
       key: 'next_due',
       header: t('next_due'),
+      sortable: true,
       render: (item: MaintenanceSchedule) => (
         <div className="flex items-center gap-2">
           {isOverdue(item.next_due) ? (
@@ -114,6 +118,7 @@ export const MaintenanceSchedules: React.FC = () => {
     {
       key: 'assignee_name',
       header: t('assigned_to'),
+      sortable: true,
       render: (item: MaintenanceSchedule) => item.assignee_name || t('unassigned'),
     },
     {
@@ -202,12 +207,16 @@ export const MaintenanceSchedules: React.FC = () => {
         </div>
 
         {viewMode === 'table' ? (
-          <Table
+          <DataGrid
             data={filteredSchedules}
             columns={columns}
             keyExtractor={(item) => item.id}
             loading={loading}
             emptyMessage={t('no_schedules')}
+            variant="striped"
+            defaultDensity="standard"
+            pageSize={10}
+            exportFilename="maintenance-schedules.csv"
           />
         ) : (
           <div className="calendar-container">

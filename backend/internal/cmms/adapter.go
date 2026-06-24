@@ -72,7 +72,7 @@ type CMMSAdapter interface {
 
 	// ── Sites ────────────────────────────────────────────────────
 
-	GetSites(ctx context.Context) ([]models.Site, error)
+	GetSites(ctx context.Context, filters map[string]interface{}) ([]models.Site, error)
 	GetSite(ctx context.Context, id string) (*models.Site, error)
 	CreateSite(ctx context.Context, site *models.Site) error
 	UpdateSite(ctx context.Context, id string, updates map[string]interface{}) error
@@ -84,6 +84,30 @@ type CMMSAdapter interface {
 	CreateCategory(ctx context.Context, cat *models.SparePartCategory) error
 	UpdateCategory(ctx context.Context, id string, updates map[string]interface{}) error
 	DeleteCategory(ctx context.Context, id string) error
+
+	// ── Work Requests (WO-4.1.1) ────────────────────────────────
+
+	CreateWorkRequest(ctx context.Context, req *models.WorkRequest) error
+	GetWorkRequests(ctx context.Context, filters map[string]interface{}) ([]models.WorkRequest, error)
+	GetWorkRequest(ctx context.Context, id string) (*models.WorkRequest, error)
+	ApproveWorkRequest(ctx context.Context, id, approvedBy string) error
+	RejectWorkRequest(ctx context.Context, id, rejectedBy, reason string) error
+	ConvertWorkRequestToWO(ctx context.Context, requestID, workOrderID string) error
+
+	// ── WorkOrder ↔ Alert (Many-to-Many) — DM-1.3.1 ────────────
+
+	LinkAlertToWorkOrder(ctx context.Context, workOrderID, alertID, userID string) error
+	UnlinkAlertFromWorkOrder(ctx context.Context, workOrderID, alertID string) error
+	GetAlertsForWorkOrder(ctx context.Context, workOrderID string) ([]models.WorkOrderAlert, error)
+	GetWorkOrdersForAlert(ctx context.Context, alertID string) ([]models.WorkOrderAlert, error)
+
+	// ── Vendors (INV-7.2.1) ─────────────────────────────────────
+
+	CreateVendor(ctx context.Context, vendor *models.Vendor) error
+	GetVendors(ctx context.Context, filters map[string]interface{}) ([]models.Vendor, error)
+	GetVendor(ctx context.Context, id string) (*models.Vendor, error)
+	UpdateVendor(ctx context.Context, id string, updates map[string]interface{}) error
+	DeleteVendor(ctx context.Context, id string) error
 
 	// ── Mobile ───────────────────────────────────────────────────
 
@@ -269,8 +293,8 @@ func (r *CMMSRouter) DeleteTechnicianSiteAssignment(ctx context.Context, id stri
 
 // ── Sites ────────────────────────────────────────────────────────
 
-func (r *CMMSRouter) GetSites(ctx context.Context) ([]models.Site, error) {
-	return r.adapter.GetSites(ctx)
+func (r *CMMSRouter) GetSites(ctx context.Context, filters map[string]interface{}) ([]models.Site, error) {
+	return r.adapter.GetSites(ctx, filters)
 }
 
 func (r *CMMSRouter) GetSite(ctx context.Context, id string) (*models.Site, error) {
@@ -305,6 +329,72 @@ func (r *CMMSRouter) UpdateCategory(ctx context.Context, id string, updates map[
 
 func (r *CMMSRouter) DeleteCategory(ctx context.Context, id string) error {
 	return r.adapter.DeleteCategory(ctx, id)
+}
+
+// ── Work Requests (WO-4.1.1) ────────────────────────────────────
+
+func (r *CMMSRouter) CreateWorkRequest(ctx context.Context, req *models.WorkRequest) error {
+	return r.adapter.CreateWorkRequest(ctx, req)
+}
+
+func (r *CMMSRouter) GetWorkRequests(ctx context.Context, filters map[string]interface{}) ([]models.WorkRequest, error) {
+	return r.adapter.GetWorkRequests(ctx, filters)
+}
+
+func (r *CMMSRouter) GetWorkRequest(ctx context.Context, id string) (*models.WorkRequest, error) {
+	return r.adapter.GetWorkRequest(ctx, id)
+}
+
+func (r *CMMSRouter) ApproveWorkRequest(ctx context.Context, id, approvedBy string) error {
+	return r.adapter.ApproveWorkRequest(ctx, id, approvedBy)
+}
+
+func (r *CMMSRouter) RejectWorkRequest(ctx context.Context, id, rejectedBy, reason string) error {
+	return r.adapter.RejectWorkRequest(ctx, id, rejectedBy, reason)
+}
+
+func (r *CMMSRouter) ConvertWorkRequestToWO(ctx context.Context, requestID, workOrderID string) error {
+	return r.adapter.ConvertWorkRequestToWO(ctx, requestID, workOrderID)
+}
+
+// ── WorkOrder ↔ Alert (Many-to-Many) — DM-1.3.1 ────────────────
+
+func (r *CMMSRouter) LinkAlertToWorkOrder(ctx context.Context, workOrderID, alertID, userID string) error {
+	return r.adapter.LinkAlertToWorkOrder(ctx, workOrderID, alertID, userID)
+}
+
+func (r *CMMSRouter) UnlinkAlertFromWorkOrder(ctx context.Context, workOrderID, alertID string) error {
+	return r.adapter.UnlinkAlertFromWorkOrder(ctx, workOrderID, alertID)
+}
+
+func (r *CMMSRouter) GetAlertsForWorkOrder(ctx context.Context, workOrderID string) ([]models.WorkOrderAlert, error) {
+	return r.adapter.GetAlertsForWorkOrder(ctx, workOrderID)
+}
+
+func (r *CMMSRouter) GetWorkOrdersForAlert(ctx context.Context, alertID string) ([]models.WorkOrderAlert, error) {
+	return r.adapter.GetWorkOrdersForAlert(ctx, alertID)
+}
+
+// ── Vendors (INV-7.2.1) ──────────────────────────────────────────
+
+func (r *CMMSRouter) CreateVendor(ctx context.Context, vendor *models.Vendor) error {
+	return r.adapter.CreateVendor(ctx, vendor)
+}
+
+func (r *CMMSRouter) GetVendors(ctx context.Context, filters map[string]interface{}) ([]models.Vendor, error) {
+	return r.adapter.GetVendors(ctx, filters)
+}
+
+func (r *CMMSRouter) GetVendor(ctx context.Context, id string) (*models.Vendor, error) {
+	return r.adapter.GetVendor(ctx, id)
+}
+
+func (r *CMMSRouter) UpdateVendor(ctx context.Context, id string, updates map[string]interface{}) error {
+	return r.adapter.UpdateVendor(ctx, id, updates)
+}
+
+func (r *CMMSRouter) DeleteVendor(ctx context.Context, id string) error {
+	return r.adapter.DeleteVendor(ctx, id)
 }
 
 // ── Mobile ───────────────────────────────────────────────────────

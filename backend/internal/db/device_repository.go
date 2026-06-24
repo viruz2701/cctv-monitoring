@@ -30,7 +30,8 @@ func (db *DB) CreateDevice(ctx context.Context, dev *models.Device) error {
 			last_seen, registered_at, created_at, updated_at,
 			connection_type, heartbeat_interval, user_agent,
 			p2p_brand, p2p_serial, cloud_status,
-			manufacturer, serial_number, mac_address, firmware_version
+			manufacturer, serial_number, mac_address, firmware_version,
+			parent_device_id, hierarchy_level
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9,
@@ -38,7 +39,8 @@ func (db *DB) CreateDevice(ctx context.Context, dev *models.Device) error {
 			$13, $14, NOW(), NOW(),
 			$15, $16, $17,
 			$18, $19, $20,
-			$21, $22, $23, $24
+			$21, $22, $23, $24,
+			$25, $26
 		)
 	`,
 		dev.DeviceID, dev.OwnerID, dev.SiteID, dev.Name, dev.Location,
@@ -48,6 +50,7 @@ func (db *DB) CreateDevice(ctx context.Context, dev *models.Device) error {
 		dev.ConnectionType, dev.HeartbeatInterval, dev.UserAgent,
 		dev.P2PBrand, dev.P2PSerial, dev.CloudStatus,
 		dev.Manufacturer, dev.SerialNumber, dev.MacAddress, dev.FirmwareVersion,
+		dev.ParentDeviceID, dev.HierarchyLevel,
 	)
 	if err != nil {
 		return fmt.Errorf("create device %q: %w", dev.DeviceID, err)
@@ -66,6 +69,8 @@ func (db *DB) GetDeviceByID(ctx context.Context, deviceID string) (*models.Devic
 	var health string
 	var assetClass string
 	var deletedAt *time.Time
+	var parentDeviceID *string
+	var hierarchyLevel int
 
 	err := db.Pool.QueryRow(ctx, `
 		SELECT
@@ -75,7 +80,8 @@ func (db *DB) GetDeviceByID(ctx context.Context, deviceID string) (*models.Devic
 			last_seen, registered_at, created_at, updated_at, deleted_at,
 			connection_type, heartbeat_interval, user_agent,
 			p2p_brand, p2p_serial, cloud_status,
-			manufacturer, serial_number, mac_address, firmware_version
+			manufacturer, serial_number, mac_address, firmware_version,
+			parent_device_id, hierarchy_level
 		FROM devices WHERE device_id = $1
 	`, deviceID).Scan(
 		&dev.DeviceID, &ownerID, &siteID, &dev.Name, &dev.Location,
@@ -85,6 +91,7 @@ func (db *DB) GetDeviceByID(ctx context.Context, deviceID string) (*models.Devic
 		&connectionType, &dev.HeartbeatInterval, &dev.UserAgent,
 		&p2pBrand, &p2pSerial, &cloudStatus,
 		&manufacturer, &serialNumber, &macAddress, &firmwareVersion,
+		&parentDeviceID, &hierarchyLevel,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -127,6 +134,8 @@ func (db *DB) GetDeviceByID(ctx context.Context, deviceID string) (*models.Devic
 	if firmwareVersion != nil {
 		dev.FirmwareVersion = *firmwareVersion
 	}
+	dev.ParentDeviceID = parentDeviceID
+	dev.HierarchyLevel = models.HierarchyLevel(hierarchyLevel)
 
 	return &dev, nil
 }
@@ -182,6 +191,12 @@ func (db *DB) ListDevices(ctx context.Context, filter models.ListDevicesFilter) 
 	if filter.AssetClass != "" {
 		where = append(where, fmt.Sprintf("asset_class = $%d", argIdx))
 		args = append(args, filter.AssetClass)
+		argIdx++
+	}
+
+	if filter.ParentDeviceID != "" {
+		where = append(where, fmt.Sprintf("parent_device_id = $%d", argIdx))
+		args = append(args, filter.ParentDeviceID)
 		argIdx++
 	}
 
@@ -269,7 +284,7 @@ func (db *DB) UpdateDevice(ctx context.Context, deviceID string, updates map[str
 		"user_agent": true, "p2p_brand": true, "p2p_serial": true,
 		"cloud_status": true, "manufacturer": true, "serial_number": true,
 		"mac_address": true, "firmware_version": true, "site_id": true,
-		"owner_id": true,
+		"owner_id": true, "parent_device_id": true, "hierarchy_level": true,
 	}
 
 	for field, value := range updates {

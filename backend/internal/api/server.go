@@ -16,12 +16,14 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"gb-telemetry-collector/internal/audit"
+	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/cmms"
-	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/recaptcha"
+	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
 	syncengine "gb-telemetry-collector/internal/sync"
@@ -71,6 +73,12 @@ type Server struct {
 
 	// Device service with audit trail (ISO 27001 A.12.4)
 	deviceService *service.DeviceService
+
+	// Feature Flag manager (F-0.2.4)
+	featureFlags *featureflag.Manager
+
+	// reCAPTCHA validator for public work request submission (WO-4.1.1)
+	recaptchaValidator *recaptcha.Validator
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -139,20 +147,29 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// Инициализация CMMS Router
 	cmmsRouter := factory.NewCMMSRouterFromConfig(cfg, database)
 
+	// Инициализация reCAPTCHA валидатора (WO-4.1.1)
+	recaptchaValidator := recaptcha.NewValidator(recaptcha.Config{
+		SecretKey: cfg.RecaptchaSecretKey,
+		SiteKey:   cfg.RecaptchaSiteKey,
+		MinScore:  0.5,
+		Enabled:   cfg.RecaptchaEnabled,
+	})
+
 	s := &Server{
-		stateManager:  stateMgr,
-		logger:        logger,
-		db:            database,
-		imagesDir:     imagesDir,
-		config:        cfg,
-		sipHandler:    sipHandler,
-		wsHub:         ws.NewHub(),
-		cmmsRouter:    cmmsRouter,
-		syncEngine:    syncEng,
-		auditSigner:   mustNewAuditSigner(cfg.AuditHMACKey, logger),
-		p2pGatewayURL: cfg.P2PGatewayURL,
-		p2pAPIKey:     cfg.P2PAPIKey,
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
+		stateManager:       stateMgr,
+		logger:             logger,
+		db:                 database,
+		imagesDir:          imagesDir,
+		config:             cfg,
+		sipHandler:         sipHandler,
+		wsHub:              ws.NewHub(),
+		cmmsRouter:         cmmsRouter,
+		syncEngine:         syncEng,
+		auditSigner:        mustNewAuditSigner(cfg.AuditHMACKey, logger),
+		p2pGatewayURL:      cfg.P2PGatewayURL,
+		p2pAPIKey:          cfg.P2PAPIKey,
+		httpClient:         &http.Client{Timeout: 30 * time.Second},
+		recaptchaValidator: recaptchaValidator,
 	}
 	// ── Device Service ────────────────────────────────────────────────
 	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
@@ -162,6 +179,13 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
 	s.mountHealthRoutes(r)
 	s.mountAuthRoutes(r)
+
+	// Публичный endpoint для подачи заявок (WO-4.1.1)
+	// Rate limit: 10 req/min/IP
+	r.Group(func(r chi.Router) {
+		r.Use(s.workRequestRateLimiter)
+		r.Post("/api/v1/public/work-requests", s.submitWorkRequest)
+	})
 
 	// External alarm routes (P2P alarm with API key, etc.)
 	s.mountExternalAlarmRoutes(r)
@@ -193,6 +217,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// CMMS domain (maintenance, work orders, spare parts, SLA, mobile)
 		s.mountCMMSRoutes(r)
+
+		// Feature Flag domain (F-0.2.4)
+		s.mountFeatureFlagRoutes(r)
 	})
 
 	// ── External API key auth ────────────────────────────────────────
@@ -230,6 +257,11 @@ func (s *Server) SetTelegramBot(bot *telegram.Bot) {
 // SetNATSConn устанавливает NATS соединение для health checks.
 func (s *Server) SetNATSConn(conn *nats.Conn) {
 	s.natsConn = conn
+}
+
+// SetFeatureFlagsManager устанавливает Feature Flag менеджер (F-0.2.4).
+func (s *Server) SetFeatureFlagsManager(ff *featureflag.Manager) {
+	s.featureFlags = ff
 }
 
 // ---------- Вспомогательные ----------

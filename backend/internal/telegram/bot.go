@@ -354,6 +354,15 @@ func (b *Bot) sendMessage(chatID int64, text string) {
 	b.api.Send(msg)
 }
 
+// SendTextMessage отправляет текстовое сообщение указанному chatID.
+//
+// Public wrapper вокруг sendMessage для использования из других пакетов (SLA Worker и др.).
+// Compliance:
+//   - OWASP ASVS V7.1 — сообщения не содержат sensitive data (логин/пароль/токен)
+func (b *Bot) SendTextMessage(chatID int64, text string) {
+	b.sendMessage(chatID, text)
+}
+
 // sendMessageWithKeyboard sends a message with inline keyboard
 func (b *Bot) sendMessageWithKeyboard(chatID int64, text string, keyboard tgbotapi.InlineKeyboardMarkup) {
 	msg := tgbotapi.NewMessage(chatID, text)

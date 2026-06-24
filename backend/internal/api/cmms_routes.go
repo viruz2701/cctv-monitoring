@@ -11,6 +11,25 @@ import (
 
 // mountCMMSRoutes регистрирует все CMMS-маршруты на защищённом роутере.
 func (s *Server) mountCMMSRoutes(r chi.Router) {
+	// Time Entries (WO-4.4.1)
+	r.Get("/api/v1/work-orders/{id}/time-entries", s.listTimeEntries)
+	r.Post("/api/v1/work-orders/{id}/time-entries", s.createTimeEntry)
+	r.Put("/api/v1/time-entries/{id}/pause", s.pauseTimeEntry)
+	r.Put("/api/v1/time-entries/{id}/resume", s.resumeTimeEntry)
+	r.Put("/api/v1/time-entries/{id}/stop", s.stopTimeEntry)
+	r.Delete("/api/v1/time-entries/{id}", s.deleteTimeEntry)
+
+	// Labor Cost (WO-4.4.2)
+	r.Get("/api/v1/work-orders/{id}/labor-cost", s.getLaborCost)
+
+	// Parts Consumption with Cost Snapshot (WO-4.4.4)
+	r.Post("/api/v1/work-orders/{id}/parts-with-cost", s.addPartWithCost)
+
+	// Additional Cost (WO-4.4.3)
+	r.Get("/api/v1/work-orders/{id}/additional-costs", s.listAdditionalCosts)
+	r.Post("/api/v1/work-orders/{id}/additional-costs", s.createAdditionalCost)
+	r.Delete("/api/v1/additional-costs/{id}", s.deleteAdditionalCost)
+
 	// Maintenance Schedules
 	r.Get("/api/v1/maintenance/schedules", s.listMaintenanceSchedules)
 	r.Post("/api/v1/maintenance/schedules", s.createMaintenanceSchedule)
@@ -20,9 +39,18 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Delete("/api/v1/maintenance/schedules/{id}", s.deleteMaintenanceSchedule)
 	r.Post("/api/v1/maintenance/schedules/{id}/complete", s.completeMaintenanceSchedule)
 
+	// Work Requests (WO-4.1.1 — approval workflow)
+	// Public submit: POST /api/v1/public/work-requests (см. server.go)
+	r.Get("/api/v1/work-requests", s.listWorkRequests)
+	r.Get("/api/v1/work-requests/{id}", s.getWorkRequest)
+	r.Post("/api/v1/work-requests/{id}/approve", s.approveWorkRequest)
+	r.Post("/api/v1/work-requests/{id}/reject", s.rejectWorkRequest)
+	r.Post("/api/v1/work-requests/{id}/convert", s.convertWorkRequestToWO)
+
 	// Work Orders
 	r.Get("/api/v1/work-orders", s.listWorkOrders)
 	r.Post("/api/v1/work-orders", s.createWorkOrder)
+	r.Post("/api/v1/work-orders/bulk", s.handleBulkWorkOrders) // WO-4.2.1 Bulk Actions
 	r.Get("/api/v1/work-orders/{id}", s.getWorkOrder)
 	r.Put("/api/v1/work-orders/{id}", s.updateWorkOrder)
 	r.Delete("/api/v1/work-orders/{id}", s.deleteWorkOrder)
@@ -33,6 +61,11 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Post("/api/v1/work-orders/{id}/photos", s.uploadWorkOrderPhotos)
 	r.Post("/api/v1/work-orders/{id}/parts", s.addWorkOrderParts)
 
+	// WorkOrder ↔ Alert (DM-1.3.1)
+	r.Get("/api/v1/work-orders/{id}/alerts", s.listAlertsForWorkOrder)
+	r.Post("/api/v1/work-orders/{id}/alerts", s.linkAlertToWorkOrder)
+	r.Delete("/api/v1/work-orders/{id}/alerts/{alertId}", s.unlinkAlertFromWorkOrder)
+
 	// Spare Parts
 	r.Get("/api/v1/spare-parts", s.listSpareParts)
 	r.Post("/api/v1/spare-parts", s.createSparePart)
@@ -41,6 +74,7 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Put("/api/v1/spare-parts/{id}", s.updateSparePart)
 	r.Delete("/api/v1/spare-parts/{id}", s.deleteSparePart)
 	r.Post("/api/v1/spare-parts/{id}/adjust", s.adjustSparePartStock)
+	r.Get("/api/v1/spare-parts/{id}/adjustments", s.listSparePartStockAdjustments)
 
 	// Spare Part Categories
 	r.Get("/api/v1/spare-parts/categories", s.listSparePartCategories)
@@ -81,6 +115,13 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Get("/api/v1/export/work-orders/pdf", s.exportWorkOrdersPDF)
 	r.Get("/api/v1/export/spare-parts/xlsx", s.exportSparePartsXLSX)
 	r.Get("/api/v1/export/spare-parts/pdf", s.exportSparePartsPDF)
+
+	// Vendors (INV-7.2.1)
+	r.Get("/api/v1/vendors", s.listVendors)
+	r.Post("/api/v1/vendors", s.createVendor)
+	r.Get("/api/v1/vendors/{id}", s.getVendor)
+	r.Put("/api/v1/vendors/{id}", s.updateVendor)
+	r.Delete("/api/v1/vendors/{id}", s.deleteVendor)
 
 	// Mobile API — rate-limited (100 req/min/IP)
 	r.Group(func(r chi.Router) {

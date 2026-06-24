@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, CardBody, Table, Input, Button, Select, Pagination, Badge } from '../components/ui';
+import { Card, CardBody, DataGrid, Input, Button, Select, Badge } from '../components/ui';
 import { api, ParsedLog } from '../services/api';
 import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,6 @@ export function Logs() {
     const [logs, setLogs] = useState<ParsedLog[]>([]);
     const [loading, setLoading] = useState(false);
     const [filters, setFilters] = useState({ device_id: '', level: '', keyword: '' });
-    const [page, setPage] = useState(1);
     const itemsPerPage = 20;
 
     const handleSearch = async () => {
@@ -24,13 +23,12 @@ export function Logs() {
         }
     };
 
-    const paginated = logs.slice((page-1)*itemsPerPage, page*itemsPerPage);
     const columns = [
-        { header: t('time'), key: 'timestamp', render: (l: ParsedLog) => new Date(l.timestamp).toLocaleString() },
-        { header: t('device_id'), key: 'device_id' },
-        { header: t('log_level'), key: 'log_level', render: (l: ParsedLog) => <Badge variant={l.log_level === 'ERROR' ? 'danger' : l.log_level === 'WARN' ? 'warning' : 'info'}>{l.log_level}</Badge> },
+        { header: t('time'), key: 'timestamp', sortable: true, render: (l: ParsedLog) => new Date(l.timestamp).toLocaleString() },
+        { header: t('device_id'), key: 'device_id', sortable: true },
+        { header: t('log_level'), key: 'log_level', sortable: true, render: (l: ParsedLog) => <Badge variant={l.log_level === 'ERROR' ? 'danger' : l.log_level === 'WARN' ? 'warning' : 'info'}>{l.log_level}</Badge> },
         { header: t('message'), key: 'message' },
-        { header: t('source'), key: 'source' },
+        { header: t('source'), key: 'source', sortable: true },
     ];
 
     return (
@@ -44,8 +42,7 @@ export function Logs() {
                         <Input placeholder={t('keyword')} value={filters.keyword} onChange={(e) => setFilters({...filters, keyword: e.target.value})} />
                         <Button icon={<Search className="w-4 h-4" />} onClick={handleSearch} loading={loading}>{t('search')}</Button>
                     </div>
-                    <Table data={paginated} columns={columns} keyExtractor={(l: ParsedLog) => l.timestamp + l.device_id} emptyMessage={t('no_logs_found')} />
-                    {logs.length > itemsPerPage && <Pagination currentPage={page} totalPages={Math.ceil(logs.length/itemsPerPage)} onPageChange={setPage} totalItems={logs.length} itemsPerPage={itemsPerPage} />}
+                    <DataGrid data={logs} columns={columns} keyExtractor={(l: ParsedLog) => l.timestamp + l.device_id} emptyMessage={t('no_logs_found')} pageSize={itemsPerPage} variant="striped" defaultDensity="compact" exportFilename="logs.csv" />
                 </CardBody>
             </Card>
         </div>

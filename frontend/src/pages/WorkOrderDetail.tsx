@@ -5,12 +5,14 @@ import {
   ArrowLeft, Clock, MapPin, HardDrive, User, AlertTriangle,
   Wrench, CheckCircle, XCircle, Play, ClipboardList, Package,
   Camera, FileText, Send, Loader2, Calendar,
+  Timer, Pause, Square, DollarSign, Plus, Trash2,
 } from 'lucide-react';
 import {
   Card, CardHeader, CardBody, Badge, Button, useToast, Modal,
-  SLAProgress, Timeline, FileUpload, PartCard,
+  SLAProgress, Timeline, FileUpload, PartCard, StatsCard,
+  LiveSLATimer,
 } from '../components/ui';
-import { workOrdersApi, WorkOrder, PartUsage } from '../services/workOrdersApi';
+import { workOrdersApi, WorkOrder, PartUsage, TimeEntry, LaborCost } from '../services/workOrdersApi';
 import { sparePartsApi, SparePart } from '../services/sparePartsApi';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
@@ -69,17 +71,36 @@ export const WorkOrderDetail: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // ── Time Tracking state ─────────────────────────────────────────
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const [timeLoading, setTimeLoading] = useState(false);
+  const [timeSubmitting, setTimeSubmitting] = useState(false);
+
+  // ── Labor Cost state ────────────────────────────────────────────
+  const [laborCost, setLaborCost] = useState<LaborCost | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+
+  // ── Parts Consumption state ─────────────────────────────────────
+  const [selectedPartId, setSelectedPartId] = useState('');
+  const [partQuantity, setPartQuantity] = useState(1);
+  const [partsCostLoading, setPartsCostLoading] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     const fetch = async () => {
       setLoading(true);
       try {
-        const [wo, parts] = await Promise.all([
+        const [wo, parts, entries, cost] = await Promise.all([
           workOrdersApi.getWorkOrder(id),
           sparePartsApi.getSpareParts(),
+          workOrdersApi.getTimeEntries(id),
+          workOrdersApi.getLaborCost(id),
         ]);
         setWorkOrder(wo);
         setSpareParts(parts || []);
+        setTimeEntries(entries || []);
+        setLaborCost(cost);
       } catch (err) {
         console.error(err);
         toast.error('Не удалось загрузить наряд-заказ');
@@ -137,6 +158,132 @@ export const WorkOrderDetail: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ── Timer interval effect ────────────────────────────────────────
+  useEffect(() => {
+    const running = timeEntries.find(e => e.status === 'running');
+    if (running) {
+      const startedAt = new Date(running.started_at).getTime();
+      const tick = () => {
+        setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      };
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => clearInterval(interval);
+    } else {
+      const paused = timeEntries.find(e => e.status === 'paused');
+      if (paused) {
+        setElapsed(paused.total_seconds);
+      } else {
+        setElapsed(0);
+      }
+    }
+  }, [timeEntries]);
+
+  // ── Time Tracking handlers ──────────────────────────────────────
+
+  const handleStartTimer = async () => {
+    if (!id) return;
+    setTimeSubmitting(true);
+    try {
+      const entry = await workOrdersApi.createTimeEntry(id, {
+        hourly_rate: laborCost?.hourly_rate || 0,
+      });
+      setTimeEntries(prev => [...prev, entry]);
+      toast.success('Таймер запущен');
+    } catch {
+      toast.error('Ошибка при запуске таймера');
+    } finally {
+      setTimeSubmitting(false);
+    }
+  };
+
+  const handlePauseTimer = async (entryId: string) => {
+    setTimeSubmitting(true);
+    try {
+      const updated = await workOrdersApi.pauseTimeEntry(entryId);
+      setTimeEntries(prev => prev.map(e => e.id === entryId ? updated : e));
+      toast.success('Таймер поставлен на паузу');
+    } catch {
+      toast.error('Ошибка при паузе');
+    } finally {
+      setTimeSubmitting(false);
+    }
+  };
+
+  const handleResumeTimer = async (entryId: string) => {
+    setTimeSubmitting(true);
+    try {
+      const updated = await workOrdersApi.resumeTimeEntry(entryId);
+      setTimeEntries(prev => prev.map(e => e.id === entryId ? updated : e));
+      toast.success('Таймер возобновлён');
+    } catch {
+      toast.error('Ошибка при возобновлении');
+    } finally {
+      setTimeSubmitting(false);
+    }
+  };
+
+  const handleStopTimer = async (entryId: string) => {
+    setTimeSubmitting(true);
+    try {
+      const updated = await workOrdersApi.stopTimeEntry(entryId);
+      setTimeEntries(prev => prev.map(e => e.id === entryId ? updated : e));
+      // Refresh labor cost after stopping
+      if (id) {
+        const cost = await workOrdersApi.getLaborCost(id);
+        setLaborCost(cost);
+      }
+      toast.success('Таймер остановлен');
+    } catch {
+      toast.error('Ошибка при остановке');
+    } finally {
+      setTimeSubmitting(false);
+    }
+  };
+
+  const handleDeleteTimeEntry = async (entryId: string) => {
+    setTimeSubmitting(true);
+    try {
+      await workOrdersApi.deleteTimeEntry(entryId);
+      setTimeEntries(prev => prev.filter(e => e.id !== entryId));
+      toast.success('Запись времени удалена');
+    } catch {
+      toast.error('Ошибка при удалении');
+    } finally {
+      setTimeSubmitting(false);
+    }
+  };
+
+  // ── Parts Consumption handler ────────────────────────────────────
+
+  const handleAddPartWithCost = async () => {
+    if (!id || !selectedPartId) return;
+    setPartsCostLoading(true);
+    try {
+      await workOrdersApi.addPartWithCost(id, {
+        part_id: selectedPartId,
+        quantity: partQuantity,
+      });
+      toast.success('Запчасть добавлена со стоимостью');
+      setSelectedPartId('');
+      setPartQuantity(1);
+      // Refresh work order to show updated parts
+      const updated = await workOrdersApi.getWorkOrder(id);
+      setWorkOrder(updated);
+    } catch {
+      toast.error('Ошибка при добавлении запчасти');
+    } finally {
+      setPartsCostLoading(false);
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
   };
 
   const handleFileUpload = async (files: File[]) => {
@@ -279,59 +426,82 @@ export const WorkOrderDetail: React.FC = () => {
           </div>
         )}
 
-        {/* Three-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT: Details & Checklist */}
-          <div className="space-y-6">
+        {/* Three-Column Layout (Atlas CMMS Pattern) */}
+        {/* LEFT:   Status, SLA, Assignee, Priority, Type
+         CENTER: Checklist, Notes, Photos, Timeline
+         RIGHT:  Asset, Location, Parts, Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* ═══ LEFT COLUMN (4/12): Status + SLA + Assignee ═══ */}
+          <div className="lg:col-span-4 space-y-6">
+            {/* Status Card */}
             <Card>
               <CardHeader className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                <span>Детали наряда</span>
+                <div className={`w-3 h-3 rounded-full ${
+                  workOrder.status === 'completed' ? 'bg-emerald-500' :
+                  workOrder.status === 'in_progress' ? 'bg-blue-500' :
+                  workOrder.status === 'cancelled' ? 'bg-red-500' :
+                  'bg-slate-400'
+                }`} />
+                <span>Статус</span>
               </CardHeader>
               <CardBody>
-                <dl className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <dt className="text-slate-500 dark:text-slate-400">ID устройства</dt>
-                    <dd className="font-mono text-slate-900 dark:text-white">{workOrder.device_id}</dd>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <Badge variant={statusVariant[workOrder.status] || 'neutral'} size="lg">
+                    {statusLabel[workOrder.status] || workOrder.status}
+                  </Badge>
+                  <Badge variant={priorityVariant[workOrder.priority] || 'info'} size="lg">
+                    {workOrder.priority}
+                  </Badge>
+                  <Badge variant="neutral" size="lg">
+                    <span className="flex items-center gap-1">
+                      {typeIcon[workOrder.type]}
+                      {typeLabel[workOrder.type] || workOrder.type}
+                    </span>
+                  </Badge>
+                </div>
+
+                {/* Live SLA Timer (WO-4.3.2) */}
+                {workOrder.sla_deadline && (
+                  <LiveSLATimer
+                    deadline={workOrder.sla_deadline}
+                    createdAt={workOrder.created_at}
+                    status={workOrder.sla_status as 'on_track' | 'at_risk' | 'breached' | 'completed' | undefined}
+                  />
+                )}
+              </CardBody>
+            </Card>
+
+            {/* Assignee Card */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <User className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                <span>Исполнитель</span>
+              </CardHeader>
+              <CardBody>
+                {workOrder.assignee_name ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold text-sm">
+                      {workOrder.assignee_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-900 dark:text-white">{workOrder.assignee_name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Техник</p>
+                    </div>
                   </div>
-                  {workOrder.schedule_id && (
-                    <div className="flex justify-between text-sm">
-                      <dt className="text-slate-500 dark:text-slate-400">Расписание</dt>
-                      <dd className="font-mono text-slate-900 dark:text-white">{workOrder.schedule_id.slice(0, 8)}</dd>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <dt className="text-slate-500 dark:text-slate-400">Создан</dt>
-                    <dd className="text-slate-900 dark:text-white">
-                      {new Date(workOrder.created_at).toLocaleString()}
-                    </dd>
-                  </div>
-                  {workOrder.started_at && (
-                    <div className="flex justify-between text-sm">
-                      <dt className="text-slate-500 dark:text-slate-400">Начат</dt>
-                      <dd className="text-slate-900 dark:text-white">
-                        {new Date(workOrder.started_at).toLocaleString()}
-                      </dd>
-                    </div>
-                  )}
-                  {workOrder.completed_at && (
-                    <div className="flex justify-between text-sm">
-                      <dt className="text-slate-500 dark:text-slate-400">Завершён</dt>
-                      <dd className="text-slate-900 dark:text-white">
-                        {new Date(workOrder.completed_at).toLocaleString()}
-                      </dd>
-                    </div>
-                  )}
-                  {workOrder.sla_deadline && (
-                    <div className="flex justify-between text-sm">
-                      <dt className="text-slate-500 dark:text-slate-400">SLA дедлайн</dt>
-                      <dd className="flex items-center gap-1 text-slate-900 dark:text-white">
-                        <Clock className="w-3.5 h-3.5" />
-                        {new Date(workOrder.sla_deadline).toLocaleString()}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
+                ) : (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 italic">Не назначен</p>
+                )}
+              </CardBody>
+            </Card>
+
+            {/* Timeline */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                <span>История</span>
+              </CardHeader>
+              <CardBody>
+                <Timeline events={timelineEvents} />
               </CardBody>
             </Card>
 
@@ -423,17 +593,8 @@ export const WorkOrderDetail: React.FC = () => {
             )}
           </div>
 
-          {/* CENTER: Timeline & Photos */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                <span>История</span>
-              </CardHeader>
-              <CardBody>
-                <Timeline events={timelineEvents} />
-              </CardBody>
-            </Card>
+          {/* ═══ CENTER COLUMN (5/12): Checklist + Notes + Photos ═══ */}
+          <div className="lg:col-span-5 space-y-6">
 
             {/* Photos with Annotation & Before/After */}
             {workOrder.photos?.length > 0 && (
@@ -494,8 +655,342 @@ export const WorkOrderDetail: React.FC = () => {
             )}
           </div>
 
-          {/* RIGHT: Actions */}
-          <div className="space-y-6">
+          {/* ═══ RIGHT COLUMN (3/12): Asset + Location + Parts + Actions ═══ */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Asset Card */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                <span>Устройство</span>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-3">
+                  {workOrder.device_name && (
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Название</p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{workOrder.device_name}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">ID устройства</p>
+                    <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">
+                      {workOrder.device_id}
+                    </code>
+                  </div>
+                  {workOrder.schedule_id && (
+                    <div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Расписание</p>
+                      <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">
+                        {workOrder.schedule_id.slice(0, 8)}...
+                      </code>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+
+            {/* Location Card */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                <span>Локация</span>
+              </CardHeader>
+              <CardBody>
+                <p className="text-sm text-slate-400 dark:text-slate-500 italic">
+                  Информация о расположении устройства
+                </p>
+              </CardBody>
+            </Card>
+
+            {/* ═══ Time Tracking Card ═══ */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <Timer className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <span>Учёт времени</span>
+              </CardHeader>
+              <CardBody>
+                {/* Active Timer Display */}
+                {timeEntries.some(e => e.status === 'running' || e.status === 'paused') ? (
+                  <div className="mb-4 text-center">
+                    <div className="text-3xl font-mono font-bold text-slate-900 dark:text-white tracking-wider">
+                      {formatDuration(elapsed)}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {timeEntries.find(e => e.status === 'running')
+                        ? 'Идёт запись...'
+                        : 'На паузе'}
+                    </p>
+                    <div className="flex justify-center gap-2 mt-3">
+                      {timeEntries.find(e => e.status === 'running') ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<Pause className="w-3.5 h-3.5" />}
+                            onClick={() => {
+                              const running = timeEntries.find(e => e.status === 'running');
+                              if (running) handlePauseTimer(running.id);
+                            }}
+                            loading={timeSubmitting}
+                          >
+                            Пауза
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={<Square className="w-3.5 h-3.5" />}
+                            onClick={() => {
+                              const running = timeEntries.find(e => e.status === 'running');
+                              if (running) handleStopTimer(running.id);
+                            }}
+                            loading={timeSubmitting}
+                          >
+                            Стоп
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={<Play className="w-3.5 h-3.5" />}
+                            onClick={() => {
+                              const paused = timeEntries.find(e => e.status === 'paused');
+                              if (paused) handleResumeTimer(paused.id);
+                            }}
+                            loading={timeSubmitting}
+                          >
+                            Продолжить
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            icon={<Square className="w-3.5 h-3.5" />}
+                            onClick={() => {
+                              const paused = timeEntries.find(e => e.status === 'paused');
+                              if (paused) handleStopTimer(paused.id);
+                            }}
+                            loading={timeSubmitting}
+                          >
+                            Стоп
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <Button
+                      fullWidth
+                      icon={<Play className="w-4 h-4" />}
+                      onClick={handleStartTimer}
+                      loading={timeSubmitting}
+                      disabled={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                    >
+                      Начать учёт времени
+                    </Button>
+                  </div>
+                )}
+
+                {/* Time Entries List */}
+                {timeEntries.length > 0 && (
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {[...timeEntries]
+                      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+                      .map(entry => (
+                        <div
+                          key={entry.id}
+                          className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              entry.status === 'running' ? 'bg-green-500 animate-pulse' :
+                              entry.status === 'paused' ? 'bg-yellow-500' :
+                              'bg-slate-400'
+                            }`} />
+                            <span className="text-slate-700 dark:text-slate-300 truncate">
+                              {formatDuration(entry.total_seconds)}
+                            </span>
+                            {entry.status === 'stopped' && (
+                              <button
+                                onClick={() => handleDeleteTimeEntry(entry.id)}
+                                className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <Badge variant={
+                            entry.status === 'running' ? 'success' :
+                            entry.status === 'paused' ? 'warning' : 'neutral'
+                          } size="sm">
+                            {entry.status === 'running' ? 'Активен' :
+                             entry.status === 'paused' ? 'Пауза' : 'Остановлен'}
+                          </Badge>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+
+            {/* ═══ Labor Cost Card ═══ */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <span>Стоимость работ</span>
+              </CardHeader>
+              <CardBody>
+                {laborCost ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Часов</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                          {laborCost.total_hours.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Ставка</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                          {laborCost.currency}{laborCost.hourly_rate.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-center">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">Всего</p>
+                      <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
+                        {laborCost.currency}{laborCost.total_cost.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 italic text-center">
+                    Нет данных о стоимости
+                  </p>
+                )}
+              </CardBody>
+            </Card>
+
+            {/* ═══ Parts Consumption Card ═══ */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                <span>Добавить запчасть (со стоимостью)</span>
+              </CardHeader>
+              <CardBody>
+                <div className="space-y-3">
+                  {/* Part Selector */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                      Запчасть
+                    </label>
+                    <select
+                      value={selectedPartId}
+                      onChange={(e) => setSelectedPartId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                      disabled={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                    >
+                      <option value="">— Выберите запчасть —</option>
+                      {spareParts.map(part => (
+                        <option key={part.id} value={part.id}>
+                          {part.name} (SKU: {part.sku}) — {part.cost}₽
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                      Количество
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPartQuantity(Math.max(1, partQuantity - 1))}
+                        className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 text-lg font-medium"
+                        disabled={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        value={partQuantity}
+                        onChange={(e) => setPartQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-16 text-center px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                        disabled={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                      />
+                      <button
+                        onClick={() => setPartQuantity(partQuantity + 1)}
+                        className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 text-lg font-medium"
+                        disabled={workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cost Preview */}
+                  {selectedPartId && (() => {
+                    const part = spareParts.find(p => p.id === selectedPartId);
+                    return part ? (
+                      <div className="p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">Стоимость: </span>
+                        <span className="font-medium text-slate-900 dark:text-white">
+                          {part.cost}₽ × {partQuantity} = {part.cost * partQuantity}₽
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <Button
+                    fullWidth
+                    variant="primary"
+                    icon={<Plus className="w-4 h-4" />}
+                    onClick={handleAddPartWithCost}
+                    loading={partsCostLoading}
+                    disabled={!selectedPartId || workOrder.status === 'completed' || workOrder.status === 'cancelled'}
+                  >
+                    Добавить со стоимостью
+                  </Button>
+                </div>
+              </CardBody>
+            </Card>
+
+            {/* ═══ Total Cost Dashboard (WO-4.4.5) ═══ */}
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <span>Total Cost Dashboard</span>
+              </CardHeader>
+              <CardBody>
+                <div className="grid grid-cols-3 gap-3">
+                  <StatsCard
+                    title="Total Cost"
+                    value={workOrder.total_cost ? `${workOrder.total_cost.toFixed(2)} ₽` : '—'}
+                    icon={DollarSign}
+                    iconColor="text-blue-600"
+                    iconBgColor="bg-blue-50"
+                  />
+                  <StatsCard
+                    title="Labor Cost"
+                    value={workOrder.total_labor_cost ? `${workOrder.total_labor_cost.toFixed(2)} ₽` : '—'}
+                    icon={DollarSign}
+                    iconColor="text-emerald-600"
+                    iconBgColor="bg-emerald-50"
+                  />
+                  <StatsCard
+                    title="Parts Cost"
+                    value={workOrder.total_parts_cost ? `${workOrder.total_parts_cost.toFixed(2)} ₽` : '—'}
+                    icon={DollarSign}
+                    iconColor="text-amber-600"
+                    iconBgColor="bg-amber-50"
+                  />
+                </div>
+              </CardBody>
+            </Card>
+
             {/* Actions Card */}
             <Card>
               <CardHeader className="flex items-center gap-2">
@@ -541,13 +1036,13 @@ export const WorkOrderDetail: React.FC = () => {
             </Card>
 
             {/* Parts Used */}
-            {workOrder.parts_used?.length > 0 && (
-              <Card>
-                <CardHeader className="flex items-center gap-2">
-                  <Package className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                  <span>Использованные запчасти</span>
-                </CardHeader>
-                <CardBody>
+            <Card>
+              <CardHeader className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                <span>Запчасти ({workOrder.parts_used?.length || 0})</span>
+              </CardHeader>
+              <CardBody>
+                {workOrder.parts_used?.length > 0 ? (
                   <div className="space-y-2">
                     {workOrder.parts_used.map((p, i) => {
                       const part = spareParts.find(sp => sp.id === p.part_id);
@@ -564,9 +1059,13 @@ export const WorkOrderDetail: React.FC = () => {
                       );
                     })}
                   </div>
-                </CardBody>
-              </Card>
-            )}
+                ) : (
+                  <p className="text-sm text-slate-400 dark:text-slate-500 italic">
+                    Запчасти не использованы
+                  </p>
+                )}
+              </CardBody>
+            </Card>
           </div>
         </div>
 

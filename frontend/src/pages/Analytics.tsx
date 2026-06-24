@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Badge } from '../components/ui';
+import { Card, DataGrid, Badge } from '../components/ui';
 import { api, Prediction } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -245,13 +245,14 @@ export function Analytics() {
           <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
             Детальный прогноз по устройствам
           </h3>
-          <Table
+          <DataGrid
             data={predictions}
             columns={[
-              { header: t('device_id'), key: 'device_id' },
+              { header: t('device_id'), key: 'device_id', sortable: true },
               {
                 header: t('failure_probability'),
                 key: 'failure_probability',
+                sortable: true,
                 render: (p: Prediction) => (
                   <Badge variant={p.failure_probability > 70 ? 'danger' : p.failure_probability > 30 ? 'warning' : 'success'}>
                     {p.failure_probability}%
@@ -262,11 +263,15 @@ export function Analytics() {
               {
                 header: 'Осталось часов',
                 key: 'expected_remaining_hours',
+                sortable: true,
                 render: (p: Prediction) => (p as any).expected_remaining_hours ? `${(p as any).expected_remaining_hours} ч` : '—',
               },
             ]}
             keyExtractor={(p) => p.device_id + p.prediction_date}
             emptyMessage={t('no_predictions')}
+            variant="striped"
+            defaultDensity="standard"
+            pageSize={10}
           />
         </div>
       </Card>

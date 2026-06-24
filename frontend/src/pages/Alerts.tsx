@@ -10,7 +10,7 @@ import {
     Check,
     CheckCircle
 } from 'lucide-react';
-import { Card, CardBody, VirtualTable, Badge, Button, Select, SearchInput, ConfirmModal } from '../components/ui';
+import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal } from '../components/ui';
 import { useAlerts } from '../context/DataContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
@@ -213,7 +213,7 @@ export function Alerts() {
                 </div>
             )}
 
-            <VirtualTable
+            <DataGrid
                 data={filteredAlerts}
                 columns={columns}
                 keyExtractor={(item) => item.id}
@@ -221,8 +221,10 @@ export function Alerts() {
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 emptyMessage={t('no_alerts')}
-                maxHeight={600}
-                estimateRowHeight={64}
+                variant="striped"
+                defaultDensity="standard"
+                pageSize={20}
+                exportFilename="alerts.csv"
             />
 
             <ConfirmModal

@@ -179,7 +179,7 @@ func (a *InternalAdapter) DeleteTechnicianSiteAssignment(_ context.Context, id s
 
 // ── Sites ────────────────────────────────────────────────────────
 
-func (a *InternalAdapter) GetSites(_ context.Context) ([]models.Site, error) {
+func (a *InternalAdapter) GetSites(_ context.Context, _ map[string]interface{}) ([]models.Site, error) {
 	return a.db.GetSites()
 }
 
@@ -217,7 +217,73 @@ func (a *InternalAdapter) DeleteCategory(_ context.Context, id string) error {
 	return a.db.DeleteCategory(id)
 }
 
+// ── Work Requests (WO-4.1.1) ────────────────────────────────────
+
+func (a *InternalAdapter) CreateWorkRequest(_ context.Context, req *models.WorkRequest) error {
+	return a.db.CreateWorkRequest(req)
+}
+
+func (a *InternalAdapter) GetWorkRequests(_ context.Context, filters map[string]interface{}) ([]models.WorkRequest, error) {
+	return a.db.GetWorkRequests(filters)
+}
+
+func (a *InternalAdapter) GetWorkRequest(_ context.Context, id string) (*models.WorkRequest, error) {
+	return a.db.GetWorkRequest(id)
+}
+
+func (a *InternalAdapter) ApproveWorkRequest(_ context.Context, id, approvedBy string) error {
+	return a.db.ApproveWorkRequest(id, approvedBy)
+}
+
+func (a *InternalAdapter) RejectWorkRequest(_ context.Context, id, rejectedBy, reason string) error {
+	return a.db.RejectWorkRequest(id, rejectedBy, reason)
+}
+
+func (a *InternalAdapter) ConvertWorkRequestToWO(_ context.Context, requestID, workOrderID string) error {
+	return a.db.ConvertWorkRequestToWO(requestID, workOrderID)
+}
+
 // ── Mobile ───────────────────────────────────────────────────────
+
+// ── WorkOrder ↔ Alert (Many-to-Many) — DM-1.3.1 ────────────────
+
+func (a *InternalAdapter) LinkAlertToWorkOrder(_ context.Context, workOrderID, alertID, userID string) error {
+	return a.db.LinkAlertToWorkOrder(workOrderID, alertID, userID)
+}
+
+func (a *InternalAdapter) UnlinkAlertFromWorkOrder(_ context.Context, workOrderID, alertID string) error {
+	return a.db.UnlinkAlertFromWorkOrder(workOrderID, alertID)
+}
+
+func (a *InternalAdapter) GetAlertsForWorkOrder(_ context.Context, workOrderID string) ([]models.WorkOrderAlert, error) {
+	return a.db.GetAlertsForWorkOrder(workOrderID)
+}
+
+func (a *InternalAdapter) GetWorkOrdersForAlert(_ context.Context, alertID string) ([]models.WorkOrderAlert, error) {
+	return a.db.GetWorkOrdersForAlert(alertID)
+}
+
+// ── Vendors (INV-7.2.1) ──────────────────────────────────────────
+
+func (a *InternalAdapter) CreateVendor(_ context.Context, vendor *models.Vendor) error {
+	return a.db.CreateVendor(vendor)
+}
+
+func (a *InternalAdapter) GetVendors(_ context.Context, filters map[string]interface{}) ([]models.Vendor, error) {
+	return a.db.GetVendors(filters)
+}
+
+func (a *InternalAdapter) GetVendor(_ context.Context, id string) (*models.Vendor, error) {
+	return a.db.GetVendor(id)
+}
+
+func (a *InternalAdapter) UpdateVendor(_ context.Context, id string, updates map[string]interface{}) error {
+	return a.db.UpdateVendor(id, updates)
+}
+
+func (a *InternalAdapter) DeleteVendor(_ context.Context, id string) error {
+	return a.db.DeleteVendor(id)
+}
 
 func (a *InternalAdapter) SavePushToken(_ context.Context, userID, token, platform string) error {
 	return a.db.SavePushToken(userID, token, platform)

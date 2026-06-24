@@ -1,4 +1,5 @@
-import { defineConfig, type Plugin } from 'vite'
+import { type Plugin } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -11,9 +12,9 @@ function cspPlugin(): Plugin {
     "script-src 'self' 'strict-dynamic' blob:",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: https:",
-    "connect-src 'self'",
+    "connect-src 'self' https://nominatim.openstreetmap.org",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -26,9 +27,9 @@ function cspPlugin(): Plugin {
     "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: https:",
-    "connect-src 'self' http://localhost:8080 ws: wss:",
+    "connect-src 'self' http://localhost:8080 https://nominatim.openstreetmap.org ws: wss:",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -57,6 +58,10 @@ function cspPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), cspPlugin()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -65,6 +70,7 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
+        ws: true,
       }
     }
   }
