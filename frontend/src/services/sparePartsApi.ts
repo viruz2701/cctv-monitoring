@@ -1,5 +1,14 @@
 import { request } from './api';
 
+export interface SparePartCategory {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SparePart {
   id: string;
   name: string;
@@ -65,6 +74,31 @@ export const sparePartsApi = {
     return request<{ status: string }>(`/spare-parts/${id}/adjust`, {
       method: 'POST',
       body: JSON.stringify({ quantity }),
+    });
+  },
+
+  // ── Categories ────────────────────────────────────────────
+  getCategories: () => {
+    return request<SparePartCategory[]>('/spare-parts/categories');
+  },
+
+  createCategory: (data: { name: string; description?: string; color?: string }) => {
+    return request<SparePartCategory>('/spare-parts/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateCategory: (id: string, data: { name?: string; description?: string; color?: string }) => {
+    return request<{ status: string }>(`/spare-parts/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteCategory: (id: string) => {
+    return request<{ status: string }>(`/spare-parts/categories/${id}`, {
+      method: 'DELETE',
     });
   },
 };

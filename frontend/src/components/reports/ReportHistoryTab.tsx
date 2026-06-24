@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Card, CardBody, Button, Badge } from '../ui';
+import React, { useState, useMemo } from 'react';
+import { Card, CardBody, Button, Badge, Input, Select } from '../ui';
 import { Download, FileText, Calendar, Clock, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { useToast } from '../ui';
+import { useToast, SearchInput } from '../ui';
 import { useReports } from '../../context/DataContext';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,60 @@ export function ReportHistoryTab() {
     const toast = useToast();
     const { generatedReports } = useReports();
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
-    const reportHistory = generatedReports;
+
+    // Filters
+    const [searchQuery, setSearchQuery] = useState('');
+    const [typeFilter, setTypeFilter] = useState('all');
+    const [formatFilter, setFormatFilter] = useState('all');
+    const [dateFilter, setDateFilter] = useState('all');
+
+    const reportHistory = useMemo(() => {
+        let filtered = [...generatedReports];
+
+        // Search by name
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            filtered = filtered.filter(r => r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q));
+        }
+
+        // Filter by type
+        if (typeFilter !== 'all') {
+            filtered = filtered.filter(r => r.type === typeFilter);
+        }
+
+        // Filter by format
+        if (formatFilter !== 'all') {
+            filtered = filtered.filter(r => r.format === formatFilter);
+        }
+
+        // Filter by date
+        if (dateFilter !== 'all') {
+            const now = new Date();
+            const filterDate = new Date();
+            switch (dateFilter) {
+                case 'today':
+                    filterDate.setHours(0, 0, 0, 0);
+                    filtered = filtered.filter(r => new Date(r.generatedAt) >= filterDate);
+                    break;
+                case 'week':
+                    filterDate.setDate(now.getDate() - 7);
+                    filtered = filtered.filter(r => new Date(r.generatedAt) >= filterDate);
+                    break;
+                case 'month':
+                    filterDate.setMonth(now.getMonth() - 1);
+                    filtered = filtered.filter(r => new Date(r.generatedAt) >= filterDate);
+                    break;
+            }
+        }
+
+        return filtered;
+    }, [generatedReports, searchQuery, typeFilter, formatFilter, dateFilter]);
+
+    // Extract unique types for the type filter dropdown
+    const typeOptions = useMemo(() => {
+        const types = new Set(generatedReports.map(r => r.type));
+        return [{ value: 'all', label: t('all_types') || 'All Types' }, ...Array.from(types).map(type => ({ value: type, label: type }))];
+    }, [generatedReports, t]);
 
     return (
         <div className="space-y-6">
@@ -21,6 +74,41 @@ export function ReportHistoryTab() {
                     <p className="text-sm text-slate-500 dark:text-slate-400">{t('report_history_desc')}</p>
                 </div>
             </div>
+
+            {/* Filters */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <SearchInput
+                    placeholder={t('search') + '...'}
+                    value={searchQuery}
+                    onSearch={(value) => setSearchQuery(value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <Select
+                    options={typeOptions}
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                />
+                <Select
+                    options={[
+                        { value: 'all', label: t('all_formats') || 'All Formats' },
+                        { value: 'xlsx', label: 'XLSX' },
+                        { value: 'pdf', label: 'PDF' },
+                    ]}
+                    value={formatFilter}
+                    onChange={(e) => setFormatFilter(e.target.value)}
+                />
+                <Select
+                    options={[
+                        { value: 'all', label: t('all_time') || 'All Time' },
+                        { value: 'today', label: t('today') },
+                        { value: 'week', label: t('last_7_days') },
+                        { value: 'month', label: t('last_30_days') },
+                    ]}
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                />
+            </div>
+
             <div className="grid grid-cols-1 gap-4">
                 {reportHistory.length > 0 ? reportHistory.map((report) => (
                     <Card key={report.id} variant="bordered" className="hover:border-blue-500/50 transition-colors">

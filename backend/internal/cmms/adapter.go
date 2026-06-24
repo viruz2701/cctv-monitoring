@@ -70,6 +70,21 @@ type CMMSAdapter interface {
 	UpdateTechnicianSiteAssignment(ctx context.Context, id string, updates map[string]interface{}) error
 	DeleteTechnicianSiteAssignment(ctx context.Context, id string) error
 
+	// ── Sites ────────────────────────────────────────────────────
+
+	GetSites(ctx context.Context) ([]models.Site, error)
+	GetSite(ctx context.Context, id string) (*models.Site, error)
+	CreateSite(ctx context.Context, site *models.Site) error
+	UpdateSite(ctx context.Context, id string, updates map[string]interface{}) error
+	DeleteSite(ctx context.Context, id string) error
+
+	// ── Spare Part Categories ────────────────────────────────────
+
+	GetCategories(ctx context.Context) ([]models.SparePartCategory, error)
+	CreateCategory(ctx context.Context, cat *models.SparePartCategory) error
+	UpdateCategory(ctx context.Context, id string, updates map[string]interface{}) error
+	DeleteCategory(ctx context.Context, id string) error
+
 	// ── Mobile ───────────────────────────────────────────────────
 
 	SavePushToken(ctx context.Context, userID, token, platform string) error
@@ -250,6 +265,46 @@ func (r *CMMSRouter) UpdateTechnicianSiteAssignment(ctx context.Context, id stri
 
 func (r *CMMSRouter) DeleteTechnicianSiteAssignment(ctx context.Context, id string) error {
 	return r.adapter.DeleteTechnicianSiteAssignment(ctx, id)
+}
+
+// ── Sites ────────────────────────────────────────────────────────
+
+func (r *CMMSRouter) GetSites(ctx context.Context) ([]models.Site, error) {
+	return r.adapter.GetSites(ctx)
+}
+
+func (r *CMMSRouter) GetSite(ctx context.Context, id string) (*models.Site, error) {
+	return r.adapter.GetSite(ctx, id)
+}
+
+func (r *CMMSRouter) CreateSite(ctx context.Context, site *models.Site) error {
+	return r.adapter.CreateSite(ctx, site)
+}
+
+func (r *CMMSRouter) UpdateSite(ctx context.Context, id string, updates map[string]interface{}) error {
+	return r.adapter.UpdateSite(ctx, id, updates)
+}
+
+func (r *CMMSRouter) DeleteSite(ctx context.Context, id string) error {
+	return r.adapter.DeleteSite(ctx, id)
+}
+
+// ── Spare Part Categories ────────────────────────────────────────
+
+func (r *CMMSRouter) GetCategories(ctx context.Context) ([]models.SparePartCategory, error) {
+	return r.adapter.GetCategories(ctx)
+}
+
+func (r *CMMSRouter) CreateCategory(ctx context.Context, cat *models.SparePartCategory) error {
+	return r.adapter.CreateCategory(ctx, cat)
+}
+
+func (r *CMMSRouter) UpdateCategory(ctx context.Context, id string, updates map[string]interface{}) error {
+	return r.adapter.UpdateCategory(ctx, id, updates)
+}
+
+func (r *CMMSRouter) DeleteCategory(ctx context.Context, id string) error {
+	return r.adapter.DeleteCategory(ctx, id)
 }
 
 // ── Mobile ───────────────────────────────────────────────────────

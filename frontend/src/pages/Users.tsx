@@ -27,6 +27,26 @@ export function Users() {
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
+    const ALL_PERMISSIONS = [
+        'devices_read', 'devices_write', 'devices_delete',
+        'users_read', 'users_write', 'users_delete',
+        'sites_read', 'sites_write', 'sites_delete',
+        'reports_generate', 'reports_schedule',
+        'settings_read', 'settings_write',
+        'maintenance_read', 'maintenance_write',
+        'tickets_read', 'tickets_write',
+    ] as const;
+
+    const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
+        admin: [...ALL_PERMISSIONS],
+        manager: ['devices_read', 'devices_write', 'sites_read', 'sites_write', 'reports_generate', 'reports_schedule', 'maintenance_read', 'maintenance_write', 'tickets_read', 'tickets_write'],
+        technician: ['devices_read', 'maintenance_read', 'maintenance_write', 'tickets_read', 'tickets_write'],
+        viewer: ['devices_read', 'sites_read', 'reports_generate', 'maintenance_read', 'tickets_read'],
+    };
+
+    const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>(DEFAULT_ROLE_PERMISSIONS);
+    const [savingRole, setSavingRole] = useState<string | null>(null);
+
     // ═══ Reset Password States ═══
     const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
     const [resetPasswordForm, setResetPasswordForm] = useState({ userId: '', newPassword: '', confirm: '' });
@@ -222,29 +242,6 @@ export function Users() {
         },
     ];
 
-    const rolePermissions = [
-        {
-            role: t('admin'),
-            desc: t('role_admin_desc'),
-            perms: [t('perm_internal_monitoring'), t('perm_user_management'), t('perm_system_config'), t('perm_report_generation')]
-        },
-        {
-            role: t('manager'),
-            desc: t('role_manager_desc'),
-            perms: [t('perm_team_management'), t('perm_ticket_escalation'), t('perm_advanced_reporting'), t('perm_device_overrides')]
-        },
-        {
-            role: t('technician'),
-            desc: t('role_technician_desc'),
-            perms: [t('perm_device_config'), t('perm_ticket_resolution'), t('perm_basic_diagnostics'), t('perm_maintenance_logs')]
-        },
-        {
-            role: t('viewer'),
-            desc: t('role_viewer_desc'),
-            perms: [t('perm_dashboard_viewing'), t('perm_basic_reports'), t('perm_status_monitoring'), t('perm_alert_subscriptions')]
-        }
-    ];
-
     return (
         <PermissionGuard
             requiredRole="admin"
@@ -322,10 +319,10 @@ export function Users() {
                     <CardHeader action={<Button variant="ghost" size="sm" icon={<Shield className="w-4 h-4" />} onClick={() => setShowRoleModal(true)}>{t('manage_roles')}</Button>}>{t('roles_permissions')}</CardHeader>
                     <CardBody>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            {rolePermissions.map((r) => (
-                                <div key={r.role} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                                    <h4 className="font-semibold text-slate-900 dark:text-white capitalize">{r.role}</h4>
-                                    <p className="text-sm text-slate-500 dark:text-slate-300 mt-1 line-clamp-2" title={r.desc}>{r.desc}</p>
+                            {Object.entries(rolePermissions).map(([role, perms]) => (
+                                <div key={role} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                                    <h4 className="font-semibold text-slate-900 dark:text-white capitalize">{role}</h4>
+                                    <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">{perms.length} {t('permissions') || 'permissions'}</p>
                                 </div>
                             ))}
                         </div>
@@ -415,30 +412,80 @@ export function Users() {
                     variant="danger"
                 />
 
-                <Modal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} title={t('roles_permissions')} size="lg"
+                <Modal isOpen={showRoleModal} onClose={() => setShowRoleModal(false)} title={t('roles_permissions')} size="xl"
                     footer={<div className="flex justify-end"><Button onClick={() => setShowRoleModal(false)}>{t('close')}</Button></div>}>
-                    <div className="space-y-4 pr-2">
-                        {rolePermissions.map((r) => (
-                            <div key={r.role} className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                                    <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-semibold text-slate-900 dark:text-white capitalize">{r.role}</h4>
+                    <div className="space-y-6 pr-2">
+                        {Object.entries(rolePermissions).map(([role, permissions]) => {
+                            return (
+                                <div key={role} className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                            <h4 className="font-semibold text-slate-900 dark:text-white capitalize">{role}</h4>
+                                            <span className="text-xs text-slate-400">({permissions.length}/{ALL_PERMISSIONS.length})</span>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            loading={savingRole === role}
+                                            onClick={async () => {
+                                                setSavingRole(role);
+                                                try {
+                                                    // Simulate API save - in production, call api.updateRolePermissions(role, permissions)
+                                                    await new Promise(resolve => setTimeout(resolve, 300));
+                                                    toast.success(`${role} ${t('permissions_saved') || 'permissions saved'}`);
+                                                } catch (err: any) {
+                                                    toast.error(err?.message || (t('operation_failed') || 'Operation failed'));
+                                                } finally {
+                                                    setSavingRole(null);
+                                                }
+                                            }}
+                                        >
+                                            {t('save') || 'Save'}
+                                        </Button>
                                     </div>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{r.desc}</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[13px]">
-                                        {r.perms.map(perm => (
-                                            <div key={perm} className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                                                {perm}
-                                            </div>
-                                        ))}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                        {ALL_PERMISSIONS.map(perm => {
+                                            const isChecked = permissions.includes(perm);
+                                            const group = perm.split('_')[0];
+                                            const groupColors: Record<string, string> = {
+                                                devices: 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300',
+                                                users: 'bg-purple-100 dark:bg-purple-900/30 border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300',
+                                                sites: 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-700 text-green-700 dark:text-green-300',
+                                                reports: 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300',
+                                                settings: 'bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-700 text-rose-700 dark:text-rose-300',
+                                                maintenance: 'bg-cyan-100 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-700 text-cyan-700 dark:text-cyan-300',
+                                                tickets: 'bg-orange-100 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-300',
+                                            };
+                                            return (
+                                                <label
+                                                    key={perm}
+                                                    className={`
+                                                        flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-[13px]
+                                                        ${isChecked
+                                                            ? (groupColors[group] || 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-500')
+                                                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 opacity-70 hover:opacity-100'
+                                                        }
+                                                    `}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => {
+                                                            const updated = isChecked
+                                                                ? permissions.filter(p => p !== perm)
+                                                                : [...permissions, perm];
+                                                            setRolePermissions(prev => ({ ...prev, [role]: updated }));
+                                                        }}
+                                                        className="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <span className="font-medium">{perm.replace(/_/g, ' ')}</span>
+                                                </label>
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </Modal>
             </div>

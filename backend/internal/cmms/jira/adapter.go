@@ -691,9 +691,48 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 		}
 	})
 }
-
 // FallbackQueueSize возвращает размер очереди.
 func (a *Adapter) FallbackQueueSize() int {
 	count, _ := a.fallbackQueue.Len()
 	return count
+}
+
+// ── Sites ────────────────────────────────────────────────────────
+
+func (a *Adapter) GetSites(_ context.Context) ([]models.Site, error) {
+	return nil, fmt.Errorf("get sites not implemented for Jira adapter")
+}
+
+func (a *Adapter) GetSite(_ context.Context, _ string) (*models.Site, error) {
+	return nil, fmt.Errorf("get site not implemented for Jira adapter")
+}
+
+func (a *Adapter) CreateSite(_ context.Context, _ *models.Site) error {
+	return fmt.Errorf("create site not implemented for Jira adapter")
+}
+
+func (a *Adapter) UpdateSite(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("update site not implemented for Jira adapter")
+}
+
+func (a *Adapter) DeleteSite(_ context.Context, _ string) error {
+	return fmt.Errorf("delete site not implemented for Jira adapter")
+}
+
+// ── Spare Part Categories ────────────────────────────────────────
+
+func (a *Adapter) GetCategories(_ context.Context) ([]models.SparePartCategory, error) {
+	return nil, fmt.Errorf("get categories not implemented for Jira adapter")
+}
+
+func (a *Adapter) CreateCategory(_ context.Context, _ *models.SparePartCategory) error {
+	return fmt.Errorf("create category not implemented for Jira adapter")
+}
+
+func (a *Adapter) UpdateCategory(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("update category not implemented for Jira adapter")
+}
+
+func (a *Adapter) DeleteCategory(_ context.Context, _ string) error {
+	return fmt.Errorf("delete category not implemented for Jira adapter")
 }

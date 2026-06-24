@@ -878,3 +878,221 @@ func (db *DB) GetSiteInfo(ctx context.Context, workOrderID string) (*SiteInfo, e
 	}
 	return &info, nil
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Sites CRUD
+// ═══════════════════════════════════════════════════════════════════════
+
+func (db *DB) GetSites() ([]models.Site, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, name, COALESCE(address, ''), COALESCE(city, ''),
+		       COALESCE(organization, ''), COALESCE(latitude, 0), COALESCE(longitude, 0),
+		       status, last_sync, created_at, updated_at
+		FROM sites
+		ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query sites: %w", err)
+	}
+	defer rows.Close()
+
+	var sites []models.Site
+	for rows.Next() {
+		var s models.Site
+		if err := rows.Scan(
+			&s.ID, &s.Name, &s.Address, &s.City,
+			&s.Organization, &s.Latitude, &s.Longitude,
+			&s.Status, &s.LastSync, &s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan site: %w", err)
+		}
+		sites = append(sites, s)
+	}
+	return sites, rows.Err()
+}
+
+func (db *DB) GetSite(id string) (*models.Site, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var s models.Site
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, name, COALESCE(address, ''), COALESCE(city, ''),
+		       COALESCE(organization, ''), COALESCE(latitude, 0), COALESCE(longitude, 0),
+		       status, last_sync, created_at, updated_at
+		FROM sites
+		WHERE id = $1
+	`, id).Scan(
+		&s.ID, &s.Name, &s.Address, &s.City,
+		&s.Organization, &s.Latitude, &s.Longitude,
+		&s.Status, &s.LastSync, &s.CreatedAt, &s.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get site %s: %w", id, err)
+	}
+	return &s, nil
+}
+
+func (db *DB) CreateSite(site *models.Site) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO sites (id, name, address, city, organization, latitude, longitude, status)
+		VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, created_at, updated_at
+	`, site.Name, site.Address, site.City, site.Organization,
+		site.Latitude, site.Longitude, site.Status,
+	).Scan(&site.ID, &site.CreatedAt, &site.UpdatedAt)
+
+	if err != nil {
+		return fmt.Errorf("insert site: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) UpdateSite(id string, updates map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	allowedFields := map[string]bool{
+		"name": true, "address": true, "city": true, "organization": true,
+		"latitude": true, "longitude": true, "status": true,
+	}
+
+	for key, value := range updates {
+		if !allowedFields[key] {
+			continue
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", key, argIdx))
+		args = append(args, value)
+		argIdx++
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, id)
+
+	query := fmt.Sprintf("UPDATE sites SET %s WHERE id = $%d",
+		strings.Join(setClauses, ", "), argIdx)
+
+	_, err := db.Pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update site %s: %w", id, err)
+	}
+	return nil
+}
+
+func (db *DB) DeleteSite(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, "DELETE FROM sites WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("delete site %s: %w", id, err)
+	}
+	return nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Spare Part Categories CRUD
+// ═══════════════════════════════════════════════════════════════════════
+
+func (db *DB) GetCategories() ([]models.SparePartCategory, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, name, COALESCE(description, ''), COALESCE(color, ''), created_at, updated_at
+		FROM spare_part_categories
+		ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query spare_part_categories: %w", err)
+	}
+	defer rows.Close()
+
+	var categories []models.SparePartCategory
+	for rows.Next() {
+		var c models.SparePartCategory
+		if err := rows.Scan(
+			&c.ID, &c.Name, &c.Description, &c.Color, &c.CreatedAt, &c.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan spare_part_category: %w", err)
+		}
+		categories = append(categories, c)
+	}
+	return categories, rows.Err()
+}
+
+func (db *DB) CreateCategory(cat *models.SparePartCategory) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO spare_part_categories (name, description, color)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at, updated_at
+	`, cat.Name, cat.Description, cat.Color,
+	).Scan(&cat.ID, &cat.CreatedAt, &cat.UpdatedAt)
+
+	if err != nil {
+		return fmt.Errorf("insert spare_part_category: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) UpdateCategory(id string, updates map[string]interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	allowedFields := map[string]bool{
+		"name": true, "description": true, "color": true,
+	}
+
+	for key, value := range updates {
+		if !allowedFields[key] {
+			continue
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", key, argIdx))
+		args = append(args, value)
+		argIdx++
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, id)
+
+	query := fmt.Sprintf("UPDATE spare_part_categories SET %s WHERE id = $%d",
+		strings.Join(setClauses, ", "), argIdx)
+
+	_, err := db.Pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("update spare_part_category %s: %w", id, err)
+	}
+	return nil
+}
+
+func (db *DB) DeleteCategory(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, "DELETE FROM spare_part_categories WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("delete spare_part_category %s: %w", id, err)
+	}
+	return nil
+}

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorkOrders } from '../context/WorkOrdersContext';
+import { useDevicesSites } from '../context/DevicesSitesContext';
+import { useUsers } from '../context/UsersContext';
 import { WorkOrder } from '../services/workOrdersApi';
 import { Button, Card, VirtualTable, Badge, Modal, Input } from '../components/ui';
 import { Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -180,39 +182,70 @@ export const WorkOrders: React.FC = () => {
 const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
   const { createWorkOrder } = useWorkOrders();
-  const [formData, setFormData] = useState<{
-    device_id: string;
-    type: 'preventive' | 'corrective' | 'emergency';
-    priority: 'critical' | 'high' | 'medium' | 'low';
-    notes: string;
-  }>({
-    device_id: '',
-    type: 'corrective',
-    priority: 'medium',
+  const { sites, devices } = useDevicesSites();
+  const { users } = useUsers();
+  const technicians = users.filter(u => u.role === 'technician');
+
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
+  const [formData, setFormData] = useState({
+    type: 'corrective' as 'preventive' | 'corrective' | 'emergency',
+    priority: 'medium' as 'critical' | 'high' | 'medium' | 'low',
     notes: '',
   });
 
+  const siteDevices = devices.filter(d => d.siteId === selectedSiteId);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createWorkOrder(formData);
+    if (!selectedDeviceId) return;
+    await createWorkOrder({
+      device_id: selectedDeviceId,
+      type: formData.type,
+      priority: formData.priority,
+      assigned_to: selectedTechnicianId || undefined,
+      notes: formData.notes,
+    });
     onClose();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        label={t('device_id')}
-        value={formData.device_id}
-        onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
-        required
-      />
+      {/* Site select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('site') || 'Site'}</label>
+        <select value={selectedSiteId} onChange={e => { setSelectedSiteId(e.target.value); setSelectedDeviceId(''); }}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required>
+          <option value="">{t('select_site') || 'Select site...'}</option>
+          {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
+        </select>
+      </div>
+
+      {/* Device select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('device') || 'Device'}</label>
+        <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required disabled={!selectedSiteId}>
+          <option value="">{t('select_device') || 'Select device...'}</option>
+          {siteDevices.map(dev => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
+        </select>
+      </div>
+
+      {/* Technician select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('assigned_to') || 'Assigned to'}</label>
+        <select value={selectedTechnicianId} onChange={e => setSelectedTechnicianId(e.target.value)}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
+          <option value="">{t('unassigned') || 'Unassigned'}</option>
+          {technicians.map(tech => <option key={tech.id} value={tech.id}>{tech.name || tech.username}</option>)}
+        </select>
+      </div>
+
       <div>
         <label className="block text-sm font-medium mb-1">{t('type')}</label>
-        <select
-          value={formData.type}
-          onChange={(e) => setFormData({ ...formData, type: e.target.value as typeof formData.type })}
-          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600"
-        >
+        <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
           <option value="preventive">{t('preventive')}</option>
           <option value="corrective">{t('corrective')}</option>
           <option value="emergency">{t('emergency')}</option>
@@ -220,22 +253,16 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">{t('priority')}</label>
-        <select
-          value={formData.priority}
-          onChange={(e) => setFormData({ ...formData, priority: e.target.value as typeof formData.priority })}
-          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600"
-        >
+        <select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
           <option value="critical">{t('critical')}</option>
           <option value="high">{t('high')}</option>
           <option value="medium">{t('medium')}</option>
           <option value="low">{t('low')}</option>
         </select>
       </div>
-      <Input
-        label={t('notes')}
-        value={formData.notes}
-        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-      />
+      <Input label={t('notes')} value={formData.notes}
+        onChange={e => setFormData({...formData, notes: e.target.value})} />
       <div className="flex gap-2 justify-end pt-4">
         <Button variant="secondary" onClick={onClose}>{t('cancel')}</Button>
         <Button type="submit">{t('create')}</Button>

@@ -177,6 +177,46 @@ func (a *InternalAdapter) DeleteTechnicianSiteAssignment(_ context.Context, id s
 	return a.db.DeleteTechnicianSiteAssignment(id)
 }
 
+// ── Sites ────────────────────────────────────────────────────────
+
+func (a *InternalAdapter) GetSites(_ context.Context) ([]models.Site, error) {
+	return a.db.GetSites()
+}
+
+func (a *InternalAdapter) GetSite(_ context.Context, id string) (*models.Site, error) {
+	return a.db.GetSite(id)
+}
+
+func (a *InternalAdapter) CreateSite(_ context.Context, site *models.Site) error {
+	return a.db.CreateSite(site)
+}
+
+func (a *InternalAdapter) UpdateSite(_ context.Context, id string, updates map[string]interface{}) error {
+	return a.db.UpdateSite(id, updates)
+}
+
+func (a *InternalAdapter) DeleteSite(_ context.Context, id string) error {
+	return a.db.DeleteSite(id)
+}
+
+// ── Spare Part Categories ────────────────────────────────────────
+
+func (a *InternalAdapter) GetCategories(_ context.Context) ([]models.SparePartCategory, error) {
+	return a.db.GetCategories()
+}
+
+func (a *InternalAdapter) CreateCategory(_ context.Context, cat *models.SparePartCategory) error {
+	return a.db.CreateCategory(cat)
+}
+
+func (a *InternalAdapter) UpdateCategory(_ context.Context, id string, updates map[string]interface{}) error {
+	return a.db.UpdateCategory(id, updates)
+}
+
+func (a *InternalAdapter) DeleteCategory(_ context.Context, id string) error {
+	return a.db.DeleteCategory(id)
+}
+
 // ── Mobile ───────────────────────────────────────────────────────
 
 func (a *InternalAdapter) SavePushToken(_ context.Context, userID, token, platform string) error {

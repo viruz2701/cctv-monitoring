@@ -7,6 +7,9 @@ export interface Site {
     name: string;
     address: string;
     city: string;
+    organization?: string;      // Организация/владелец
+    latitude?: number;          // Широта
+    longitude?: number;         // Долгота
     status: 'active' | 'inactive' | 'maintenance';
     lastSync: string;
 }

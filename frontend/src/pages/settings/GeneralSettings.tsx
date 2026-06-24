@@ -22,6 +22,8 @@ interface APIKey {
     created_at: string;
 }
 
+const TIMEZONES = Intl.supportedValuesOf('timeZone');
+
 export const GeneralSettings: React.FC<Props> = ({
   formData,
   onTopLevelChange,
@@ -124,12 +126,7 @@ export const GeneralSettings: React.FC<Props> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
                 label={t('timezone')}
-                options={[
-                  { value: 'UTC', label: 'UTC' },
-                  { value: 'EST', label: t('eastern_time') },
-                  { value: 'PST', label: t('pacific_time') },
-                  { value: 'IST', label: t('india_time') },
-                ]}
+                options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
                 value={formData.timezone}
                 onChange={(e) => onTopLevelChange('timezone', e.target.value)}
               />

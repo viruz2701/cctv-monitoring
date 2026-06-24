@@ -57,6 +57,9 @@ export function Sites() {
         name: '',
         address: '',
         city: '',
+        organization: '',
+        latitude: 0,
+        longitude: 0,
         status: 'active'
     });
 
@@ -81,7 +84,7 @@ export function Sites() {
     }, []);
 
     const resetForm = () => {
-        setFormData({ name: '', address: '', city: '', status: 'active' });
+        setFormData({ name: '', address: '', city: '', organization: '', latitude: 0, longitude: 0, status: 'active' });
         setSelectedSite(null);
         setSiteAssignments([]);
         setAssignForm({ technician_id: '', is_primary: false });
@@ -110,6 +113,9 @@ export function Sites() {
                 name: site.name,
                 address: site.address,
                 city: site.city,
+                organization: site.organization || '',
+                latitude: site.latitude || 0,
+                longitude: site.longitude || 0,
                 status: site.status as string
             });
             loadSiteAssignments(site.id);
@@ -158,28 +164,37 @@ export function Sites() {
         }
     };
 
-    const handleSaveSite = (e: React.FormEvent) => {
+    const handleSaveSite = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (selectedSite) {
-            updateSite(selectedSite.id, {
-                name: formData.name,
-                address: formData.address,
-                city: formData.city,
-                status: formData.status as any
-            });
-        } else {
-            const newSite: Site = {
-                id: `site-${generateUUID()}`,
-                name: formData.name,
-                address: formData.address,
-                city: formData.city,
-                status: formData.status as any,
-                lastSync: new Date().toISOString()
-            };
-            addSite(newSite);
+        try {
+            if (selectedSite) {
+                await updateSite(selectedSite.id, {
+                    name: formData.name,
+                    address: formData.address,
+                    city: formData.city,
+                    organization: formData.organization || undefined,
+                    latitude: formData.latitude || undefined,
+                    longitude: formData.longitude || undefined,
+                    status: formData.status as any
+                });
+            } else {
+                const newSite: Partial<Site> = {
+                    name: formData.name,
+                    address: formData.address,
+                    city: formData.city,
+                    organization: formData.organization || undefined,
+                    latitude: formData.latitude || undefined,
+                    longitude: formData.longitude || undefined,
+                    status: formData.status as any,
+                };
+                await addSite(newSite as Site);
+            }
+            setShowAddModal(false);
+            resetForm();
+        } catch (err) {
+            console.error('Failed to save site:', err);
+            toast.error(t('save_failed') || 'Failed to save site');
         }
-        setShowAddModal(false);
-        resetForm();
     };
 
     const handleDeleteSite = (siteId: string) => {
@@ -198,7 +213,7 @@ export function Sites() {
         let result = [...sites];
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(s => s.name.toLowerCase().includes(q) || s.city.toLowerCase().includes(q) || s.address.toLowerCase().includes(q));
+            result = result.filter(s => s.name.toLowerCase().includes(q) || s.city.toLowerCase().includes(q) || s.address.toLowerCase().includes(q) || (s.organization || '').toLowerCase().includes(q));
         }
         if (statusFilter !== 'all') {
             result = result.filter(s => s.status === statusFilter);
@@ -227,6 +242,13 @@ export function Sites() {
                         <p className="text-xs text-slate-500 dark:text-slate-400">ID: {site.id}</p>
                     </div>
                 </div>
+            ),
+        },
+        {
+            key: 'organization' as keyof Site,
+            header: t('organization'),
+            render: (site: Site) => (
+                <span className="text-slate-600 dark:text-slate-300">{site.organization || '-'}</span>
             ),
         },
         {
@@ -365,6 +387,63 @@ export function Sites() {
             >
                 <form id="site-form" onSubmit={handleSaveSite} className="space-y-4">
                     <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('site_name')}</label><Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={t('site_name_placeholder')} required /></div>
+                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('organization') || 'Organization'}</label><Input value={formData.organization} onChange={e => setFormData({ ...formData, organization: e.target.value })} placeholder={t('organization_placeholder') || 'Organization name'} /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('latitude') || 'Latitude'}</label>
+                            <Input type="number" step="any" value={formData.latitude} onChange={e => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })} placeholder="0.0" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('longitude') || 'Longitude'}</label>
+                            <Input type="number" step="any" value={formData.longitude} onChange={e => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })} placeholder="0.0" />
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                                const query = [formData.address, formData.city].filter(Boolean).join(', ');
+                                if (!query) {
+                                    toast.error(t('enter_address_first') || 'Enter address first');
+                                    return;
+                                }
+                                try {
+                                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+                                    const data = await res.json();
+                                    if (data && data[0]) {
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            latitude: parseFloat(data[0].lat),
+                                            longitude: parseFloat(data[0].lon),
+                                        }));
+                                        toast.success(t('coordinates_found') || 'Coordinates found');
+                                    } else {
+                                        toast.error(t('coordinates_not_found') || 'Coordinates not found for this address');
+                                    }
+                                } catch {
+                                    toast.error(t('geocoding_error') || 'Failed to get coordinates');
+                                }
+                            }}
+                            icon={<MapPin className="w-4 h-4" />}
+                        >
+                            {t('get_coordinates') || 'Get coordinates'}
+                        </Button>
+                        {formData.latitude !== 0 && formData.longitude !== 0 && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                    window.open(`https://www.openstreetmap.org/?mlat=${formData.latitude}&mlon=${formData.longitude}#map=15/${formData.latitude}/${formData.longitude}`, '_blank');
+                                }}
+                                icon={<MapPin className="w-4 h-4" />}
+                            >
+                                {t('view_on_map') || 'View on map'}
+                            </Button>
+                        )}
+                    </div>
                     <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('address')}</label><Input value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder={t('address_placeholder')} required /></div>
                     <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('city')}</label><Input value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder={t('city_placeholder')} required /></div>
                     <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('status')}</label><Select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} options={[{ value: 'active', label: t('active') }, { value: 'inactive', label: t('inactive') }, { value: 'maintenance', label: t('maintenance') }]} /></div>

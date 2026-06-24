@@ -16,7 +16,7 @@ export function Logs() {
         setLoading(true);
         try {
             const result = await api.searchLogs(filters);
-            setLogs(result);
+            setLogs(result || []);
         } catch (err) {
             console.error(err);
         } finally {

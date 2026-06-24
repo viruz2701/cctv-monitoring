@@ -538,6 +538,47 @@ func (a *AtlasAdapter) FallbackQueueSize() int {
 	return count
 }
 
+// ── Sites ────────────────────────────────────────────────────────
+// External adapter — not implemented, delegated to InternalAdapter
+
+func (a *AtlasAdapter) GetSites(_ context.Context) ([]models.Site, error) {
+	return nil, fmt.Errorf("get sites not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) GetSite(_ context.Context, _ string) (*models.Site, error) {
+	return nil, fmt.Errorf("get site not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) CreateSite(_ context.Context, _ *models.Site) error {
+	return fmt.Errorf("create site not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) UpdateSite(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("update site not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) DeleteSite(_ context.Context, _ string) error {
+	return fmt.Errorf("delete site not implemented for Atlas adapter")
+}
+
+// ── Spare Part Categories ────────────────────────────────────────
+
+func (a *AtlasAdapter) GetCategories(_ context.Context) ([]models.SparePartCategory, error) {
+	return nil, fmt.Errorf("get categories not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) CreateCategory(_ context.Context, _ *models.SparePartCategory) error {
+	return fmt.Errorf("create category not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) UpdateCategory(_ context.Context, _ string, _ map[string]interface{}) error {
+	return fmt.Errorf("update category not implemented for Atlas adapter")
+}
+
+func (a *AtlasAdapter) DeleteCategory(_ context.Context, _ string) error {
+	return fmt.Errorf("delete category not implemented for Atlas adapter")
+}
+
 // ── Helpers ──────────────────────────────────────────────────────
 
 // buildQueryPath добавляет query-параметры к URL из фильтров.

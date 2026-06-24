@@ -1,13 +1,14 @@
 import { generateUUID } from '../utils/uuid';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Badge, TicketStatusBadge, PriorityBadge, Textarea, ConfirmModal } from '../components/ui';
-import { ArrowLeft, Clock, MapPin, HardDrive, User, Send, Trash2 } from 'lucide-react';
+import { ArrowLeft, Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import type { Ticket, TicketStatus, TicketComment } from '../types';
 import { useTickets } from '../context/DataContext';
 import { useTranslation } from 'react-i18next';
+import { api, Alarm } from '../services/api';
 
 export function TicketDetail() {
     const { t } = useTranslation();
@@ -20,6 +21,18 @@ export function TicketDetail() {
 
     const [newComment, setNewComment] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [alarms, setAlarms] = useState<Alarm[]>([]);
+    const [alarmsLoading, setAlarmsLoading] = useState(false);
+
+    useEffect(() => {
+      if (ticket?.deviceId) {
+        setAlarmsLoading(true);
+        api.getAlarms(ticket.deviceId)
+          .then(setAlarms)
+          .catch(() => {})
+          .finally(() => setAlarmsLoading(false));
+      }
+    }, [ticket?.deviceId]);
 
     if (!ticket) {
         return (
@@ -229,6 +242,43 @@ export function TicketDetail() {
                             </div>
                         </CardBody>
                     </Card>
+
+                    {/* ALARMS SECTION */}
+                    {ticket?.deviceId && (
+                      <Card>
+                        <CardBody>
+                          <div className="flex items-center gap-2 mb-4">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                            <h3 className="font-semibold text-slate-900 dark:text-white">{t('device_alarms') || 'Device Alarms'}</h3>
+                          </div>
+                          {alarmsLoading ? (
+                            <div className="flex items-center justify-center py-4">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-600"></div>
+                              <span className="ml-2 text-sm text-slate-500">{t('loading')}</span>
+                            </div>
+                          ) : alarms.length === 0 ? (
+                            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+                              {t('no_alarms') || 'No alarms'}
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {alarms.map((alarm, idx) => (
+                                <div key={alarm.timestamp + alarm.device_id + idx} className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm">
+                                  <AlertTriangle className={`w-4 h-4 flex-shrink-0 ${alarm.priority >= 3 ? 'text-red-500' : alarm.priority >= 2 ? 'text-amber-500' : 'text-blue-500'}`} />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-slate-900 dark:text-white truncate">{alarm.description}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{new Date(alarm.timestamp).toLocaleString()}</p>
+                                  </div>
+                                  <Badge variant={alarm.priority >= 3 ? 'danger' : alarm.priority >= 2 ? 'warning' : 'info'}>
+                                    P{alarm.priority}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </CardBody>
+                      </Card>
+                    )}
                 </div>
             </div>
 

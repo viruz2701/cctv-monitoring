@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Card, CardHeader, CardBody, CardFooter, Button, Select, Input, Badge } from '../ui';
-import { FileText, Download, Calendar, Search, Filter } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Card, CardHeader, CardBody, CardFooter, Button, Select, Input, Badge, Modal, Table } from '../ui';
+import { FileText, Download, Calendar, Search, Filter, X } from 'lucide-react';
 import { useToast } from '../ui';
 import { generateExcelReport, triggerBlobDownload } from '../../utils/reportGenerator';
 import { useDevicesSites, useTickets, useReports } from '../../context/DataContext';
@@ -9,6 +9,16 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { parseISO, format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import { Device } from '../../types';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+const StatCard: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+    <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+    <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+  </div>
+);
 
 export function ManualDownloadTab() {
     const { t } = useTranslation();
@@ -30,6 +40,77 @@ export function ManualDownloadTab() {
     const [selectedDeviceId, setSelectedDeviceId] = useState('');
     const [isDeviceDropdownOpen, setIsDeviceDropdownOpen] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
+
+    const filteredDevices = useMemo(() => devices.filter(d => {
+        if (filteredSites !== 'all' && d.siteId !== filteredSites) return false;
+        if (deviceType !== 'all' && d.type !== deviceType) return false;
+        if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+        return true;
+    }), [devices, filteredSites, deviceType, statusFilter]);
+
+    const previewColumns = [
+        { key: 'name' as keyof Device, header: t('device') || 'Device' },
+        { key: 'type' as keyof Device, header: t('type') || 'Type' },
+        { key: 'status' as keyof Device, header: t('status') || 'Status' },
+        { key: 'siteName' as keyof Device, header: t('site') || 'Site' },
+    ];
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+
+        // Title
+        doc.setFontSize(16);
+        doc.text(`Report: ${reportType}`, 14, 20);
+
+        // Date range
+        doc.setFontSize(10);
+        const dateStr = duration === 'custom' ? `${startDate} to ${endDate}` : duration;
+        doc.text(`Period: ${dateStr}`, 14, 30);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
+
+        // Filter info
+        doc.setFontSize(9);
+        doc.text(`Site: ${filteredSites === 'all' ? 'All' : filteredSites}`, 14, 44);
+        doc.text(`Device Type: ${deviceType === 'all' ? 'All' : deviceType}`, 14, 50);
+        doc.text(`Status: ${statusFilter === 'all' ? 'All' : statusFilter}`, 14, 56);
+
+        // Summary table
+        const summaryData = [
+            ['Total Devices', String(devices.length)],
+            ['Online Devices', String(devices.filter(d => d.status === 'online').length)],
+            ['Offline Devices', String(devices.filter(d => d.status === 'offline').length)],
+            ['Total Sites', String(sites.length)],
+        ];
+
+        (doc as any).autoTable({
+            startY: 64,
+            head: [['Metric', 'Value']],
+            body: summaryData,
+            theme: 'striped',
+            headStyles: { fillColor: [59, 130, 246] },
+        });
+
+        // Device list
+        const deviceData = devices
+            .filter(d => filteredSites === 'all' || d.siteId === filteredSites)
+            .filter(d => deviceType === 'all' || d.type === deviceType)
+            .filter(d => statusFilter === 'all' || d.status === statusFilter)
+            .map(d => [d.name, d.type, d.status, d.siteName]);
+
+        if (deviceData.length > 0) {
+            (doc as any).autoTable({
+                startY: (doc as any).lastAutoTable.finalY + 10,
+                head: [['Device', 'Type', 'Status', 'Site']],
+                body: deviceData,
+                theme: 'grid',
+                headStyles: { fillColor: [59, 130, 246] },
+            });
+        }
+
+        doc.save(`report-${reportType}-${Date.now()}.pdf`);
+        toast.success('PDF report downloaded');
+    };
 
     const handleGenerate = () => {
         if (duration === 'custom') {
@@ -117,116 +198,143 @@ export function ManualDownloadTab() {
     };
 
     return (
-        <Card>
-            <CardHeader className="border-b border-slate-200 dark:border-slate-700/50 pb-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
-                        <Download className="w-5 h-5" />
+        <>
+            <Card>
+                <CardHeader className="border-b border-slate-200 dark:border-slate-700/50 pb-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                            <Download className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-medium text-slate-900 dark:text-white">{t('manual_download')}</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 font-normal">{t('manual_download_desc')}</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-lg font-medium text-slate-900 dark:text-white">{t('manual_download')}</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-normal">{t('manual_download_desc')}</p>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardBody className="p-6 space-y-8 pb-8">
-                {/* Section 1: Report Options */}
-                <div>
-                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        {t('select_report_type')}
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {[
-                            { id: 'consolidated', label: t('consolidated_health'), desc: t('consolidated_desc') },
-                            { id: 'dvr_nvr_health', label: t('dvr_nvr_health'), desc: t('dvr_nvr_desc') },
-                            { id: 'camera_health', label: t('camera_health_report'), desc: t('camera_health_desc') },
-                            { id: 'hdd_health', label: t('hdd_health_report'), desc: t('hdd_health_desc') },
-                            { id: 'recording_availability', label: t('recording_availability_report'), desc: t('recording_availability_desc') },
-                            { id: 'ticket_log', label: t('ticket_log_report'), desc: t('ticket_log_desc') }
-                        ].map(type => (
-                            <div
-                                key={type.id}
-                                onClick={() => setReportType(type.id)}
-                                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${reportType === type.id
-                                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 dark:border-blue-500 shadow-sm'
-                                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-slate-500 bg-white dark:bg-slate-800'
-                                    }`}
-                            >
-                                <div className="flex justify-between items-start mb-1">
-                                    <span className={`font-medium ${reportType === type.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-white'}`}>
-                                        {type.label}
-                                    </span>
-                                    {reportType === type.id && (
-                                        <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-white" /></div>
-                                    )}
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">{type.desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    {/* Section 2: Duration Options */}
+                </CardHeader>
+                <CardBody className="p-6 space-y-8 pb-8">
+                    {/* Section 1: Report Options */}
                     <div>
                         <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            {t('select_duration')}
+                            <FileText className="w-4 h-4" />
+                            {t('select_report_type')}
                         </h4>
-                        <div className="space-y-4 max-w-sm">
-                            <Select
-                                label={t('time_range_preset')}
-                                options={[
-                                    { value: 'last_7_days', label: t('last_7_days') },
-                                    { value: 'last_30_days', label: t('last_30_days') },
-                                    { value: 'last_3_months', label: t('last_3_months') },
-                                    { value: 'last_6_months', label: t('last_6_months') },
-                                    { value: 'all_data', label: t('all_available_data') },
-                                    { value: 'custom', label: t('custom_date_range') },
-                                ]}
-                                value={duration}
-                                onChange={(e) => setDuration(e.target.value)}
-                            />
-                            {duration === 'custom' && (
-                                <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('start_date')}</label><DatePicker selected={startDate ? parseISO(startDate) : null} onChange={(date: Date | null) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
-                                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('end_date')}</label><DatePicker selected={endDate ? parseISO(endDate) : null} onChange={(date: Date | null) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {[
+                                { id: 'consolidated', label: t('consolidated_health'), desc: t('consolidated_desc') },
+                                { id: 'dvr_nvr_health', label: t('dvr_nvr_health'), desc: t('dvr_nvr_desc') },
+                                { id: 'camera_health', label: t('camera_health_report'), desc: t('camera_health_desc') },
+                                { id: 'hdd_health', label: t('hdd_health_report'), desc: t('hdd_health_desc') },
+                                { id: 'recording_availability', label: t('recording_availability_report'), desc: t('recording_availability_desc') },
+                                { id: 'ticket_log', label: t('ticket_log_report'), desc: t('ticket_log_desc') }
+                            ].map(type => (
+                                <div
+                                    key={type.id}
+                                    onClick={() => setReportType(type.id)}
+                                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${reportType === type.id
+                                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 dark:border-blue-500 shadow-sm'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-slate-500 bg-white dark:bg-slate-800'
+                                        }`}
+                                >
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className={`font-medium ${reportType === type.id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-white'}`}>
+                                            {type.label}
+                                        </span>
+                                        {reportType === type.id && (
+                                            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-white" /></div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{type.desc}</p>
                                 </div>
-                            )}
+                            ))}
                         </div>
                     </div>
 
-                    {/* Section 3: Filters */}
-                    <div>
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Filter className="w-4 h-4" />
-                            {t('apply_filters')}
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Select label={t('region_site')} options={[{ value: 'all', label: t('all_accessible_sites') }, ...sites.filter(s => user?.role === 'admin' || user?.sites?.includes(s.id)).map(s => ({ value: s.id, label: s.name }))]} value={filteredSites} onChange={(e) => setFilteredSites(e.target.value)} />
-                            <Select label={t('device_type_filter')} options={[{ value: 'all', label: t('all_device_types') }, { value: 'camera', label: t('camera') }, { value: 'nvr', label: 'NVR' }, { value: 'dvr', label: 'DVR' }]} value={deviceType} onChange={(e) => setDeviceType(e.target.value)} disabled={reportType === 'dvr_nvr_health' || reportType === 'camera_health'} />
-                            <Select label={t('current_status')} options={[{ value: 'all', label: t('all_statuses_filter') }, { value: 'online', label: t('online') }, { value: 'warning', label: t('warning') }, { value: 'offline', label: t('offline') }]} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} />
-                            <Select label={t('issue_type')} options={[{ value: 'all', label: t('all_issues') }, { value: 'offline', label: t('issue_offline') }, { value: 'storage', label: t('issue_storage') }, { value: 'recording', label: t('issue_recording') }]} value={issueTypeFilter} onChange={(e) => setIssueTypeFilter(e.target.value)} />
-                            <div className="relative">
-                                <Input label={t('device_name_search')} placeholder={t('type_to_search')} value={deviceNameQuery} onChange={(e) => { setDeviceNameQuery(e.target.value); setSelectedDeviceId(''); setIsDeviceDropdownOpen(true); }} onFocus={() => setIsDeviceDropdownOpen(true)} onBlur={() => setTimeout(() => setIsDeviceDropdownOpen(false), 200)} />
-                                {isDeviceDropdownOpen && deviceNameQuery && (
-                                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                                        {devices.filter(d => (user?.role === 'admin' || user?.sites?.includes(d.siteId)) && d.name.toLowerCase().includes(deviceNameQuery.toLowerCase())).map(device => (
-                                            <div key={device.id} className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer flex flex-col border-b border-slate-100 dark:border-slate-700/50 last:border-0" onMouseDown={(e) => { e.preventDefault(); setDeviceNameQuery(device.name); setSelectedDeviceId(device.id); setIsDeviceDropdownOpen(false); }}><span className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</span><span className="text-xs text-slate-500">{device.siteName} • {device.type.toUpperCase()}</span></div>
-                                        ))}
-                                        {devices.filter(d => (user?.role === 'admin' || user?.sites?.includes(d.siteId)) && d.name.toLowerCase().includes(deviceNameQuery.toLowerCase())).length === 0 && <div className="px-4 py-3 text-sm text-slate-500 text-center">{t('no_matching_devices')}</div>}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        {/* Section 2: Duration Options */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <Calendar className="w-4 h-4" />
+                                {t('select_duration')}
+                            </h4>
+                            <div className="space-y-4 max-w-sm">
+                                <Select
+                                    label={t('time_range_preset')}
+                                    options={[
+                                        { value: 'last_7_days', label: t('last_7_days') },
+                                        { value: 'last_30_days', label: t('last_30_days') },
+                                        { value: 'last_3_months', label: t('last_3_months') },
+                                        { value: 'last_6_months', label: t('last_6_months') },
+                                        { value: 'all_data', label: t('all_available_data') },
+                                        { value: 'custom', label: t('custom_date_range') },
+                                    ]}
+                                    value={duration}
+                                    onChange={(e) => setDuration(e.target.value)}
+                                />
+                                {duration === 'custom' && (
+                                    <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('start_date')}</label><DatePicker selected={startDate ? parseISO(startDate) : null} onChange={(date: Date | null) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
+                                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('end_date')}</label><DatePicker selected={endDate ? parseISO(endDate) : null} onChange={(date: Date | null) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
                                     </div>
                                 )}
                             </div>
                         </div>
+
+                        {/* Section 3: Filters */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <Filter className="w-4 h-4" />
+                                {t('apply_filters')}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <Select label={t('region_site')} options={[{ value: 'all', label: t('all_accessible_sites') }, ...sites.filter(s => user?.role === 'admin' || user?.sites?.includes(s.id)).map(s => ({ value: s.id, label: s.name }))]} value={filteredSites} onChange={(e) => setFilteredSites(e.target.value)} />
+                                <Select label={t('device_type_filter')} options={[{ value: 'all', label: t('all_device_types') }, { value: 'camera', label: t('camera') }, { value: 'nvr', label: 'NVR' }, { value: 'dvr', label: 'DVR' }]} value={deviceType} onChange={(e) => setDeviceType(e.target.value)} disabled={reportType === 'dvr_nvr_health' || reportType === 'camera_health'} />
+                                <Select label={t('current_status')} options={[{ value: 'all', label: t('all_statuses_filter') }, { value: 'online', label: t('online') }, { value: 'warning', label: t('warning') }, { value: 'offline', label: t('offline') }]} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} />
+                                <Select label={t('issue_type')} options={[{ value: 'all', label: t('all_issues') }, { value: 'offline', label: t('issue_offline') }, { value: 'storage', label: t('issue_storage') }, { value: 'recording', label: t('issue_recording') }]} value={issueTypeFilter} onChange={(e) => setIssueTypeFilter(e.target.value)} />
+                                <div className="relative">
+                                    <Input label={t('device_name_search')} placeholder={t('type_to_search')} value={deviceNameQuery} onChange={(e) => { setDeviceNameQuery(e.target.value); setSelectedDeviceId(''); setIsDeviceDropdownOpen(true); }} onFocus={() => setIsDeviceDropdownOpen(true)} onBlur={() => setTimeout(() => setIsDeviceDropdownOpen(false), 200)} />
+                                    {isDeviceDropdownOpen && deviceNameQuery && (
+                                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                            {devices.filter(d => (user?.role === 'admin' || user?.sites?.includes(d.siteId)) && d.name.toLowerCase().includes(deviceNameQuery.toLowerCase())).map(device => (
+                                                <div key={device.id} className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer flex flex-col border-b border-slate-100 dark:border-slate-700/50 last:border-0" onMouseDown={(e) => { e.preventDefault(); setDeviceNameQuery(device.name); setSelectedDeviceId(device.id); setIsDeviceDropdownOpen(false); }}><span className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</span><span className="text-xs text-slate-500">{device.siteName} • {device.type.toUpperCase()}</span></div>
+                                            ))}
+                                            {devices.filter(d => (user?.role === 'admin' || user?.sites?.includes(d.siteId)) && d.name.toLowerCase().includes(deviceNameQuery.toLowerCase())).length === 0 && <div className="px-4 py-3 text-sm text-slate-500 text-center">{t('no_matching_devices')}</div>}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CardBody>
+                <CardFooter className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700/50 flex justify-between items-center py-4">
+                    <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500" />{t('ready_to_generate')} {t(reportType.replace(/_/g, ' '))}</span>
+                    <div className="flex gap-3">
+                        <Button variant="outline" icon={<Search className="w-4 h-4" />} onClick={() => setShowPreview(true)}>
+                            {t('preview') || 'Preview'}
+                        </Button>
+                        <Button variant="outline" icon={<FileText className="w-4 h-4" />} onClick={handleExportPDF}>{t('export_pdf')}</Button>
+                        <Button variant="primary" icon={isGenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />} onClick={handleGenerate} disabled={isGenerating} className="min-w-[140px]">{isGenerating ? t('generating') : t('download_excel')}</Button>
+                    </div>
+                </CardFooter>
+            </Card>
+
+            {/* Preview Modal */}
+            <Modal isOpen={showPreview} onClose={() => setShowPreview(false)} title={t('report_preview') || 'Report Preview'} size="xl">
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <StatCard label={t('total_devices')} value={filteredDevices.length} />
+                        <StatCard label={t('online')} value={filteredDevices.filter(d => d.status === 'online').length} />
+                        <StatCard label={t('offline')} value={filteredDevices.filter(d => d.status === 'offline').length} />
+                        <StatCard label={t('sites')} value={sites.length} />
+                    </div>
+                    <Table data={filteredDevices.slice(0, 50)} columns={previewColumns} keyExtractor={d => d.id} />
+                    <p className="text-xs text-slate-400">{filteredDevices.length > 50 ? `Showing 50 of ${filteredDevices.length} devices` : ''}</p>
+                    <div className="flex gap-2 justify-end pt-2">
+                        <Button variant="secondary" onClick={() => setShowPreview(false)}>{t('close') || 'Close'}</Button>
+                        <Button icon={<Download size={16} />} onClick={() => { setShowPreview(false); handleGenerate(); }}>{t('download_excel')}</Button>
+                        <Button icon={<FileText size={16} />} onClick={() => { setShowPreview(false); handleExportPDF(); }}>{t('export_pdf') || 'Export PDF'}</Button>
                     </div>
                 </div>
-            </CardBody>
-            <CardFooter className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700/50 flex justify-between items-center py-4">
-                <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500" />{t('ready_to_generate')} {t(reportType.replace(/_/g, ' '))}</span>
-                <div className="flex gap-3"><Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={() => toast.info(t('pdf_export_soon'))}>{t('export_pdf')}</Button><Button variant="primary" icon={isGenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Download className="w-4 h-4" />} onClick={handleGenerate} disabled={isGenerating} className="min-w-[140px]">{isGenerating ? t('generating') : t('download_excel')}</Button></div>
-            </CardFooter>
-        </Card>
+            </Modal>
+        </>
     );
 }

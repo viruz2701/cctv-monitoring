@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMaintenance } from '../context/MaintenanceContext';
+import { useDevicesSites } from '../context/DevicesSitesContext';
+import { useUsers } from '../context/UsersContext';
+import { useWorkOrders } from '../context/WorkOrdersContext';
+import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, Table, Badge, Modal, Input } from '../components/ui';
 import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
@@ -21,7 +25,9 @@ const PRIORITY_COLORS: Record<string, { bg: string; border: string }> = {
 
 export const MaintenanceSchedules: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { schedules, loading, completeSchedule, deleteSchedule, updateSchedule } = useMaintenance();
+  const { workOrders } = useWorkOrders();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -319,6 +325,26 @@ export const MaintenanceSchedules: React.FC = () => {
                 <p className="text-sm">{selectedEvent.notes}</p>
               </div>
             )}
+
+            {/* Related Work Orders */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-3 mt-3">
+              <h4 className="text-sm font-semibold mb-2">{t('work_orders') || 'Work Orders'}</h4>
+              {workOrders.filter(wo => wo.schedule_id === selectedEvent.id).length === 0 ? (
+                <p className="text-sm text-slate-500">{t('no_work_orders') || 'No work orders'}</p>
+              ) : (
+                <div className="space-y-2">
+                  {workOrders.filter(wo => wo.schedule_id === selectedEvent.id).map(wo => (
+                    <div key={wo.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm"
+                      onClick={() => navigate(`/work-orders/${wo.id}`)} style={{cursor: 'pointer'}}>
+                      <span>{wo.device_name || wo.device_id}</span>
+                      <Badge variant={wo.status === 'completed' ? 'success' : wo.status === 'in_progress' ? 'primary' : 'neutral'}>
+                        {wo.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Modal>
@@ -329,79 +355,100 @@ export const MaintenanceSchedules: React.FC = () => {
 const CreateScheduleForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
   const { createSchedule } = useMaintenance();
+  const { sites, devices } = useDevicesSites();
+  const { users } = useUsers();
+  const technicians = users.filter(u => u.role === 'technician');
 
-  const [formData, setFormData] = useState<{
-    device_id: string;
-    schedule_type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'custom';
-    interval_days: number;
-    priority: 'critical' | 'high' | 'medium' | 'low';
-    next_due: string;
-    notes: string;
-  }>(() => ({
-    device_id: '',
-    schedule_type: 'monthly',
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
+  const [formData, setFormData] = useState({
+    schedule_type: 'monthly' as const,
     interval_days: 30,
-    priority: 'medium',
+    priority: 'medium' as const,
     next_due: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     notes: '',
-  }));
+  });
+
+  const siteDevices = devices.filter(d => d.siteId === selectedSiteId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createSchedule(formData);
+    if (!selectedDeviceId) return;
+    await createSchedule({
+      device_id: selectedDeviceId,
+      schedule_type: formData.schedule_type,
+      interval_days: formData.interval_days,
+      priority: formData.priority,
+      next_due: formData.next_due,
+      assigned_to: selectedTechnicianId || undefined,
+      notes: formData.notes,
+    });
     onClose();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        label={t('device_id')}
-        value={formData.device_id}
-        onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
-        required
-      />
+      {/* Site select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('site') || 'Site'}</label>
+        <select value={selectedSiteId} onChange={e => { setSelectedSiteId(e.target.value); setSelectedDeviceId(''); }}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required>
+          <option value="">{t('select_site') || 'Select site...'}</option>
+          {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
+        </select>
+      </div>
+
+      {/* Device select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('device') || 'Device'}</label>
+        <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required disabled={!selectedSiteId}>
+          <option value="">{t('select_device') || 'Select device...'}</option>
+          {siteDevices.map(dev => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
+        </select>
+      </div>
+
+      {/* Technician select */}
+      <div>
+        <label className="block text-sm font-medium mb-1">{t('assigned_to') || 'Assigned to'}</label>
+        <select value={selectedTechnicianId} onChange={e => setSelectedTechnicianId(e.target.value)}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
+          <option value="">{t('unassigned') || 'Unassigned'}</option>
+          {technicians.map(tech => <option key={tech.id} value={tech.id}>{tech.name || tech.username}</option>)}
+        </select>
+      </div>
+
+      {/* schedule_type */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('schedule_type')}</label>
-        <select
-          value={formData.schedule_type}
-          onChange={(e) => setFormData({ ...formData, schedule_type: e.target.value as typeof formData.schedule_type })}
-          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600"
-        >
+        <select value={formData.schedule_type} onChange={e => setFormData({...formData, schedule_type: e.target.value as any})}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
           <option value="daily">{t('daily')}</option>
           <option value="weekly">{t('weekly')}</option>
           <option value="monthly">{t('monthly')}</option>
           <option value="quarterly">{t('quarterly')}</option>
         </select>
       </div>
+
+      {/* priority */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('priority')}</label>
-        <select
-          value={formData.priority}
-          onChange={(e) => setFormData({ ...formData, priority: e.target.value as typeof formData.priority })}
-          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600"
-        >
+        <select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}
+          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600">
           <option value="critical">{t('critical')}</option>
           <option value="high">{t('high')}</option>
           <option value="medium">{t('medium')}</option>
           <option value="low">{t('low')}</option>
         </select>
       </div>
-      <Input
-        type="date"
-        label={t('next_due')}
-        value={formData.next_due}
-        onChange={(e) => setFormData({ ...formData, next_due: e.target.value })}
-        required
-      />
-      <Input
-        label={t('notes')}
-        value={formData.notes}
-        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-      />
+
+      <Input type="date" label={t('next_due')} value={formData.next_due}
+        onChange={e => setFormData({...formData, next_due: e.target.value})} required />
+      <Input label={t('notes')} value={formData.notes}
+        onChange={e => setFormData({...formData, notes: e.target.value})} />
       <div className="flex gap-2 justify-end pt-4">
-        <Button variant="secondary" onClick={onClose}>
-          {t('cancel')}
-        </Button>
+        <Button variant="secondary" onClick={onClose}>{t('cancel')}</Button>
         <Button type="submit">{t('create')}</Button>
       </div>
     </form>

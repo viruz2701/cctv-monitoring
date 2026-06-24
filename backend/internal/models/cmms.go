@@ -143,3 +143,28 @@ type TechnicianMonthlyStats struct {
 	OnTimePercent      float64 `json:"on_time_percent"`
 	AvgRating          float64 `json:"avg_rating"`
 }
+
+// Site — объект (площадка) видеонаблюдения
+type Site struct {
+	ID           string    `json:"id" db:"id"`
+	Name         string    `json:"name" db:"name"`
+	Address      string    `json:"address,omitempty" db:"address"`
+	City         string    `json:"city,omitempty" db:"city"`
+	Organization string    `json:"organization,omitempty" db:"organization"`
+	Latitude     float64   `json:"latitude,omitempty" db:"latitude"`
+	Longitude    float64   `json:"longitude,omitempty" db:"longitude"`
+	Status       string    `json:"status" db:"status"`
+	LastSync     *time.Time `json:"last_sync,omitempty" db:"last_sync"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// SparePartCategory — категория запчасти
+type SparePartCategory struct {
+	ID          string    `json:"id" db:"id"`
+	Name        string    `json:"name" db:"name"`
+	Description string    `json:"description,omitempty" db:"description"`
+	Color       string    `json:"color,omitempty" db:"color"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
