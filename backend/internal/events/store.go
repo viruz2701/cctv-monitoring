@@ -21,11 +21,13 @@ package events
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -408,14 +410,10 @@ func (es *EventStore) Replay(ctx context.Context, opts RetrieveOptions) ([]*Even
 	// ── 3. Merge: hot + cold, сортировка по timestamp ────────────
 	all := append(hotRecords, coldRecords...)
 
-	// Сортировка по timestamp (стабильная)
-	for i := 0; i < len(all); i++ {
-		for j := i + 1; j < len(all); j++ {
-			if all[j].Timestamp.Before(all[i].Timestamp) {
-				all[i], all[j] = all[j], all[i]
-			}
-		}
-	}
+	// Сортировка по timestamp
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].Timestamp.Before(all[j].Timestamp)
+	})
 
 	// Применяем limit если задан
 	if opts.Limit > 0 && len(all) > opts.Limit {
@@ -751,19 +749,15 @@ func newShortID() string {
 	return fmt.Sprintf("%08x", time.Now().UnixNano())
 }
 
-// newTraceID генерирует W3C Trace Context trace ID (16 байт hex).
+// newTraceID генерирует W3C Trace Context trace ID (16 байт crypto/rand).
 func newTraceID() string {
 	b := make([]byte, 16)
-	// Временно используем timestamp + random
-	now := time.Now().UnixNano()
-	b[0] = byte(now >> 56)
-	b[1] = byte(now >> 48)
-	b[2] = byte(now >> 40)
-	b[3] = byte(now >> 32)
-	b[4] = byte(now >> 24)
-	b[5] = byte(now >> 16)
-	b[6] = byte(now >> 8)
-	b[7] = byte(now)
-
+	if _, err := rand.Read(b); err != nil {
+		// Fallback: используем timestamp при ошибке (крайне маловероятно)
+		now := time.Now().UnixNano()
+		for i := 0; i < 8; i++ {
+			b[i] = byte(now >> (56 - i*8))
+		}
+	}
 	return fmt.Sprintf("%032x", b)
 }

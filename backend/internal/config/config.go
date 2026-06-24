@@ -289,13 +289,13 @@ func Load() *Config {
 	viper.SetDefault("ftp.enabled", false)
 	viper.SetDefault("ftp.port", 2121)
 	viper.SetDefault("ftp.rootPath", "./ftp")
-	viper.SetDefault("ftp.user", "alarm")
-	viper.SetDefault("ftp.password", "alarm_pass")
+	viper.SetDefault("ftp.user", "")     // W7: Должен быть задан через env/config
+	viper.SetDefault("ftp.password", "") // W7: Должен быть задан через env/config
 	viper.SetDefault("ftp.allowFiles", true)
 	viper.SetDefault("hikvision.enabled", false)
 	viper.SetDefault("snmp.enabled", false)
 	viper.SetDefault("snmp.port", 1162)
-	viper.SetDefault("snmp.community", "public")
+	viper.SetDefault("snmp.community", "") // W6: Должен быть задан через env/config, не public
 	viper.SetDefault("snmp.version", "v2c")
 
 	// GB28181 defaults

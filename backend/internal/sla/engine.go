@@ -477,12 +477,13 @@ func (e *SLACalculationEngine) UpdateStatus(ctx context.Context, woID, newStatus
 }
 
 // CompleteWorkOrder завершает отслеживание SLA.
+// После завершения удаляет трекер из памяти через 1 час (TTL-эвикшн).
 func (e *SLACalculationEngine) CompleteWorkOrder(ctx context.Context, woID string) (*SLATrackerState, error) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	tracker, ok := e.trackers[woID]
 	if !ok {
+		e.mu.Unlock()
 		return nil, fmt.Errorf("sla tracker for %s not found", woID)
 	}
 
@@ -498,11 +499,21 @@ func (e *SLACalculationEngine) CompleteWorkOrder(ctx context.Context, woID strin
 
 	tracker.ElapsedWorkSeconds = int64(elapsed)
 
+	e.mu.Unlock()
+
 	e.logger.Info("sla completed",
 		"work_order", woID,
 		"status", tracker.Status,
 		"elapsed_seconds", elapsed,
 	)
+
+	// TTL-эвикшн: удаляем трекер из памяти через 1 час после завершения
+	time.AfterFunc(1*time.Hour, func() {
+		e.mu.Lock()
+		delete(e.trackers, woID)
+		e.mu.Unlock()
+		e.logger.Debug("sla tracker evicted", "work_order", woID)
+	})
 
 	return tracker, nil
 }

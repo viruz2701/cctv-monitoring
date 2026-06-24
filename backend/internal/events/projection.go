@@ -25,7 +25,6 @@ package events
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -413,10 +412,13 @@ func (bp *BaseProjection) Rebuild(ctx context.Context, store *EventStore) error 
 	return nil
 }
 
+// Snapshot возвращает ошибку — BaseProjection не хранит состояние.
+// Конкретные проекции должны реализовать свой Snapshot/Restore.
 func (bp *BaseProjection) Snapshot() ([]byte, error) {
-	return json.Marshal(bp)
+	return nil, fmt.Errorf("projection %q: Snapshot not implemented — override in concrete projection", bp.name)
 }
 
+// Restore возвращает ошибку — BaseProjection не хранит состояние.
 func (bp *BaseProjection) Restore(data []byte) error {
-	return json.Unmarshal(data, bp)
+	return fmt.Errorf("projection %q: Restore not implemented — override in concrete projection", bp.name)
 }
