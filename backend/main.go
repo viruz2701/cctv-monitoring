@@ -448,7 +448,11 @@ func main() {
 	}
 
 	// --- Feature Flag Manager (F-0.2.4) ---
-	ffManager := featureflag.NewManager(database, logger)
+	ffManager, err := featureflag.NewManager(database, logger)
+	if err != nil {
+		logger.Error("Failed to create feature flag manager", "error", err)
+		os.Exit(1)
+	}
 
 	// --- API-сервер ---
 	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler, syncEng)

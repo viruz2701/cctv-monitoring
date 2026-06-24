@@ -50,12 +50,11 @@ func TestNewManager(t *testing.T) {
 		Enabled: true,
 	}
 
-	mgr := NewManager(mock, testLogger())
-	defer mgr.Stop()
-
-	if mgr == nil {
-		t.Fatal("NewManager returned nil")
+	mgr, err := NewManager(mock, testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
 	}
+	defer mgr.Stop()
 }
 
 func TestIsEnabled(t *testing.T) {
@@ -63,7 +62,10 @@ func TestIsEnabled(t *testing.T) {
 	mock.flags["flag_on"] = models.FeatureFlag{Key: "flag_on", Enabled: true}
 	mock.flags["flag_off"] = models.FeatureFlag{Key: "flag_off", Enabled: false}
 
-	mgr := NewManager(mock, testLogger())
+	mgr, err := NewManager(mock, testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 	defer mgr.Stop()
 
 	// Даём время на загрузку
@@ -92,7 +94,10 @@ func TestSetEnabled(t *testing.T) {
 	mock := newMockDB()
 	mock.flags["test_flag"] = models.FeatureFlag{Key: "test_flag", Enabled: false}
 
-	mgr := NewManager(mock, testLogger())
+	mgr, err := NewManager(mock, testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 	defer mgr.Stop()
 
 	time.Sleep(50 * time.Millisecond)
@@ -111,7 +116,10 @@ func TestSetEnabled(t *testing.T) {
 }
 
 func TestFailSecure(t *testing.T) {
-	mgr := NewManager(newMockDB(), testLogger())
+	mgr, err := NewManager(newMockDB(), testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 	defer mgr.Stop()
 
 	time.Sleep(50 * time.Millisecond)
@@ -127,7 +135,10 @@ func TestGetAll(t *testing.T) {
 	mock.flags["a"] = models.FeatureFlag{Key: "a", Enabled: true}
 	mock.flags["b"] = models.FeatureFlag{Key: "b", Enabled: false}
 
-	mgr := NewManager(mock, testLogger())
+	mgr, err := NewManager(mock, testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 	defer mgr.Stop()
 
 	time.Sleep(50 * time.Millisecond)
@@ -145,7 +156,10 @@ func TestConcurrentAccess(t *testing.T) {
 		mock.flags[key] = models.FeatureFlag{Key: key, Enabled: i%2 == 0}
 	}
 
-	mgr := NewManager(mock, testLogger())
+	mgr, err := NewManager(mock, testLogger())
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
 	defer mgr.Stop()
 
 	time.Sleep(50 * time.Millisecond)
@@ -166,7 +180,7 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestManagerStop(t *testing.T) {
-	mgr := NewManager(newMockDB(), testLogger())
+	mgr, _ := NewManager(newMockDB(), testLogger())
 
 	// Stop не должен паниковать
 	mgr.Stop()

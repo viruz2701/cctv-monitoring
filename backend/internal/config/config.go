@@ -273,7 +273,7 @@ func Load() *Config {
 
 	// ITSM Sync defaults
 	viper.SetDefault("itsm_sync_interval", "5m")
-	viper.SetDefault("cors_allowed_origins", []string{"*"})
+	viper.SetDefault("cors_allowed_origins", []string{"http://localhost:5173", "http://localhost:8080"})
 
 	// Новые настройки
 	viper.SetDefault("http_xml_enabled", true)

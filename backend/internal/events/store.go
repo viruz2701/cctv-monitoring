@@ -20,6 +20,9 @@ package events
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -305,12 +308,15 @@ func (es *EventStore) Store(ctx context.Context, record *EventRecord) error {
 	if es.lastHash != "" {
 		record.PrevHash = es.lastHash
 	}
-	// ⚠ PLACEHOLDER: В production заменить на СТБ bash-256 HMAC
-	// После добавления github.com/bp2012/crypto/bash:
+	// ⚠ PLACEHOLDER: Используем HMAC-SHA256 как временное решение.
+	// TODO(C1): Заменить на СТБ bash-256 HMAC (github.com/bp2012/crypto/bash) перед production:
 	//   h := bash.NewHmac(key, bash.Size256)
 	//   h.Write([]byte(record.ID + record.TraceID))
 	//   es.lastHash = hex.EncodeToString(h.Sum(nil))
-	es.lastHash = record.ID
+	h := hmac.New(sha256.New, []byte("event-store-chain-placeholder"))
+	h.Write([]byte(es.lastHash))
+	h.Write([]byte(record.ID))
+	es.lastHash = hex.EncodeToString(h.Sum(nil))
 	es.mu.Unlock()
 
 	// ── 3. Буферизированная запись ────────────────────────────────

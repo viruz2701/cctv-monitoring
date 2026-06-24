@@ -19,23 +19,32 @@ var (
 )
 
 // getEncryptionKey retrieves the AES-256 key from the environment.
-// Panics if not set — this is intentional: encrypted data cannot be decrypted without the key.
-func getEncryptionKey() []byte {
+// Returns error if not set or invalid — never panics.
+//
+// СТБ Compliance: В production заменить на belt-gcm (github.com/bp2012/crypto/belt)
+// TODO(C1): Мигрировать на СТБ 34.101.30 belt-gcm перед production deployment
+func getEncryptionKey() ([]byte, error) {
 	keyHex := os.Getenv("PUSH_TOKEN_ENCRYPTION_KEY")
 	if keyHex == "" {
-		panic("PUSH_TOKEN_ENCRYPTION_KEY environment variable is required")
+		return nil, errors.New("PUSH_TOKEN_ENCRYPTION_KEY environment variable is required")
 	}
 	key, err := hex.DecodeString(keyHex)
 	if err != nil || len(key) != 32 {
-		panic(fmt.Sprintf("PUSH_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes): %v", err))
+		return nil, fmt.Errorf("PUSH_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes): %v", err)
 	}
-	return key
+	return key, nil
 }
 
 // Encrypt encrypts plaintext using AES-256-GCM.
 // Returns hex-encoded ciphertext: nonce(12 bytes) + ciphertext + tag(16 bytes).
+//
+// ⚠ СТБ Compliance: Используется только для совместимости с внешними системами.
+// Для новых разработок — belt-gcm (СТБ 34.101.30).
 func Encrypt(plaintext string) (string, error) {
-	key := getEncryptionKey()
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -58,7 +67,10 @@ func Encrypt(plaintext string) (string, error) {
 
 // Decrypt decrypts a hex-encoded ciphertext produced by Encrypt.
 func Decrypt(hexCiphertext string) (string, error) {
-	key := getEncryptionKey()
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
 
 	ciphertext, err := hex.DecodeString(hexCiphertext)
 	if err != nil {

@@ -4,13 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"unicode"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrPasswordTooShort  = errors.New("password must be at least 8 characters")
+	ErrPasswordTooShort  = errors.New("password must be at least 12 characters")
 	ErrPasswordNoUpper   = errors.New("password must contain at least one uppercase letter")
 	ErrPasswordNoLower   = errors.New("password must contain at least one lowercase letter")
 	ErrPasswordNoDigit   = errors.New("password must contain at least one digit")
@@ -40,10 +41,10 @@ func (s PasswordStrength) String() string {
 }
 
 // ValidatePasswordStrength проверяет пароль на соответствие политике безопасности
-// (OWASP ASVS L3 V2 — Authentication Verification).
+// (OWASP ASVS L3 V2 — Authentication Verification, requires min 12 chars).
 // Возвращает уровень сложности и ошибку, если пароль не проходит минимальные требования.
 func ValidatePasswordStrength(password string) (PasswordStrength, error) {
-	if len(password) < 8 {
+	if len(password) < 12 {
 		return PasswordWeak, ErrPasswordTooShort
 	}
 
@@ -120,11 +121,11 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 // GenerateResetToken generates a cryptographically secure random token for password reset.
-func GenerateResetToken() string {
+// Returns error if crypto/rand fails — never returns an insecure fallback.
+func GenerateResetToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback — не должно произойти в нормальной среде
-		return "fallback-token-" + hex.EncodeToString([]byte("emergency"))
+		return "", fmt.Errorf("failed to generate reset token: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }

@@ -49,13 +49,13 @@ type Manager struct {
 
 // NewManager создаёт FeatureFlagManager и загружает флаги из БД.
 // Запускает фоновую горутину для периодического обновления кэша.
-// panic если db или logger nil.
-func NewManager(db DB, logger *slog.Logger) *Manager {
+// Возвращает ошибку если db или logger nil (никогда не паникует).
+func NewManager(db DB, logger *slog.Logger) (*Manager, error) {
 	if db == nil {
-		panic("featureflag: db cannot be nil")
+		return nil, fmt.Errorf("featureflag: db cannot be nil")
 	}
 	if logger == nil {
-		panic("featureflag: logger cannot be nil")
+		return nil, fmt.Errorf("featureflag: logger cannot be nil")
 	}
 
 	m := &Manager{
@@ -79,7 +79,7 @@ func NewManager(db DB, logger *slog.Logger) *Manager {
 		"initial_flags", len(m.flags),
 	)
 
-	return m
+	return m, nil
 }
 
 // IsEnabled проверяет включён ли флаг (глобально, для всех тенантов).

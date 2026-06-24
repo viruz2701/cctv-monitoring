@@ -212,7 +212,12 @@ func (s *Server) handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Генерируем токен
-	token := auth.GenerateResetToken()
+	token, err := auth.GenerateResetToken()
+	if err != nil {
+		s.logger.Error("failed to generate reset token", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
 	expiresAt := time.Now().Add(1 * time.Hour)
 
 	if err := s.db.CreatePasswordResetToken(user.ID, token, expiresAt); err != nil {
