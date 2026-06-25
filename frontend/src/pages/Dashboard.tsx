@@ -115,18 +115,32 @@ function mapAlarmToAlert(alarm: APIAlarm): Alert {
 export function Dashboard() {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { data: apiTickets = [] } = useTickets();
-    const { data: apiAlarms = [] } = useAlarms();
-    const { data: apiDevices = [] } = useDevices();
-    const { data: apiSites = [] } = useSites();
+    const { data: apiTickets } = useTickets();
+    const { data: apiAlarms } = useAlarms();
+    const { data: apiDevices } = useDevices();
+    const { data: apiSites } = useSites();
     const { dashboardConfig, updateDashboardConfig } = useSettings();
     const [pageLoading, setPageLoading] = React.useState(true);
     const [customizeMode, setCustomizeMode] = React.useState(false);
 
-    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
-    const alerts = useMemo(() => apiAlarms.map(mapAlarmToAlert), [apiAlarms]);
-    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
-    const sites = useMemo(() => apiSites.map((s: any) => ({
+    // Защита: бэкенд может вернуть { data: [...] } вместо чистого массива
+    const getArrayData = <T,>(raw: unknown): T[] => {
+      if (Array.isArray(raw)) return raw as T[];
+      if (raw && typeof raw === 'object' && 'data' in raw) {
+        const nested = (raw as Record<string, unknown>).data;
+        if (Array.isArray(nested)) return nested as T[];
+      }
+      return [];
+    };
+    const apiTicketsData = getArrayData<APITicket>(apiTickets);
+    const apiAlarmsData = getArrayData<APIAlarm>(apiAlarms);
+    const apiDevicesData = getArrayData<APIDevice>(apiDevices);
+    const apiSitesData = getArrayData<import('../services/api').Site>(apiSites);
+
+    const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
+    const alerts = useMemo(() => apiAlarmsData.map(mapAlarmToAlert), [apiAlarmsData]);
+    const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
+    const sites = useMemo(() => apiSitesData.map((s: any) => ({
         id: s.id,
         name: s.name || 'Unnamed',
         address: s.address || '',

@@ -13,6 +13,11 @@ const getWsBaseUrl = () => {
     return `${protocol}//${window.location.host}`;
 };
 
+// Коды закрытия WebSocket, указывающие на ошибку авторизации — reconnect бесполезен
+const AUTH_CLOSE_CODES = new Set([1001, 1006, 4001, 4003, 4004]);
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 export function useAlarmWebSocket() {
     const { token, user } = useAuth();
     const toast = useToast();
@@ -21,9 +26,10 @@ export function useAlarmWebSocket() {
     const reconnectAttempts = useRef(0);
     const maxReconnectDelay = 30000; // 30 seconds
     const scheduleReconnectRef = useRef<() => void>(() => {});
+    const wsSupportedRef = useRef(true);
 
     const connect = useCallback(() => {
-        if (!token || !user) return;
+        if (!token || !user || !wsSupportedRef.current) return;
 
         const wsUrl = `${getWsBaseUrl()}/api/v1/ws/alarms?token=${encodeURIComponent(token)}`;
         const ws = new WebSocket(wsUrl);
@@ -45,15 +51,29 @@ export function useAlarmWebSocket() {
             }
         };
 
-        ws.onclose = () => {
-            console.log('WebSocket closed');
+        ws.onclose = (event) => {
+            console.log('WebSocket closed', event.code, event.reason);
             wsRef.current = null;
+
+            // Если код закрытия указывает на ошибку авторизации — не реконнектимся
+            if (AUTH_CLOSE_CODES.has(event.code)) {
+                console.warn(`WebSocket closed with auth error code ${event.code} — disabling reconnection`);
+                wsSupportedRef.current = false;
+                return;
+            }
+
+            if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+                console.warn(`WebSocket max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached — disabling`);
+                wsSupportedRef.current = false;
+                return;
+            }
+
             scheduleReconnectRef.current();
         };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket error', error);
-            ws.close();
+        ws.onerror = () => {
+            console.error('WebSocket error');
+            // Не вызываем ws.close() — onclose сработает автоматически
         };
 
         wsRef.current = ws;
@@ -67,7 +87,7 @@ export function useAlarmWebSocket() {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
         reconnectAttempts.current += 1;
 
-        console.log(`Scheduling WebSocket reconnect in ${delay}ms`);
+        console.log(`Scheduling WebSocket reconnect ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
         reconnectTimeoutRef.current = setTimeout(() => {
             connect();
         }, delay);
@@ -77,6 +97,11 @@ export function useAlarmWebSocket() {
     useEffect(() => {
         scheduleReconnectRef.current = scheduleReconnect;
     }, [scheduleReconnect]);
+
+    // Сброс флага wsSupported при смене токена (пользователь перелогинился)
+    useEffect(() => {
+        wsSupportedRef.current = true;
+    }, [token]);
 
     useEffect(() => {
         if (token && user) {

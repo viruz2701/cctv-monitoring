@@ -287,9 +287,22 @@ export function useResolveAlarm() {
 export function useNotifications() {
   return useQuery({
     queryKey: queryKeys.notifications.all,
-    queryFn: () => api.getNotifications(),
+    queryFn: () =>
+      api.getNotifications().catch((err) => {
+        // Backend может не иметь /notifications endpoint (404)
+        if (err instanceof Error && err.message.includes('404')) {
+          console.warn('Notifications endpoint not available (404), returning empty array');
+          return [];
+        }
+        throw err;
+      }),
     staleTime: 15_000,
     refetchInterval: 30_000,
+    // Не ретраим 404 — если эндпоинта нет, повторные попытки бесполезны
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('404')) return false;
+      return failureCount < 3;
+    },
   });
 }
 
