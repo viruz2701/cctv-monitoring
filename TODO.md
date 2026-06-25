@@ -241,16 +241,19 @@ Compliance & Fines Shield
 10
 Конвертация downtime в $risk. "Камера на кассе = $500/час штрафа"
 Premium tier
+✅ DONE
 KF-15.1.2
 Contractor Auto-Enforcer
 8
 GPS + EXIF + AI = техник не может фальсифицировать работу
 Premium
+✅ DONE
 KF-15.1.3
 Predictive Maintenance Dashboard
 10
 XGBoost + DeepSeek explanations. "Камера #123 — 80% риск отказа"
 Premium
+✅ DONE
 KF-15.1.4
 AI RCA с визуализацией
 8
@@ -366,6 +369,7 @@ Foundation
 IP-аудит (FOSSA/Snyk)
 3
 ⚖️ Legal
+✅ DONE (pre-existing — docs/compliance/sbom.csv, 233 deps)
 CCTV-2.1.2
 CCTV Core
 XGBoost Failure Prediction
@@ -557,9 +561,9 @@ Revenue potential: $10M ARR при 1000 paying customers (mix tiers)
 Всего задач в плане
 ~160+ (+80 vs v4.0)
 Реализовано
-~64 (40%) ✅ +4 P0
+~72 (45%) ✅ +8 P0
 Pending P0 (Critical)
-8 задач (~40 SP) ⬇️
+0 задач (0 SP) — ALL P0 DONE 🎉
 Pending P1 (High)
 11 задач (~60 SP)
 Pending P2 (Medium)

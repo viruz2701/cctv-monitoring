@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Package, CheckCircle, AlertCircle, Settings, User, Wrench } from 'lucide-react';
 
-interface TimelineEvent {
+export interface TimelineEvent {
   id: string;
   timestamp: string;
   type: 'status_change' | 'assignment' | 'maintenance' | 'part' | 'note' | 'system';
