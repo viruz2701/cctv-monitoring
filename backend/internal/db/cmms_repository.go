@@ -1363,6 +1363,10 @@ func (db *DB) GetWorkOrderCostSummary(ctx context.Context) (*models.WorkOrderCos
 
 // GetWorkOrderCostBreakdown возвращает разбивку затрат по категориям.
 //
+// NOTE: Этот метод ВЫПОЛНЯЕТ повторный дорогой запрос GetWorkOrderCostSummary.
+// Для production используйте GetWorkOrderCostBreakdownFromSummary,
+// который принимает уже полученный summary и не делает второй запрос.
+//
 // Compliance:
 //   - OWASP ASVS V5.1 (Parameterized query — SQL injection prevention)
 func (db *DB) GetWorkOrderCostBreakdown(ctx context.Context) ([]models.WorkOrderCostBreakdown, error) {
@@ -1374,6 +1378,12 @@ func (db *DB) GetWorkOrderCostBreakdown(ctx context.Context) ([]models.WorkOrder
 		return nil, err
 	}
 
+	return db.GetWorkOrderCostBreakdownFromSummary(dbCtx, summary)
+}
+
+// GetWorkOrderCostBreakdownFromSummary возвращает разбивку затрат на основе
+// уже полученного WorkOrderCostSummary — без повторного дорогого запроса.
+func (db *DB) GetWorkOrderCostBreakdownFromSummary(ctx context.Context, summary *models.WorkOrderCostSummary) ([]models.WorkOrderCostBreakdown, error) {
 	total := summary.TotalCost
 	if total == 0 {
 		total = 1
@@ -1384,13 +1394,15 @@ func (db *DB) GetWorkOrderCostBreakdown(ctx context.Context) ([]models.WorkOrder
 		{Category: "parts", Amount: summary.TotalPartsCost, Percent: summary.TotalPartsCost / total * 100},
 	}
 
-	err = db.Pool.QueryRow(dbCtx, `
+	// Лёгкий запрос — только подсчёт строк (не JOIN, без агрегации)
+	err := db.Pool.QueryRow(ctx, `
 		SELECT
 			(SELECT COUNT(*) FROM time_entries WHERE status = 'stopped')::bigint,
 			(SELECT COUNT(*) FROM parts_used)::bigint
 	`).Scan(&breakdown[0].Count, &breakdown[1].Count)
 	if err != nil {
-		breakdown[2].Count = 0
+		// При ошибке оставляем нулевые значения (graceful degradation)
+		db.Logger.Warn("failed to count work order cost breakdown items, using zeros", "error", err)
 	}
 
 	return breakdown, nil

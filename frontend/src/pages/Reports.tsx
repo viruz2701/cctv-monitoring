@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getArrayData } from '../utils/helpers';
 import { useDevices, useSites, useTickets } from '../hooks/useApiQuery';
 import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
 import {
@@ -69,11 +70,13 @@ export function Reports() {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<TabType>('manual');
 
-    const { data: apiDevices = [] } = useDevices();
-    const { data: apiTickets = [] } = useTickets();
+    const { data: apiDevices } = useDevices();
+    const { data: apiTickets } = useTickets();
+    const apiDevicesData = getArrayData<APIDevice>(apiDevices);
+    const apiTicketsData = getArrayData<APITicket>(apiTickets);
 
-    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
-    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
+    const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
+    const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
 
     const dashboardStats = useMemo(() => ({
         totalDevices: devices.length,

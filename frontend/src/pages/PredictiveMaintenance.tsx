@@ -42,6 +42,7 @@ import {
 import { Card, Badge, EmptyState, SkeletonStatsCard, SkeletonChart, SkeletonTable } from '../components/ui';
 import { StatsCard } from '../components/ui/StatsCard';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { getArrayData } from '../utils/helpers';
 import { useDevices, usePredictions } from '../hooks/useApiQuery';
 import type { Prediction } from '../services/api';
 import { api } from '../services/api';
@@ -162,7 +163,8 @@ export function PredictiveMaintenance() {
 
   // ── Data ───────────────────────────────────────────────────────────
   const { data: predictions = [], isLoading: predictionsLoading, error: predictionsError, refetch } = usePredictions();
-  const { data: devices = [] } = useDevices();
+  const { data: rawDevices } = useDevices();
+  const devices = getArrayData<Record<string, any>>(rawDevices);
 
   // ── Local state ────────────────────────────────────────────────────
   const [filter, setFilter] = useState<FilterState>({ site: '', deviceType: '' });

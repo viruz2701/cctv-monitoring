@@ -247,6 +247,12 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// External alarm routes (P2P alarm with API key, etc.)
 	s.mountExternalAlarmRoutes(r)
 
+	// WebSocket для alarm (JWT в query-параметре, НЕ в Authorization header)
+	// Браузерный WebSocket API не поддерживает кастомные заголовки,
+	// поэтому маршрут НЕ может быть под AuthMiddleware.
+	// handleWebSocket сам валидирует JWT из ?token=...
+	r.Get("/api/v1/ws/alarms", s.handleWebSocket)
+
 	// Legacy XML/Vigi alarm endpoints
 	if cfg.HTTPXMLEnabled {
 		r.Post("/api/v1/external/alarm/xml", s.handleExternalAlarmXML)
@@ -301,9 +307,17 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── ITSM Webhooks (HMAC, rate-limited) ───────────────────────────
 	s.mountWebhookRoutes(r)
 
+	// Таймауты HTTP-сервера — предотвращают зависание соединений
+	// при медленных запросах к БД или атаках slowloris.
+	// ReadHeaderTimeout должен быть меньше ReadTimeout для защиты заголовков.
+	// WriteTimeout = Max(readTimeout, maxExpectedResponseTime) — даём время на ответ.
 	s.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: r,
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 	return s
 }

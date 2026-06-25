@@ -22,6 +22,7 @@ import {
     Server,
     Pencil,
 } from 'lucide-react';
+import { getArrayData } from '../utils/helpers';
 import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../components/ui';
 import { useTickets, useAlarms, useDevices, useSites } from '../hooks/useApiQuery';
 import { useSettings } from '../context/SettingsContext';
@@ -123,15 +124,6 @@ export function Dashboard() {
     const [pageLoading, setPageLoading] = React.useState(true);
     const [customizeMode, setCustomizeMode] = React.useState(false);
 
-    // Защита: бэкенд может вернуть { data: [...] } вместо чистого массива
-    const getArrayData = <T,>(raw: unknown): T[] => {
-      if (Array.isArray(raw)) return raw as T[];
-      if (raw && typeof raw === 'object' && 'data' in raw) {
-        const nested = (raw as Record<string, unknown>).data;
-        if (Array.isArray(nested)) return nested as T[];
-      }
-      return [];
-    };
     const apiTicketsData = getArrayData<APITicket>(apiTickets);
     const apiAlarmsData = getArrayData<APIAlarm>(apiAlarms);
     const apiDevicesData = getArrayData<APIDevice>(apiDevices);

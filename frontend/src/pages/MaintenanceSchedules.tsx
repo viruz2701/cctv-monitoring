@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getArrayData } from '../utils/helpers';
 import {
   useMaintenanceSchedules,
   useCompleteMaintenanceSchedule,
@@ -374,12 +375,13 @@ export const MaintenanceSchedules: React.FC = () => {
 const CreateScheduleForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
   const createSchedule = useCreateMaintenanceSchedule();
-  const { data: rawSites = [] } = useSites();
-  const { data: rawDevices = [] } = useDevices();
+  const { data: rawSites } = useSites();
+  const { data: rawDevices } = useDevices();
   const { data: rawUsers = [] } = useUsers();
-  const sites = useMemo(() => rawSites.map((s: any) => ({ id: s.id, name: s.name || 'Unnamed' })), [rawSites]);
-  const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
-  const devices = useMemo(() => devsArray.map((d: any) => ({ id: d.device_id, name: d.name || d.device_id, siteId: d.site_id || 'site-default' })), [devsArray]);
+  const safeSites = getArrayData<{ id: string; name?: string }>(rawSites);
+  const safeDevices = getArrayData<{ device_id: string; name?: string; site_id?: string }>(rawDevices);
+  const sites = useMemo(() => safeSites.map((s: any) => ({ id: s.id, name: s.name || 'Unnamed' })), [safeSites]);
+  const devices = useMemo(() => safeDevices.map((d: any) => ({ id: d.device_id, name: d.name || d.device_id, siteId: d.site_id || 'site-default' })), [safeDevices]);
   const users = useMemo(() => rawUsers.map((u: any) => ({ ...u, name: u.name || u.username })), [rawUsers]);
   const technicians = users.filter((u: any) => u.role === 'technician');
 

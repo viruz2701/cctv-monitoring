@@ -1,4 +1,5 @@
 import { generateUUID } from '../utils/uuid';
+import { getArrayData } from '../utils/helpers';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { ticketSchema } from '../lib/validations';
@@ -77,15 +78,18 @@ export function Tickets() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { data: apiTickets = [] } = useTickets();
-    const { data: apiDevices = [] } = useDevices();
-    const { data: apiSites = [] } = useSites();
+    const { data: apiTickets } = useTickets();
+    const { data: apiDevices } = useDevices();
+    const { data: apiSites } = useSites();
+    const apiTicketsData = getArrayData<APITicket>(apiTickets);
+    const apiDevicesData = getArrayData<APIDevice>(apiDevices);
+    const apiSitesData = getArrayData<{ id: string; name?: string; address?: string; city?: string; status?: string; last_sync?: string; latitude?: number; longitude?: number }>(apiSites);
     const createTicketMut = useCreateTicket();
     const deleteTicketMut = useDeleteTicket();
 
-    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
-    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
-    const sites = useMemo(() => apiSites.map((s: any) => ({
+    const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
+    const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
+    const sites = useMemo(() => apiSitesData.map((s: any) => ({
         id: s.id,
         name: s.name || 'Unnamed',
         address: s.address || '',
@@ -94,7 +98,7 @@ export function Tickets() {
         lastSync: (s as any).last_sync || new Date().toISOString(),
         latitude: (s as any).latitude || 0,
         longitude: (s as any).longitude || 0,
-    })), [apiSites]);
+    })), [apiSitesData]);
 
     const isLoading = tickets.length === 0;
     const [searchTerm, setSearchTerm] = useState('');

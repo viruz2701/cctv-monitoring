@@ -35,17 +35,32 @@ export async function request<T>(
     if (!response.ok) {
         if (response.status === 401) {
             setAuthToken(null);
-            // НЕ делаем редирект, если уже на странице логина
+            // На странице логина — не делаем редирект, а парсим ошибку
             if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
                 window.location.href = '/login';
+                throw new Error('Session expired. Please log in again.');
             }
-            throw new Error('Session expired. Please log in again.');
+            // Продолжаем ниже — парсим JSON-ответ ошибки
         }
         if (response.status === 403) {
             throw new Error('Access denied. Insufficient permissions.');
         }
-        const errorText = await response.text();
-        throw new Error(errorText || `Request failed with status ${response.status}`);
+
+        // Пытаемся извлечь человеческое сообщение из стандартного JSON-ответа ошибки
+        // Формат: {"error":{"code":"UNAUTHORIZED","message":"invalid credentials"},"timestamp":"...","trace_id":"..."}
+        const body = await response.text();
+        try {
+            const parsed = JSON.parse(body);
+            const msg = parsed?.error?.message;
+            if (msg && typeof msg === 'string') {
+                throw new Error(msg);
+            }
+        } catch (e) {
+            if (e instanceof Error && e.message !== 'Failed to parse error response') {
+                throw e;
+            }
+        }
+        throw new Error(body || `Request failed with status ${response.status}`);
     }
 
     if (response.status === 204) {

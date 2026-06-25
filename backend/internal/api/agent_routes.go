@@ -18,8 +18,6 @@ func (s *Server) mountAgentRoutes(r chi.Router) {
 	r.Post("/api/v1/gb28181/catalog/{id}", s.requestCatalog)
 	r.Post("/api/v1/gb28181/ptz/{id}", s.sendPTZCommand)
 
-	// WebSocket real-time alarms
-	r.Get("/api/v1/ws/alarms", s.handleWebSocket)
 }
 
 // mountExternalAlarmRoutes регистрирует публичные alarm-эндпоинты.

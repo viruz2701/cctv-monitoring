@@ -14,7 +14,10 @@ const getWsBaseUrl = () => {
 };
 
 // Коды закрытия WebSocket, указывающие на ошибку авторизации — reconnect бесполезен
-const AUTH_CLOSE_CODES = new Set([1001, 1006, 4001, 4003, 4004]);
+// 1006 — Abnormal Closure (сеть, таймаут прокси): НЕ auth-ошибка, reconnect возможен
+// 1001 — Going Away (сервер уходит): НЕ auth-ошибка, reconnect возможен
+// 4001, 4003, 4004 — кастомные коды с сервера: реальные auth-ошибки
+const AUTH_CLOSE_CODES = new Set([4001, 4003, 4004]);
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 

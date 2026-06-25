@@ -1,4 +1,5 @@
 import { generateUUID } from '../utils/uuid';
+import { getArrayData } from '../utils/helpers';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { prefetchDevice, useDevices, useSites, useCreateDevice, useUpdateDevice, useDeleteDevice } from '../hooks/useApiQuery';
@@ -104,15 +105,17 @@ export function Devices() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-    const { data: apiDevices = [], isLoading: devicesLoading } = useDevices();
-    const { data: apiSites = [] } = useSites();
+    const { data: apiDevices, isLoading: devicesLoading } = useDevices();
+    const { data: apiSites } = useSites();
+    const apiDevicesData = getArrayData<APIDevice>(apiDevices);
+    const apiSitesData = getArrayData<APISite>(apiSites);
     const createDeviceMut = useCreateDevice();
     const updateDeviceMut = useUpdateDevice();
     const deleteDeviceMut = useDeleteDevice();
 
-    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
-    const sites = useMemo(() => apiSites.map(mapAPISiteToUI), [apiSites]);
-    const isLoading = devicesLoading && apiSites.length === 0;
+    const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
+    const sites = useMemo(() => apiSitesData.map(mapAPISiteToUI), [apiSitesData]);
+    const isLoading = devicesLoading && apiSitesData.length === 0;
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState('all');
     const [siteFilter, setSiteFilter] = useState(searchParams.get('site') || 'all');

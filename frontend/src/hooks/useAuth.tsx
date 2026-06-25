@@ -63,8 +63,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || 'Login failed');
+            const body = await response.text();
+            // Пытаемся извлечь человеческое сообщение из JSON-ответа ошибки
+            // Формат: {"error":{"code":"UNAUTHORIZED","message":"invalid credentials"},"timestamp":"...","trace_id":"..."}
+            try {
+                const parsed = JSON.parse(body);
+                const msg = parsed?.error?.message;
+                if (msg && typeof msg === 'string') {
+                    throw new Error(msg);
+                }
+            } catch (e) {
+                if (e instanceof Error) throw e;
+            }
+            throw new Error(body || 'Login failed');
         }
 
         const { token: newToken, user: userData } = await response.json();

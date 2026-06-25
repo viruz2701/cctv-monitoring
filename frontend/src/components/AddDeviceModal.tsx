@@ -107,44 +107,42 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
             const selectedSite = sites.find(s => s.id === siteId);
             const siteName = selectedSite?.name || 'Unknown';
 
-            // Базовое устройство
-            const newDevice: Device = {
-                id: `dev-${generateUUID()}`,
+            // Формируем payload для API (snake_case поля как ожидает бэкенд)
+            const payload: Record<string, any> = {
+                device_id: `dev-${generateUUID()}`,
                 name: name,
-                siteId: siteId,
-                siteName: siteName,
-                type: connectionType === 'ip' ? 'camera' : 'switch', // базовый тип
-                status: 'online',
-                health: 'healthy',
-                recordingStatus: 'recording',
-                lastSeen: new Date().toISOString(),
-                ipAddress: connectionType === 'ip' ? ipAddress : '',
-                model: model || (connectionType === 'p2p' ? p2pBrand : connectionType),
-                firmware: '1.0.0',
-                connectionType: connectionType,
+                device_type: connectionType === 'ip' ? 'camera' : 'switch',
+                status: 'ONLINE',
+                connection_type: connectionType,
+                asset_class: 'internal',
             };
 
-            // Добавляем специфичные поля в зависимости от типа
+            // Привязка к сайту
+            if (siteId) payload.site_id = siteId;
+
+            // IP-адрес
+            if (connectionType === 'ip' && ipAddress) {
+                payload.ip_address = ipAddress;
+            }
+
+            // Специфичные поля
             if (connectionType === 'p2p') {
-                newDevice.p2p_brand = p2pBrand;
-                newDevice.p2p_serial = p2pSerial;
-                newDevice.p2p_security_code = p2pSecurityCode;
-                if (p2pCloudUser) newDevice.p2p_cloud_user = p2pCloudUser;
-                if (p2pCloudPass) newDevice.p2p_cloud_pass = p2pCloudPass;
-                newDevice.cloud_status = 'unknown';
-                // Для P2P также можно вызвать регистрацию через шлюз, но не блокируем добавление
-                // Пока просто добавляем устройство локально
+                payload.p2p_brand = p2pBrand;
+                payload.p2p_serial = p2pSerial;
+                payload.p2p_security_code = p2pSecurityCode;
+                if (p2pCloudUser) payload.p2p_cloud_user = p2pCloudUser;
+                if (p2pCloudPass) payload.p2p_cloud_pass = p2pCloudPass;
             } else if (connectionType === 'snmp') {
-                newDevice.snmp_community = snmpCommunity;
-                newDevice.snmp_version = snmpVersion;
+                payload.snmp_community = snmpCommunity;
+                payload.snmp_version = snmpVersion;
             } else if (connectionType === 'syslog') {
-                newDevice.syslog_port = syslogPort;
+                payload.syslog_port = syslogPort;
             } else if (connectionType === 'alarm') {
-                newDevice.alarm_protocol = alarmProtocol;
+                payload.alarm_protocol = alarmProtocol;
             }
 
             // Добавляем устройство через API
-            await createDevice.mutateAsync(newDevice);
+            await createDevice.mutateAsync(payload as any);
 
             toast.success(t('device_added_success') || 'Device added successfully');
             onSuccess?.();

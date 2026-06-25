@@ -17,6 +17,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { useDevices, useSites, useNotifications, useMarkAllNotificationsRead } from '../../hooks/useApiQuery';
+import { getArrayData } from '../../utils/helpers';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore, type Theme } from '../../store/themeStore';
@@ -33,8 +34,10 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const { user, logout } = useAuth();
     const { data: apiNotifications = [] } = useNotifications();
     const markAllAsReadMut = useMarkAllNotificationsRead();
-    const { data: rawDevices = [] } = useDevices();
-    const { data: rawSites = [] } = useSites();
+    const { data: rawDevices } = useDevices();
+    const { data: rawSites } = useSites();
+    const safeDevices = getArrayData<Record<string, any>>(rawDevices);
+    const safeSites = getArrayData<Record<string, any>>(rawSites);
 
     const notifications = useMemo(() => apiNotifications.map(n => ({
         id: n.id,
@@ -66,10 +69,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
         owner_id: d.owner_id,
     });
 
-    const devices = useMemo(() => {
-        const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
-        return devsArray.map(mapAPIDeviceToUI);
-    }, [rawDevices]);
+    const devices = useMemo(() => safeDevices.map(mapAPIDeviceToUI), [safeDevices]);
 
     const mapAPISiteToUI = (s: Record<string, any>) => ({
         id: s.id,
@@ -83,7 +83,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
         lastSync: s.last_sync || new Date().toISOString(),
     });
 
-    const sites = useMemo(() => rawSites.map(mapAPISiteToUI), [rawSites]);
+    const sites = useMemo(() => safeSites.map(mapAPISiteToUI), [safeSites]);
 
     const { theme, setTheme } = useThemeStore();
     const [userMenuOpen, setUserMenuOpen] = useState(false);

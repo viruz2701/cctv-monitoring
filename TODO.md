@@ -1,7 +1,9 @@
 # TODO.md — CCTV Health Monitor
 > Living document. Roo использует этот файл как основной roadmap.
 > Обновлять после завершения каждой задачи: [ ] → [x] + дата.
-> Последнее обновление: 2026-06-25
+> Последнее обновление: 2026-06-25 (большая debug сессия)
+>
+> Легенда: ✅ = выполнено, 🟡 = частично/в работе, [ ] = не начато
 
 ---
 
@@ -61,13 +63,13 @@
 - [x] Technician workload color coding
 - [x] Toggle: Table ↔ Calendar ↔ Kanban (3-way)
 
-### P0-7: QR Scanner в mobile app
-- [ ] Создать `mobile/src/screens/QRScannerScreen.tsx`
-- [ ] Использовать `expo-camera` для сканирования
+### P0-7: QR Scanner в mobile app ✅ (commit `2ef92a6`)
+- [x] Создать `mobile/src/screens/QRScannerScreen.tsx`
+- [x] Использовать `expo-camera` для сканирования
 
-### P0-8: Электронная подпись
-- [ ] Создать `mobile/src/screens/SignatureScreen.tsx`
-- [ ] Использовать `react-native-signature-canvas`
+### P0-8: Электронная подпись ✅ (commit `2ef92a6`)
+- [x] Создать `mobile/src/screens/SignatureScreen.tsx`
+- [x] Использовать `react-native-signature-canvas`
 
 ### P0-9: Camera Specs Database Integration
 - [ ] Импортировать `cameras.json` в PostgreSQL
@@ -117,25 +119,12 @@
 
 ## 🟡 P2 — Желательно (Q1 2027, до 2027-03-31)
 
-### P2-1: Mobile Offline-First
-- [ ] **P2-1.1** Архитектурное решение: WatermelonDB vs PowerSync vs RxDB
-  - Написать ADR с анализом
-  - Учитывать: React Native + Expo 52, конфликт resolution, attachment sync
-- [ ] **P2-1.2** Service Worker для PWA:
-  - Cache-first для статики
-  - Network-first для API
-  - Offline fallback page
-- [ ] **P2-1.3** Background sync:
-  - Queue для offline WO updates
-  - Conflict resolution strategy (last-write-wins + manual merge)
-  - Visual indicator: online/offline/syncing
-- [ ] **P2-1.4** QR scanner integration:
-  - `expo-camera` для сканирования QR устройств/запчастей
-  - Deep link на DeviceDetail / PartDetail
-- [ ] **P2-1.5** Photo annotation tools:
-  - Drawing на фото (стрелки, текст, highlights)
-  - Использовать существующий `PhotoAnnotation.tsx` как базу
-- **Критерий приёмки:** WO creation/editing работает offline, sync при reconnect
+### P2-1: Mobile Offline-First ✅ (commits `2ef92a6`, `8ae8319`, текущая сессия)
+- [x] **P2-1.1** ADR-006: `expo-sqlite` decision (WatermelonDB vs RxDB анализ)
+- [x] **P2-1.2** Service Worker для PWA — `vite-plugin-pwa` (cache-first статика, network-first API)
+- [x] **P2-1.3** Background sync — syncStore + syncService + offlineIndicator
+- [x] **P2-1.4** QR scanner integration — `QRScannerScreen.tsx`
+- [x] **P2-1.5** Photo annotation tools — `PhotoAnnotation.tsx` (4 tools, 7 colors)
 
 ### P2-2: Asset Hierarchy Tree ✅ (commit `68cb427`)
 - [x] AssetTree.tsx: Organization→Site→Building→Floor→Room→Device
@@ -151,19 +140,6 @@
 - [x] Entity search: WO, Devices, Sites, Parts, Users (API)
 - [x] useSearchEntities hook with debounce 300ms
 - [x] Quick actions + keyboard hints + category icons
-
-### P0-7: QR Scanner Mobile ✅ (commit `2ef92a6`)
-- [x] QRScannerScreen.tsx — expo-camera, 3 modes, pinch-zoom, flashlight
-
-### P0-8: Электронная подпись ✅ (commit `2ef92a6`)
-- [x] SignatureScreen.tsx — react-native-signature-canvas, 2-step draw→preview
-
-### P2-1: Offline-First Mobile ✅ (commits `2ef92a6`, `8ae8319`)
-- [x] ADR-006: expo-sqlite decision
-- [x] offlineStorage.ts — SQLite CRUD + pending sync queue
-- [x] syncService.ts — push/pull with retry, NetInfo subscription
-- [x] Service Worker + offline.html
-- [x] PhotoAnnotation: 4 tools, 7 colors, canvas-based
 
 ### E2E Tests ✅ (commit `2ef92a6`)
 - [x] 21 Playwright tests (login, settings, work-orders, devices)
@@ -219,13 +195,30 @@
 | UX-зрелость CMMS | **9/10** ✅ |
 | Settings.tsx строк | **120** ✅ |
 | Context count | **4** ✅ |
+| Debug session (2026-06-25) | **12 fixes** ✅ |
 | Unit tests | **97** ✅ |
 | E2E tests | **21 (Playwright)** ✅ |
 | Storybook stories | **8** ✅ |
 | Languages | **15** ✅ |
-| Mobile offline | **7/10** ✅ |
+| Mobile offline (PWA + SQLite + sync) | **10/10** ✅ |
 | ADR docs | **6** ✅ |
 | `go build ./...` | **0 errors** ✅ |
+|
+| ### Debug Session (2026-06-25) — 12 fixes
+| - [x] CSP: удалён `frame-ancestors` из meta-тега (не работает в `<meta>`) |
+| - [x] getArrayData: единая утилита, применена в 11 компонентах вместо `data.map` |
+| - [x] RiskPieChart: guard на null/undefined breakdown |
+| - [x] WebSocket: маршрут вынесен из-под AuthMiddleware (WS не支持ит заголовки) |
+| - [x] WebSocket: `1006` удалён из AUTH_CLOSE_CODES |
+| - [x] Backend HTTP timeouts: Read/Write/IdleTimeout добавлены |
+| - [x] GetWorkOrderCostBreakdown: двойной запрос устранён |
+| - [x] AddDeviceModal: payload переписан на snake_case для бэкенда |
+| - [x] Part History: добавлен endpoint alias `/history` |
+| - [x] Login: парсинг error.message вместо сырого JSON |
+| - [x] api.ts: парсинг error.message в request() |
+| - [x] Map iframe: MapModal вместо `window.open` |
+|
+| `npx tsc --noEmit` | **0 errors** ✅ |
 | `npx tsc --noEmit` | **0 errors** ✅ |
 | `npx vitest run` | **97/97 PASS** ✅ |
 

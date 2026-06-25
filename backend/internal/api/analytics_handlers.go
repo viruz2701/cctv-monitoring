@@ -215,12 +215,12 @@ func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) 
 		if d.TotalDowntimeCost > 0 {
 			devicesWithDowntime++
 			topByDowntime = append(topByDowntime, map[string]interface{}{
-				"device_id":          d.DeviceID,
-				"device_name":        d.DeviceName,
-				"device_type":        d.DeviceType,
-				"downtime_cost":      d.TotalDowntimeCost,
-				"downtime_events":    d.TotalDowntimeEvents,
-				"tco":                d.TCO,
+				"device_id":       d.DeviceID,
+				"device_name":     d.DeviceName,
+				"device_type":     d.DeviceType,
+				"downtime_cost":   d.TotalDowntimeCost,
+				"downtime_events": d.TotalDowntimeEvents,
+				"tco":             d.TCO,
 			})
 		}
 	}
@@ -238,10 +238,10 @@ func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	result := map[string]interface{}{
-		"total_downtime_cost":  totalDowntimeCost,
-		"total_devices":        totalDevices,
+		"total_downtime_cost":   totalDowntimeCost,
+		"total_devices":         totalDevices,
 		"devices_with_downtime": devicesWithDowntime,
-		"top_by_downtime_cost": topByDowntime,
+		"top_by_downtime_cost":  topByDowntime,
 	}
 
 	jsonResponse(w, http.StatusOK, result)
@@ -272,14 +272,16 @@ func (s *Server) getWorkOrderCosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	breakdown, err := s.db.GetWorkOrderCostBreakdown(r.Context())
+	// Используем GetWorkOrderCostBreakdownFromSummary — не делаем повторный
+	// дорогой запрос GetWorkOrderCostSummary (см. WO-4.4.5)
+	breakdown, err := s.db.GetWorkOrderCostBreakdownFromSummary(r.Context(), summary)
 	if err != nil {
 		s.logger.Warn("failed to get work order cost breakdown", "error", err)
 		breakdown = []models.WorkOrderCostBreakdown{}
 	}
 
 	type costResponse struct {
-		Summary   models.WorkOrderCostSummary   `json:"summary"`
+		Summary   models.WorkOrderCostSummary     `json:"summary"`
 		Breakdown []models.WorkOrderCostBreakdown `json:"breakdown"`
 	}
 

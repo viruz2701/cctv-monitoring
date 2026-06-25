@@ -1,4 +1,5 @@
 import { generateUUID } from '../utils/uuid';
+import { getArrayData } from '../utils/helpers';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
@@ -215,12 +216,14 @@ export function DeviceDetail() {
     const { t, i18n } = useTranslation();
     const { deviceId } = useParams();
     const navigate = useNavigate();
-    const { data: apiTickets = [] } = useTickets();
-    const { data: apiDevices = [] } = useDevices();
+    const { data: apiTickets } = useTickets();
+    const { data: apiDevices } = useDevices();
+    const apiTicketsData = getArrayData<APITicket>(apiTickets);
+    const apiDevicesData = getArrayData<APIDevice>(apiDevices);
     const createTicketMut = useCreateTicket();
 
-    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
-    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
+    const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
+    const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
 
     const [selectedRecording, setSelectedRecording] = useState<RecordingDay | null>(null);
     const [ticketCreated, setTicketCreated] = useState(false);

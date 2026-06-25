@@ -1,4 +1,5 @@
 import { generateUUID } from '../utils/uuid';
+import { getArrayData } from '../utils/helpers';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { siteSchema } from '../lib/validations';
@@ -34,6 +35,7 @@ import {
     SearchInput,
     SkeletonCard,
     SkeletonTable,
+    MapModal,
 } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
 import { useDevices, useSites, useCreateSite, useUpdateSite, useDeleteSite } from '../hooks/useApiQuery';
@@ -50,8 +52,10 @@ export function Sites() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data: rawSites = [] } = useSites();
-    const { data: rawDevices = [] } = useDevices();
+    const { data: rawSites } = useSites();
+    const { data: rawDevices } = useDevices();
+    const safeSites = getArrayData<Record<string, any>>(rawSites);
+    const safeDevices = getArrayData<Record<string, any>>(rawDevices);
     const { data: rawUsers = [] } = useUsers();
     const createSite = useCreateSite();
     const updateSiteMut = useUpdateSite();
@@ -69,7 +73,7 @@ export function Sites() {
         lastSync: s.last_sync || new Date().toISOString(),
     }), []);
 
-    const sites = useMemo(() => rawSites.map(mapAPISiteToUI), [rawSites, mapAPISiteToUI]);
+    const sites = useMemo(() => safeSites.map(mapAPISiteToUI), [safeSites, mapAPISiteToUI]);
 
     const mapAPIDeviceToUI = useCallback((d: any) => ({
         id: d.device_id,
@@ -87,10 +91,7 @@ export function Sites() {
         owner_id: d.owner_id,
     }), []);
 
-    const devices = useMemo(() => {
-        const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
-        return devsArray.map(mapAPIDeviceToUI);
-    }, [rawDevices, mapAPIDeviceToUI]);
+    const devices = useMemo(() => safeDevices.map(mapAPIDeviceToUI), [safeDevices, mapAPIDeviceToUI]);
 
     const users = useMemo(() => rawUsers.map(u => ({ ...u, name: (u as any).name || u.username })), [rawUsers]);
 
@@ -102,6 +103,7 @@ export function Sites() {
     const [showFilters, setShowFilters] = useState(!!searchParams.get('search'));
     const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showMap, setShowMap] = useState(false);
     const [selectedSite, setSelectedSite] = useState<Site | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
     const [viewMode, setViewMode] = useState<'table' | 'tree'>('table');
@@ -596,9 +598,7 @@ export function Sites() {
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
-                                    window.open(`https://www.openstreetmap.org/?mlat=${formData.latitude}&mlon=${formData.longitude}#map=15/${formData.latitude}/${formData.longitude}`, '_blank');
-                                }}
+                                onClick={() => setShowMap(true)}
                                 icon={<MapPin className="w-4 h-4" />}
                             >
                                 {t('view_on_map') || 'View on map'}
@@ -766,6 +766,14 @@ export function Sites() {
                 confirmText={t('remove') || 'Remove'}
                 cancelText={t('cancel')}
                 variant="danger"
+            />
+
+            <MapModal
+                isOpen={showMap}
+                onClose={() => setShowMap(false)}
+                latitude={formData.latitude}
+                longitude={formData.longitude}
+                title={formData.name || 'Map'}
             />
         </div>
     );

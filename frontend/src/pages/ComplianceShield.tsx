@@ -86,7 +86,8 @@ function RiskBadge({ level }: { level: string }) {
 // Simple PieChart SVG Component
 // ═══════════════════════════════════════════════════════════════════════
 
-function RiskPieChart({ breakdown }: { breakdown: Record<string, number> }) {
+function RiskPieChart({ breakdown }: { breakdown: Record<string, number> | null | undefined }) {
+  if (!breakdown) return <div className="text-slate-400 text-sm text-center py-4">No data</div>;
   const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
   if (total === 0) return <div className="text-slate-400 text-sm text-center py-4">No data</div>;
 
@@ -451,7 +452,7 @@ export const ComplianceShield: React.FC = () => {
               <PieChart className="w-5 h-5 text-slate-500" />
               <h3 className="font-semibold text-slate-900 dark:text-white">Risk Breakdown</h3>
             </div>
-            {summary ? (
+            {summary?.risk_breakdown ? (
               <RiskPieChart breakdown={summary.risk_breakdown} />
             ) : (
               <EmptyState icon={<PieChart className="w-8 h-8" />} title="No data" description="No risk data available" size="sm" />

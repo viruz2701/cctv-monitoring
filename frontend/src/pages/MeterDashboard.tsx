@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
+import { getArrayData } from '../utils/helpers';
 import { Card, Badge, Button, Select } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -212,10 +213,11 @@ export function MeterDashboard() {
   useEffect(() => {
     const fetchDevices = async () => {
       try {
-        const data = await request<any[]>('/devices');
-        setDevices(data || []);
-        if (data && data.length > 0 && !selectedDevice) {
-          setSelectedDevice(data[0].device_id);
+        const data = await request<any>('/devices');
+        const devicesArr = getArrayData<any>(data);
+        setDevices(devicesArr);
+        if (devicesArr.length > 0 && !selectedDevice) {
+          setSelectedDevice(devicesArr[0].device_id);
         }
       } catch { /* ignore */ }
     };

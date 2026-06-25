@@ -75,6 +75,7 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Delete("/api/v1/spare-parts/{id}", s.deleteSparePart)
 	r.Post("/api/v1/spare-parts/{id}/adjust", s.adjustSparePartStock)
 	r.Get("/api/v1/spare-parts/{id}/adjustments", s.listSparePartStockAdjustments)
+	r.Get("/api/v1/spare-parts/{id}/history", s.listSparePartStockAdjustments)
 
 	// Spare Part Categories
 	r.Get("/api/v1/spare-parts/categories", s.listSparePartCategories)

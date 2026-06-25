@@ -21,6 +21,7 @@ export { ImportWizard, exportData } from './ImportWizard';
 export { WorkOrderPrintView } from './WorkOrderPrintView';
 export type { WorkOrderPrintViewProps, PartWithCost } from './WorkOrderPrintView';
 export * from './AdvancedSearch';
+export { MapModal } from './MapModal';
 export * from './Modal';
 export * from './Button';
 export * from './Input';
