@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WorkOrders } from '../WorkOrders';
-import { WorkOrdersProvider } from '../../context/WorkOrdersContext';
 
-// Mock the context
-vi.mock('../../context/WorkOrdersContext', () => ({
+// Mock React Query hooks
+vi.mock('../../hooks/useApiQuery', () => ({
   useWorkOrders: () => ({
-    workOrders: [
+    data: [
       {
         id: '1',
         device_id: 'device-1',
@@ -22,9 +22,22 @@ vi.mock('../../context/WorkOrdersContext', () => ({
         parts_used: [],
       },
     ],
-    loading: false,
-    error: null,
-    fetchWorkOrders: vi.fn(),
+    isLoading: false,
+  }),
+  useUsers: () => ({ data: [], isLoading: false }),
+  useSites: () => ({ data: [], isLoading: false }),
+  useDevices: () => ({ data: [], isLoading: false }),
+  useCreateWorkOrder: () => ({ mutateAsync: vi.fn() }),
+  useUpdateWorkOrder: () => ({ mutateAsync: vi.fn() }),
+  useDeleteWorkOrder: () => ({ mutateAsync: vi.fn() }),
+  queryKeys: {
+    workOrders: { all: ['workOrders'] },
+  },
+}));
+
+vi.mock('../../services/workOrdersApi', () => ({
+  workOrdersApi: {
+    getWorkOrders: vi.fn(),
     createWorkOrder: vi.fn(),
     updateWorkOrder: vi.fn(),
     deleteWorkOrder: vi.fn(),
@@ -32,8 +45,12 @@ vi.mock('../../context/WorkOrdersContext', () => ({
     startWorkOrder: vi.fn(),
     completeWorkOrder: vi.fn(),
     cancelWorkOrder: vi.fn(),
-  }),
-  WorkOrdersProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    bulkActions: vi.fn(),
+    getWorkOrder: vi.fn(),
+    getTimeEntries: vi.fn(),
+    getLaborCost: vi.fn(),
+  },
+  WorkOrder: {},
 }));
 
 // Mock i18n
@@ -43,22 +60,34 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+// Mock modules that might cause issues in test environment
+vi.mock('../../components/work-orders/QuickFilters', () => ({
+  QuickFilters: () => null,
+  useQuickFilter: () => ['all', vi.fn()],
+}));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+  },
+});
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+}
+
 describe('WorkOrders', () => {
   it('renders work orders list', () => {
-    render(
-      <WorkOrdersProvider>
-        <WorkOrders />
-      </WorkOrdersProvider>
-    );
+    renderWithProviders(<WorkOrders />);
     expect(screen.getByText('work_orders')).toBeInTheDocument();
   });
 
   it('displays work order data', () => {
-    render(
-      <WorkOrdersProvider>
-        <WorkOrders />
-      </WorkOrdersProvider>
-    );
+    renderWithProviders(<WorkOrders />);
     expect(screen.getByText('Camera 1')).toBeInTheDocument();
   });
 });

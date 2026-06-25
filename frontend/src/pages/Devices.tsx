@@ -1,8 +1,11 @@
 import { generateUUID } from '../utils/uuid';
 import React, { useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { prefetchDevice, useDevices, useSites, useCreateDevice, useUpdateDevice, useDeleteDevice } from '../hooks/useApiQuery';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { deviceSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import type { Device as APIDevice, Site as APISite } from '../services/api';
 import {
     Search,
     Filter,
@@ -40,7 +43,6 @@ import {
 } from '../components/ui';
 import { VirtualTable } from '../components/ui/VirtualTable';
 import { SavedViews } from '../components/ui/SavedViews';
-import { useDevicesSites } from '../context/DataContext';
 import type { Device } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { formatDistanceToNow } from 'date-fns';
@@ -62,11 +64,53 @@ function timeAgo(dateString: string) {
     }
 }
 
+// ═══ API→UI mapping (migrated from DevicesSitesContext) ═══
+function mapAPIDeviceToUI(d: APIDevice): Device {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: (d as any).site_id || 'site-default',
+        siteName: (d as any).location || 'Unknown',
+        type: ((d as any).vendor_type === 'camera' ? 'camera' : 'nvr') as Device['type'],
+        status: (d.status || 'offline').toLowerCase() as Device['status'],
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording' as Device['recordingStatus'],
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: (d as any).vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+        p2p_brand: (d as any).p2p_brand,
+    };
+}
+
+function mapAPISiteToUI(s: APISite): import('../types').Site {
+    return {
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: (s as any).organization || '',
+        latitude: (s as any).latitude || 0,
+        longitude: (s as any).longitude || 0,
+        status: (s.status || 'active') as 'active' | 'inactive' | 'maintenance',
+        lastSync: (s as any).last_sync || new Date().toISOString(),
+    };
+}
+
 export function Devices() {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { devices, sites, addDevice, updateDevice, deleteDevice } = useDevicesSites();
-    const isLoading = devices.length === 0 && sites.length === 0;
+    const queryClient = useQueryClient();
+    const { data: apiDevices = [], isLoading: devicesLoading } = useDevices();
+    const { data: apiSites = [] } = useSites();
+    const createDeviceMut = useCreateDevice();
+    const updateDeviceMut = useUpdateDevice();
+    const deleteDeviceMut = useDeleteDevice();
+
+    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
+    const sites = useMemo(() => apiSites.map(mapAPISiteToUI), [apiSites]);
+    const isLoading = devicesLoading && apiSites.length === 0;
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState('all');
     const [siteFilter, setSiteFilter] = useState(searchParams.get('site') || 'all');
@@ -143,14 +187,12 @@ export function Devices() {
 
         const selectedSite = sites.find(s => s.id === editFormData.siteId);
         const siteName = selectedSite?.name || 'Unknown';
-        updateDevice(selectedDevice.id, {
+        updateDeviceMut.mutateAsync({ id: selectedDevice.id, updates: {
             name: editFormData.name,
-            type: editFormData.type,
-            siteId: editFormData.siteId,
-            siteName: siteName,
-            ipAddress: editFormData.ipAddress,
-            model: editFormData.model
-        });
+            site_id: editFormData.siteId,
+            location: siteName,
+            vendor_type: editFormData.type,
+        } as any });
         setSelectedDevice(null);
         resetEditForm();
     };
@@ -160,7 +202,7 @@ export function Devices() {
     };
 
     const confirmDeleteDevice = () => {
-        if (deleteConfirm.id) deleteDevice(deleteConfirm.id);
+        if (deleteConfirm.id) deleteDeviceMut.mutateAsync(deleteConfirm.id);
     };
 
     const handleAddDeviceSuccess = () => {
@@ -369,6 +411,7 @@ export function Devices() {
                     columns={columns}
                     keyExtractor={(device: Device) => device.id}
                     onRowClick={(device: Device) => navigate(`/devices/${device.id}`)}
+                    onRowHover={(device: Device) => prefetchDevice(queryClient, device.id)}
                     sortColumn={sortColumn}
                     sortDirection={sortDirection}
                     onSort={handleSort}

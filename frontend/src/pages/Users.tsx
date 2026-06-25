@@ -6,7 +6,7 @@ import {
     Card, CardHeader, CardBody, Table, Button, SearchInput,
     Modal, ConfirmModal, Input, Select, Badge, RoleBadge, useToast
 } from '../components/ui';
-import { useUsers } from '../context/DataContext';
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../hooks/useApiQuery';
 import type { User } from '../services/api';
 import { api } from '../services/api';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
@@ -18,7 +18,12 @@ type UserStatus = NonNullable<User['status']>;
 export function Users() {
     const { t } = useTranslation();
     const toast = useToast();
-    const { users, addUser, updateUser, deleteUser } = useUsers();
+    const { data: rawUsers = [], isLoading } = useUsers();
+    const createUserMut = useCreateUser();
+    const updateUserMut = useUpdateUser();
+    const deleteUserMut = useDeleteUser();
+
+    const users = useMemo(() => rawUsers.map((u: any) => ({ ...u, name: u.name || u.username })), [rawUsers]);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -178,12 +183,12 @@ export function Users() {
 
         try {
             if (selectedUser) {
-                await updateUser(selectedUser.id, {
+                await updateUserMut.mutateAsync({ id: selectedUser.id, updates: {
                     name: formData.name,
                     email: formData.email,
                     role: formData.role,
                     status: formData.status,
-                });
+                } });
                 toast.success(t('user_updated') || 'User updated successfully');
             } else {
                 if (!formData.password) {
@@ -214,7 +219,12 @@ export function Users() {
                     lastLogin: new Date().toISOString(),
                     sites: []
                 };
-                await addUser(newUser);
+                await createUserMut.mutateAsync({
+                    username: newUser.username,
+                    password: newUser.password,
+                    role: newUser.role,
+                    email: newUser.email,
+                });
                 toast.success(t('user_created') || 'User created successfully');
             }
             setShowAddModal(false);
@@ -235,7 +245,7 @@ export function Users() {
     const confirmDelete = async () => {
         if (deleteConfirm.id) {
             try {
-                await deleteUser(deleteConfirm.id);
+                await deleteUserMut.mutateAsync(deleteConfirm.id);
                 toast.success(t('user_deleted') || 'User deleted successfully');
             } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : (t('delete_failed') || 'Failed to delete user');

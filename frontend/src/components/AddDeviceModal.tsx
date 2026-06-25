@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Button, Input, Select, useToast } from './ui';
 import { ConnectionType, P2PRegistrationForm, Device } from '../types';
-import { useDevicesSites } from '../context/DevicesSitesContext';
+import { useSites, useCreateDevice, useUpdateDevice } from '../hooks/useApiQuery';
 import { generateUUID } from '../utils/uuid';
 
 interface Props {
@@ -14,7 +14,21 @@ interface Props {
 export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     const { t } = useTranslation();
     const toast = useToast();
-    const { sites, devices, addDevice, updateDevice } = useDevicesSites();
+    const { data: rawSites = [] } = useSites();
+    const createDevice = useCreateDevice();
+    const updateDeviceMut = useUpdateDevice();
+
+    const sites = useMemo(() => rawSites.map((s: Record<string, any>) => ({
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: s.organization || '',
+        latitude: s.latitude || 0,
+        longitude: s.longitude || 0,
+        status: s.status || 'active',
+        lastSync: s.last_sync || new Date().toISOString(),
+    })), [rawSites]);
     const [loading, setLoading] = useState(false);
     const [connectionType, setConnectionType] = useState<ConnectionType>('ip');
     
@@ -129,10 +143,10 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
                 newDevice.alarm_protocol = alarmProtocol;
             }
 
-            // Добавляем устройство в контекст (локальное состояние)
-            addDevice(newDevice);
+            // Добавляем устройство через API
+            await createDevice.mutateAsync(newDevice);
 
-            toast.success(t('device_added_success'));
+            toast.success(t('device_added_success') || 'Device added successfully');
             onSuccess?.();
             onClose(); // закрываем модальное окно
         } catch (err: any) {

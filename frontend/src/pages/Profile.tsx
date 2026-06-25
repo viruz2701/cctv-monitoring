@@ -5,14 +5,16 @@ import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, 
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { useTheme } from '../context/ThemeContext';
+import { useThemeStore } from '../store';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
 
 export function Profile() {
     const { t } = useTranslation();
     const { user, logout, updateUser } = useAuth();
-    const { theme, setTheme, isDark } = useTheme();
+    const theme = useThemeStore((s) => s.theme);
+    const setTheme = useThemeStore((s) => s.setTheme);
+    const isDark = useThemeStore((s) => s.isDark);
     const toast = useToast();
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);

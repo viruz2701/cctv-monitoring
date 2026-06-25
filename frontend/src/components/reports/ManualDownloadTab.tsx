@@ -3,7 +3,8 @@ import { Card, CardHeader, CardBody, CardFooter, Button, Select, Input, Badge, M
 import { FileText, Download, Calendar, Search, Filter, X } from 'lucide-react';
 import { useToast } from '../ui';
 import { generateExcelReport, triggerBlobDownload } from '../../utils/reportGenerator';
-import { useDevicesSites, useTickets, useReports } from '../../context/DataContext';
+import { useDevices, useSites, useTickets } from '../../hooks/useApiQuery';
+import { useReportsStore } from '../../context/ReportsContext';
 import { useAuth } from '../../hooks/useAuth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -23,10 +24,46 @@ const StatCard: React.FC<{ label: string; value: number }> = ({ label, value }) 
 export function ManualDownloadTab() {
     const { t } = useTranslation();
     const toast = useToast();
-    const { devices, sites } = useDevicesSites();
-    const { tickets } = useTickets();
+    const { data: rawDevices = [] } = useDevices();
+    const { data: rawSites = [] } = useSites();
+    const { data: apiTickets = [] } = useTickets();
     const { user } = useAuth();
-    const { addGeneratedReport } = useReports();
+    const addGeneratedReport = useReportsStore((s) => s.addGeneratedReport);
+
+    const mapAPIDeviceToUI = (d: Record<string, any>): { id: string; name: string; siteId: string; siteName: string; type: string; status: string; health: string; recordingStatus: string; lastSeen: string; ipAddress: string; model: string; firmware: string; owner_id: any } => ({
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: d.site_id || 'site-default',
+        siteName: d.location || 'Unknown',
+        type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
+        status: (d.status || 'offline').toLowerCase(),
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording',
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: d.vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    });
+
+    const devices = useMemo((): Array<Record<string, any>> => {
+        const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
+        return devsArray.map(mapAPIDeviceToUI);
+    }, [rawDevices]);
+
+    const sites = useMemo((): Array<Record<string, any>> => rawSites.map((s: Record<string, any>) => ({
+        id: s.id, name: s.name || 'Unnamed', address: s.address || '', city: s.city || '',
+        organization: s.organization || '', latitude: s.latitude || 0, longitude: s.longitude || 0,
+        status: s.status || 'active', lastSync: s.last_sync || new Date().toISOString(),
+    })), [rawSites]);
+
+    const tickets = useMemo((): Array<Record<string, any>> => apiTickets.map((t: Record<string, any>) => ({
+        id: t.id, title: t.title, description: t.description, deviceId: t.device_id || '',
+        deviceName: '', siteName: '', priority: (t.priority || 'medium') as any,
+        status: (t.status || 'open') as any, assignee: t.assignee || '',
+        createdAt: t.created_at, updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({ id: c.id, ticketId: c.ticket_id, userId: c.user_id, userName: c.user_name || '', content: c.content, createdAt: c.created_at })),
+    })), [apiTickets]);
 
     const [reportType, setReportType] = useState('consolidated');
     const [duration, setDuration] = useState('last_3_months');
@@ -149,7 +186,7 @@ export function ManualDownloadTab() {
                     issueType: issueTypeFilter,
                     deviceId: selectedDeviceId,
                 },
-                data: { devices, sites, tickets },
+                data: { devices: devices as any, sites: sites as any, tickets: tickets as any },
                 userSites: user?.role === 'admin' ? [] : user?.sites || []
             });
 

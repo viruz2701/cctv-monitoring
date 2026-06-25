@@ -2,6 +2,7 @@ import { type Plugin } from 'vite'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 function cspPlugin(): Plugin {
   // Production CSP — без 'unsafe-inline' в script-src (OWASP ASVS V5.3.3)
@@ -57,7 +58,17 @@ function cspPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cspPlugin()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    cspPlugin(),
+    visualizer({
+      filename: 'dist/stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
   test: {
     globals: true,
     environment: 'jsdom',

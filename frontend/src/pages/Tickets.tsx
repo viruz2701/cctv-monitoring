@@ -3,6 +3,8 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { ticketSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTickets, useDevices, useSites, useCreateTicket, useDeleteTicket } from '../hooks/useApiQuery';
+import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
 import {
     Filter,
     Plus,
@@ -24,17 +26,76 @@ import {
     SkeletonCard
 } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
-import { useTickets, useDevicesSites } from '../context/DataContext';
 import { Ticket as TicketType } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
+
+// ═══ API→UI mapping (migrated from TicketsContext) ═══
+function mapAPITicketToUI(t: APITicket): TicketType {
+    return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deviceId: t.device_id || '',
+        deviceName: '',
+        siteName: '',
+        priority: (t.priority as TicketType['priority']) || 'medium',
+        status: (t.status as TicketType['status']) || 'open',
+        assignee: t.assignee || '',
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({
+            id: c.id,
+            ticketId: c.ticket_id,
+            userId: c.user_id,
+            userName: c.user_name || '',
+            content: c.content,
+            createdAt: c.created_at,
+        })),
+    };
+}
+
+function mapAPIDeviceToUI(d: APIDevice): import('../types').Device {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: (d as any).site_id || 'site-default',
+        siteName: (d as any).location || 'Unknown',
+        type: ((d as any).vendor_type === 'camera' ? 'camera' : 'nvr') as import('../types').Device['type'],
+        status: (d.status || 'offline').toLowerCase() as import('../types').Device['status'],
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording' as import('../types').Device['recordingStatus'],
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: (d as any).vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    };
+}
 
 export function Tickets() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { tickets, addTicket, deleteTicket } = useTickets();
-    const { devices, sites } = useDevicesSites();
+    const { data: apiTickets = [] } = useTickets();
+    const { data: apiDevices = [] } = useDevices();
+    const { data: apiSites = [] } = useSites();
+    const createTicketMut = useCreateTicket();
+    const deleteTicketMut = useDeleteTicket();
+
+    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
+    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
+    const sites = useMemo(() => apiSites.map((s: any) => ({
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        status: (s.status || 'active') as 'active' | 'inactive' | 'maintenance',
+        lastSync: (s as any).last_sync || new Date().toISOString(),
+        latitude: (s as any).latitude || 0,
+        longitude: (s as any).longitude || 0,
+    })), [apiSites]);
+
     const isLoading = tickets.length === 0;
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -103,7 +164,13 @@ export function Tickets() {
             updatedAt: new Date().toISOString(),
             comments: []
         };
-        addTicket(ticket);
+        createTicketMut.mutateAsync({
+            title: ticket.title,
+            description: ticket.description,
+            device_id: ticket.deviceId,
+            priority: ticket.priority,
+            status: ticket.status,
+        });
         setShowCreateModal(false);
         resetTicketValidation();
         setNewTicket({
@@ -120,7 +187,7 @@ export function Tickets() {
     };
 
     const confirmDelete = () => {
-        if (deleteConfirm.id) deleteTicket(deleteConfirm.id);
+        if (deleteConfirm.id) deleteTicketMut.mutateAsync(deleteConfirm.id);
     };
 
     const filteredTickets = useMemo(() => {
@@ -289,8 +356,8 @@ export function Tickets() {
                 <VirtualTable
                     data={filteredTickets}
                     columns={columns}
-                    keyExtractor={(ticket) => ticket.id}
-                    onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
+                    keyExtractor={(ticket: TicketType) => ticket.id}
+                    onRowClick={(ticket: TicketType) => navigate(`/tickets/${ticket.id}`)}
                     emptyMessage={t('no_tickets')}
                     maxHeight={600}
                     estimateRowHeight={64}

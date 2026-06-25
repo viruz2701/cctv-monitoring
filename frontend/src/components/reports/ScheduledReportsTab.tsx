@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardBody, Button, Badge, Modal, Input, Select } from '../ui';
 import { Plus, Clock, Users, Mail, Settings, Play, Trash2, Pause, X } from 'lucide-react';
 import { useToast } from '../ui';
-import { useReports } from '../../context/DataContext';
+import { useReportsStore } from '../../context/ReportsContext';
 import { useTranslation } from 'react-i18next';
 
 interface ScheduledReport {
@@ -26,7 +26,7 @@ interface CreateScheduleFormData {
 export function ScheduledReportsTab() {
     const { t } = useTranslation();
     const toast = useToast();
-    const { addGeneratedReport } = useReports();
+    const addGeneratedReport = useReportsStore((s) => s.addGeneratedReport);
 
     const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>([
         { id: 'sr-001', name: 'Weekly Management Overview', type: 'Consolidated Health', frequency: 'Weekly (Monday)', recipients: ['management@company.com', 'admin@company.com'], status: 'active', nextRun: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() },

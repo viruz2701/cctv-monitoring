@@ -3,7 +3,12 @@ import {
     Check, Clock, AlertTriangle, Info, AlertCircle, Bell,
     Trash2, CheckSquare, Square
 } from 'lucide-react';
-import { useNotifications } from '../context/NotificationsContext';
+import {
+    useNotifications,
+    useMarkNotificationRead,
+    useMarkAllNotificationsRead,
+    useDeleteNotification,
+} from '../hooks/useApiQuery';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SkeletonNotification, SkeletonCard } from '../components/ui';
@@ -36,14 +41,27 @@ type FilterType = 'all' | 'unread' | 'error' | 'warning' | 'info';
 
 export function Notifications() {
     const { t } = useTranslation();
-    const {
-        notifications,
-        markAllAsRead,
-        markAsRead,
-        markNotificationsAsRead,
-        deleteNotifications,
-        unreadCount
-    } = useNotifications();
+    const { data: apiNotifications = [] } = useNotifications();
+    const markRead = useMarkNotificationRead();
+    const markAllRead = useMarkAllNotificationsRead();
+    const deleteNotif = useDeleteNotification();
+
+    const notifications = useMemo(() => apiNotifications.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        read: n.read,
+        link: n.link,
+        timestamp: n.created_at,
+    })), [apiNotifications]);
+
+    const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+    const markAsRead = (id: string) => markRead.mutate(id);
+    const markAllAsRead = () => markAllRead.mutate();
+    const markNotificationsAsRead = (ids: string[]) => ids.forEach(id => markRead.mutate(id));
+    const deleteNotifications = (ids: string[]) => ids.forEach(id => deleteNotif.mutate(id));
 
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

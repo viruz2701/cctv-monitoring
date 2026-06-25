@@ -34,8 +34,8 @@ import {
     SkeletonTable,
 } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
-import { useDevicesSites } from '../context/DevicesSitesContext';
-import { useUsers } from '../context/UsersContext';
+import { useDevices, useSites, useCreateSite, useUpdateSite, useDeleteSite } from '../hooks/useApiQuery';
+import { useUsers } from '../hooks/useApiQuery';
 import { api, TechnicianSiteAssignment } from '../services/api';
 import { useToast } from '../components/ui/Toast';
 import type { Site, Device } from '../types';
@@ -46,8 +46,49 @@ export function Sites() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { sites, devices, addSite, updateSite, deleteSite } = useDevicesSites();
-    const { users } = useUsers();
+    const { data: rawSites = [] } = useSites();
+    const { data: rawDevices = [] } = useDevices();
+    const { data: rawUsers = [] } = useUsers();
+    const createSite = useCreateSite();
+    const updateSiteMut = useUpdateSite();
+    const deleteSiteMut = useDeleteSite();
+
+    const mapAPISiteToUI = useCallback((s: any) => ({
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: s.organization || '',
+        latitude: s.latitude || 0,
+        longitude: s.longitude || 0,
+        status: s.status || 'active',
+        lastSync: s.last_sync || new Date().toISOString(),
+    }), []);
+
+    const sites = useMemo(() => rawSites.map(mapAPISiteToUI), [rawSites, mapAPISiteToUI]);
+
+    const mapAPIDeviceToUI = useCallback((d: any) => ({
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: d.site_id || 'site-default',
+        siteName: d.location || 'Unknown',
+        type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
+        status: (d.status || 'offline').toLowerCase(),
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording',
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: d.vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    }), []);
+
+    const devices = useMemo(() => {
+        const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
+        return devsArray.map(mapAPIDeviceToUI);
+    }, [rawDevices, mapAPIDeviceToUI]);
+
+    const users = useMemo(() => rawUsers.map(u => ({ ...u, name: (u as any).name || u.username })), [rawUsers]);
 
     const isLoading = sites.length === 0 && devices.length === 0;
     const toast = useToast();
@@ -205,15 +246,15 @@ export function Sites() {
 
         try {
             if (selectedSite) {
-                await updateSite(selectedSite.id, {
+                await updateSiteMut.mutateAsync({ id: selectedSite.id, updates: {
                     name: formData.name,
                     address: formData.address,
                     city: formData.city,
                     organization: formData.organization || undefined,
                     latitude: formData.latitude || undefined,
                     longitude: formData.longitude || undefined,
-                    status: formData.status as any
-                });
+                    status: formData.status,
+                } as any });
             } else {
                 const newSite: Partial<Site> = {
                     name: formData.name,
@@ -224,7 +265,7 @@ export function Sites() {
                     longitude: formData.longitude || undefined,
                     status: formData.status as any,
                 };
-                await addSite(newSite as Site);
+                await createSite.mutateAsync(newSite as any);
             }
             setShowAddModal(false);
             resetForm();
@@ -239,7 +280,7 @@ export function Sites() {
     };
 
     const confirmDeleteSite = () => {
-        if (deleteConfirm.id) deleteSite(deleteConfirm.id);
+        if (deleteConfirm.id) deleteSiteMut.mutateAsync(deleteConfirm.id);
     };
 
     const toggleExpand = (siteId: string) => {

@@ -1,12 +1,12 @@
 import { generateUUID } from '../utils/uuid';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Badge, TicketStatusBadge, PriorityBadge, Textarea, ConfirmModal } from '../components/ui';
 import { ArrowLeft, Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import type { Ticket, TicketStatus, TicketComment } from '../types';
-import { useTickets } from '../context/DataContext';
+import { useTickets, useUpdateTicket, useDeleteTicket } from '../hooks/useApiQuery';
 import { useTranslation } from 'react-i18next';
 import { api, Alarm } from '../services/api';
 
@@ -15,7 +15,32 @@ export function TicketDetail() {
     const { ticketId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { tickets, updateTicket, addTicketComment, deleteTicket } = useTickets();
+    const { data: apiTickets = [] } = useTickets();
+    const updateTicketMut = useUpdateTicket();
+    const deleteTicketMut = useDeleteTicket();
+
+    // API→UI mapping (migrated from TicketsContext)
+    const tickets = useMemo(() => apiTickets.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deviceId: t.device_id || '',
+        deviceName: '',
+        siteName: '',
+        priority: (t.priority as Ticket['priority']) || 'medium',
+        status: (t.status as Ticket['status']) || 'open',
+        assignee: t.assignee || '',
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({
+            id: c.id,
+            ticketId: c.ticket_id,
+            userId: c.user_id,
+            userName: c.user_name || '',
+            content: c.content,
+            createdAt: c.created_at,
+        })),
+    })), [apiTickets]);
 
     const ticket = tickets.find(t => t.id === ticketId);
 
@@ -46,7 +71,7 @@ export function TicketDetail() {
     }
 
     const handleStatusChange = (newStatus: TicketStatus) => {
-        updateTicket(ticket.id, { status: newStatus });
+        updateTicketMut.mutateAsync({ id: ticket.id, updates: { status: newStatus } });
     };
 
     const handleAddComment = () => {
@@ -61,7 +86,10 @@ export function TicketDetail() {
             createdAt: new Date().toISOString(),
         };
 
-        addTicketComment(ticket.id, comment);
+        (async () => {
+            const { api } = await import('../services/api');
+            await api.addTicketComment(ticket.id, comment.content);
+        })();
         setNewComment('');
     };
 
@@ -70,7 +98,7 @@ export function TicketDetail() {
     };
 
     const confirmDeleteTicket = () => {
-        deleteTicket(ticket.id);
+        deleteTicketMut.mutateAsync(ticket.id);
         navigate('/tickets');
     };
 

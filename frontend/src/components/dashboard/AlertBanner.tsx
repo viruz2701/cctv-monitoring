@@ -1,12 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useAlerts } from '../../context/DataContext';
+import { useState, useEffect, useMemo } from 'react';
+import { useAlarms } from '../../hooks/useApiQuery';
 import { AlertCircle, X, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export function AlertBanner() {
     const { t } = useTranslation();
-    const { alerts } = useAlerts();
+    const { data: apiAlarms = [] } = useAlarms();
+
+    const alerts = useMemo(() => apiAlarms.map(a => ({
+        id: a.device_id + '-' + a.timestamp,
+        deviceId: a.device_id,
+        deviceName: a.device_id,
+        type: a.priority >= 3 ? 'error' : a.priority >= 2 ? 'warning' : 'info',
+        message: a.description,
+        timestamp: a.timestamp,
+        status: 'active',
+        priority: a.priority >= 4 ? 'critical' : a.priority >= 3 ? 'high' : a.priority >= 2 ? 'medium' : 'low',
+        source: a.device_id,
+        siteName: '',
+    })), [apiAlarms]);
     const navigate = useNavigate();
     const activeAlerts = alerts.filter(a => a.status === 'active' && (a.type === 'error' || a.type === 'warning'));
     const [dismissed, setDismissed] = useState(false);

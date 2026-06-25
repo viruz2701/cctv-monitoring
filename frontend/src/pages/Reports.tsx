@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { useDevices, useSites, useTickets } from '../hooks/useApiQuery';
+import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
 import {
     FileText,
     Download,
@@ -15,18 +17,63 @@ import {
     Server
 } from 'lucide-react';
 import { Card, CardBody, Button, Select } from '../components/ui';
-import { useDevicesSites, useTickets } from '../context/DataContext';
 import { ManualDownloadTab, ScheduledReportsTab, ReportHistoryTab } from '../components/reports';
 import { useTranslation } from 'react-i18next';
 
 type TabType = 'manual' | 'scheduled' | 'history';
 
+// ═══ API→UI mapping helpers ═══
+function mapAPIDeviceToUI(d: APIDevice): import('../types').Device {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: (d as any).site_id || 'site-default',
+        siteName: (d as any).location || 'Unknown',
+        type: ((d as any).vendor_type === 'camera' ? 'camera' : 'nvr') as 'camera' | 'nvr' | 'dvr' | 'switch',
+        status: (d.status || 'offline').toLowerCase() as 'online' | 'offline' | 'warning',
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording' as const,
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: (d as any).vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    };
+}
+
+function mapAPITicketToUI(t: APITicket): import('../types').Ticket {
+    return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deviceId: t.device_id || '',
+        deviceName: '',
+        siteName: '',
+        priority: (t.priority as import('../types').Ticket['priority']) || 'medium',
+        status: (t.status as import('../types').Ticket['status']) || 'open',
+        assignee: t.assignee || '',
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({
+            id: c.id,
+            ticketId: c.ticket_id,
+            userId: c.user_id,
+            userName: c.user_name || '',
+            content: c.content,
+            createdAt: c.created_at,
+        })),
+    };
+}
+
 export function Reports() {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<TabType>('manual');
 
-    const { devices } = useDevicesSites();
-    const { tickets } = useTickets();
+    const { data: apiDevices = [] } = useDevices();
+    const { data: apiTickets = [] } = useTickets();
+
+    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
+    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
 
     const dashboardStats = useMemo(() => ({
         totalDevices: devices.length,

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { useAlarms, useAcknowledgeAlarm, useResolveAlarm } from '../hooks/useApiQuery';
 import {
     AlertTriangle,
     AlertCircle,
@@ -12,15 +13,40 @@ import {
 } from 'lucide-react';
 import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal, SkeletonTable, SkeletonCard } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
-import { useAlerts } from '../context/DataContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
 import type { Alert } from '../types';
 
 export function Alerts() {
     const { t } = useTranslation();
-    const { alerts, updateAlertStatus, deleteAlert } = useAlerts();
+    const { data: apiAlarms = [] } = useAlarms();
+    const acknowledgeAlarm = useAcknowledgeAlarm();
+    const resolveAlarm = useResolveAlarm();
+
+    // API Alarm → UI Alert mapping (migrated from AlertsContext)
+    const alerts = useMemo(() => apiAlarms.map(a => ({
+        id: a.device_id + '-' + a.timestamp,
+        deviceId: a.device_id,
+        deviceName: a.device_id,
+        type: (a.priority >= 3 ? 'error' : a.priority >= 2 ? 'warning' : 'info') as 'error' | 'warning' | 'info',
+        message: a.description,
+        timestamp: a.timestamp,
+        status: 'active' as const,
+        priority: (a.priority >= 4 ? 'critical' : a.priority >= 3 ? 'high' : a.priority >= 2 ? 'medium' : 'low') as 'critical' | 'high' | 'medium' | 'low',
+        source: a.device_id,
+        siteName: '',
+        acknowledgedBy: undefined as string | undefined,
+        resolvedBy: undefined as string | undefined,
+        resolvedAt: undefined as string | undefined,
+    })), [apiAlarms]);
+
     const isLoading = alerts.length === 0;
+
+    const updateAlertStatus = (id: string, status: string) => {
+        if (status === 'acknowledged') acknowledgeAlarm.mutate(id);
+        else if (status === 'resolved') resolveAlarm.mutate(id);
+    };
+    const deleteAlert = () => {};
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -265,7 +291,7 @@ export function Alerts() {
             <ConfirmModal
                 isOpen={deleteConfirm.isOpen}
                 onClose={() => setDeleteConfirm({ isOpen: false, id: '' })}
-                onConfirm={() => { if (deleteConfirm.id) deleteAlert(deleteConfirm.id); }}
+                onConfirm={() => { if (deleteConfirm.id) deleteAlert(); }}
                 title={t('delete_alert')}
                 message={t('delete_alert_confirm')}
                 confirmText={t('delete')}

@@ -1,13 +1,22 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { workOrderSchema } from '../lib/validations';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useWorkOrders, BulkActionType } from '../context/WorkOrdersContext';
-import { useDevicesSites } from '../context/DevicesSitesContext';
-import { useUsers } from '../context/UsersContext';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+    prefetchWorkOrder,
+    useWorkOrders,
+    useCreateWorkOrder,
+    useUpdateWorkOrder,
+    useDeleteWorkOrder,
+    useSites,
+    useDevices,
+    useUsers,
+    queryKeys,
+} from '../hooks/useApiQuery';
+import { workOrdersApi, WorkOrder } from '../services/workOrdersApi';
 import { useAuth } from '../hooks/useAuth';
-import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
 import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable, DataGrid } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
@@ -117,13 +126,19 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
 
 type ViewMode = 'table' | 'kanban' | 'calendar';
 
+type BulkActionType = 'status_change' | 'assign' | 'delete' | 'priority_change';
+
 export const WorkOrders: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { confirm, ConfirmDialog } = useConfirmAction();
-  const { workOrders, loading, startWorkOrder, completeWorkOrder, cancelWorkOrder, updateWorkOrder, bulkActionWorkOrders } = useWorkOrders();
-  const { users } = useUsers();
+  const { data: workOrders = [], isLoading: loading } = useWorkOrders();
+  const { data: rawUsers = [] } = useUsers();
+  const updateWorkOrderMut = useUpdateWorkOrder();
+
+  const users = useMemo(() => rawUsers.map(u => ({ ...u, name: (u as any).name || u.username })), [rawUsers]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -210,17 +225,18 @@ export const WorkOrders: React.FC = () => {
     setBulkError(null);
     try {
       const ids = Array.from(selectedIds);
-      const response = await bulkActionWorkOrders(action, ids, value);
+      const response = await workOrdersApi.bulkActions(action, ids, value);
       if (response.failed > 0) {
         setBulkError(`${response.failed} operation(s) failed`);
       }
       setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
     } catch (err) {
       setBulkError(err instanceof Error ? err.message : 'Bulk action failed');
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedIds, bulkActionWorkOrders, confirm, t]);
+  }, [selectedIds, confirm, t, queryClient]);
 
   // ── Bulk Actions for DataGrid ────────────────────────────────────
   const bulkActions = [
@@ -252,13 +268,13 @@ export const WorkOrders: React.FC = () => {
 
   // ── Kanban status change handler ─────────────────────────────────
   const handleKanbanStatusChange = useCallback(async (id: string, newStatus: string) => {
-    await updateWorkOrder(id, { status: newStatus as WorkOrder['status'] });
-  }, [updateWorkOrder]);
+    await updateWorkOrderMut.mutateAsync({ id, data: { status: newStatus as WorkOrder['status'] } });
+  }, [updateWorkOrderMut]);
 
   // ── Calendar date change handler (drag-and-drop) ─────────────────
   const handleCalendarDateChange = useCallback(async (id: string, newDate: string) => {
-    await updateWorkOrder(id, { sla_deadline: newDate });
-  }, [updateWorkOrder]);
+    await updateWorkOrderMut.mutateAsync({ id, data: { sla_deadline: newDate } });
+  }, [updateWorkOrderMut]);
 
   // ── Calendar date click handler (create WO on date) ──────────────
   const handleCalendarDateClick = useCallback((date: Date) => {
@@ -293,7 +309,7 @@ export const WorkOrders: React.FC = () => {
             { value: 'low', label: t('low') },
           ]}
           onSave={async (val) => {
-            await updateWorkOrder(item.id, { priority: val as WorkOrder['priority'] });
+            await updateWorkOrderMut.mutateAsync({ id: item.id, data: { priority: val as WorkOrder['priority'] } });
           }}
           renderDisplay={(val) => (
             <Badge variant={getPriorityVariant(val)} size="sm">{t(val)}</Badge>
@@ -315,7 +331,7 @@ export const WorkOrders: React.FC = () => {
             { value: 'cancelled', label: t('cancelled') },
           ]}
           onSave={async (val) => {
-            await updateWorkOrder(item.id, { status: val as WorkOrder['status'] });
+            await updateWorkOrderMut.mutateAsync({ id: item.id, data: { status: val as WorkOrder['status'] } });
           }}
           renderDisplay={(val) => (
             <Badge variant={getStatusVariant(val)} size="sm">{t(val)}</Badge>
@@ -351,7 +367,7 @@ export const WorkOrders: React.FC = () => {
             })),
           ]}
           onSave={async (val) => {
-            await updateWorkOrder(item.id, { assigned_to: val || undefined });
+            await updateWorkOrderMut.mutateAsync({ id: item.id, data: { assigned_to: val || undefined } });
           }}
           renderDisplay={() => (
             <span className="text-sm">{item.assignee_name || t('unassigned')}</span>
@@ -365,12 +381,12 @@ export const WorkOrders: React.FC = () => {
       render: (item: WorkOrder) => (
         <div className="flex gap-1">
           {item.status === 'open' && (
-            <Button size="sm" onClick={(e) => { e.stopPropagation(); startWorkOrder(item.id); }} icon={<Play size={14} />}>
+            <Button size="sm" onClick={async (e) => { e.stopPropagation(); await workOrdersApi.startWorkOrder(item.id); queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all }); }} icon={<Play size={14} />}>
               {t('start')}
             </Button>
           )}
           {item.status === 'in_progress' && (
-            <Button size="sm" onClick={(e) => { e.stopPropagation(); completeWorkOrder(item.id, '', [], []); }} icon={<CheckCircle size={14} />}>
+            <Button size="sm" onClick={async (e) => { e.stopPropagation(); await workOrdersApi.completeWorkOrder(item.id, '', [], []); queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all }); }} icon={<CheckCircle size={14} />}>
               {t('complete')}
             </Button>
           )}
@@ -383,7 +399,7 @@ export const WorkOrders: React.FC = () => {
                 confirmText: t('cancel') || 'Cancel',
                 variant: 'warning',
               });
-              if (ok) cancelWorkOrder(item.id, 'Cancelled by user');
+              if (ok) { await workOrdersApi.cancelWorkOrder(item.id, 'Cancelled by user'); queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all }); }
             }} icon={<XCircle size={14} />}>
               {t('cancel')}
             </Button>
@@ -531,6 +547,7 @@ export const WorkOrders: React.FC = () => {
             selectable
             selectedIds={selectedIds}
             onSelectionChange={(ids: Set<string>) => setSelectedIds(ids)}
+            onRowHover={(item: WorkOrder) => prefetchWorkOrder(queryClient, item.id)}
             onRowClick={(item: WorkOrder) => navigate(`/work-orders/${item.id}`)}
             stickyHeader
             persistId="work-orders"
@@ -574,10 +591,16 @@ export const WorkOrders: React.FC = () => {
 
 const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
-  const { createWorkOrder } = useWorkOrders();
-  const { sites, devices } = useDevicesSites();
-  const { users } = useUsers();
-  const technicians = users.filter(u => u.role === 'technician');
+  const createWorkOrder = useCreateWorkOrder();
+  const { data: rawSites = [] } = useSites();
+  const { data: rawDevices = [] } = useDevices();
+  const { data: rawUsers = [] } = useUsers();
+
+  const sites = useMemo(() => rawSites.map((s: any) => ({ id: s.id, name: s.name || 'Unnamed' })), [rawSites]);
+  const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
+  const devices = useMemo(() => devsArray.map((d: any) => ({ id: d.device_id, name: d.name || d.device_id, siteId: d.site_id || 'site-default' })), [devsArray]);
+  const users = useMemo(() => rawUsers.map((u: any) => ({ ...u, name: u.name || u.username })), [rawUsers]);
+  const technicians = users.filter((u: any) => u.role === 'technician');
 
   const { errors: woErrors, validate: validateWO, validateField: validateWOField, touched: woTouched, reset: resetWOValidation } = useFormValidation(workOrderSchema);
 
@@ -622,7 +645,7 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     if (!validateWO(validationData)) return;
 
     try {
-      await createWorkOrder({
+      await createWorkOrder.mutateAsync({
         device_id: selectedDeviceId,
         type: formData.type,
         priority: formData.priority,

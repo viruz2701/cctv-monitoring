@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bell, Shield, Globe, Settings as SettingsIcon, Lock, Server, Palette, FileText } from 'lucide-react';
 import { Tabs, useToast } from '../components/ui';
-import { useSettings } from '../context/DataContext';
+import { useSettings } from '../context/SettingsContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';

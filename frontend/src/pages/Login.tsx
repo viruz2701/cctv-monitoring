@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, Eye, EyeOff, Lock, Mail, Shield } from 'lucide-react';
 import { Button } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { useSettings } from '../context/DataContext';
+import { useSettings } from '../context/SettingsContext';
 import { useTranslation } from 'react-i18next';
 
 export function Login() {

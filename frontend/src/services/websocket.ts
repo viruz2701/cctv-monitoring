@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useAlerts } from '../context/AlertsContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../hooks/useApiQuery';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../hooks/useAuth';
 import type { Alert } from '../types';
@@ -14,7 +15,6 @@ const getWsBaseUrl = () => {
 
 export function useAlarmWebSocket() {
     const { token, user } = useAuth();
-    const { addAlert } = useAlerts();
     const toast = useToast();
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -37,18 +37,8 @@ export function useAlarmWebSocket() {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'alarm' && data.alarm) {
-                    const newAlert: Alert = {
-                        id: crypto.randomUUID(),
-                        deviceId: data.alarm.device_id,
-                        deviceName: 'Unknown Device',
-                        siteName: 'Unknown Site',
-                        type: 'error',
-                        message: data.alarm.description || `Alarm triggered on device ${data.alarm.device_id}`,
-                        timestamp: new Date(data.alarm.timestamp).toISOString(),
-                        status: 'active',
-                    };
-                    addAlert(newAlert);
-                    toast.error(newAlert.message);
+                    toast.error(data.alarm.description || `Alarm triggered on device ${data.alarm.device_id}`);
+                    // Alarm data comes from useAlarms() React Query hook on next refetch
                 }
             } catch (err) {
                 console.error('Failed to parse WebSocket message', err);
@@ -67,7 +57,7 @@ export function useAlarmWebSocket() {
         };
 
         wsRef.current = ws;
-    }, [token, user, addAlert, toast]);
+    }, [token, user, toast]);
 
     const scheduleReconnect = useCallback(() => {
         if (reconnectTimeoutRef.current) {

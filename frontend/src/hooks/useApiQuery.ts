@@ -13,7 +13,7 @@
 //   - IEC 62443 SR 7.1 (Resource availability — async data fetching)
 // ═══════════════════════════════════════════════════════════════════════
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import type {
   Device, Site, Ticket, Alarm, Notification as AppNotification,
@@ -675,5 +675,35 @@ export function usePredictions(deviceId?: string, limit?: number) {
     queryFn: () => api.getPredictions(deviceId, limit),
     staleTime: 60_000,
     refetchInterval: 300_000, // auto-refresh каждые 5 минут
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Prefetch utilities (P1-3.3: prefetch on hover for list navigation)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * Prefetch device detail on row hover.
+ * Использование: onRowHover={(device) => prefetchDevice(queryClient, device.id)}
+ */
+export function prefetchDevice(client: QueryClient, id: string) {
+  if (!id) return;
+  client.prefetchQuery({
+    queryKey: queryKeys.devices.detail(id),
+    queryFn: () => api.getDevice(id),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Prefetch work order detail on row hover.
+ * Использование: onRowHover={(wo) => prefetchWorkOrder(queryClient, wo.id)}
+ */
+export function prefetchWorkOrder(client: QueryClient, id: string) {
+  if (!id) return;
+  client.prefetchQuery({
+    queryKey: queryKeys.workOrders.detail(id),
+    queryFn: () => import('../services/workOrdersApi').then((m) => m.workOrdersApi.getWorkOrder(id)),
+    staleTime: 30_000,
   });
 }

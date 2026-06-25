@@ -23,11 +23,15 @@ import {
     Pencil,
 } from 'lucide-react';
 import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../components/ui';
-import { useTickets, useAlerts, useDevicesSites, useSettings } from '../context/DataContext';
+import { useTickets, useAlarms, useDevices, useSites } from '../hooks/useApiQuery';
+import { useSettings } from '../context/SettingsContext';
 import { AlertBanner } from '../components/dashboard/AlertBanner';
 import { DragDropDashboard } from '../components/dashboard/DragDropDashboard';
 import type { DashboardWidget } from '../components/dashboard/DragDropDashboard';
 import { useTranslation } from 'react-i18next';
+import type { Device as APIDevice, Ticket as APITicket, Alarm as APIAlarm } from '../services/api';
+import type { Device as UIDevice, Ticket as UITicket, Alert } from '../types';
+import { useMemo } from 'react';
 import {
     LineChart, Line, AreaChart, Area, BarChart, Bar,
     XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -50,15 +54,89 @@ const ticketTrendData = [
     { name: 'Sun', critical: 8, high: 14, medium: 21, low: 38 },
 ];
 
+// ═══ API→UI mapping helpers (migrated from DevicesSitesContext/TicketsContext/AlertsContext) ═══
+function mapAPIDeviceToUI(d: APIDevice): UIDevice {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: (d as any).site_id || 'site-default',
+        siteName: (d as any).location || 'Unknown',
+        type: (d as any).vendor_type === 'camera' ? 'camera' : 'nvr',
+        status: (d.status || 'offline').toLowerCase() as UIDevice['status'],
+        health: d.status === 'online' ? 'healthy' as const : 'faulty' as const,
+        recordingStatus: 'recording' as const,
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: (d as any).vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    };
+}
+
+function mapAPITicketToUI(t: APITicket): UITicket {
+    return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deviceId: t.device_id || '',
+        deviceName: '',
+        siteName: '',
+        priority: (t.priority as UITicket['priority']) || 'medium',
+        status: (t.status as UITicket['status']) || 'open',
+        assignee: t.assignee || '',
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({
+            id: c.id,
+            ticketId: c.ticket_id,
+            userId: c.user_id,
+            userName: c.user_name || '',
+            content: c.content,
+            createdAt: c.created_at,
+        })),
+    };
+}
+
+function mapAlarmToAlert(alarm: APIAlarm): Alert {
+    return {
+        id: alarm.device_id + '-' + alarm.timestamp,
+        deviceId: alarm.device_id,
+        deviceName: alarm.device_id,
+        type: alarm.priority >= 3 ? 'error' as const : alarm.priority >= 2 ? 'warning' as const : 'info' as const,
+        message: alarm.description,
+        timestamp: alarm.timestamp,
+        status: 'active' as const,
+        priority: alarm.priority >= 4 ? 'critical' as const : alarm.priority >= 3 ? 'high' as const : alarm.priority >= 2 ? 'medium' as const : 'low' as const,
+        source: alarm.device_id,
+        siteName: '',
+    };
+}
+
 export function Dashboard() {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { tickets } = useTickets();
-    const { alerts } = useAlerts();
-    const { devices, sites } = useDevicesSites();
+    const { data: apiTickets = [] } = useTickets();
+    const { data: apiAlarms = [] } = useAlarms();
+    const { data: apiDevices = [] } = useDevices();
+    const { data: apiSites = [] } = useSites();
     const { dashboardConfig, updateDashboardConfig } = useSettings();
     const [pageLoading, setPageLoading] = React.useState(true);
     const [customizeMode, setCustomizeMode] = React.useState(false);
+
+    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
+    const alerts = useMemo(() => apiAlarms.map(mapAlarmToAlert), [apiAlarms]);
+    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
+    const sites = useMemo(() => apiSites.map((s: any) => ({
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: (s as any).organization || '',
+        latitude: (s as any).latitude || 0,
+        longitude: (s as any).longitude || 0,
+        status: (s.status || 'active') as 'active' | 'inactive' | 'maintenance',
+        lastSync: (s as any).last_sync || new Date().toISOString(),
+    })), [apiSites]);
 
     React.useEffect(() => {
         const timer = setTimeout(() => setPageLoading(false), 300);

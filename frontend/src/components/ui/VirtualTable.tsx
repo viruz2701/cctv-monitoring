@@ -35,6 +35,8 @@ interface VirtualTableProps<T> {
   estimateRowHeight?: number;
   maxHeight?: number;
   overscan?: number;
+  /** P1-3.3: Prefetch on row hover */
+  onRowHover?: (item: T) => void;
 }
 
 function getValue<T>(item: T, key: keyof T | string): unknown {
@@ -55,7 +57,7 @@ const ALIGN_CLASSES: Record<string, string> = {
   right: 'text-right justify-end',
 };
 
-export function VirtualTable<T>({
+const VirtualTable = React.memo(function VirtualTableInner<T>({
   data,
   columns,
   keyExtractor,
@@ -74,6 +76,7 @@ export function VirtualTable<T>({
   estimateRowHeight = 56,
   maxHeight = 600,
   overscan = 5,
+  onRowHover,
 }: VirtualTableProps<T>) {
   const [search, setSearch] = React.useState('');
   const [hiddenColumns, setHiddenColumns] = React.useState<Set<string>>(new Set());
@@ -149,7 +152,7 @@ export function VirtualTable<T>({
     URL.revokeObjectURL(url);
   }, [filteredData, visibleColumns, exportFilename]);
 
-  const renderSortIcon = (column: Column<T>) => {
+  const renderSortIcon = useCallback((column: Column<T>) => {
     if (!column.sortable) return null;
     const colKey = String(column.key);
     if (sortColumn !== colKey) return <ChevronsUpDown className="w-4 h-4 text-slate-400 flex-shrink-0" />;
@@ -158,7 +161,7 @@ export function VirtualTable<T>({
     ) : (
       <ChevronDown className="w-4 h-4 text-blue-600 flex-shrink-0" />
     );
-  };
+  }, [sortColumn, sortDirection]);
 
   const gridTemplateColumns = useMemo(() => {
     const parts: string[] = [];
@@ -323,6 +326,7 @@ export function VirtualTable<T>({
                     minHeight: estimateRowHeight,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
+                  onMouseEnter={() => onRowHover?.(item)}
                   onClick={() => onRowClick?.(item)}
                 >
                   {selectable && (
@@ -357,4 +361,6 @@ export function VirtualTable<T>({
       </div>
     </div>
   );
-}
+}) as any;
+
+export { VirtualTable };

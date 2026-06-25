@@ -14,7 +14,8 @@ import {
 } from '../components/ui';
 import { workOrdersApi, WorkOrder, PartUsage, TimeEntry, LaborCost } from '../services/workOrdersApi';
 import { sparePartsApi, SparePart } from '../services/sparePartsApi';
-import { useWorkOrders } from '../context/WorkOrdersContext';
+import { queryKeys } from '../hooks/useApiQuery';
+import { useQueryClient } from '@tanstack/react-query';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { ThreeColumnTemplate } from '../components/layout';
@@ -59,7 +60,7 @@ export const WorkOrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const toast = useToast();
-  const { fetchWorkOrders } = useWorkOrders();
+  const queryClient = useQueryClient();
 
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,7 +136,7 @@ export const WorkOrderDetail: React.FC = () => {
       const updated = await workOrdersApi.getWorkOrder(id);
       setWorkOrder(updated);
       setCompleteModal(false);
-      fetchWorkOrders();
+      queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
       toast.success('Наряд-заказ завершён');
     } catch {
       toast.error('Ошибка при завершении');
@@ -152,7 +153,7 @@ export const WorkOrderDetail: React.FC = () => {
       const updated = await workOrdersApi.getWorkOrder(id);
       setWorkOrder(updated);
       setCancelModal(false);
-      fetchWorkOrders();
+      queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
       toast.success('Наряд-заказ отменён');
     } catch {
       toast.error('Ошибка при отмене');

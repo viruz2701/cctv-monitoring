@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
     Bell,
@@ -14,10 +14,9 @@ import {
     Monitor
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { useDevicesSites } from '../../context/DevicesSitesContext';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { useNotifications } from '../../context/NotificationsContext';
+import { useDevices, useSites, useNotifications, useMarkAllNotificationsRead } from '../../hooks/useApiQuery';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore, type Theme } from '../../store/themeStore';
@@ -32,8 +31,59 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, logout } = useAuth();
-    const { unreadCount, notifications, markAllAsRead } = useNotifications();
-    const { devices, sites } = useDevicesSites();
+    const { data: apiNotifications = [] } = useNotifications();
+    const markAllAsReadMut = useMarkAllNotificationsRead();
+    const { data: rawDevices = [] } = useDevices();
+    const { data: rawSites = [] } = useSites();
+
+    const notifications = useMemo(() => apiNotifications.map(n => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        read: n.read,
+        link: n.link,
+        timestamp: n.created_at,
+    })), [apiNotifications]);
+
+    const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+    const markAllAsRead = () => markAllAsReadMut.mutate();
+
+    const mapAPIDeviceToUI = (d: Record<string, any>): { id: string; name: string; siteId: string; siteName: string; type: string; status: string; health: string; recordingStatus: string; lastSeen: string; ipAddress: string; model: string; firmware: string; owner_id: any } => ({
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: d.site_id || 'site-default',
+        siteName: d.location || 'Unknown',
+        type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
+        status: (d.status || 'offline').toLowerCase(),
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording',
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: d.vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    });
+
+    const devices = useMemo(() => {
+        const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
+        return devsArray.map(mapAPIDeviceToUI);
+    }, [rawDevices]);
+
+    const mapAPISiteToUI = (s: Record<string, any>) => ({
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: s.organization || '',
+        latitude: s.latitude || 0,
+        longitude: s.longitude || 0,
+        status: s.status || 'active',
+        lastSync: s.last_sync || new Date().toISOString(),
+    });
+
+    const sites = useMemo(() => rawSites.map(mapAPISiteToUI), [rawSites]);
 
     const { theme, setTheme } = useThemeStore();
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -62,7 +112,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
         location.pathname.startsWith(path)
     )?.[1] || t('dashboard');
 
-    const searchResults = React.useMemo(() => {
+    const searchResults = React.useMemo((): { devices: Array<Record<string, any>>; sites: Array<Record<string, any>> } => {
         if (!searchQuery.trim()) return { devices: [], sites: [] };
         const query = searchQuery.toLowerCase();
         return {

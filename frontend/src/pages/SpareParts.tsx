@@ -5,7 +5,18 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSpareParts } from '../context/SparePartsContext';
+import {
+  useSpareParts,
+  useLowStockParts,
+  useSparePartCategories,
+  useCreateSparePart,
+  useUpdateSparePart,
+  useDeleteSparePart,
+  useAdjustStock,
+  useCreateSparePartCategory,
+  useUpdateSparePartCategory,
+  useDeleteSparePartCategory,
+} from '../hooks/useApiQuery';
 import {
   Button, Modal, Input, useToast, EmptyState, SkeletonCard, ConfirmModal,
 } from '../components/ui';
@@ -27,11 +38,15 @@ export const SpareParts: React.FC = () => {
   const { t } = useTranslation();
   const toast = useToast();
   const { confirm, ConfirmDialog } = useConfirmAction();
-  const {
-    spareParts, categories, loading, lowStockParts,
-    createCategory, updateCategory, deleteCategory,
-    updateSparePart, deleteSparePart, adjustStock,
-  } = useSpareParts();
+  const { data: spareParts = [], isLoading: loading } = useSpareParts();
+  const { data: lowStockParts = [] } = useLowStockParts();
+  const { data: categories = [] } = useSparePartCategories();
+  const createCategoryMut = useCreateSparePartCategory();
+  const updateCategoryMut = useUpdateSparePartCategory();
+  const deleteCategoryMut = useDeleteSparePartCategory();
+  const updateSparePartMut = useUpdateSparePart();
+  const deleteSparePartMut = useDeleteSparePart();
+  const adjustStockMut = useAdjustStock();
 
   // ── UI State ──────────────────────────────────────────────────────
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -97,7 +112,7 @@ export const SpareParts: React.FC = () => {
     try {
       for (const part of selectedParts) {
         const diff = bulkStockValue - part.stock;
-        await adjustStock(part.id, diff);
+        await adjustStockMut.mutateAsync({ id: part.id, quantity: diff });
       }
       toast.success(`Stock updated for ${selectedParts.length} parts`);
       setShowBulkStockModal(false);
@@ -105,12 +120,12 @@ export const SpareParts: React.FC = () => {
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update stock');
     }
-  }, [selectedParts, bulkStockValue, adjustStock, toast]);
+  }, [selectedParts, bulkStockValue, adjustStockMut, toast]);
 
   const handleBulkChangeLocation = useCallback(async () => {
     try {
       for (const part of selectedParts) {
-        await updateSparePart(part.id, { location: bulkLocationValue });
+        await updateSparePartMut.mutateAsync({ id: part.id, data: { location: bulkLocationValue } });
       }
       toast.success(`Location updated for ${selectedParts.length} parts`);
       setShowBulkLocationModal(false);
@@ -118,7 +133,7 @@ export const SpareParts: React.FC = () => {
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update location');
     }
-  }, [selectedParts, bulkLocationValue, updateSparePart, toast]);
+  }, [selectedParts, bulkLocationValue, updateSparePartMut, toast]);
 
   const handleExportSelectedCSV = useCallback(() => {
     const header = 'Name,SKU,Category,Stock,Min Stock,Location,Cost,Supplier';
@@ -181,10 +196,10 @@ export const SpareParts: React.FC = () => {
     const part = spareParts.find((p) => p.id === id);
     if (part) {
       const suggested = Math.max(part.min_stock * 2 - part.stock, part.min_stock);
-      adjustStock(id, suggested);
+      adjustStockMut.mutateAsync({ id, quantity: suggested });
       toast.success(`Ordered ${suggested} units of ${part.name}`);
     }
-  }, [spareParts, adjustStock, toast]);
+  }, [spareParts, adjustStockMut, toast]);
 
   // ── Render ────────────────────────────────────────────────────────
   return (
@@ -293,7 +308,7 @@ export const SpareParts: React.FC = () => {
                   <button
                     onClick={async () => {
                       const ok = await confirm({ title: t('delete_category') || 'Delete Category', message: t('delete_category_confirm') || 'Are you sure you want to delete this category?', variant: 'danger' });
-                      if (ok) deleteCategory(cat.id);
+                      if (ok) deleteCategoryMut.mutateAsync(cat.id);
                     }}
                     className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
                   >
@@ -316,10 +331,10 @@ export const SpareParts: React.FC = () => {
               if (!catForm.name.trim()) return;
               try {
                 if (editingCategory) {
-                  await updateCategory(editingCategory.id, catForm);
+                  await updateCategoryMut.mutateAsync({ id: editingCategory.id, data: catForm });
                   toast.success(t('category_updated') || 'Category updated');
                 } else {
-                  await createCategory(catForm);
+                  await createCategoryMut.mutateAsync(catForm);
                   toast.success(t('category_created') || 'Category created');
                 }
                 setCatForm({ name: '', description: '', color: CATEGORY_COLORS[0] });
@@ -377,7 +392,7 @@ export const SpareParts: React.FC = () => {
       <Modal isOpen={showAlertsModal} onClose={() => setShowAlertsModal(false)} title={t('stock_alerts')} size="lg">
         <LowStockAlertsContent
           lowStockParts={lowStockParts}
-          adjustStock={adjustStock}
+          adjustStock={async (id, qty) => { await adjustStockMut.mutateAsync({ id, quantity: qty }); }}
           toast={toast}
           t={t}
         />
@@ -462,7 +477,8 @@ export const SpareParts: React.FC = () => {
 
 const CreatePartForm: React.FC<{ onClose: () => void; categories: any[] }> = ({ onClose, categories }) => {
   const { t } = useTranslation();
-  const { createSparePart, createCategory } = useSpareParts();
+  const createSparePart = useCreateSparePart();
+  const createCategory = useCreateSparePartCategory();
   const [formData, setFormData] = useState({
     name: '', sku: '', category: '', stock: 0, min_stock: 5,
     location: '', cost: 0, supplier: '',
@@ -472,13 +488,13 @@ const CreatePartForm: React.FC<{ onClose: () => void; categories: any[] }> = ({ 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createSparePart(formData);
+    await createSparePart.mutateAsync(formData);
     onClose();
   };
 
   const handleAddCategory = async () => {
     if (!newCategoryName) return;
-    const cat = await createCategory({ name: newCategoryName });
+    const cat = await createCategory.mutateAsync({ name: newCategoryName });
     setFormData({ ...formData, category: cat.id });
     setShowNewCategory(false);
     setNewCategoryName('');

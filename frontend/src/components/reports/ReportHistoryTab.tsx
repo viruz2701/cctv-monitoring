@@ -2,14 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardBody, Button, Badge, Input, Select } from '../ui';
 import { Download, FileText, Calendar, Clock, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useToast, SearchInput } from '../ui';
-import { useReports } from '../../context/DataContext';
+import { useReportsStore } from '../../context/ReportsContext';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
 
 export function ReportHistoryTab() {
     const { t } = useTranslation();
     const toast = useToast();
-    const { generatedReports } = useReports();
+    const generatedReports = useReportsStore((s) => s.generatedReports);
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     // Filters

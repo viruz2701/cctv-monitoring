@@ -1,6 +1,8 @@
 import { generateUUID } from '../utils/uuid';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
+import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
 import {
     ArrowLeft,
     Camera,
@@ -42,7 +44,6 @@ import {
     Select,
     Tabs,
 } from '../components/ui';
-import { useTickets, useDevicesSites } from '../context/DataContext';
 import type { RecordingDay, HealthTimelineEvent as TimelineEvent, DeviceStats, DeviceCamera } from '../types';
 import { DeviceAuditLog } from '../components/devices/DeviceAuditLog';
 import { useTranslation } from 'react-i18next';
@@ -167,12 +168,59 @@ const CameraRow = React.memo(function CameraRow({
 });
 
 // ─── Main Component ──────────────────────────────────────────────────
+// ═══ API→UI mapping helpers ═══
+function mapAPITicketToUI(t: APITicket): import('../types').Ticket {
+    return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        deviceId: t.device_id || '',
+        deviceName: '',
+        siteName: '',
+        priority: (t.priority as import('../types').Ticket['priority']) || 'medium',
+        status: (t.status as import('../types').Ticket['status']) || 'open',
+        assignee: t.assignee || '',
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        comments: (t.comments || []).map((c: any) => ({
+            id: c.id,
+            ticketId: c.ticket_id,
+            userId: c.user_id,
+            userName: c.user_name || '',
+            content: c.content,
+            createdAt: c.created_at,
+        })),
+    };
+}
+
+function mapAPIDeviceToUI(d: APIDevice): import('../types').Device {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: (d as any).site_id || 'site-default',
+        siteName: (d as any).location || 'Unknown',
+        type: ((d as any).vendor_type === 'camera' ? 'camera' : 'nvr') as 'camera' | 'nvr' | 'dvr' | 'switch',
+        status: (d.status || 'offline').toLowerCase() as 'online' | 'offline' | 'warning',
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording' as const,
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: (d as any).vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    };
+}
+
 export function DeviceDetail() {
     const { t, i18n } = useTranslation();
     const { deviceId } = useParams();
     const navigate = useNavigate();
-    const { tickets, addTicket } = useTickets();
-    const { devices } = useDevicesSites();
+    const { data: apiTickets = [] } = useTickets();
+    const { data: apiDevices = [] } = useDevices();
+    const createTicketMut = useCreateTicket();
+
+    const tickets = useMemo(() => apiTickets.map(mapAPITicketToUI), [apiTickets]);
+    const devices = useMemo(() => apiDevices.map(mapAPIDeviceToUI), [apiDevices]);
 
     const [selectedRecording, setSelectedRecording] = useState<RecordingDay | null>(null);
     const [ticketCreated, setTicketCreated] = useState(false);
@@ -282,19 +330,12 @@ export function DeviceDetail() {
 
     const handleCreateTicket = () => {
         if (!selectedRecording || !device) return;
-        addTicket({
-            id: `tkt-${generateUUID()}`,
+        createTicketMut.mutateAsync({
             title: `${t('missing_recording')}: ${selectedRecording.cameraName}`,
             description: `${t('no_recording_data')} ${selectedRecording.cameraName} ${t('on')} ${formatDate(selectedRecording.date, i18n.language)}.`,
             priority: 'medium',
             status: 'open',
-            assignee: 'Unassigned',
-            deviceId: device.id,
-            deviceName: device.name,
-            siteName: device.siteName,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            comments: [],
+            device_id: device.id,
         });
         setTicketCreated(true);
         setTimeout(() => {
@@ -306,19 +347,12 @@ export function DeviceDetail() {
     const handleCreateGeneralTicket = (e: React.FormEvent) => {
         e.preventDefault();
         if (!device) return;
-        addTicket({
-            id: `TKT-${generateUUID()}`,
+        createTicketMut.mutateAsync({
             title: newTicket.title,
             description: newTicket.description,
-            priority: newTicket.priority as any,
+            priority: newTicket.priority,
             status: 'open',
-            assignee: 'Unassigned',
-            deviceId: device.id,
-            deviceName: device.name,
-            siteName: device.siteName,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            comments: [],
+            device_id: device.id,
         });
         setShowCreateTicketModal(false);
         setNewTicket({ title: '', description: '', priority: 'medium' });

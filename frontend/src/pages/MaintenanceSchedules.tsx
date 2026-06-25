@@ -1,9 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMaintenance } from '../context/MaintenanceContext';
-import { useDevicesSites } from '../context/DevicesSitesContext';
-import { useUsers } from '../context/UsersContext';
-import { useWorkOrders } from '../context/WorkOrdersContext';
+import {
+  useMaintenanceSchedules,
+  useCompleteMaintenanceSchedule,
+  useDeleteMaintenanceSchedule,
+  useUpdateMaintenanceSchedule,
+  useCreateMaintenanceSchedule,
+  useSites,
+  useDevices,
+  useUsers,
+} from '../hooks/useApiQuery';
+import { useWorkOrders } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
@@ -26,8 +33,11 @@ const PRIORITY_COLORS: Record<string, { bg: string; border: string }> = {
 export const MaintenanceSchedules: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { schedules, loading, completeSchedule, deleteSchedule, updateSchedule } = useMaintenance();
-  const { workOrders } = useWorkOrders();
+  const { data: schedules = [], isLoading: loading } = useMaintenanceSchedules();
+  const { data: workOrders = [] } = useWorkOrders();
+  const completeScheduleMut = useCompleteMaintenanceSchedule();
+  const deleteScheduleMut = useDeleteMaintenanceSchedule();
+  const updateScheduleMut = useUpdateMaintenanceSchedule();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
@@ -68,7 +78,7 @@ export const MaintenanceSchedules: React.FC = () => {
 
   const handleComplete = async (id: string) => {
     if (window.confirm(t('confirm_complete_schedule') || 'Complete this schedule?')) {
-      await completeSchedule(id);
+      await completeScheduleMut.mutateAsync(id);
       setSelectedEvent(null);
     }
   };
@@ -136,7 +146,7 @@ export const MaintenanceSchedules: React.FC = () => {
           <Button
             size="sm"
             variant="danger"
-            onClick={(e) => { e.stopPropagation(); deleteSchedule(item.id); }}
+            onClick={(e) => { e.stopPropagation(); deleteScheduleMut.mutateAsync(item.id); }}
           >
             {t('delete')}
           </Button>
@@ -235,7 +245,7 @@ export const MaintenanceSchedules: React.FC = () => {
                       const schedule = info.event.extendedProps.schedule as MaintenanceSchedule;
                       const newDate = info.event.startStr;
                       try {
-                          await updateSchedule(schedule.id, { next_due: newDate });
+                          await updateScheduleMut.mutateAsync({ id: schedule.id, data: { next_due: newDate } });
                           info.el.style.opacity = '1';
                       } catch {
                           info.revert();
@@ -278,7 +288,7 @@ export const MaintenanceSchedules: React.FC = () => {
             </Button>
             <Button
               variant="danger"
-              onClick={() => selectedEvent && deleteSchedule(selectedEvent.id)}
+              onClick={() => selectedEvent && deleteScheduleMut.mutateAsync(selectedEvent.id)}
             >
               {t('delete')}
             </Button>
@@ -363,10 +373,15 @@ export const MaintenanceSchedules: React.FC = () => {
 
 const CreateScheduleForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { t } = useTranslation();
-  const { createSchedule } = useMaintenance();
-  const { sites, devices } = useDevicesSites();
-  const { users } = useUsers();
-  const technicians = users.filter(u => u.role === 'technician');
+  const createSchedule = useCreateMaintenanceSchedule();
+  const { data: rawSites = [] } = useSites();
+  const { data: rawDevices = [] } = useDevices();
+  const { data: rawUsers = [] } = useUsers();
+  const sites = useMemo(() => rawSites.map((s: any) => ({ id: s.id, name: s.name || 'Unnamed' })), [rawSites]);
+  const devsArray = Array.isArray(rawDevices) ? rawDevices : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices ? (rawDevices as any).devices : []);
+  const devices = useMemo(() => devsArray.map((d: any) => ({ id: d.device_id, name: d.name || d.device_id, siteId: d.site_id || 'site-default' })), [devsArray]);
+  const users = useMemo(() => rawUsers.map((u: any) => ({ ...u, name: u.name || u.username })), [rawUsers]);
+  const technicians = users.filter((u: any) => u.role === 'technician');
 
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -379,12 +394,12 @@ const CreateScheduleForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     notes: '',
   });
 
-  const siteDevices = devices.filter(d => d.siteId === selectedSiteId);
+  const siteDevices = devices.filter((d: any) => d.siteId === selectedSiteId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDeviceId) return;
-    await createSchedule({
+    await createSchedule.mutateAsync({
       device_id: selectedDeviceId,
       schedule_type: formData.schedule_type,
       interval_days: formData.interval_days,
@@ -414,7 +429,7 @@ const CreateScheduleForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
           className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required disabled={!selectedSiteId}>
           <option value="">{t('select_device') || 'Select device...'}</option>
-          {siteDevices.map(dev => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
+          {siteDevices.map((dev: any) => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
         </select>
       </div>
 
