@@ -14,7 +14,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
+
+	"github.com/xeipuuv/gojsonschema"
 )
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -23,12 +26,12 @@ import (
 
 // SchemaDefinition описывает JSON Schema для события.
 type SchemaDefinition struct {
-	Source      EventSource       `json:"source"`       // alarms, cmms, etc.
-	EventType   string            `json:"event_type"`    // alarm.created, cmms.wo.completed
-	Version     EventSchemaVersion `json:"version"`      // "1.0.0"
-	Schema      json.RawMessage   `json:"schema"`        // JSON Schema draft-07
-	Description string            `json:"description"`   // human-readable description
-	Required    bool              `json:"required"`      // обязательна ли валидация
+	Source      EventSource        `json:"source"`      // alarms, cmms, etc.
+	EventType   string             `json:"event_type"`  // alarm.created, cmms.wo.completed
+	Version     EventSchemaVersion `json:"version"`     // "1.0.0"
+	Schema      json.RawMessage    `json:"schema"`      // JSON Schema draft-07
+	Description string             `json:"description"` // human-readable description
+	Required    bool               `json:"required"`    // обязательна ли валидация
 }
 
 // ValidationError — ошибка валидации события.
@@ -121,15 +124,15 @@ func (r *SchemaRegistry) GetSchema(source EventSource, eventType string) (*Schem
 // Compliance:
 //   - OWASP ASVS V5.1 (Input validation — whitelist)
 //   - OWASP ASVS V5.3 (Input validation — structured data)
+//   - ISO 27001 A.12.4.1 (Event logging — data quality enforcement)
 //
 // Если схема не найдена:
 //   - Если Required == true: возвращаем ошибку
 //   - Если Required == false (default): пропускаем валидацию (log warn)
 func (r *SchemaRegistry) Validate(record *EventRecord) error {
-	_, ok := r.GetSchema(record.Source, record.EventType)
+	def, ok := r.GetSchema(record.Source, record.EventType)
 	if !ok {
 		// Схема не зарегистрирована
-		// Если required — ошибка, иначе warn
 		r.logger.Warn("schema not found for event",
 			"source", record.Source,
 			"event_type", record.EventType,
@@ -137,7 +140,7 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 		return nil
 	}
 
-	// Базовая валидация обязательных полей
+	// Базовая валидация обязательных полей EventRecord
 	if record.ID == "" {
 		return &ValidationError{
 			EventType: record.EventType,
@@ -160,16 +163,28 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 		}
 	}
 
-	// ⚠ Валидация по JSON Schema (полная реализация — после добавления библиотеки)
-	// План: использовать github.com/santhosh-tekuri/jsonschema/v6 (Apache 2.0)
-	// or github.com/xeipuuv/gojsonschema (MIT)
-	//
-	// var schemaLoader, _ = jsonschema.NewLoader().Compile("", strings.NewReader(string(def.Schema)))
-	// var doc interface{}
-	// json.Unmarshal(record.Data, &doc)
-	// if err := schemaLoader.Validate(doc); err != nil {
-	//     return fmt.Errorf("schema validation failed: %w", err)
-	// }
+	// Валидация Data по JSON Schema (gojsonschema)
+	schemaLoader := gojsonschema.NewStringLoader(string(def.Schema))
+	docLoader := gojsonschema.NewBytesLoader(record.Data)
+
+	result, err := gojsonschema.Validate(schemaLoader, docLoader)
+	if err != nil {
+		return fmt.Errorf("schema validation error for %s.%s: %w",
+			record.Source, record.EventType, err)
+	}
+
+	if !result.Valid() {
+		// Собираем все ошибки валидации
+		var errs []string
+		for _, desc := range result.Errors() {
+			errs = append(errs, desc.String())
+		}
+		return &ValidationError{
+			EventType: record.EventType,
+			Field:     "data",
+			Message:   fmt.Sprintf("schema validation failed: %s", strings.Join(errs, "; ")),
+		}
+	}
 
 	return nil
 }

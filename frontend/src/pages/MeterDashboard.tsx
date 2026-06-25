@@ -378,7 +378,7 @@ export function MeterDashboard() {
                       <h3 className="text-sm font-semibold text-slate-900">{cfg.label}</h3>
                       <span className="text-[10px] text-slate-400">({cfg.unit})</span>
                     </div>
-                    <Badge variant="info">{readingsByKind[kind].length} точек</Badge>
+                    <Badge variant="info">{t('meter_data_points', { count: readingsByKind[kind].length })}</Badge>
                   </div>
                   <TimeSeriesChart
                     kind={kind}

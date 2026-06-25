@@ -283,10 +283,10 @@ export function Analytics() {
               },
               { header: t('explanation'), key: 'explanation' },
               {
-                header: 'Осталось часов',
+                header: t('remaining_hours') || 'Remaining hours',
                 key: 'expected_remaining_hours',
                 sortable: true,
-                render: (p: Prediction) => (p as any).expected_remaining_hours ? `${(p as any).expected_remaining_hours} ч` : '—',
+                render: (p: Prediction) => (p as any).expected_remaining_hours ? `${(p as any).expected_remaining_hours} ${t('hours_short') || 'h'}` : '—',
               },
             ]}
             keyExtractor={(p) => p.device_id + p.prediction_date}

@@ -54,42 +54,29 @@ const RISK_COLORS: Record<string, { bg: string; text: string; border: string }> 
   critical: { bg: 'bg-red-100 dark:bg-red-900/20', text: 'text-red-700 dark:text-red-400', border: 'border-red-300 dark:border-red-700' },
 };
 
-const DEVICE_TYPE_LABELS: Record<string, string> = {
-  cash_register: 'Cash Register',
-  perimeter: 'Perimeter',
-  warehouse: 'Warehouse',
-  office: 'Office',
-  camera: 'Camera',
-  nvr: 'NVR',
-  dvr: 'DVR',
-  switch: 'Switch',
-  server: 'Server',
-  encoder: 'Encoder',
-  ups: 'UPS',
-};
 
 // ═══════════════════════════════════════════════════════════════════════
 // RiskBadge Component
 // ═══════════════════════════════════════════════════════════════════════
 
-function RiskBadge({ level }: { level: string }) {
+function RiskBadge({ level, t }: { level: string; t: (key: string, options?: Record<string, unknown>) => string }) {
   const variantMap: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
     low: 'success',
     medium: 'warning',
     high: 'danger',
     critical: 'danger',
   };
-  return <Badge variant={variantMap[level] || 'neutral'}>{level.toUpperCase()}</Badge>;
+  return <Badge variant={variantMap[level] || 'neutral'}>{t(`risk_level_${level}`, { defaultValue: level.toUpperCase() })}</Badge>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // Simple PieChart SVG Component
 // ═══════════════════════════════════════════════════════════════════════
 
-function RiskPieChart({ breakdown }: { breakdown: Record<string, number> | null | undefined }) {
-  if (!breakdown) return <div className="text-slate-400 text-sm text-center py-4">No data</div>;
+function RiskPieChart({ breakdown, t }: { breakdown: Record<string, number> | null | undefined; t: (key: string, options?: Record<string, unknown>) => string }) {
+  if (!breakdown) return <div className="text-slate-400 text-sm text-center py-4">{t('no_data_short')}</div>;
   const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
-  if (total === 0) return <div className="text-slate-400 text-sm text-center py-4">No data</div>;
+  if (total === 0) return <div className="text-slate-400 text-sm text-center py-4">{t('no_data_short')}</div>;
 
   const COLORS: Record<string, string> = {
     low: '#16a34a',
@@ -145,7 +132,7 @@ function RiskPieChart({ breakdown }: { breakdown: Record<string, number> | null 
           {total}
         </text>
         <text x="100" y="118" textAnchor="middle" dominantBaseline="middle" className="text-xs fill-slate-500" fontSize="10">
-          devices
+          {t('pie_devices')}
         </text>
       </svg>
       <div className="flex flex-wrap gap-3 justify-center">
@@ -165,13 +152,13 @@ function RiskPieChart({ breakdown }: { breakdown: Record<string, number> | null 
 // Exposure by DeviceType Chart
 // ═══════════════════════════════════════════════════════════════════════
 
-function ExposureByTypeChart({ risks }: { risks: ComplianceRisk[] }) {
-  if (risks.length === 0) return <div className="text-slate-400 text-sm text-center py-4">No data</div>;
+function ExposureByTypeChart({ risks, t }: { risks: ComplianceRisk[]; t: (key: string, options?: Record<string, unknown>) => string }) {
+  if (risks.length === 0) return <div className="text-slate-400 text-sm text-center py-4">{t('no_data_short')}</div>;
 
   // Aggregate by device type
   const byType: Record<string, number> = {};
   for (const r of risks) {
-    const label = DEVICE_TYPE_LABELS[r.device_type] || r.device_type;
+    const label = t(`device_type_${r.device_type}`, { defaultValue: r.device_type });
     byType[label] = (byType[label] || 0) + r.total_exposure;
   }
 
@@ -205,7 +192,7 @@ function ExposureByTypeChart({ risks }: { risks: ComplianceRisk[] }) {
 // Fine Rates Table
 // ═══════════════════════════════════════════════════════════════════════
 
-function FineRatesTable({ fines }: { fines: FineTable }) {
+function FineRatesTable({ fines, t }: { fines: FineTable; t: (key: string, options?: Record<string, unknown>) => string }) {
   const entries = Object.entries(fines).sort(([, a], [, b]) => b - a);
 
   return (
@@ -213,15 +200,15 @@ function FineRatesTable({ fines }: { fines: FineTable }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-200 dark:border-slate-700">
-            <th className="text-left py-2 px-3 text-slate-500 dark:text-slate-400 font-medium">Device Type</th>
-            <th className="text-right py-2 px-3 text-slate-500 dark:text-slate-400 font-medium">Hourly Fine</th>
+            <th className="text-left py-2 px-3 text-slate-500 dark:text-slate-400 font-medium">{t('fine_device_type')}</th>
+            <th className="text-right py-2 px-3 text-slate-500 dark:text-slate-400 font-medium">{t('fine_hourly_rate')}</th>
           </tr>
         </thead>
         <tbody>
           {entries.map(([type, fine]) => (
             <tr key={type} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
               <td className="py-2 px-3 text-slate-700 dark:text-slate-300 capitalize">
-                {DEVICE_TYPE_LABELS[type] || type.replace(/_/g, ' ')}
+                {t(`device_type_${type}`, { defaultValue: type.replace(/_/g, ' ') })}
               </td>
               <td className="py-2 px-3 text-right font-medium text-slate-900 dark:text-white">
                 ${fine.toFixed(2)}/h
@@ -261,7 +248,7 @@ export const ComplianceShield: React.FC = () => {
       setFines(finesData || {});
     } catch (err) {
       console.error('Failed to fetch compliance data', err);
-      setError('Failed to load compliance data. Please try again.');
+      setError(t('compliance_load_error'));
     } finally {
       setLoading(false);
     }
@@ -289,13 +276,13 @@ export const ComplianceShield: React.FC = () => {
       )
     : 0;
 
-  const trendUp = { value: 100, label: 'Target', direction: 'up' as const };
-  const trendDown = { value: 0, label: 'At risk', direction: 'down' as const };
+  const trendUp = { value: 100, label: t('target_label'), direction: 'up' as const };
+  const trendDown = { value: 0, label: t('at_risk_label'), direction: 'down' as const };
 
   const columns: { key: string; header: string; render: (item: ComplianceRisk) => React.ReactNode }[] = [
     {
       key: 'device_id',
-      header: 'Device',
+      header: t('col_device'),
       render: (row: ComplianceRisk) => (
         <div>
           <div className="font-medium text-slate-900 dark:text-white">{row.device_name || row.device_id}</div>
@@ -305,14 +292,14 @@ export const ComplianceShield: React.FC = () => {
     },
     {
       key: 'device_type',
-      header: 'Type',
+      header: t('col_type'),
       render: (row: ComplianceRisk) => (
-        <Badge variant="primary">{DEVICE_TYPE_LABELS[row.device_type] || row.device_type}</Badge>
+        <Badge variant="primary">{t('device_type_' + row.device_type, { defaultValue: row.device_type })}</Badge>
       ),
     },
     {
       key: 'total_downtime_min',
-      header: 'Downtime',
+      header: t('col_downtime'),
       render: (row: ComplianceRisk) => (
         <span className="text-sm text-slate-700 dark:text-slate-300">
           {row.downtime_hours >= 1
@@ -323,7 +310,7 @@ export const ComplianceShield: React.FC = () => {
     },
     {
       key: 'hourly_fine',
-      header: 'Fine/h',
+      header: t('col_fine_hourly'),
       render: (row: ComplianceRisk) => (
         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
           ${row.hourly_fine.toFixed(2)}
@@ -332,7 +319,7 @@ export const ComplianceShield: React.FC = () => {
     },
     {
       key: 'total_exposure',
-      header: 'Exposure',
+      header: t('col_exposure'),
       render: (row: ComplianceRisk) => (
         <span className={`text-sm font-semibold ${
           row.total_exposure >= 5000
@@ -347,8 +334,8 @@ export const ComplianceShield: React.FC = () => {
     },
     {
       key: 'risk_level',
-      header: 'Risk',
-      render: (row: ComplianceRisk) => <RiskBadge level={row.risk_level} />,
+      header: t('col_risk'),
+      render: (row: ComplianceRisk) => <RiskBadge level={row.risk_level} t={t} />,
     },
   ];
 
@@ -371,7 +358,7 @@ export const ComplianceShield: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors text-sm font-medium"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing...' : 'Refresh'}
+          {refreshing ? t('compliance_refreshing') : t('compliance_refresh')}
         </button>
       </div>
 
@@ -410,35 +397,35 @@ export const ComplianceShield: React.FC = () => {
       {summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatsCard
-            title="Total Exposure"
+            title={t('total_exposure_kpi')}
             value={`$${summary.total_exposure.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             icon={DollarSign}
-            trend={summary.at_risk_devices > 0 ? { value: summary.at_risk_devices, label: 'at risk', direction: 'down' } : trendUp}
+            trend={summary.at_risk_devices > 0 ? { value: summary.at_risk_devices, label: t('at_risk_label'), direction: 'down' } : trendUp}
           />
           <StatsCard
-            title="At-Risk Devices"
+            title={t('at_risk_devices')}
             value={summary.at_risk_devices.toString()}
-            subtitle={`out of ${summary.total_devices} total`}
+            subtitle={t('out_of_total', { total: summary.total_devices })}
             icon={AlertTriangle}
             iconColor="text-red-600"
             iconBgColor="bg-red-50"
-            trend={summary.at_risk_devices > 0 ? { value: Math.round((summary.at_risk_devices / Math.max(summary.total_devices, 1)) * 100), label: 'of total', direction: 'down' } : trendUp}
+            trend={summary.at_risk_devices > 0 ? { value: Math.round((summary.at_risk_devices / Math.max(summary.total_devices, 1)) * 100), label: t('of_total_label'), direction: 'down' } : trendUp}
           />
           <StatsCard
-            title="Compliant Devices"
+            title={t('compliant_devices_kpi')}
             value={summary.compliant_devices.toString()}
-            subtitle={`${summary.total_devices > 0 ? Math.round((summary.compliant_devices / summary.total_devices) * 100) : 0}% compliant`}
+            subtitle={t('percent_compliant', { percent: summary.total_devices > 0 ? Math.round((summary.compliant_devices / summary.total_devices) * 100) : 0 })}
             icon={Shield}
             iconColor="text-emerald-600"
             iconBgColor="bg-emerald-50"
-            trend={{ value: Math.round((summary.compliant_devices / Math.max(summary.total_devices, 1)) * 100), label: 'compliant', direction: 'up' }}
+            trend={{ value: Math.round((summary.compliant_devices / Math.max(summary.total_devices, 1)) * 100), label: t('compliant_label'), direction: 'up' }}
           />
           <StatsCard
-            title="Risk Score"
+            title={t('risk_score_kpi')}
             value={`${riskScore}%`}
-            subtitle={riskScore >= 80 ? 'Good' : riskScore >= 50 ? 'Fair' : 'Poor'}
+            subtitle={riskScore >= 80 ? t('good_label') : riskScore >= 50 ? t('fair_label') : t('poor_label')}
             icon={TrendingUp}
-            trend={riskScore >= 80 ? { value: riskScore, label: 'score', direction: 'up' } : { value: riskScore, label: 'score', direction: 'down' }}
+            trend={riskScore >= 80 ? { value: riskScore, label: t('score_label'), direction: 'up' } : { value: riskScore, label: t('score_label'), direction: 'down' }}
           />
         </div>
       )}
@@ -450,12 +437,12 @@ export const ComplianceShield: React.FC = () => {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <PieChart className="w-5 h-5 text-slate-500" />
-              <h3 className="font-semibold text-slate-900 dark:text-white">Risk Breakdown</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">{t('risk_breakdown')}</h3>
             </div>
             {summary?.risk_breakdown ? (
-              <RiskPieChart breakdown={summary.risk_breakdown} />
+              <RiskPieChart breakdown={summary.risk_breakdown} t={t} />
             ) : (
-              <EmptyState icon={<PieChart className="w-8 h-8" />} title="No data" description="No risk data available" size="sm" />
+              <EmptyState icon={<PieChart className="w-8 h-8" />} title={t('no_data_short')} description={t('no_risk_data')} size="sm" />
             )}
           </div>
         </Card>
@@ -465,9 +452,9 @@ export const ComplianceShield: React.FC = () => {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <BarChart3Icon className="w-5 h-5 text-slate-500" />
-              <h3 className="font-semibold text-slate-900 dark:text-white">Exposure by Type</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">{t('exposure_by_type')}</h3>
             </div>
-            <ExposureByTypeChart risks={risks} />
+            <ExposureByTypeChart risks={risks} t={t} />
           </div>
         </Card>
 
@@ -476,12 +463,12 @@ export const ComplianceShield: React.FC = () => {
           <div className="p-4">
             <div className="flex items-center gap-2 mb-4">
               <DollarSign className="w-5 h-5 text-slate-500" />
-              <h3 className="font-semibold text-slate-900 dark:text-white">Fine Rates</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-white">{t('fine_rates')}</h3>
             </div>
             {Object.keys(fines).length > 0 ? (
-              <FineRatesTable fines={fines} />
+              <FineRatesTable fines={fines} t={t} />
             ) : (
-              <EmptyState icon={<DollarSign className="w-8 h-8" />} title="No fines data" description="Fine rates not configured" size="sm" />
+              <EmptyState icon={<DollarSign className="w-8 h-8" />} title={t('no_fines_data')} description={t('fines_not_configured')} size="sm" />
             )}
           </div>
         </Card>
@@ -492,7 +479,7 @@ export const ComplianceShield: React.FC = () => {
         <div className="p-4 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-slate-500" />
-            <h3 className="font-semibold text-slate-900 dark:text-white">Device Risk Details</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{t('device_risk_details')}</h3>
           </div>
         </div>
         {risks.length > 0 ? (
@@ -506,8 +493,8 @@ export const ComplianceShield: React.FC = () => {
           <div className="p-8">
             <EmptyState
               icon={<Shield className="w-12 h-12" />}
-              title="No compliance risks"
-              description="All devices are currently compliant. No downtime exceeding thresholds detected."
+              title={t('no_compliance_risks')}
+              description={t('all_compliant_desc')}
             />
           </div>
         )}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from './Modal';
 import { MapPin, ExternalLink } from 'lucide-react';
 
@@ -19,6 +20,7 @@ interface MapModalProps {
  * CSP: требуется frame-src https://www.openstreetmap.org
  */
 export function MapModal({ isOpen, onClose, latitude, longitude, title }: MapModalProps) {
+  const { t } = useTranslation();
     // Вычисляем bounding box с отступом ~0.01° (~1км) для масштаба
     const lat = Number(latitude) || 0;
     const lon = Number(longitude) || 0;
@@ -36,7 +38,7 @@ export function MapModal({ isOpen, onClose, latitude, longitude, title }: MapMod
     }, [lat, lon]);
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={title || 'Map'} size="xl" showClose>
+        <Modal isOpen={isOpen} onClose={onClose} title={title || t('map_title')} size="xl" showClose>
             {embedUrl ? (
                 <div className="flex flex-col gap-3">
                     <div className="relative w-full h-[60vh] rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -64,13 +66,13 @@ export function MapModal({ isOpen, onClose, latitude, longitude, title }: MapMod
                             className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
-                            Open in new tab
+                            {t('open_in_new_tab')}
                         </a>
                     </div>
                 </div>
             ) : (
                 <div className="py-8 text-center text-slate-400 text-sm">
-                    No coordinates available
+                    {t('no_coordinates_available')}
                 </div>
             )}
         </Modal>

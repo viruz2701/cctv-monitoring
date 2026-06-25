@@ -20,7 +20,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
 
     const sites = useMemo(() => rawSites.map((s: Record<string, any>) => ({
         id: s.id,
-        name: s.name || 'Unnamed',
+        name: s.name || t('unnamed_site'),
         address: s.address || '',
         city: s.city || '',
         organization: s.organization || '',
@@ -105,7 +105,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
         setLoading(true);
         try {
             const selectedSite = sites.find(s => s.id === siteId);
-            const siteName = selectedSite?.name || 'Unknown';
+            const siteName = selectedSite?.name || t('unknown_device');
 
             // Формируем payload для API (snake_case поля как ожидает бэкенд)
             const payload: Record<string, any> = {
@@ -209,7 +209,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
                         value={ipAddress}
                         onChange={(e) => setIpAddress(e.target.value)}
                         required
-                        placeholder="e.g., 192.168.1.100"
+                        placeholder={t('ip_placeholder')}
                     />
                 )}
 
@@ -217,7 +217,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
                     label={t('model')}
                     value={model}
                     onChange={(e) => setModel(e.target.value)}
-                    placeholder="e.g., DS-2CD2143G2"
+                    placeholder={t('model_placeholder')}
                 />
 
                 {connectionType === 'p2p' && (
@@ -236,7 +236,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
                         />
                         <Input
                             label={t('serial_number')}
-                            placeholder="e.g., 95270DSD7FFRVTAS7"
+                            placeholder={t('serial_placeholder')}
                             value={p2pSerial}
                             onChange={(e) => setP2pSerial(e.target.value)}
                             required

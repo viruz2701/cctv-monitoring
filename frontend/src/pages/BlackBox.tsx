@@ -109,24 +109,35 @@ interface TriggerIncidentResponse {
 // Constants
 // ═══════════════════════════════════════════════════════════════════════
 
-const TRIGGER_LABELS: Record<string, { label: string; color: string }> = {
-  alarm: { label: 'Alarm', color: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' },
-  manual: { label: 'Manual', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' },
-  sla_breach: { label: 'SLA Breach', color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' },
-  downtime: { label: 'Downtime', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' },
-};
+type TLabelFn = (k: string) => string;
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Draft', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-  finalized: { label: 'Finalized', color: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' },
-  archived: { label: 'Archived', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' },
-};
+function getTriggerLabel(t: TLabelFn, key?: string): { label: string; color: string } {
+  const labels: Record<string, { label: string; color: string }> = {
+    alarm: { label: t('trigger_alarm'), color: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' },
+    manual: { label: t('trigger_manual'), color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' },
+    sla_breach: { label: t('trigger_sla_breach'), color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400' },
+    downtime: { label: t('trigger_downtime'), color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' },
+  };
+  return labels[key ?? ''] ?? { label: key ?? t('unknown_label'), color: 'bg-slate-100 text-slate-600' };
+}
 
-const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: 'Low', color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
-  2: { label: 'Medium', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' },
-  3: { label: 'High', color: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' },
-};
+function getStatusLabel(t: TLabelFn, key?: string): { label: string; color: string } {
+  const labels: Record<string, { label: string; color: string }> = {
+    draft: { label: t('status_draft'), color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+    finalized: { label: t('status_finalized'), color: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' },
+    archived: { label: t('status_archived'), color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' },
+  };
+  return labels[key ?? ''] ?? { label: key ?? t('unknown_label'), color: 'bg-slate-100 text-slate-600' };
+}
+
+function getPriorityLabel(t: TLabelFn, priority: number): { label: string; color: string } {
+  switch (priority) {
+    case 1: return { label: t('priority_low'), color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' };
+    case 2: return { label: t('priority_medium'), color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' };
+    case 3: return { label: t('priority_high'), color: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' };
+    default: return { label: `${t('unknown_label')} (${priority})`, color: 'bg-slate-100 text-slate-600' };
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // Helpers
@@ -174,7 +185,7 @@ function TriggerModal({ isOpen, onClose, onTriggered }: TriggerModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deviceId.trim()) {
-      toast.error('Device ID is required');
+      toast.error(t('device_id_required'));
       return;
     }
 
@@ -188,13 +199,13 @@ function TriggerModal({ isOpen, onClose, onTriggered }: TriggerModalProps) {
           trigger_type: 'manual',
         }),
       });
-      toast.success(`Incident triggered: ${resp.report_id}`);
+      toast.success(t('incident_triggered', { id: resp.report_id }));
       setDeviceId('');
       setNotes('');
       onClose();
       onTriggered();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to trigger incident');
+      toast.error(err instanceof Error ? err.message : t('trigger_failed'));
     } finally {
       setLoading(false);
     }
@@ -207,29 +218,29 @@ function TriggerModal({ isOpen, onClose, onTriggered }: TriggerModalProps) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full mx-4 p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Trigger Manual Incident</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{t('trigger_manual_incident')}</h2>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded">
             <X className="w-5 h-5" />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Device ID"
+            label={t('device_id_label')}
             value={deviceId}
             onChange={(e) => setDeviceId(e.target.value)}
-            placeholder="Enter device UUID"
+            placeholder={t('enter_device_uuid')}
             required
             disabled={loading}
           />
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Notes (optional)
+              {t('notes_optional')}
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Describe the reason for manual trigger..."
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg 
+              placeholder={t('notes_placeholder')}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg
                 bg-white dark:bg-slate-800 text-slate-900 dark:text-white
                 placeholder:text-slate-400 dark:placeholder:text-slate-500
                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
@@ -246,14 +257,14 @@ function TriggerModal({ isOpen, onClose, onTriggered }: TriggerModalProps) {
               disabled={loading}
               className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Triggering...' : 'Trigger Incident'}
+              {loading ? t('triggering') : t('trigger_incident')}
             </button>
           </div>
         </form>
@@ -286,10 +297,10 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
       setActiveTab('overview');
       request<IncidentReport>(`/blackbox/reports/${reportId}`)
         .then(setReport)
-        .catch((err) => toast.error(err instanceof Error ? err.message : 'Failed to load report'))
+        .catch((err) => toast.error(err instanceof Error ? err.message : t('load_report_failed')))
         .finally(() => setLoading(false));
     }
-  }, [isOpen, reportId, toast]);
+  }, [isOpen, reportId, toast, t]);
 
   const handleExport = async (format: 'json' | 'pdf') => {
     if (!reportId) return;
@@ -297,31 +308,31 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
       const url = `/api/v1/blackbox/reports/${reportId}/export?format=${format}`;
       window.open(url, '_blank');
     } catch {
-      toast.error('Export failed');
+      toast.error(t('export_failed'));
     }
   };
 
   const handleDelete = async () => {
-    if (!reportId || !confirm('Delete this report permanently?')) return;
+    if (!reportId || !confirm(t('delete_confirm'))) return;
     try {
       await request(`/blackbox/reports/${reportId}`, { method: 'DELETE' });
-      toast.success('Report deleted');
+      toast.success(t('report_deleted'));
       onClose();
       onDeleted();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(err instanceof Error ? err.message : t('delete_failed'));
     }
   };
 
-  const triggerInfo = TRIGGER_LABELS[report?.triggered_by ?? ''] ?? { label: report?.triggered_by ?? 'Unknown', color: 'bg-slate-100 text-slate-600' };
-  const statusInfo = STATUS_LABELS[report?.status ?? ''] ?? { label: report?.status ?? 'Unknown', color: 'bg-slate-100 text-slate-600' };
+  const triggerInfo = getTriggerLabel(t, report?.triggered_by);
+  const statusInfo = getStatusLabel(t, report?.status);
 
   const TABS = [
-    { key: 'overview' as const, label: 'Overview' },
-    { key: 'alerts' as const, label: `Alerts (${report?.recent_alerts?.length ?? 0})` },
-    { key: 'logs' as const, label: `Logs (${report?.recent_logs?.length ?? 0})` },
-    { key: 'downtime' as const, label: `Downtime (${report?.downtime_history?.length ?? 0})` },
-    { key: 'sla' as const, label: 'SLA' },
+    { key: 'overview' as const, label: t('tab_overview') },
+    { key: 'alerts' as const, label: t('tab_alerts', { count: report?.recent_alerts?.length ?? 0 }) },
+    { key: 'logs' as const, label: t('tab_logs', { count: report?.recent_logs?.length ?? 0 }) },
+    { key: 'downtime' as const, label: t('tab_downtime', { count: report?.downtime_history?.length ?? 0 }) },
+    { key: 'sla' as const, label: t('tab_sla') },
   ];
 
   if (!isOpen) return null;
@@ -335,7 +346,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                {report?.device_name || report?.device_id || 'Report Detail'}
+                {report?.device_name || report?.device_id || t('report_detail')}
               </h3>
               {report && (
                 <>
@@ -356,19 +367,19 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
               onClick={() => handleExport('json')}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
-              <Download className="w-4 h-4" /> JSON
+              <Download className="w-4 h-4" /> {t('export_json')}
             </button>
             <button
               onClick={() => handleExport('pdf')}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
             >
-              <Download className="w-4 h-4" /> PDF
+              <Download className="w-4 h-4" /> {t('bb_export_pdf')}
             </button>
             <button
               onClick={handleDelete}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
             >
-              <Trash2 className="w-4 h-4" /> Delete
+              <Trash2 className="w-4 h-4" /> {t('delete_action')}
             </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded">
               <X className="w-5 h-5" />
@@ -403,7 +414,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                 {activeTab === 'overview' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card>
-                      <CardHeader>Device Snapshot</CardHeader>
+                      <CardHeader>{t('device_snapshot')}</CardHeader>
                       <CardBody>
                         <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-auto max-h-60 font-mono bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
                           {JSON.stringify(report.device_snapshot, null, 2)}
@@ -411,14 +422,14 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                       </CardBody>
                     </Card>
                     <Card>
-                      <CardHeader>Recording Status</CardHeader>
+                      <CardHeader>{t('bb_recording_status')}</CardHeader>
                       <CardBody>
                         <div className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                          {report.recording_status || 'Unknown'}
+                          {report.recording_status || t('unknown_label')}
                         </div>
                         {report.notes && (
                           <div className="mt-4">
-                            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes</h4>
+                            <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('notes_section')}</h4>
                             <p className="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
                               {report.notes}
                             </p>
@@ -434,12 +445,12 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                     {report.recent_alerts.length === 0 ? (
                       <div className="py-12 text-center">
                         <AlertTriangle className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No Alerts</p>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('bb_no_alerts')}</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {report.recent_alerts.map((alert, idx) => {
-                          const p = PRIORITY_LABELS[alert.priority] ?? { label: `Priority ${alert.priority}`, color: 'bg-slate-100 text-slate-600' };
+                          const p = getPriorityLabel(t, alert.priority);
                           return (
                             <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                               <div className="flex items-center gap-3">
@@ -462,7 +473,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                     {report.recent_logs.length === 0 ? (
                       <div className="py-12 text-center">
                         <FileText className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No Logs</p>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('no_logs')}</p>
                       </div>
                     ) : (
                       <div className="space-y-1 max-h-80 overflow-y-auto">
@@ -484,7 +495,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                     {report.downtime_history.length === 0 ? (
                       <div className="py-12 text-center">
                         <Clock className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No Downtime</p>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('no_downtime')}</p>
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -494,7 +505,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
                               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">{dt.reason}</p>
                               <p className="text-xs text-slate-400">{dt.description}</p>
                               <p className="text-xs text-slate-400">
-                                {formatDate(dt.started_at)} → {dt.ended_at ? formatDate(dt.ended_at) : 'Ongoing'}
+                                {formatDate(dt.started_at)} → {dt.ended_at ? formatDate(dt.ended_at) : t('ongoing')}
                               </p>
                             </div>
                             <Badge className="bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400">
@@ -521,7 +532,7 @@ function DetailModal({ isOpen, onClose, reportId, onDeleted }: DetailModalProps)
           ) : (
             <div className="py-12 text-center">
               <HardDrive className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Report not found</p>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t('report_not_found')}</p>
             </div>
           )}
         </div>
@@ -608,10 +619,10 @@ export function BlackBox() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Archive className="w-6 h-6 text-blue-500" />
-            Black Box Incident Recorder
+            {t('blackbox_title')}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Automated evidence collection for security incidents
+            {t('blackbox_desc')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -620,23 +631,23 @@ export function BlackBox() {
             disabled={loading}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
           >
-            <Activity className="w-4 h-4" /> Refresh
+            <Activity className="w-4 h-4" /> {t('refresh_action')}
           </button>
           <button
             onClick={() => setTriggerModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <Plus className="w-4 h-4" /> Trigger Manual
+            <Plus className="w-4 h-4" /> {t('trigger_manual_action')}
           </button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatsCard title="Total Reports" value={total} icon={Archive} iconColor="text-blue-600" iconBgColor="bg-blue-50" />
-        <StatsCard title="Draft Reports" value={stats.draftCount} icon={FileText} iconColor="text-amber-600" iconBgColor="bg-amber-50" />
-        <StatsCard title="Total Alerts" value={stats.totalAlerts} icon={AlertTriangle} iconColor="text-red-600" iconBgColor="bg-red-50" />
-        <StatsCard title="Total Logs" value={stats.totalLogs} icon={FileText} iconColor="text-purple-600" iconBgColor="bg-purple-50" />
+        <StatsCard title={t('total_reports')} value={total} icon={Archive} iconColor="text-blue-600" iconBgColor="bg-blue-50" />
+        <StatsCard title={t('draft_reports')} value={stats.draftCount} icon={FileText} iconColor="text-amber-600" iconBgColor="bg-amber-50" />
+        <StatsCard title={t('blackbox_total_alerts')} value={stats.totalAlerts} icon={AlertTriangle} iconColor="text-red-600" iconBgColor="bg-red-50" />
+        <StatsCard title={t('total_logs')} value={stats.totalLogs} icon={FileText} iconColor="text-purple-600" iconBgColor="bg-purple-50" />
       </div>
 
       {/* Filters */}
@@ -645,33 +656,33 @@ export function BlackBox() {
           <div className="flex flex-wrap gap-4 items-end">
             <div className="flex-1 min-w-[200px]">
               <Input
-                label="Device ID"
+                label={t('device_id_label')}
                 value={filterDeviceId}
                 onChange={(e) => { setFilterDeviceId(e.target.value); setPage(1); }}
-                placeholder="Filter by device ID..."
+                placeholder={t('filter_by_device_id')}
               />
             </div>
             <div className="w-40">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Trigger
+                {t('trigger_label')}
               </label>
               <select
                 value={filterTrigger}
                 onChange={(e) => { setFilterTrigger(e.target.value); setPage(1); }}
                 className="w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">All</option>
-                <option value="alarm">Alarm</option>
-                <option value="manual">Manual</option>
-                <option value="sla_breach">SLA Breach</option>
-                <option value="downtime">Downtime</option>
+                <option value="">{t('filter_all')}</option>
+                <option value="alarm">{t('filter_alarm')}</option>
+                <option value="manual">{t('filter_manual')}</option>
+                <option value="sla_breach">{t('filter_sla_breach')}</option>
+                <option value="downtime">{t('filter_downtime')}</option>
               </select>
             </div>
             <button
               onClick={() => { setFilterDeviceId(''); setFilterTrigger(''); setPage(1); }}
               className="px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
-              Clear Filters
+              {t('bb_clear_filters')}
             </button>
           </div>
         </CardBody>
@@ -685,28 +696,28 @@ export function BlackBox() {
           ) : reports.length === 0 ? (
             <EmptyState
               icon={<Archive className="w-12 h-12" />}
-              title="No Incidents"
-              description="No black box reports found."
-              action={{ label: 'Trigger Manual', onClick: () => setTriggerModalOpen(true) }}
+              title={t('no_incidents')}
+              description={t('no_incidents_desc')}
+              action={{ label: t('trigger_manual_action'), onClick: () => setTriggerModalOpen(true) }}
             />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Device</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Trigger</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Alerts</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Logs</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('device_col')}</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('timestamp_col')}</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('trigger_col')}</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('status_col')}</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('alerts_col')}</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('logs_col')}</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('actions_col')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {reports.map((report) => {
-                    const triggerInfo = TRIGGER_LABELS[report.triggered_by] ?? { label: report.triggered_by, color: 'bg-slate-100 text-slate-600' };
-                    const statusInfo = STATUS_LABELS[report.status] ?? { label: report.status, color: 'bg-slate-100 text-slate-600' };
+                    const triggerInfo = getTriggerLabel(t, report.triggered_by);
+                    const statusInfo = getStatusLabel(t, report.status);
                     return (
                       <tr key={report.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                         <td className="px-4 py-3">
@@ -759,7 +770,7 @@ export function BlackBox() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 rounded-lg">
           <div className="text-sm text-slate-500 dark:text-slate-300">
-            Page {page} of {totalPages} ({total} total)
+            {t('page_info', { page, totalPages, total })}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -767,7 +778,7 @@ export function BlackBox() {
               disabled={page === 1}
               className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Previous
+              {t('previous_page')}
             </button>
             <span className="text-sm text-slate-500 dark:text-slate-400 px-2">{page}</span>
             <button
@@ -775,7 +786,7 @@ export function BlackBox() {
               disabled={page === totalPages}
               className="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next
+              {t('next_page')}
             </button>
           </div>
         </div>
