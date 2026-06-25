@@ -224,6 +224,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Защищённые маршруты (JWT) ────────────────────────────────────
 	r.Group(func(r chi.Router) {
 		r.Use(auth.AuthMiddleware)
+		r.Use(auth.TenantMiddleware)
 
 		// Auth domain (users, sessions, 2FA, Telegram, API keys, settings)
 		s.mountProtectedAuthRoutes(r)

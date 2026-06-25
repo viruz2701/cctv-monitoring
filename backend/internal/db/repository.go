@@ -145,9 +145,10 @@ func (db *DB) GetUserByUsername(username string) (*models.User, error) {
 	err := db.Pool.QueryRow(ctx, `
 		SELECT id, username, password_hash, role, owner_id, created_at,
 		       COALESCE(email, ''), COALESCE(totp_secret, ''), COALESCE(totp_enabled, false),
-		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false)
+		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false),
+		       COALESCE(tenant_id, '')
 		FROM users WHERE username = $1 AND status = 'active'
-	`, username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.Email, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA)
+	`, username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.Email, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &u.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +162,10 @@ func (db *DB) GetUserByID(id string) (*models.User, error) {
 	err := db.Pool.QueryRow(ctx, `
 		SELECT id, username, password_hash, role, owner_id, created_at,
 		       COALESCE(totp_secret, ''), COALESCE(totp_enabled, false),
-		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false)
+		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false),
+		       COALESCE(tenant_id, '')
 		FROM users WHERE id = $1
-	`, id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA)
+	`, id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &u.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +177,8 @@ func (db *DB) CreateUser(username, passwordHash, role, email string, ownerID *st
 	defer cancel()
 	var id string
 	err := db.Pool.QueryRow(ctx, `
-		INSERT INTO users (id, username, password_hash, role, email, owner_id)
-		VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5) RETURNING id
+		INSERT INTO users (id, username, password_hash, role, email, owner_id, tenant_id)
+		VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, '') RETURNING id
 	`, username, passwordHash, role, email, ownerID).Scan(&id)
 	if err != nil {
 		return nil, err
@@ -454,11 +456,12 @@ func (db *DB) GetUserByRefreshTokenHash(tokenHash string) (*models.User, string,
 		SELECT u.id, u.username, u.password_hash, u.role, u.owner_id, u.created_at,
 		       COALESCE(u.totp_secret, ''), COALESCE(u.totp_enabled, false),
 		       COALESCE(u.telegram_chat_id, ''), COALESCE(u.telegram_alerts, false), COALESCE(u.telegram_2fa, false),
+		       COALESCE(u.tenant_id, ''),
 		       s.id
 		FROM user_sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > NOW() AND u.status = 'active'
-	`, tokenHash).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &sessionID)
+	`, tokenHash).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &u.TenantID, &sessionID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -541,9 +544,10 @@ func (db *DB) GetUserByTelegramChatID(chatID string) (*models.User, error) {
 	err := db.Pool.QueryRow(ctx, `
 		SELECT id, username, password_hash, role, owner_id, created_at,
 		       COALESCE(totp_secret, ''), COALESCE(totp_enabled, false),
-		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false)
+		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false),
+		       COALESCE(tenant_id, '')
 		FROM users WHERE telegram_chat_id = $1 AND status = 'active'
-	`, chatID).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA)
+	`, chatID).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &u.TenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -831,9 +835,10 @@ func (db *DB) GetUserByEmail(email string) (*models.User, error) {
 	err := db.Pool.QueryRow(ctx, `
 		SELECT id, username, password_hash, role, owner_id, created_at,
 		       COALESCE(email, ''), COALESCE(totp_secret, ''), COALESCE(totp_enabled, false),
-		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false)
+		       COALESCE(telegram_chat_id, ''), COALESCE(telegram_alerts, false), COALESCE(telegram_2fa, false),
+		       COALESCE(tenant_id, '')
 		FROM users WHERE email = $1 AND status = 'active'
-	`, email).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.Email, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA)
+	`, email).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.OwnerID, &u.CreatedAt, &u.Email, &u.TOTPSecret, &u.TOTPEnabled, &u.TelegramChatID, &u.TelegramAlerts, &u.Telegram2FA, &u.TenantID)
 	if err != nil {
 		return nil, err
 	}

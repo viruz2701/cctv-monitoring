@@ -38,7 +38,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// If 2FA is enabled, return a temporary session token instead of the main JWT
 	if user.TOTPEnabled {
-		tempToken, err := auth.GenerateTempToken(user.ID, user.Username, user.Role)
+		tempToken, err := auth.GenerateTempToken(user.ID, user.Username, user.Role, user.TenantID)
 		if err != nil {
 			s.logger.Error("failed to generate temp token", "error", err)
 			respondError(w, r, NewInternalError("internal error", nil))
@@ -51,7 +51,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role, user.TenantID)
 	if err != nil {
 		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
@@ -98,7 +98,7 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role, user.TenantID)
 	if err != nil {
 		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
@@ -288,7 +288,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role, user.TenantID)
 	if err != nil {
 		s.logger.Error("failed to issue refreshed tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
@@ -304,8 +304,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) issueTokenPair(r *http.Request, userID, username, role string) (string, string, error) {
-	token, err := auth.GenerateJWT(userID, username, role)
+func (s *Server) issueTokenPair(r *http.Request, userID, username, role, tenantID string) (string, string, error) {
+	token, err := auth.GenerateJWT(userID, username, role, tenantID)
 	if err != nil {
 		return "", "", err
 	}

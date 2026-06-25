@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGenerateJWT(t *testing.T) {
-	token, err := GenerateJWT("user-1", "testuser", "admin")
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT failed: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestGenerateJWT(t *testing.T) {
 }
 
 func TestValidateJWT(t *testing.T) {
-	token, err := GenerateJWT("user-1", "testuser", "admin")
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT failed: %v", err)
 	}
@@ -56,10 +56,13 @@ func TestValidateJWT(t *testing.T) {
 	if claims.Role != "admin" {
 		t.Errorf("expected Role 'admin', got '%s'", claims.Role)
 	}
+	if claims.TenantID != "tenant-1" {
+		t.Errorf("expected TenantID 'tenant-1', got '%s'", claims.TenantID)
+	}
 }
 
 func TestJWTAccessTokenTTL(t *testing.T) {
-	token, err := GenerateJWT("user-1", "testuser", "admin")
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT failed: %v", err)
 	}
@@ -89,7 +92,7 @@ func TestInvalidJWT(t *testing.T) {
 
 func TestExpiredJWT(t *testing.T) {
 	// Verify that our regular token has correct TTL
-	_, err := GenerateJWT("user-1", "testuser", "admin")
+	_, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT failed: %v", err)
 	}
@@ -99,6 +102,7 @@ func TestExpiredJWT(t *testing.T) {
 		UserID:   "user-1",
 		Username: "testuser",
 		Role:     "admin",
+		TenantID: "tenant-1",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
@@ -202,7 +206,7 @@ func TestHashRefreshToken(t *testing.T) {
 }
 
 func TestGenerateTempToken(t *testing.T) {
-	token, err := GenerateTempToken("user-1", "testuser", "admin")
+	token, err := GenerateTempToken("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateTempToken failed: %v", err)
 	}
@@ -212,7 +216,7 @@ func TestGenerateTempToken(t *testing.T) {
 }
 
 func TestValidateTempToken(t *testing.T) {
-	token, err := GenerateTempToken("user-1", "testuser", "admin")
+	token, err := GenerateTempToken("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateTempToken failed: %v", err)
 	}
@@ -228,10 +232,13 @@ func TestValidateTempToken(t *testing.T) {
 	if claims.Subject != "2fa_pending" {
 		t.Errorf("expected Subject '2fa_pending', got '%s'", claims.Subject)
 	}
+	if claims.TenantID != "tenant-1" {
+		t.Errorf("expected TenantID 'tenant-1', got '%s'", claims.TenantID)
+	}
 }
 
 func TestValidateRegularTokenAsTempToken(t *testing.T) {
-	token, err := GenerateJWT("user-1", "testuser", "admin")
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT failed: %v", err)
 	}

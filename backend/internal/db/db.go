@@ -113,8 +113,8 @@ func (db *DB) SeedDefaultAdmin() error {
 		return fmt.Errorf("seed: hash password: %w", err)
 	}
 	if _, err := db.Pool.Exec(ctx, `
-		INSERT INTO users (id, username, password_hash, role, email)
-		VALUES (gen_random_uuid()::text, 'admin', $1, 'admin', 'admin@example.com')
+		INSERT INTO users (id, username, password_hash, role, email, tenant_id)
+		VALUES (gen_random_uuid()::text, 'admin', $1, 'admin', 'admin@example.com', '')
 	`, hashed); err != nil {
 		return fmt.Errorf("seed: create admin: %w", err)
 	}

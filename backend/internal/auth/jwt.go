@@ -16,13 +16,14 @@ type Claims struct {
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	TenantID string `json:"tenant_id"`
 	jwt.RegisteredClaims
 }
 
 // AccessTokenTTL — время жизни access token (15 минут, OWASP ASVS V3.3.1).
 const AccessTokenTTL = 15 * time.Minute
 
-func GenerateJWT(userID, username, role string) (string, error) {
+func GenerateJWT(userID, username, role, tenantID string) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
 		return "", err
@@ -32,6 +33,7 @@ func GenerateJWT(userID, username, role string) (string, error) {
 		UserID:   userID,
 		Username: username,
 		Role:     role,
+		TenantID: tenantID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -60,7 +62,7 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 }
 
 // GenerateTempToken generates a short-lived token for 2FA verification step (5 minutes).
-func GenerateTempToken(userID, username, role string) (string, error) {
+func GenerateTempToken(userID, username, role, tenantID string) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
 		return "", err
@@ -70,6 +72,7 @@ func GenerateTempToken(userID, username, role string) (string, error) {
 		UserID:   userID,
 		Username: username,
 		Role:     role,
+		TenantID: tenantID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

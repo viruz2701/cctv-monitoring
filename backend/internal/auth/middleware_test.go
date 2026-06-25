@@ -18,7 +18,7 @@ import (
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	// Создаём валидный JWT
-	token, err := GenerateJWT("user-1", "testuser", "admin")
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
 	if err != nil {
 		t.Fatalf("GenerateJWT: %v", err)
 	}
@@ -103,6 +103,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 		UserID:   "user-1",
 		Username: "testuser",
 		Role:     "admin",
+		TenantID: "tenant-1",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
@@ -138,6 +139,7 @@ func TestAuthMiddleware_SessionTimeout(t *testing.T) {
 		UserID:   "user-1",
 		Username: "testuser",
 		Role:     "admin",
+		TenantID: "tenant-1",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-31 * time.Minute)), // > 30 min timeout

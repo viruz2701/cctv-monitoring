@@ -97,18 +97,18 @@ const (
 // Device представляет устройство видеонаблюдения.
 // JSON-теги для API, validate теги для OWASP ASVS V5 (whitelist validation).
 type Device struct {
-	DeviceID    string       `json:"device_id" validate:"required,uuid"`
-	OwnerID     *string      `json:"owner_id,omitempty" validate:"omitempty,uuid"`
-	SiteID      *string      `json:"site_id,omitempty" validate:"omitempty,uuid"`
-	Name        string       `json:"name" validate:"required,min=1,max=255"`
-	Location    string       `json:"location" validate:"max=500"`
-	Latitude    float64      `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
-	Longitude   float64      `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
-	VendorType  string       `json:"vendor_type" validate:"max=100"`
-	DeviceType  DeviceType   `json:"device_type" validate:"required,oneof=camera nvr dvr switch"`
-	Status      DeviceStatus `json:"status" validate:"required,oneof=ONLINE OFFLINE WARNING"`
-	Health      HealthStatus `json:"health" validate:"required,oneof=healthy faulty degraded"`
-	AssetClass  AssetClass   `json:"asset_class" validate:"required,oneof=critical confidential internal public"`
+	DeviceID   string       `json:"device_id" validate:"required,uuid"`
+	OwnerID    *string      `json:"owner_id,omitempty" validate:"omitempty,uuid"`
+	SiteID     *string      `json:"site_id,omitempty" validate:"omitempty,uuid"`
+	Name       string       `json:"name" validate:"required,min=1,max=255"`
+	Location   string       `json:"location" validate:"max=500"`
+	Latitude   float64      `json:"latitude,omitempty" validate:"omitempty,min=-90,max=90"`
+	Longitude  float64      `json:"longitude,omitempty" validate:"omitempty,min=-180,max=180"`
+	VendorType string       `json:"vendor_type" validate:"max=100"`
+	DeviceType DeviceType   `json:"device_type" validate:"required,oneof=camera nvr dvr switch"`
+	Status     DeviceStatus `json:"status" validate:"required,oneof=ONLINE OFFLINE WARNING"`
+	Health     HealthStatus `json:"health" validate:"required,oneof=healthy faulty degraded"`
+	AssetClass AssetClass   `json:"asset_class" validate:"required,oneof=critical confidential internal public"`
 
 	// Hierarchy (AH-5.2.1)
 	ParentDeviceID *string        `json:"parent_device_id,omitempty" validate:"omitempty,uuid"`
@@ -201,11 +201,11 @@ type UpdateDeviceRequest struct {
 
 // DeviceListResponse — ответ со списком устройств и метаданными пагинации.
 type DeviceListResponse struct {
-	Devices      []DeviceSummary `json:"devices"`
-	Total        int             `json:"total"`
-	Page         int             `json:"page"`
-	PageSize     int             `json:"page_size"`
-	TotalPages   int             `json:"total_pages"`
+	Devices    []DeviceSummary `json:"devices"`
+	Total      int             `json:"total"`
+	Page       int             `json:"page"`
+	PageSize   int             `json:"page_size"`
+	TotalPages int             `json:"total_pages"`
 }
 
 // DeviceSummary — краткая информация об устройстве для списка.
@@ -290,6 +290,7 @@ type User struct {
 	Username       string     `json:"username"`
 	PasswordHash   string     `json:"-"`
 	Role           string     `json:"role"`
+	TenantID       string     `json:"tenant_id,omitempty"`
 	OwnerID        *string    `json:"owner_id,omitempty"`
 	Email          string     `json:"email,omitempty"`
 	Avatar         string     `json:"avatar,omitempty"`

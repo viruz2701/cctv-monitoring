@@ -159,7 +159,7 @@ func (s *Server) handleTelegramVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role)
+	token, refreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role, user.TenantID)
 	if err != nil {
 		s.logger.Error("failed to issue auth tokens", "error", err)
 		respondError(w, r, NewInternalError("internal error", nil))
