@@ -91,6 +91,12 @@ type Server struct {
 
 	// Black Box Incident Recorder (KF-15.2.4)
 	blackboxRecorder *blackbox.Recorder
+
+	// Auto-dispatcher service (P1-6)
+	autoDispatcher *cmms.AutoDispatcher
+
+	// Dispatch rules engine (P1-6)
+	ruleEngine *cmms.RuleEngine
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -204,6 +210,26 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Black Box Incident Recorder (KF-15.2.4) ───────────────────────
 	bbRepo := blackbox.NewDBRepository(database.Pool, logger)
 	s.blackboxRecorder = blackbox.NewRecorder(bbRepo, database, nil, logger)
+
+	// ── Auto-dispatcher Service (P1-6) ────────────────────────────────
+	// WorkOrderProvider инициализируется nil, так как требуется адаптация
+	// к существующему CMMSAdapter. Будет подключён через SetWorkOrderProvider
+	// при инициализации CMMS адаптера.
+	s.autoDispatcher = cmms.NewAutoDispatcher(
+		nil, // TechnicianProvider — будет подключён при инициализации workforce
+		nil, // WorkOrderProvider — будет подключён при инициализации CMMS
+		nil, // SLAStatusChecker — будет подключён при инициализации SLA
+		cmms.DispatcherAuditLoggerFunc(func(ctx context.Context, entry *cmms.DispatchAuditEntry) error {
+			userID := "system"
+			s.logAudit(userID, entry.Action, "dispatch", entry.WorkOrderID, nil, entry)
+			return nil
+		}),
+		cmms.DefaultAutoDispatcherConfig,
+		logger,
+	)
+
+	// ── Dispatch Rules Engine (P1-6) ──────────────────────────────────
+	s.ruleEngine = cmms.NewRuleEngine(logger)
 
 	go s.wsHub.Run()
 

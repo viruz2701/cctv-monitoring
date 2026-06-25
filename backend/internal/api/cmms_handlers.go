@@ -15,6 +15,7 @@ import (
 
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
 )
@@ -1724,5 +1725,210 @@ func (s *Server) deleteAdditionalCost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logAudit(userID, "delete_additional_cost", "additional_cost", costID, nil, nil)
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Auto-dispatcher Handlers (P1-6)
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleAutoAssign запускает автоматическое назначение техника на Work Order.
+//
+// POST /api/v1/dispatcher/auto-assign/{workOrderId}
+//
+// Compliance:
+//   - IEC 62443 SR 7.1 (Fail Secure)
+//   - ISO 27001 A.12.4.1 (Event logging)
+//   - OWASP ASVS V5.1 (Path parameter validation)
+func (s *Server) handleAutoAssign(w http.ResponseWriter, r *http.Request) {
+	workOrderID := chi.URLParam(r, "workOrderId")
+	if workOrderID == "" {
+		respondError(w, r, NewBadRequestError("workOrderId is required"))
+		return
+	}
+
+	if s.autoDispatcher == nil {
+		respondError(w, r, NewInternalError("auto-dispatcher not initialized", nil))
+		return
+	}
+
+	result, err := s.autoDispatcher.AutoAssign(r.Context(), workOrderID)
+	if err != nil {
+		s.logger.Error("auto-assign failed", "work_order_id", workOrderID, "error", err)
+		respondError(w, r, NewInternalError("auto-assign operation failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "auto_assign", "work_order", workOrderID, nil, result)
+
+	status := http.StatusOK
+	if result.Status == "no_technician" {
+		status = http.StatusAccepted
+	}
+	jsonResponse(w, status, result)
+}
+
+// handleListDispatchRules возвращает список правил диспетчеризации.
+//
+// GET /api/v1/dispatcher/rules
+func (s *Server) handleListDispatchRules(w http.ResponseWriter, r *http.Request) {
+	if s.ruleEngine == nil {
+		respondError(w, r, NewInternalError("rule engine not initialized", nil))
+		return
+	}
+
+	rules := s.ruleEngine.GetRules()
+	if rules == nil {
+		rules = []cmms.DispatchRule{}
+	}
+	jsonResponse(w, http.StatusOK, rules)
+}
+
+// handleCreateDispatchRule создаёт новое правило диспетчеризации.
+//
+// POST /api/v1/dispatcher/rules
+func (s *Server) handleCreateDispatchRule(w http.ResponseWriter, r *http.Request) {
+	if s.ruleEngine == nil {
+		respondError(w, r, NewInternalError("rule engine not initialized", nil))
+		return
+	}
+
+	var rule cmms.DispatchRule
+	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	if err := s.ruleEngine.AddRule(rule); err != nil {
+		s.logger.Error("failed to create dispatch rule", "error", err)
+		respondError(w, r, NewBadRequestError(err.Error()))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "create_dispatch_rule", "dispatch_rule", rule.ID, nil, rule)
+
+	jsonResponse(w, http.StatusCreated, rule)
+}
+
+// handleBatchAutoAssign запускает batch-назначение для всех непривязанных WO.
+//
+// POST /api/v1/dispatcher/batch-assign
+func (s *Server) handleBatchAutoAssign(w http.ResponseWriter, r *http.Request) {
+	if s.autoDispatcher == nil {
+		respondError(w, r, NewInternalError("auto-dispatcher not initialized", nil))
+		return
+	}
+
+	result, err := s.autoDispatcher.BatchAutoAssign(r.Context())
+	if err != nil {
+		s.logger.Error("batch auto-assign failed", "error", err)
+		respondError(w, r, NewInternalError("batch auto-assign failed", err))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "batch_auto_assign", "work_order", "", nil, map[string]interface{}{
+		"total":    result.Total,
+		"assigned": result.Assigned,
+		"failed":   result.Failed,
+		"skipped":  result.Skipped,
+	})
+
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// handleRunEscalationCheck запускает проверку эскалации для всех непривязанных WO.
+//
+// POST /api/v1/dispatcher/escalation-check
+//
+// Compliance:
+//   - Приказ ОАЦ №66 п. 7.18.3 (Incident response)
+func (s *Server) handleRunEscalationCheck(w http.ResponseWriter, r *http.Request) {
+	if s.autoDispatcher == nil {
+		respondError(w, r, NewInternalError("auto-dispatcher not initialized", nil))
+		return
+	}
+
+	results, err := s.autoDispatcher.RunEscalationCheck(r.Context())
+	if err != nil {
+		s.logger.Error("escalation check failed", "error", err)
+		respondError(w, r, NewInternalError("escalation check failed", err))
+		return
+	}
+
+	if results == nil {
+		results = []cmms.EscalationResult{}
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "escalation_check", "work_order", "", nil, map[string]interface{}{
+		"escalated": len(results),
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"escalated": len(results),
+		"results":   results,
+	})
+}
+
+// handleUpdateDispatchRule обновляет существующее правило.
+//
+// PUT /api/v1/dispatcher/rules/{id}
+func (s *Server) handleUpdateDispatchRule(w http.ResponseWriter, r *http.Request) {
+	if s.ruleEngine == nil {
+		respondError(w, r, NewInternalError("rule engine not initialized", nil))
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		respondError(w, r, NewBadRequestError("id is required"))
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		respondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	if err := s.ruleEngine.UpdateRule(id, updates); err != nil {
+		s.logger.Error("failed to update dispatch rule", "id", id, "error", err)
+		respondError(w, r, NewBadRequestError(err.Error()))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "update_dispatch_rule", "dispatch_rule", id, nil, updates)
+
+	jsonResponse(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// handleDeleteDispatchRule удаляет правило.
+//
+// DELETE /api/v1/dispatcher/rules/{id}
+func (s *Server) handleDeleteDispatchRule(w http.ResponseWriter, r *http.Request) {
+	if s.ruleEngine == nil {
+		respondError(w, r, NewInternalError("rule engine not initialized", nil))
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		respondError(w, r, NewBadRequestError("id is required"))
+		return
+	}
+
+	if err := s.ruleEngine.DeleteRule(id); err != nil {
+		s.logger.Error("failed to delete dispatch rule", "id", id, "error", err)
+		respondError(w, r, NewNotFoundError("Rule not found"))
+		return
+	}
+
+	userID := getUserIDFromContext(r.Context())
+	s.logAudit(userID, "delete_dispatch_rule", "dispatch_rule", id, nil, nil)
+
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

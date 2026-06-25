@@ -106,6 +106,15 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Get("/api/v1/reports/maintenance", s.getMaintenanceReport)
 	r.Get("/api/v1/reports/sla-compliance", s.getSLAComplianceReport)
 
+	// Auto-dispatcher (P1-6)
+	r.Post("/api/v1/dispatcher/auto-assign/{workOrderId}", s.handleAutoAssign)
+	r.Post("/api/v1/dispatcher/batch-assign", s.handleBatchAutoAssign)
+	r.Post("/api/v1/dispatcher/escalation-check", s.handleRunEscalationCheck)
+	r.Get("/api/v1/dispatcher/rules", s.handleListDispatchRules)
+	r.Post("/api/v1/dispatcher/rules", s.handleCreateDispatchRule)
+	r.Put("/api/v1/dispatcher/rules/{id}", s.handleUpdateDispatchRule)
+	r.Delete("/api/v1/dispatcher/rules/{id}", s.handleDeleteDispatchRule)
+
 	// Export (Excel/PDF)
 	r.Get("/api/v1/export/maintenance/xlsx", s.exportMaintenanceXLSX)
 	r.Get("/api/v1/export/maintenance/pdf", s.exportMaintenancePDF)
