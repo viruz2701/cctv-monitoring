@@ -109,7 +109,7 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
 
             // Формируем payload для API (snake_case поля как ожидает бэкенд)
             const payload: Record<string, any> = {
-                device_id: `dev-${generateUUID()}`,
+                device_id: generateUUID(),
                 name: name,
                 device_type: connectionType === 'ip' ? 'camera' : 'switch',
                 status: 'ONLINE',

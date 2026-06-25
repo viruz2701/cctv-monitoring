@@ -1168,31 +1168,31 @@ export const api = {
     // ── Webhook Endpoints (WF-9.3.1) ─────────────────────────────────
 
     async getWebhooks(): Promise<WebhookEndpoint[]> {
-        return request<WebhookEndpoint[]>('/webhooks');
+        return request<WebhookEndpoint[]>('/integrations/extended/webhooks');
     },
 
     async createWebhook(data: { name: string; url: string; events: string[]; secret?: string; active?: boolean }): Promise<WebhookEndpoint> {
-        return request<WebhookEndpoint>('/webhooks', {
+        return request<WebhookEndpoint>('/integrations/extended/webhooks', {
             method: 'POST',
             body: JSON.stringify(data),
         });
     },
 
     async updateWebhook(id: string, data: Partial<WebhookEndpoint>): Promise<WebhookEndpoint> {
-        return request<WebhookEndpoint>(`/webhooks/${id}`, {
+        return request<WebhookEndpoint>(`/integrations/extended/webhooks/${id}`, {
             method: 'PUT',
             body: JSON.stringify(data),
         });
     },
 
     async deleteWebhook(id: string): Promise<void> {
-        await request<void>(`/webhooks/${id}`, {
+        await request<void>(`/integrations/extended/webhooks/${id}`, {
             method: 'DELETE',
         });
     },
 
     async testWebhook(id: string): Promise<{ status: string; message: string }> {
-        return request<{ status: string; message: string }>(`/webhooks/${id}/test`, {
+        return request<{ status: string; message: string }>(`/integrations/extended/webhooks/${id}/test`, {
             method: 'POST',
         });
     },
