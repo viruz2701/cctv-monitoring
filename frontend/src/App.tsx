@@ -149,7 +149,7 @@ function App() {
 
                               {/* Admin Only Routes - Settings */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
-                                <Route path="/settings" element={<PageSuspense><Settings /></PageSuspense>} />
+                                <Route path="/settings/:tab?" element={<PageSuspense><Settings /></PageSuspense>} />
                               </Route>
 
                               {/* Profile Route - Accessible to all authenticated users */}
