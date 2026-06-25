@@ -14,6 +14,7 @@ export { ManagerDashboard } from './ManagerDashboard';
 export { AssetOverview } from './AssetOverview';
 export * from './VendorPerformance';
 export * from './OnCallSchedule';
+export * from './ExecutiveDashboard';
 export * from './MeterDashboard';
 export * from './WOAging';
 export * from './LocationTree';

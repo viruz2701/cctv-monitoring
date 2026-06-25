@@ -56,6 +56,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/vendor-performance', label: t('vendor_performance') || 'Vendors', icon: Truck, roles: ['admin', 'manager'] },
         { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
+        { path: '/executive-dashboard', label: t('executive_dashboard') || 'Executive', icon: BarChart3, roles: ['admin', 'manager'] },
         { path: '/workload-analytics', label: t('workload_analytics') || 'Workload', icon: BarChart3, roles: ['admin', 'manager'] },
         { path: '/on-call', label: t('on_call') || 'On-Call', icon: Phone, roles: ['admin', 'manager'] },
         { path: '/meter-dashboard', label: t('meter_dashboard') || 'Meter Dashboard', icon: Activity, roles: ['admin', 'manager'] },

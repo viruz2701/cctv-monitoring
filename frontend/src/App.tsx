@@ -28,6 +28,7 @@ import { WorkloadAnalytics } from './pages/WorkloadAnalytics';
 import { WorkRequestPortal } from './pages/WorkRequestPortal';
 import { VendorPerformance } from './pages/VendorPerformance';
 import { OnCallSchedule } from './pages/OnCallSchedule';
+import { ExecutiveDashboard } from './pages/ExecutiveDashboard';
 import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
 import { WorkOrders } from './pages/WorkOrders';
 import { SpareParts } from './pages/SpareParts';
@@ -111,6 +112,7 @@ function App() {
                                 <Route path="/api-keys" element={<APIKeys />} />
                               <Route path="/webhooks" element={<Webhooks />} />
                               <Route path="/workload-analytics" element={<WorkloadAnalytics />} />
+                              <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
                               </Route>
 
                               {/* Admin Only Routes - Settings */}
