@@ -72,7 +72,8 @@ type Server struct {
 	httpClient    *http.Client
 
 	// NATS connection for health checks
-	natsConn *nats.Conn
+	natsConn     *nats.Conn
+	natsRequired bool // если true — NATS unavailable = service unavailable
 
 	// Device service with audit trail (ISO 27001 A.12.4)
 	deviceService *service.DeviceService
@@ -339,8 +340,10 @@ func (s *Server) SetTelegramBot(bot *telegram.Bot) {
 }
 
 // SetNATSConn устанавливает NATS соединение для health checks.
-func (s *Server) SetNATSConn(conn *nats.Conn) {
+// natsRequired указывает, обязателен ли NATS для readiness probe.
+func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
 	s.natsConn = conn
+	s.natsRequired = natsRequired
 }
 
 // SetFeatureFlagsManager устанавливает Feature Flag менеджер (F-0.2.4).

@@ -69,6 +69,9 @@ type Config struct {
 	NATSURL      string `mapstructure:"nats_url"`
 	NATSCreds    string `mapstructure:"nats_creds"`
 	NATSTLS      bool   `mapstructure:"nats_tls"`
+	// NATSRequired — если true, startup фейлится при недоступности NATS.
+	// Для production (КИИ РБ) ДОЛЖНО быть true.
+	NATSRequired bool `mapstructure:"nats_required"`
 
 	// Webhook secrets for bi-directional ITSM sync
 	ServiceNowWebhookSecret string `mapstructure:"servicenow_webhook_secret"`
@@ -635,6 +638,7 @@ func Load() *Config {
 		NATSURL:                 viper.GetString("nats_url"),
 		NATSCreds:               viper.GetString("nats_creds"),
 		NATSTLS:                 viper.GetBool("nats_tls"),
+		NATSRequired:            viper.GetBool("nats_required"),
 		ServiceNowWebhookSecret: viper.GetString("servicenow_webhook_secret"),
 		JiraWebhookSecret:       viper.GetString("jira_webhook_secret"),
 		TOIRWebhookSecret:       viper.GetString("toir_webhook_secret"),

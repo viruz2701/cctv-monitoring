@@ -271,21 +271,30 @@ func main() {
 	dbWriter := NewDBWriter(database, 1000)
 
 	// --- NATS Connection (ARCH-01: нужен до State Manager) ---
-	// Опционально: если NATS недоступен — работаем без событийной шины.
+	// В production (NATSRequired=true) — обязателен, startup фейлится при недоступности.
+	// В dev режиме — опционально, работаем без событийной шины.
 	var natsConn *nats.Conn
 	if cfg.NATSURL != "" {
 		nc, err := nats.Connect(cfg.NATSURL)
 		if err != nil {
+			if cfg.NATSRequired {
+				logger.Error("NATS connection required but unavailable", "url", cfg.NATSURL, "error", err)
+				os.Exit(1)
+			}
 			logger.Debug("NATS not available, continuing without", "error", err)
 		} else {
 			natsConn = nc
 			logger.Info("NATS connected", "url", cfg.NATSURL)
 		}
+	} else if cfg.NATSRequired {
+		logger.Error("NATS connection required but nats_url is not configured")
+		os.Exit(1)
 	}
 
 	// --- NATS JetStream KV State Manager (ARCH-01) ---
 	// Если NATS доступен — используем распределённое состояние для horizontal scaling.
-	// Иначе — InMemoryStateManager (dev mode).
+	// Если UseNATSKV=true и NATSRequired=true — JetStream обязателен, без fallback.
+	// В dev режиме — InMemoryStateManager (dev mode).
 	var (
 		stateManager     state.DeviceStateManager
 		jetStreamManager *state.JetStreamStateManager // для graceful shutdown
@@ -293,11 +302,19 @@ func main() {
 	if natsConn != nil && cfg.UseNATSKV {
 		js, err := natsConn.JetStream()
 		if err != nil {
+			if cfg.NATSRequired {
+				logger.Error("NATS JetStream required but not available", "error", err)
+				os.Exit(1)
+			}
 			logger.Warn("NATS JetStream not available, falling back to InMemoryStateManager", "error", err)
 			stateManager = state.NewInMemoryStateManager()
 		} else {
 			jsMgr, err := state.NewJetStreamStateManager(js, logger)
 			if err != nil {
+				if cfg.NATSRequired {
+					logger.Error("JetStream KV state manager creation failed", "error", err)
+					os.Exit(1)
+				}
 				logger.Warn("JetStream KV state manager failed, falling back to InMemoryStateManager", "error", err)
 				stateManager = state.NewInMemoryStateManager()
 			} else {
@@ -487,7 +504,7 @@ func main() {
 	// --- API-сервер ---
 	apiServer := api.NewServer(cfg.APIAddr, stateWrapper, logger, database, cfg.ImagesDir, cfg, sipHandler, syncEng)
 	if natsConn != nil {
-		apiServer.SetNATSConn(natsConn)
+		apiServer.SetNATSConn(natsConn, cfg.NATSRequired)
 	}
 	apiServer.SetFeatureFlagsManager(ffManager)
 	stateWrapper.broadcastFn = apiServer.BroadcastAlarm

@@ -3,7 +3,7 @@
 > Обновлять после завершения каждой задачи: [ ] → [x] + дата.
 
 **Последнее обновление:** 2026-06-26
-**Общая готовность:** 86%
+**Общая готовность:** 87%
 
 ---
 
@@ -28,19 +28,20 @@
 
 ### P0-1: Security & Data Integrity
 
-#### P0-1.1: Schema Registry Validation
-- **Файлы:** `backend/internal/events/schema_registry.go`, `backend/internal/events/publisher.go`
-- **Проблема:** `SchemaRegistry.Validate()` закомментирована → риск записи невалидных событий
-- **Решение:** 
-  - Добавить `github.com/xeipuuv/gojsonschema` в `go.mod`
-  - Реализовать валидацию в `publisher.go` перед publish
-  - Добавить middleware для проверки всех событий
+#### P0-1.1: Schema Registry Validation ✅ DONE
+- **Файлы:** `backend/internal/events/schema_registry.go`, `backend/internal/events/validated_publisher.go`
+- **Проблема:** `SchemaRegistry.Validate()` была закомментирована → риск записи невалидных событий
+- **Решение:**
+  - Добавлен `github.com/xeipuuv/gojsonschema` в `go.mod`
+  - Реализована JSON Schema валидация в `Validate()` через `gojsonschema`
+  - Создан `ValidatedPublisher` — middleware-обёртка с валидацией перед publish
+  - Добавлены `ValidationStats` с атомарными счётчиками (Prometheus-ready)
 - **Критерий приёмки:**
-  - [ ] Валидация включена в production config
-  - [ ] Тесты покрывают valid/invalid scenarios
-  - [ ] Error logging для failed validations
+  - [x] Валидация включена через `ValidatedPublisher` (может быть отключена через `SetEnabled`)
+  - [x] Тесты покрывают valid/invalid scenarios (30+ test cases)
+  - [x] Error logging для failed validations с полным context (source, event_type, trace_id)
 - **Effort:** 2d
-- **Status:** [ ]
+- **Status:** [x] (commit `3903312`)
 
 #### P0-1.2: NATS JetStream Mandatory
 - **Файлы:** `backend/config.yaml`, `backend/internal/state/state_manager.go`, `backend/main.go`

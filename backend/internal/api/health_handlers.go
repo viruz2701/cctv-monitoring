@@ -125,8 +125,9 @@ func (s *Server) handleDBHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReadiness — 200 если все зависимости доступны, 503 если нет.
-// Проверяет: PostgreSQL, NATS (если сконфигурирован), disk space для imagesDir.
+// Проверяет: PostgreSQL, NATS (обязательно если natsRequired=true), disk space.
 // Соответствует: ISO 27001 A.12.1.1, ISO 27001 A.12.4.1, СТБ 34.101.27 п. 7.1
+// Compliance: IEC 62443 SR 7.1 (Resource availability — health monitoring)
 func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	response := healthResponse{
 		Status:    "ok",
@@ -160,10 +161,18 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 		response.Dependencies["auth"] = healthDetail{Status: "ok"}
 	}
 
-	// Check NATS connection (если сконфигурирован)
+	// Check NATS connection
+	// Если natsRequired=true — NATS unavailable = service unavailable (не degraded)
 	if s.natsConn != nil {
 		if s.natsConn.IsConnected() {
 			response.Dependencies["nats"] = healthDetail{Status: "ok"}
+		} else if s.natsRequired {
+			statusCode = http.StatusServiceUnavailable
+			response.Status = "unavailable"
+			response.Dependencies["nats"] = healthDetail{
+				Status: "unavailable",
+				Error:  "NATS not connected — required dependency",
+			}
 		} else {
 			statusCode = http.StatusServiceUnavailable
 			response.Status = "degraded"
