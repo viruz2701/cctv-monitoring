@@ -158,10 +158,12 @@
 ### P0-8: Электронная подпись ✅ (commit `2ef92a6`)
 - [x] SignatureScreen.tsx — react-native-signature-canvas, 2-step draw→preview
 
-### P2-1: Offline-First Mobile ✅ (commit `2ef92a6`)
+### P2-1: Offline-First Mobile ✅ (commits `2ef92a6`, `8ae8319`)
 - [x] ADR-006: expo-sqlite decision
 - [x] offlineStorage.ts — SQLite CRUD + pending sync queue
 - [x] syncService.ts — push/pull with retry, NetInfo subscription
+- [x] Service Worker + offline.html
+- [x] PhotoAnnotation: 4 tools, 7 colors, canvas-based
 
 ### E2E Tests ✅ (commit `2ef92a6`)
 - [x] 21 Playwright tests (login, settings, work-orders, devices)
