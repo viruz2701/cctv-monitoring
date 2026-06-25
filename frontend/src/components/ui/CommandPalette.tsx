@@ -44,6 +44,7 @@ import {
   History,
   Sparkles,
   Video,
+  Archive,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
@@ -291,6 +292,15 @@ const NAV_COMMANDS: CommandItem[] = [
     category: 'monitoring',
     icon: Activity,
     keywords: ['meter', 'reading', 'sensor', 'gauge'],
+  },
+  {
+    id: 'blackbox',
+    label: 'Black Box',
+    description: 'Incident evidence collection and reports',
+    path: '/blackbox',
+    category: 'monitoring',
+    icon: Archive,
+    keywords: ['blackbox', 'incident', 'evidence', 'report', 'snapshot', 'forensic', 'investigation'],
   },
   {
     id: 'sla',

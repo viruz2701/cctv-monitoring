@@ -24,6 +24,7 @@ import {
     Webhook,
     Phone,
     Video,
+    Archive,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -73,6 +74,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
         { path: '/audit-log', label: t('audit_log') || 'Audit Log', icon: Shield, roles: ['admin', 'support'] },
         { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },
+        { path: '/blackbox', label: 'Black Box', icon: Archive, roles: ['admin', 'support'] },
         // Help
         { path: '/tutorials', label: t('tutorials') || 'Tutorials', icon: Video, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'] },
     ];

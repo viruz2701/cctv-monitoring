@@ -17,6 +17,7 @@ import (
 
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/blackbox"
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/compliance"
@@ -87,6 +88,9 @@ type Server struct {
 
 	// Compliance Engine (KF-15.1.1)
 	complianceEngine *compliance.Engine
+
+	// Black Box Incident Recorder (KF-15.2.4)
+	blackboxRecorder *blackbox.Recorder
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -197,6 +201,10 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Compliance Engine (KF-15.1.1) ─────────────────────────────────
 	s.complianceEngine = compliance.NewEngine(nil, logger, nil)
 
+	// ── Black Box Incident Recorder (KF-15.2.4) ───────────────────────
+	bbRepo := blackbox.NewDBRepository(database.Pool, logger)
+	s.blackboxRecorder = blackbox.NewRecorder(bbRepo, database, nil, logger)
+
 	go s.wsHub.Run()
 
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
@@ -247,6 +255,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// Compliance & Fines Shield (KF-15.1.1)
 		s.mountComplianceRoutes(r)
+
+		// Black Box Incident Recorder (KF-15.2.4)
+		s.mountBlackBoxRoutes(r)
 
 		// GraphQL read-only endpoint (INT-13.2.4)
 		s.mountGraphQLRoute(r)

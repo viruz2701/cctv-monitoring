@@ -50,6 +50,7 @@ import { ForgotPassword } from './pages/ForgotPassword';
 import { ComplianceShield } from './pages/ComplianceShield';
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance';
 import { Tutorials } from './pages/Tutorials';
+import { BlackBox } from './pages/BlackBox';
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -134,6 +135,7 @@ function App() {
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support']} />}>
                                 <Route path="/logs" element={<PageSuspense><Logs /></PageSuspense>} />
                                 <Route path="/audit-log" element={<PageSuspense><AuditLog /></PageSuspense>} />
+                                <Route path="/blackbox" element={<PageSuspense><BlackBox /></PageSuspense>} />
                               </Route>
 
                               {/* Admin Only Routes */}

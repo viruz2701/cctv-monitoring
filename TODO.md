@@ -130,6 +130,7 @@ Global Error Boundary + Suspense
 3
 Per-route ErrorBoundary + skeletons
 No white screens
+✅ DONE (commit 91e145f)
 UX-14.1.5
 Command Palette (⌘K)
 5
@@ -153,16 +154,19 @@ Keyboard Shortcuts
 3
 ⌘N новый WO, ⌘K поиск, Esc закрыть
 Power users
+✅ DONE (commit 91e145f)
 UX-14.1.9
 Dark Mode Toggle в Header
 1
 Быстрое переключение темы
 User request #1
+✅ DONE (commit 91e145f)
 UX-14.1.10
 Confirmation Dialogs
 2
 Confirm для всех destructive actions
 -data loss
+✅ DONE (commit 91e145f)
 🟠 P1 — High Priority UX (Q3-Q4 2026)
 ID
 Задача
@@ -172,61 +176,77 @@ UX-14.2.1
 Progressive Disclosure в WorkOrderDetail
 5
 3-колонки → табы + drawers
+✅ DONE (commit 9cebb63)
 UX-14.2.2
 Drag-n-Drop Dashboards
 6
 react-grid-layout с сохранением layout
+✅ DONE (commit 5aae4c9)
 UX-14.2.3
 Skeleton Screens
 3
 Shimmer-эффекты для всех async-загрузок
+✅ DONE (commit e6d8df8)
 UX-14.2.4
 Inline Validation
 4
 Real-time Zod validation в формах
+✅ DONE (commit 91e145f)
 UX-14.2.5
 Toast Notifications Redesign
 2
 Stacked toasts с undo-action
+✅ DONE (commit 5aae4c9)
 UX-14.2.6
 Global Search (⌘K) v2
 4
 Fuzzy search + recent + categories
+✅ DONE (commit 91e145f)
 UX-14.2.7
 Accessibility Audit (WCAG 2.1 AA)
 8
 axe-core + Lighthouse, ARIA labels
+✅ DONE (commit 99a82a4)
 UX-14.2.8
 Focus Management
 3
 Focus traps в модалках, skip-links
+✅ DONE (commit bbfee27)
 UX-14.2.9
 Color Contrast Fix
 2
 WebAIM-совместимые палитры
+✅ DONE (commit 91e145f)
 UX-14.2.10
 Multi-language (15+)
 8
 i18next + Crowdin integration
-🟡 P2 — Medium Priority (Q1 2027)
+✅ DONE (commit 99a82a4)
+🟡 P2 — Medium Priority (Q1 2027) — ALL DONE ✅
 ID
 Задача
 SP
+Статус
 UX-14.3.1
 Customizable Workspaces
 6
+✅ DONE (commit 24fa859)
 UX-14.3.2
 Saved Views & Filters
 4
+✅ DONE (commit 24fa859)
 UX-14.3.3
 Advanced DataGrid (pivoting)
 8
+✅ DONE (commit 24fa859)
 UX-14.3.4
 Theming Engine
 5
+✅ DONE (commit 24fa859)
 UX-14.3.5
 Onboarding Video Tutorials
 3
+✅ DONE (commit 24fa859)
 Итого Epic 14: 59 SP (~7 недель для 3 frontend-разработчиков)
 🚀 EPIC 15: Killer Features (НОВЫЙ ЭПИК)
 Features, которые делают продукт уникальным на рынке CMMS. Конкуренты (MaintainX, UpKeep, Fiix, Atlas) не имеют ничего подобного.
@@ -364,6 +384,7 @@ Killer
 Predictive Maintenance
 10
 💰 Premium tier
+✅ DONE (commit 902e5ba)
 F-0.1.1
 Foundation
 IP-аудит (FOSSA/Snyk)
@@ -386,22 +407,52 @@ UX-14.2.1
 UX
 Progressive Disclosure WorkOrderDetail
 5
+✅ DONE
 UX-14.2.2
 UX
 Drag-n-Drop Dashboards
 6
+✅ DONE
 UX-14.2.3
 UX
 Skeleton Screens
 3
+✅ DONE
+UX-14.2.4
+UX
+Inline Validation
+4
+✅ DONE
+UX-14.2.5
+UX
+Toast Redesign
+2
+✅ DONE
+UX-14.2.6
+UX
+Global Search v2
+4
+✅ DONE
 UX-14.2.7
 UX
 WCAG 2.1 AA Audit
 8
+✅ DONE
+UX-14.2.8
+UX
+Focus Management
+3
+✅ DONE
+UX-14.2.9
+UX
+Color Contrast Fix
+2
+✅ DONE
 UX-14.2.10
 UX
 Multi-language (15+)
 8
+✅ DONE
 KF-15.2.1
 Killer
 Digital Twin (3D/2D)
@@ -418,15 +469,17 @@ F-0.2.3
 Foundation
 Multi-tenancy RLS
 4
+✅ DONE (commit 8862b70)
 CCTV-2.2.1
 CCTV Core
 ONVIF Profile S/T
 6
+✅ DONE (commit 2aa4453)
 WM-8.3.2
 Workforce
 Capacity Planning heatmap
 4
-Итого P1: ~60 SP
+Итого P1: ~45 SP
 🟡 P2 / MEDIUM (Q1 2027)
 ID
 Epic
@@ -561,19 +614,19 @@ Revenue potential: $10M ARR при 1000 paying customers (mix tiers)
 Всего задач в плане
 ~160+ (+80 vs v4.0)
 Реализовано
-~72 (45%) ✅ +8 P0
+~99 (62%) ✅ +27 UX + 8 P0 + Multi-tenancy + ONVIF
 Pending P0 (Critical)
-0 задач (0 SP) — ALL P0 DONE 🎉
+0 задач — ALL P0 DONE 🎉
 Pending P1 (High)
-11 задач (~60 SP)
+5 задач (~45 SP) — Epic 14 UX полностью завершён
 Pending P2 (Medium)
-7 задач (~50 SP)
+2 задачи (~12 SP) — Epic 14 UX P2 полностью завершён
 Блокировано
 1 (SEC-01: СТБ SDK)
 Общий SP pending
-~180 SP (~22 недели для 3 Senior)
+~90 SP (~11 недель для 3 Senior)
 UX/UI focus
-60% от P0+P1 задач
+✅ Epic 14 UX — 100% Complete (59/59 SP)
 Killer Features
 13 features, 6 в P0
 🎯 Top-5 рекомендаций CTO
