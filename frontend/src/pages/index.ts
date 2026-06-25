@@ -25,3 +25,4 @@ export * from './AuditLog';
 export * from './Notifications';
 export * from './WorkOrderDetail';
 export { ComplianceShield } from './ComplianceShield';
+export { PredictiveMaintenance } from './PredictiveMaintenance';

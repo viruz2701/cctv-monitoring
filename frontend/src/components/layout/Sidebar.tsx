@@ -49,6 +49,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         // CMMS Routes
         { path: '/maintenance', label: t('maintenance') || 'Maintenance', icon: FileText, roles: ['admin', 'manager', 'technician'] },
         { path: '/work-orders', label: t('work_orders') || 'Work Orders', icon: FileText, roles: ['admin', 'manager', 'technician'] },
+        { path: '/predictive-maintenance', label: t('predictive_maintenance') || 'Predictive Maint.', icon: TrendingUp, roles: ['admin', 'manager', 'technician'] },
         { path: '/spare-parts', label: t('spare_parts') || 'Spare Parts', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
         { path: '/asset-overview', label: t('asset_overview') || 'Asset Overview', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
         { path: '/manager-dashboard', label: t('manager_dashboard') || 'Manager Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] },

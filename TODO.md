@@ -349,11 +349,13 @@ Killer
 Compliance & Fines Shield
 10
 💰 Premium tier
+✅ DONE (commit 712e265)
 KF-15.1.2
 Killer
 Contractor Auto-Enforcer
 8
 💰 Premium tier
+✅ DONE (pre-existing — Gatekeeper: GPS/EXIF/AI/Approval)
 KF-15.1.3
 Killer
 Predictive Maintenance

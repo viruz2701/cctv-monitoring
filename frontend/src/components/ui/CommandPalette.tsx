@@ -298,6 +298,15 @@ const ALL_COMMANDS: CommandItem[] = [
     icon: TrendingUp,
     keywords: ['insights', 'analysis', 'data', 'metrics', 'statistics'],
   },
+  {
+    id: 'predictive-maintenance',
+    label: 'Predictive Maintenance',
+    description: 'ML-powered failure prediction dashboard',
+    path: '/predictive-maintenance',
+    category: 'analytics',
+    icon: TrendingUp,
+    keywords: ['predictive', 'failure', 'prediction', 'ml', 'ai', 'machine learning', 'forecast'],
+  },
 
   // ── Administration ─────────────────────────────────────────────────
   {

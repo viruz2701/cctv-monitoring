@@ -39,6 +39,7 @@ import { SLADashboard } from './pages/SLADashboard';
 import { MaintenanceReports } from './pages/MaintenanceReports';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ComplianceShield } from './pages/ComplianceShield';
+import { PredictiveMaintenance } from './pages/PredictiveMaintenance';
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -161,6 +162,7 @@ function App() {
                               <Route path="/vendor-performance" element={<VendorPerformance />} />
                               <Route path="/on-call" element={<OnCallSchedule />} />
                               <Route path="/compliance-shield" element={<ComplianceShield />} />
+                              <Route path="/predictive-maintenance" element={<PredictiveMaintenance />} />
                               </Route>
                             </Route>
 

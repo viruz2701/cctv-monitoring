@@ -81,6 +81,10 @@ export const queryKeys = {
     categories: ['spareParts', 'categories'] as const,
     detail: (id: string) => ['spareParts', id] as const,
   },
+  predictions: {
+    all: ['predictions'] as const,
+    stats: ['predictions', 'stats'] as const,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -656,5 +660,20 @@ export function useAuditLog(params?: {
     queryKey: [...queryKeys.auditLog.all, params],
     queryFn: () => api.getAuditLog(params),
     staleTime: 60_000,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Predictions / Predictive Maintenance (KF-15.1.3)
+// ═══════════════════════════════════════════════════════════════════════
+
+import type { Prediction } from '../services/api';
+
+export function usePredictions(deviceId?: string, limit?: number) {
+  return useQuery({
+    queryKey: [...queryKeys.predictions.all, deviceId, limit],
+    queryFn: () => api.getPredictions(deviceId, limit),
+    staleTime: 60_000,
+    refetchInterval: 300_000, // auto-refresh каждые 5 минут
   });
 }
