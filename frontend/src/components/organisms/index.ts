@@ -1,0 +1,1 @@
+export { BeforeAfterSlider } from './BeforeAfterSlider';

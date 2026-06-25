@@ -50,3 +50,6 @@ export type { TutorialVideo } from './VideoTutorialCard';
 export { ThemeCustomizer } from './ThemeCustomizer';
 export { ProgressBar } from './ProgressBar';
 export { Breadcrumbs } from './Breadcrumbs';
+export { Tooltip } from './Tooltip';
+export { Dropdown } from './Dropdown';
+export type { DropdownItem } from './Dropdown';
