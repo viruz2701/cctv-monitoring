@@ -97,6 +97,7 @@ type Config struct {
 	Hikvision HikvisionConfig
 	SNMP      SNMPConfig
 	GB28181   GB28181Config // ДОБАВЛЕНО: GB28181 конфигурация
+	ONVIF     ONVIFConfig   // CCTV-2.2.1: ONVIF Profile S/T
 
 	// Event Store configuration (DM-1.2.2)
 	EventStore EventStoreConfig
@@ -155,6 +156,17 @@ type EventStoreConfig struct {
 type TelegramConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
 	Token   string `mapstructure:"token"`
+}
+
+// ONVIFConfig — настройки ONVIF Profile S/T (CCTV-2.2.1)
+type ONVIFConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	Discovery     bool   `mapstructure:"discovery"`
+	DiscoveryPort int    `mapstructure:"discovery_port"`
+	ConnectMode   string `mapstructure:"connect_mode"`
+	EdgeAgentURL  string `mapstructure:"edge_agent_url"`
+	Username      string `mapstructure:"username"`
+	Password      string `mapstructure:"password"`
 }
 
 // GB28181Config — настройки GB/T 28181 сервера
@@ -328,6 +340,15 @@ func Load() *Config {
 	viper.SetDefault("snmp.community", "") // W6: Должен быть задан через env/config, не public
 	viper.SetDefault("snmp.version", "v2c")
 
+	// ONVIF defaults (CCTV-2.2.1)
+	viper.SetDefault("onvif.enabled", false)
+	viper.SetDefault("onvif.discovery", false)
+	viper.SetDefault("onvif.discovery_port", 3702)
+	viper.SetDefault("onvif.connect_mode", "direct")
+	viper.SetDefault("onvif.edge_agent_url", "")
+	viper.SetDefault("onvif.username", "")
+	viper.SetDefault("onvif.password", "")
+
 	// GB28181 defaults
 	viper.SetDefault("gb28181.enabled", true)
 	viper.SetDefault("gb28181.host", "0.0.0.0")
@@ -392,6 +413,15 @@ func Load() *Config {
 	bindEnv("snmp.port", "GB_SNMP_PORT")
 	bindEnv("snmp.community", "GB_SNMP_COMMUNITY")
 	bindEnv("snmp.version", "GB_SNMP_VERSION")
+
+	// ONVIF env bindings (CCTV-2.2.1)
+	bindEnv("onvif.enabled", "GB_ONVIF_ENABLED")
+	bindEnv("onvif.discovery", "GB_ONVIF_DISCOVERY")
+	bindEnv("onvif.discovery_port", "GB_ONVIF_DISCOVERY_PORT")
+	bindEnv("onvif.connect_mode", "GB_ONVIF_CONNECT_MODE")
+	bindEnv("onvif.edge_agent_url", "GB_ONVIF_EDGE_AGENT_URL")
+	bindEnv("onvif.username", "GB_ONVIF_USERNAME")
+	bindEnv("onvif.password", "GB_ONVIF_PASSWORD")
 
 	// GB28181 env bindings
 	bindEnv("gb28181.enabled", "GB_GB28181_ENABLED")
@@ -535,6 +565,15 @@ func Load() *Config {
 		Hikvision: HikvisionConfig{
 			Enabled: viper.GetBool("hikvision.enabled"),
 			Cameras: make(map[string]HikCameraConfig),
+		},
+		ONVIF: ONVIFConfig{
+			Enabled:       viper.GetBool("onvif.enabled"),
+			Discovery:     viper.GetBool("onvif.discovery"),
+			DiscoveryPort: viper.GetInt("onvif.discovery_port"),
+			ConnectMode:   viper.GetString("onvif.connect_mode"),
+			EdgeAgentURL:  viper.GetString("onvif.edge_agent_url"),
+			Username:      viper.GetString("onvif.username"),
+			Password:      viper.GetString("onvif.password"),
 		},
 		SNMP: SNMPConfig{
 			Enabled:         viper.GetBool("snmp.enabled"),
