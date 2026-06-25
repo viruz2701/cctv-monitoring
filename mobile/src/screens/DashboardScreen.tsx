@@ -1,10 +1,18 @@
-import React, { useCallback } from 'react';
-import { View, Text, FlatList, RefreshControl, StyleSheet, Alert } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Alert,
+} from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { workOrdersApi } from '../api/workOrders';
 import { useSyncStore } from '../store/syncStore';
+import { syncService } from '../services/syncService';
 import { RootStackParamList, WorkOrder } from '../types';
 import WorkOrderCard from '../components/WorkOrderCard';
 import SwipeableCard, { SwipeAction } from '../components/SwipeableCard';
@@ -18,18 +26,65 @@ export default function DashboardScreen() {
   const queryClient = useQueryClient();
   const addToQueue = useSyncStore((s) => s.addToQueue);
   const isOnline = useSyncStore((s) => s.isOnline);
+  const [offlineOrders, setOfflineOrders] = useState<WorkOrder[] | null>(null);
+  const [isOfflineFallback, setIsOfflineFallback] = useState(false);
+
+  // ── Основной запрос с fallback на SQLite ──────────────
 
   const {
     data: workOrders,
     isLoading,
     refetch,
     isRefetching,
+    isError,
+    error,
   } = useQuery({
     queryKey: ['myWorkOrders'],
-    queryFn: workOrdersApi.getMyWorkOrders,
+    queryFn: async () => {
+      try {
+        // Пробуем получить с сервера
+        const orders = await workOrdersApi.getMyWorkOrders();
+
+        // Сохраняем в SQLite кэш
+        await syncService.saveWorkOrderLocally(orders[0]); // upsert по одному
+        for (const wo of orders) {
+          await syncService.saveWorkOrderLocally(wo);
+        }
+
+        setIsOfflineFallback(false);
+        setOfflineOrders(null);
+        return orders;
+      } catch (err) {
+        // Если сеть есть, но сервер не отвечает — всё равно пытаемся
+        if (!isOnline) {
+          // Офлайн — загружаем из SQLite
+          const local = await syncService.getLocalWorkOrders();
+          if (local.length > 0) {
+            setOfflineOrders(local);
+            setIsOfflineFallback(true);
+            return local;
+          }
+        }
+        throw err;
+      }
+    },
+    retry: isOnline ? 2 : 0, // Не ретраим в офлайне
+    staleTime: isOnline ? 5 * 60 * 1000 : Infinity, // В офлайне не помечаем как stale
   });
 
-  // Mutations для inline-действий
+  // ── Обновление при восстановлении сети ────────────────
+
+  useEffect(() => {
+    const unsubscribe = syncService.subscribe((state) => {
+      if (state.status === 'online' && isOfflineFallback) {
+        refetch();
+      }
+    });
+    return () => unsubscribe();
+  }, [isOfflineFallback, refetch]);
+
+  // ── Мутации ───────────────────────────────────────────
+
   const startMutation = useMutation({
     mutationFn: (id: string) => workOrdersApi.startWorkOrder(id),
     onSuccess: () => {
@@ -50,6 +105,8 @@ export default function DashboardScreen() {
     },
   });
 
+  // ── Handlers ──────────────────────────────────────────
+
   const openWorkOrder = useCallback(
     (id: string) => {
       navigation.navigate('WorkOrderDetail', { workOrderId: id });
@@ -57,26 +114,43 @@ export default function DashboardScreen() {
     [navigation],
   );
 
-  // ── Inline actions (UX-03) ──────────────────────────────────────────
-
   const handleStart = useCallback(
-    (wo: WorkOrder) => {
-      if (isOnline) {
+    async (wo: WorkOrder) => {
+      const online = useSyncStore.getState().isOnline;
+
+      if (online) {
         startMutation.mutate(wo.id);
       } else {
-        // Offline: ставим в очередь синхронизации
-        addToQueue({ type: 'start_work_order', workOrderId: wo.id });
-        // Оптимистично обновляем кеш
+        // Офлайн: сохраняем в SQLite + pending queue
+        await syncService.enqueueMutation({
+          entityType: 'work_order',
+          entityId: wo.id,
+          mutationType: 'update',
+          payload: { status: 'in_progress' },
+        });
+
+        // Сохраняем локально обновлённый статус
+        await syncService.saveWorkOrderLocally({
+          ...wo,
+          status: 'in_progress',
+          updated_at: new Date().toISOString(),
+        });
+
+        // Оптимистично обновляем кеш React Query
         queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
-          old?.map((o) => (o.id === wo.id ? { ...o, status: 'in_progress' as const } : o)),
+          old?.map((o) =>
+            o.id === wo.id ? { ...o, status: 'in_progress' as const } : o,
+          ),
         );
       }
     },
-    [isOnline, startMutation, addToQueue, queryClient],
+    [startMutation, queryClient],
   );
 
   const handleComplete = useCallback(
-    (wo: WorkOrder) => {
+    async (wo: WorkOrder) => {
+      const online = useSyncStore.getState().isOnline;
+
       Alert.alert(
         'Завершить наряд',
         `Завершить наряд #${wo.id}?\n\nДля полного завершения откройте наряд и заполните данные.`,
@@ -84,15 +158,24 @@ export default function DashboardScreen() {
           { text: 'Отмена', style: 'cancel' },
           {
             text: 'Быстрое завершение',
-            onPress: () => {
-              if (isOnline) {
+            onPress: async () => {
+              if (online) {
                 completeMutation.mutate(wo.id);
               } else {
-                addToQueue({
-                  type: 'complete_work_order',
-                  workOrderId: wo.id,
-                  payload: { notes: '', checklist: [], photos: [], parts_used: [] },
+                // Офлайн: сохраняем в SQLite + pending queue
+                await syncService.enqueueMutation({
+                  entityType: 'work_order',
+                  entityId: wo.id,
+                  mutationType: 'update',
+                  payload: { status: 'completed', payload: { notes: '', checklist: [], photos: [], parts_used: [] } },
                 });
+
+                await syncService.saveWorkOrderLocally({
+                  ...wo,
+                  status: 'completed',
+                  updated_at: new Date().toISOString(),
+                });
+
                 queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
                   old?.map((o) =>
                     o.id === wo.id ? { ...o, status: 'completed' as const } : o,
@@ -104,22 +187,30 @@ export default function DashboardScreen() {
         ],
       );
     },
-    [isOnline, completeMutation, addToQueue, queryClient],
+    [completeMutation, queryClient],
   );
 
   const handleCancel = useCallback(
-    (wo: WorkOrder) => {
+    async (wo: WorkOrder) => {
       Alert.alert('Отменить наряд', `Отменить наряд #${wo.id}?`, [
         { text: 'Нет', style: 'cancel' },
         {
           text: 'Да, отменить',
           style: 'destructive',
-          onPress: () => {
-            // TODO: добавить API endpoint для отмены inline
-            addToQueue({
-              type: 'start_work_order', // замена: будет отдельный тип cancel
-              workOrderId: wo.id,
+          onPress: async () => {
+            await syncService.enqueueMutation({
+              entityType: 'work_order',
+              entityId: wo.id,
+              mutationType: 'update',
+              payload: { status: 'cancelled' },
             });
+
+            await syncService.saveWorkOrderLocally({
+              ...wo,
+              status: 'cancelled',
+              updated_at: new Date().toISOString(),
+            });
+
             queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
               old?.map((o) =>
                 o.id === wo.id ? { ...o, status: 'cancelled' as const } : o,
@@ -129,10 +220,11 @@ export default function DashboardScreen() {
         },
       ]);
     },
-    [addToQueue, queryClient],
+    [queryClient],
   );
 
-  // Получение действий для свайпа на основе статуса
+  // ── Swipe actions ────────────────────────────────────
+
   const getSwipeActions = useCallback(
     (wo: WorkOrder): { right?: SwipeAction[]; left?: SwipeAction[] } => {
       switch (wo.status) {
@@ -170,23 +262,26 @@ export default function DashboardScreen() {
             ],
           };
         default:
-          // completed / cancelled — без действий
           return {};
       }
     },
     [handleStart, handleComplete, handleCancel],
   );
 
+  // ── Stats ────────────────────────────────────────────
+
   const getStatusCounts = () => {
-    if (!workOrders) return { open: 0, inProgress: 0, completed: 0 };
+    const orders = workOrders || [];
     return {
-      open: workOrders.filter((wo) => wo.status === 'open').length,
-      inProgress: workOrders.filter((wo) => wo.status === 'in_progress').length,
-      completed: workOrders.filter((wo) => wo.status === 'completed').length,
+      open: orders.filter((wo) => wo.status === 'open').length,
+      inProgress: orders.filter((wo) => wo.status === 'in_progress').length,
+      completed: orders.filter((wo) => wo.status === 'completed').length,
     };
   };
 
   const counts = getStatusCounts();
+
+  // ── Render ───────────────────────────────────────────
 
   const renderItem = useCallback(
     ({ item }: { item: WorkOrder }) => {
@@ -206,7 +301,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <OfflineIndicator />
+      <OfflineIndicator showQueueBadge alwaysVisible />
 
       <View style={styles.statsRow}>
         <View style={[styles.statCard, { backgroundColor: '#fef2f2' }]}>
@@ -227,6 +322,15 @@ export default function DashboardScreen() {
         </View>
       </View>
 
+      {/* Офлайн баннер */}
+      {isOfflineFallback && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>
+            🔴 Офлайн режим — показаны кэшированные данные
+          </Text>
+        </View>
+      )}
+
       <FlatList
         data={workOrders || []}
         keyExtractor={(item) => item.id}
@@ -243,7 +347,11 @@ export default function DashboardScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>Нет назначенных заданий</Text>
+              <Text style={styles.emptyText}>
+                {isOfflineFallback
+                  ? 'Нет кэшированных данных'
+                  : 'Нет назначенных заданий'}
+              </Text>
             </View>
           ) : null
         }
@@ -251,6 +359,10 @@ export default function DashboardScreen() {
     </View>
   );
 }
+
+// ──────────────────────────────────────────────────
+// Styles
+// ──────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -295,5 +407,19 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#94a3b8',
+  },
+  offlineBanner: {
+    backgroundColor: '#fef2f2',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  offlineBannerText: {
+    fontSize: 13,
+    color: '#991b1b',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

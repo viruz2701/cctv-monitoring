@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSyncStore } from '../store/syncStore';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useBackgroundSync } from '../hooks/useBackgroundSync';
+import { syncService } from '../services/syncService';
 import OfflineIndicator from '../components/OfflineIndicator';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -15,6 +16,7 @@ import MapScreen from '../screens/MapScreen';
 import WorkOrderDetailScreen from '../screens/WorkOrderDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QRScannerScreen from '../screens/QRScannerScreen';
+import SignatureScreen from '../screens/SignatureScreen';
 import CompleteWorkOrderWizard from '../components/CompleteWorkOrderWizard';
 
 import { RootStackParamList, MainTabParamList } from '../types';
@@ -89,6 +91,15 @@ export default function AppNavigator() {
   useEffect(() => {
     loadStoredAuth();
     loadQueue();
+
+    // Инициализация offline-first сервиса (SQLite + sync)
+    syncService.initialize().catch((err) => {
+      console.error('Failed to initialize sync service:', err);
+    });
+
+    return () => {
+      syncService.destroy();
+    };
   }, []);
 
   if (isLoading) {
@@ -97,8 +108,8 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      {/* Global offline indicator */}
-      {!isOnline && <OfflineIndicator />}
+      {/* Global offline indicator — всегда активен, сам решает когда показываться */}
+      <OfflineIndicator showQueueBadge />
 
       <Stack.Navigator
         screenOptions={{
@@ -148,6 +159,16 @@ export default function AppNavigator() {
               options={{
                 title: 'Сканер QR',
                 animation: 'fade',
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="Signature"
+              component={SignatureScreen}
+              options={{
+                title: 'Электронная подпись',
+                animation: 'slide_from_bottom',
+                headerShown: false,
               }}
             />
           </>

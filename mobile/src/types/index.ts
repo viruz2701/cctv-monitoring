@@ -81,8 +81,18 @@ export type RootStackParamList = {
   Main: undefined;
   WorkOrderDetail: { workOrderId: string };
   CompleteWorkOrder: { workOrder: WorkOrder }; // Unified wizard
-  QRScanner: undefined;
+  QRScanner: { defaultMode?: QRScanMode } | undefined;
+  Signature: { workOrderId: string };
 };
+
+export type QRScanMode = 'device' | 'part' | 'work_order';
+
+export interface QRScanResult {
+  type: 'device' | 'part' | 'work_order';
+  id: string;
+  label?: string;
+  raw: string;
+}
 
 export interface VerificationRequest {
   gps: {
