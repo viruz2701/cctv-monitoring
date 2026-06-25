@@ -12,7 +12,15 @@ export * from './Settings';
 export { TotalCostDashboard } from './TotalCostDashboard';
 export { ManagerDashboard } from './ManagerDashboard';
 export { AssetOverview } from './AssetOverview';
+export * from './VendorPerformance';
+export * from './OnCallSchedule';
+export * from './MeterDashboard';
+export * from './WOAging';
+export * from './LocationTree';
+export * from './Webhooks';
+export * from './WorkloadAnalytics';
 export * from './Profile';
+export * from './AuditLog';
 export * from './Notifications';
 export * from './WorkOrderDetail';
 

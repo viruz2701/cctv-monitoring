@@ -13,8 +13,16 @@ import {
     ChevronRight,
     Camera,
     Shield,
+    Activity,
+    Truck,
+    BarChart3,
     X,
     TrendingUp,
+    Clock,
+    Building2,
+    Key,
+    Webhook,
+    Phone,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,12 +53,21 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/asset-overview', label: t('asset_overview') || 'Asset Overview', icon: HardDrive, roles: ['admin', 'manager', 'technician'] },
         { path: '/manager-dashboard', label: t('manager_dashboard') || 'Manager Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] },
         { path: '/cost-dashboard', label: t('cost_dashboard') || 'Cost Dashboard', icon: TrendingUp, roles: ['admin', 'manager'] },
+        { path: '/vendor-performance', label: t('vendor_performance') || 'Vendors', icon: Truck, roles: ['admin', 'manager'] },
         { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
+        { path: '/workload-analytics', label: t('workload_analytics') || 'Workload', icon: BarChart3, roles: ['admin', 'manager'] },
+        { path: '/on-call', label: t('on_call') || 'On-Call', icon: Phone, roles: ['admin', 'manager'] },
+        { path: '/meter-dashboard', label: t('meter_dashboard') || 'Meter Dashboard', icon: Activity, roles: ['admin', 'manager'] },
+        { path: '/wo-aging', label: t('wo_aging') || 'WO Aging', icon: Clock, roles: ['admin', 'manager'] },
+        { path: '/location-tree', label: t('location_tree') || 'Location Tree', icon: Building2, roles: ['admin', 'manager', 'technician'] },
         // Admin Only
+        { path: '/webhooks', label: t('webhooks') || 'Webhooks', icon: Webhook, roles: ['admin'] },
+        { path: '/api-keys', label: t('api_keys') || 'API Keys', icon: Key, roles: ['admin'] },
         { path: '/users', label: t('users'), icon: Users, roles: ['admin'] },
         { path: '/settings', label: t('settings'), icon: Settings, roles: ['admin'] },
         { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
+        { path: '/audit-log', label: t('audit_log') || 'Audit Log', icon: Shield, roles: ['admin', 'support'] },
         { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },
     ];
 

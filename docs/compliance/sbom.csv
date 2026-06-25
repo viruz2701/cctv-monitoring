@@ -1,0 +1,232 @@
+# CCTV Health Monitor — Software Bill of Materials (SBOM)
+# Generated: 2026-06-25
+# Format: Dependency Name,Version,License,Type,Layer
+
+# ═══════════════════════════════════════════════════════════════════════
+# Go Backend Dependencies
+# ═══════════════════════════════════════════════════════════════════════
+
+# HTTP Router & Middleware
+github.com/go-chi/chi/v5,v5.2.1,MIT,Go Direct,Backend
+github.com/go-chi/cors,v1.2.2,MIT,Go Direct,Backend
+
+# Authentication & Security
+github.com/golang-jwt/jwt/v5,v5.3.1,MIT,Go Direct,Backend
+github.com/pquerna/otp,v1.5.0,MIT,Go Direct,Backend
+github.com/icholy/digest,v1.1.0,MIT,Go Direct,Backend
+golang.org/x/crypto,v0.53.0,BSD-3-Clause,Go Direct,Backend
+golang.org/x/oauth2,v0.36.0,BSD-3-Clause,Go Direct,Backend
+
+# Database
+github.com/jackc/pgx/v5,v5.10.0,MIT,Go Direct,Backend
+github.com/golang-migrate/migrate/v4,v4.19.1,MIT,Go Direct,Backend
+
+# Message Queue
+github.com/nats-io/nats.go,v1.52.0,Apache-2.0,Go Direct,Backend
+github.com/nats-io/nkeys,v0.4.15,Apache-2.0,Go Indirect,Backend
+github.com/nats-io/nuid,v1.0.1,Apache-2.0,Go Indirect,Backend
+
+# Configuration
+github.com/spf13/viper,v1.21.0,MIT,Go Direct,Backend
+github.com/joho/godotenv,v1.5.1,MIT,Go Direct,Backend
+github.com/spf13/afero,v1.15.0,Apache-2.0,Go Indirect,Backend
+github.com/spf13/cast,v1.10.0,MIT,Go Indirect,Backend
+github.com/spf13/pflag,v1.0.10,BSD-3-Clause,Go Indirect,Backend
+github.com/fsnotify/fsnotify,v1.9.0,BSD-3-Clause,Go Indirect,Backend
+github.com/subosito/gotenv,v1.6.0,MIT,Go Indirect,Backend
+github.com/sagikazarmark/locafero,v0.11.0,MIT,Go Indirect,Backend
+github.com/sourcegraph/conc,v0.3.1,MIT,Go Indirect,Backend
+github.com/go-viper/mapstructure/v2,v2.5.0,MIT,Go Indirect,Backend
+github.com/pelletier/go-toml/v2,v2.3.1,Apache-2.0,Go Indirect,Backend
+
+# PDF & Excel Generation
+github.com/jung-kurt/gofpdf,v1.16.2,MIT,Go Direct,Backend
+github.com/xuri/excelize/v2,v2.10.1,BSD-3-Clause,Go Direct,Backend
+github.com/richardlehane/mscfb,v1.0.6,BSD-3-Clause,Go Indirect,Backend
+github.com/richardlehane/msoleps,v1.0.6,BSD-3-Clause,Go Indirect,Backend
+github.com/xuri/efp,v0.0.1,BSD-3-Clause,Go Indirect,Backend
+github.com/xuri/nfp,v0.0.2,BSD-3-Clause,Go Indirect,Backend
+
+# WebSocket
+github.com/gorilla/websocket,v1.5.3,BSD-2-Clause,Go Direct,Backend
+
+# SNMP
+github.com/gosnmp/gosnmp,v1.43.2,BSD-2-Clause,Go Direct,Backend
+
+# State Machine
+github.com/looplab/fsm,v1.0.2,MIT,Go Direct,Backend
+
+# YAML
+go.yaml.in/yaml/v3,v3.0.4,MIT,Go Direct,Backend
+
+# FTP Server
+goftp.io/server/v2,v2.0.3,Apache-2.0,Go Direct,Backend
+
+# Telegram Bot
+github.com/go-telegram-bot-api/telegram-bot-api/v5,v5.5.1,MIT,Go Direct,Backend
+
+# MinIO (S3-compatible storage)
+github.com/minio/minio-go/v7,v7.2.0,Apache-2.0,Go Indirect,Backend
+github.com/minio/md5-simd,v1.1.2,Apache-2.0,Go Indirect,Backend
+github.com/minio/crc64nvme,v1.1.1,Apache-2.0,Go Indirect,Backend
+github.com/rs/xid,v1.6.0,BSD-3-Clause,Go Indirect,Backend
+github.com/dustin/go-humanize,v1.0.1,MIT,Go Indirect,Backend
+github.com/google/uuid,v1.6.0,BSD-3-Clause,Go Indirect,Backend
+github.com/klauspost/compress,v1.18.6,Apache-2.0,Go Indirect,Backend
+github.com/klauspost/cpuid/v2,v2.2.11,Apache-2.0,Go Indirect,Backend
+github.com/klauspost/crc32,v1.3.0,Apache-2.0,Go Indirect,Backend
+github.com/zeebo/xxh3,v1.1.0,BSD-2-Clause,Go Indirect,Backend
+
+# Misc
+github.com/boombuler/barcode,v1.0.1,MIT,Go Indirect,Backend
+github.com/cespare/xxhash/v2,v2.3.0,MIT,Go Indirect,Backend
+github.com/jackc/pgpassfile,v1.0.0,MIT,Go Indirect,Backend
+github.com/jackc/pgservicefile,v0.0.1,MIT,Go Indirect,Backend
+github.com/jackc/puddle/v2,v2.2.2,MIT,Go Indirect,Backend
+github.com/lib/pq,v1.10.9,MIT,Go Indirect,Backend
+github.com/philhofer/fwd,v1.2.0,MIT,Go Indirect,Backend
+github.com/tiendc/go-deepcopy,v1.7.2,MIT,Go Indirect,Backend
+github.com/tinylib/msgp,v1.6.1,MIT,Go Indirect,Backend
+golang.org/x/net,v0.55.0,BSD-3-Clause,Go Indirect,Backend
+golang.org/x/sync,v0.21.0,BSD-3-Clause,Go Indirect,Backend
+golang.org/x/sys,v0.46.0,BSD-3-Clause,Go Indirect,Backend
+golang.org/x/text,v0.38.0,BSD-3-Clause,Go Direct,Backend
+gopkg.in/ini.v1,v1.67.2,Apache-2.0,Go Indirect,Backend
+gopkg.in/natefinch/lumberjack.v2,v2.2.1,MIT,Go Direct,Backend
+
+# ═══════════════════════════════════════════════════════════════════════
+# Frontend (React 19 + Vite) Dependencies
+# ═══════════════════════════════════════════════════════════════════════
+
+# Core
+react,^19.2.0,MIT,JS Direct,Frontend
+react-dom,^19.2.0,MIT,JS Direct,Frontend
+react-router-dom,^7.13.0,MIT,JS Direct,Frontend
+
+# State Management & Data Fetching
+@tanstack/react-virtual,^3.14.3,MIT,JS Direct,Frontend
+@hello-pangea/dnd,^18.0.1,Apache-2.0,JS Direct,Frontend
+zod,^3.25.76,MIT,JS Direct,Frontend
+
+# UI Components
+lucide-react,^0.563.0,ISC,JS Direct,Frontend
+qrcode.react,^4.2.0,MIT,JS Direct,Frontend
+react-datepicker,^9.1.0,MIT,JS Direct,Frontend
+react-dropzone,^15.0.0,MIT,JS Direct,Frontend
+react-grid-layout,^2.2.3,MIT,JS Direct,Frontend
+react-compare-image,^3.5.17,MIT,JS Direct,Frontend
+
+# Calendar
+@fullcalendar/core,^6.1.20,MIT,JS Direct,Frontend
+@fullcalendar/daygrid,^6.1.20,MIT,JS Direct,Frontend
+@fullcalendar/interaction,^6.1.20,MIT,JS Direct,Frontend
+@fullcalendar/react,^6.1.20,MIT,JS Direct,Frontend
+
+# Charts & Visualization
+recharts,^3.9.0,MIT,JS Direct,Frontend
+
+# PDF & Export
+jspdf,^4.2.1,MIT,JS Direct,Frontend
+jspdf-autotable,^5.0.8,MIT,JS Direct,Frontend
+xlsx,^0.18.5,Apache-2.0,JS Direct,Frontend
+
+# HTTP Client
+axios,^1.17.0,MIT,JS Direct,Frontend
+
+# i18n
+i18next,^26.3.1,MIT,JS Direct,Frontend
+i18next-browser-languagedetector,^8.2.1,MIT,JS Direct,Frontend
+react-i18next,^17.0.8,MIT,JS Direct,Frontend
+
+# Utilities
+date-fns,^4.1.0,MIT,JS Direct,Frontend
+
+# Dev Dependencies
+@eslint/js,^9.39.1,MIT,JS Dev,Frontend
+@tailwindcss/vite,^4.1.18,MIT,JS Dev,Frontend
+@testing-library/jest-dom,^6.9.1,MIT,JS Dev,Frontend
+@testing-library/react,^16.3.2,MIT,JS Dev,Frontend
+@types/node,^24.10.1,MIT,JS Dev,Frontend
+@types/react,^19.2.7,MIT,JS Dev,Frontend
+@types/react-dom,^19.2.3,MIT,JS Dev,Frontend
+@types/react-datepicker,^6.2.0,MIT,JS Dev,Frontend
+@types/react-grid-layout,^1.3.6,MIT,JS Dev,Frontend
+@vitejs/plugin-react,^5.1.1,MIT,JS Dev,Frontend
+eslint,^9.39.1,MIT,JS Dev,Frontend
+eslint-plugin-react-hooks,^7.0.1,MIT,JS Dev,Frontend
+eslint-plugin-react-refresh,^0.4.24,MIT,JS Dev,Frontend
+globals,^16.5.0,MIT,JS Dev,Frontend
+jsdom,^28.1.0,MIT,JS Dev,Frontend
+tailwindcss,^4.1.18,MIT,JS Dev,Frontend
+typescript,~5.9.3,Apache-2.0,JS Dev,Frontend
+typescript-eslint,^8.48.0,MIT,JS Dev,Frontend
+vite,^8.0.16,MIT,JS Dev,Frontend
+vitest,^4.0.18,MIT,JS Dev,Frontend
+
+# ═══════════════════════════════════════════════════════════════════════
+# Mobile (React Native + Expo) Dependencies
+# ═══════════════════════════════════════════════════════════════════════
+
+# Core
+react,18.3.1,MIT,JS Direct,Mobile
+react-native,0.76.0,MIT,JS Direct,Mobile
+expo,~52.0.0,MIT,JS Direct,Mobile
+expo-status-bar,~2.0.0,MIT,JS Direct,Mobile
+
+# Navigation
+@react-navigation/native,^7.0.0,MIT,JS Direct,Mobile
+@react-navigation/native-stack,^7.0.0,MIT,JS Direct,Mobile
+@react-navigation/bottom-tabs,^7.0.0,MIT,JS Direct,Mobile
+react-native-screens,~4.0.0,MIT,JS Direct,Mobile
+react-native-safe-area-context,4.12.0,MIT,JS Direct,Mobile
+
+# UI Components
+@expo/vector-icons,^14.0.0,MIT,JS Direct,Mobile
+react-native-maps,1.18.0,MIT,JS Direct,Mobile
+react-native-signature-canvas,^4.7.0,MIT,JS Direct,Mobile
+react-native-webview,13.12.0,MIT,JS Direct,Mobile
+
+# Camera & QR
+expo-camera,~16.0.0,MIT,JS Direct,Mobile
+expo-barcode-scanner,~13.0.0,MIT,JS Direct,Mobile
+expo-image-picker,~16.0.0,MIT,JS Direct,Mobile
+react-native-view-shot,3.8.0,MIT,JS Direct,Mobile
+
+# Location & Maps
+expo-location,~18.0.0,MIT,JS Direct,Mobile
+
+# Storage & Background
+@react-native-async-storage/async-storage,1.23.1,MIT,JS Direct,Mobile
+expo-sqlite,^56.0.5,MIT,JS Direct,Mobile
+expo-file-system,~18.0.0,MIT,JS Direct,Mobile
+expo-background-fetch,^56.0.19,MIT,JS Direct,Mobile
+expo-task-manager,^56.0.19,MIT,JS Direct,Mobile
+
+# Network
+axios,^1.7.0,MIT,JS Direct,Mobile
+@react-native-community/netinfo,11.4.1,MIT,JS Direct,Mobile
+
+# State & Data
+@tanstack/react-query,^5.60.0,MIT,JS Direct,Mobile
+zustand,^5.0.0,MIT,JS Direct,Mobile
+zod,^3.23.0,MIT,JS Direct,Mobile
+
+# Notifications
+expo-notifications,~0.29.0,MIT,JS Direct,Mobile
+
+# Utilities
+date-fns,^4.1.0,MIT,JS Direct,Mobile
+
+# Dev Dependencies
+@types/react,~18.3.0,MIT,JS Dev,Mobile
+typescript,^5.3.0,Apache-2.0,JS Dev,Mobile
+
+# ═══════════════════════════════════════════════════════════════════════
+# Summary
+# ═══════════════════════════════════════════════════════════════════════
+# Go Backend: 60+ dependencies
+# Frontend: 35+ dependencies  
+# Mobile: 30+ dependencies
+# All licenses: MIT (majority), Apache-2.0, BSD-2/3-Clause, ISC
+# AGPL: NONE — clean AGPL-free codebase
+# Closed-source: NONE — all OSS

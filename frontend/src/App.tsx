@@ -18,6 +18,16 @@ import { SparePartsProvider } from './context/SparePartsContext';
 import { ToastProvider } from './components/ui';
 import { Analytics } from './pages/Analytics';
 import { Logs } from './pages/Logs';
+import { AuditLog } from './pages/AuditLog';
+import { MeterDashboard } from './pages/MeterDashboard';
+import { WOAging } from './pages/WOAging';
+import { LocationTree } from './pages/LocationTree';
+import { APIKeys } from './pages/APIKeys';
+import { Webhooks } from './pages/Webhooks';
+import { WorkloadAnalytics } from './pages/WorkloadAnalytics';
+import { WorkRequestPortal } from './pages/WorkRequestPortal';
+import { VendorPerformance } from './pages/VendorPerformance';
+import { OnCallSchedule } from './pages/OnCallSchedule';
 import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
 import { WorkOrders } from './pages/WorkOrders';
 import { SpareParts } from './pages/SpareParts';
@@ -64,6 +74,7 @@ function App() {
                             {/* Public Route */}
                             <Route path="/login" element={<Login />} />
                             <Route path="/forgot-password" element={<ForgotPassword />} />
+                            <Route path="/request" element={<WorkRequestPortal />} />
 
                             {/* Protected Routes with Layout */}
                             <Route element={
@@ -91,12 +102,15 @@ function App() {
                               
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support']} />}>
                                 <Route path="/logs" element={<Logs />} />
+                              <Route path="/audit-log" element={<AuditLog />} />
                               </Route>
 
                               {/* Admin Only Routes */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
                                 <Route path="/users" element={<Users />} />
-                                <Route path="/api-keys" element={<Navigate to="/settings" replace />} />
+                                <Route path="/api-keys" element={<APIKeys />} />
+                              <Route path="/webhooks" element={<Webhooks />} />
+                              <Route path="/workload-analytics" element={<WorkloadAnalytics />} />
                               </Route>
 
                               {/* Admin Only Routes - Settings */}
@@ -121,7 +135,12 @@ function App() {
                                 <Route path="/asset-overview" element={<AssetOverview />} />
                                 <Route path="/sla" element={<SLADashboard />} />
                                 <Route path="/maintenance-reports" element={<MaintenanceReports />} />
-                                <Route path="/cost-dashboard" element={<TotalCostDashboard />} />
+                              <Route path="/meter-dashboard" element={<MeterDashboard />} />
+                              <Route path="/wo-aging" element={<WOAging />} />
+                              <Route path="/location-tree" element={<LocationTree />} />
+                              <Route path="/cost-dashboard" element={<TotalCostDashboard />} />
+                              <Route path="/vendor-performance" element={<VendorPerformance />} />
+                              <Route path="/on-call" element={<OnCallSchedule />} />
                               </Route>
                             </Route>
 

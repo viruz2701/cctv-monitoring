@@ -104,6 +104,31 @@ type Config struct {
 	RecaptchaSecretKey string `mapstructure:"recaptcha_secret_key"`
 	RecaptchaSiteKey   string `mapstructure:"recaptcha_site_key"`
 	RecaptchaEnabled   bool   `mapstructure:"recaptcha_enabled"`
+
+	// INT-02: SAML 2.0 / LDAP SSO configuration
+	LDAPEnabled        bool   `mapstructure:"ldap_enabled"`
+	LDAPHost           string `mapstructure:"ldap_host"`
+	LDAPPort           int    `mapstructure:"ldap_port"`
+	LDAPUseTLS         bool   `mapstructure:"ldap_use_tls"`
+	LDAPBaseDN         string `mapstructure:"ldap_base_dn"`
+	LDAPBindDN         string `mapstructure:"ldap_bind_dn"`
+	LDAPBindPassword   string `mapstructure:"ldap_bind_password"`
+	LDAPUserFilter     string `mapstructure:"ldap_user_filter"`
+	LDAPLoginAttribute string `mapstructure:"ldap_login_attribute"`
+	LDAPMailAttribute  string `mapstructure:"ldap_mail_attribute"`
+	LDAPNameAttribute  string `mapstructure:"ldap_name_attribute"`
+	LDAPDefaultRole    string `mapstructure:"ldap_default_role"`
+
+	SAMLEnabled        bool   `mapstructure:"saml_enabled"`
+	SAMLIdPMetadataURL string `mapstructure:"saml_idp_metadata_url"`
+	SAMLIdPEntityID    string `mapstructure:"saml_idp_entity_id"`
+	SAMLIdPSSOURL      string `mapstructure:"saml_idp_sso_url"`
+	SAMLSPEntityID     string `mapstructure:"saml_sp_entity_id"`
+	SAMLAcsURL         string `mapstructure:"saml_acs_url"`
+	SAMLDefaultRole    string `mapstructure:"saml_default_role"`
+	SAMLMailAttribute  string `mapstructure:"saml_mail_attribute"`
+	SAMLNameAttribute  string `mapstructure:"saml_name_attribute"`
+	SAMLRoleAttribute  string `mapstructure:"saml_role_attribute"`
 }
 
 // EventStoreConfig — настройки Event Store (DM-1.2.2: NATS + S3 Cold Storage)

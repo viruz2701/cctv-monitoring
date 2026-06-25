@@ -13,6 +13,7 @@ import { NotificationsSettings } from './settings/NotificationsSettings';
 import { SecuritySettings } from './settings/SecuritySettings';
 import { ServicesSettings } from './settings/ServicesSettings';
 import { IntegrationsSettings } from './settings/IntegrationsSettings';
+import { SSOSettings } from './settings/SSOSettings';
 
 // ── Atlas CMMS Integration Panel (встроенный мини-компонент) ──────────
 import { AtlasCMSPanel } from './settings/AtlasCMSPanel';
@@ -32,6 +33,7 @@ export function Settings() {
     { id: 'security', label: t('security'), icon: <Shield className="w-4 h-4" /> },
     { id: 'services', label: t('services') || 'Services', icon: <Server className="w-4 h-4" /> },
     { id: 'integrations', label: t('integrations'), icon: <Globe className="w-4 h-4" /> },
+    { id: 'sso', label: t('sso') || 'SSO', icon: <Lock className="w-4 h-4" /> },
   ];
 
   useEffect(() => {
@@ -160,6 +162,10 @@ export function Settings() {
           <IntegrationsSettings>
             <AtlasCMSPanel />
           </IntegrationsSettings>
+        )}
+
+        {activeTab === 'sso' && (
+          <SSOSettings />
         )}
       </div>
     </PermissionGuard>

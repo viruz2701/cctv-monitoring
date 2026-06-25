@@ -20,6 +20,7 @@ export { FileUpload } from './FileUpload';
 export { ImportWizard, exportData } from './ImportWizard';
 export { WorkOrderPrintView } from './WorkOrderPrintView';
 export type { WorkOrderPrintViewProps, PartWithCost } from './WorkOrderPrintView';
+export * from './AdvancedSearch';
 export * from './Modal';
 export * from './Button';
 export * from './Input';

@@ -353,6 +353,22 @@ export interface TechnicianSiteAssignment {
     site_name?: string;
 }
 
+// ─── Webhook Endpoint Types (WF-9.3.1) ──────────────────────────────
+
+export interface WebhookEndpoint {
+    id: string;
+    name: string;
+    url: string;
+    events: string[];
+    secret?: string;
+    active: boolean;
+    retry_count: number;
+    timeout_seconds: number;
+    last_sent_at?: string;
+    last_status?: string;
+    created_at: string;
+}
+
 // ─── Dashboard Stats ──────────────────────────────────────────────────
 
 export interface DashboardStats {
@@ -920,6 +936,38 @@ export const api = {
 
     async atlasSyncAsset(deviceId: string): Promise<{ status: string; error?: string; message?: string }> {
         return request<{ status: string; error?: string; message?: string }>(`/atlas/sync-asset/${deviceId}`, {
+            method: 'POST',
+        });
+    },
+
+    // ── Webhook Endpoints (WF-9.3.1) ─────────────────────────────────
+
+    async getWebhooks(): Promise<WebhookEndpoint[]> {
+        return request<WebhookEndpoint[]>('/webhooks');
+    },
+
+    async createWebhook(data: { name: string; url: string; events: string[]; secret?: string; active?: boolean }): Promise<WebhookEndpoint> {
+        return request<WebhookEndpoint>('/webhooks', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async updateWebhook(id: string, data: Partial<WebhookEndpoint>): Promise<WebhookEndpoint> {
+        return request<WebhookEndpoint>(`/webhooks/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteWebhook(id: string): Promise<void> {
+        await request<void>(`/webhooks/${id}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async testWebhook(id: string): Promise<{ status: string; message: string }> {
+        return request<{ status: string; message: string }>(`/webhooks/${id}/test`, {
             method: 'POST',
         });
     },

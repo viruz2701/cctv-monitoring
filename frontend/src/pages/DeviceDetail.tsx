@@ -25,6 +25,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Tag,
+    QrCode,
 } from 'lucide-react';
 import {
     Card,
@@ -354,6 +355,10 @@ export function DeviceDetail() {
                 </div>
                 <div className="flex gap-3">
                     <Button variant="outline" icon={<RefreshCw className="w-4 h-4" />}>{t('refresh')}</Button>
+                    <Button variant="outline" icon={<QrCode className="w-4 h-4" />}
+                      onClick={() => window.open(`/request?device_id=${deviceId}`, '_blank')}>
+                      {t('qr_request') || 'QR Заявка'}
+                    </Button>
                     <Button variant="outline" icon={<Settings className="w-4 h-4" />}>{t('configure')}</Button>
                 </div>
             </div>

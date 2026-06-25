@@ -14,6 +14,12 @@ interface Column<T> {
   minWidth?: number;
   align?: 'left' | 'center' | 'right';
   hideable?: boolean;
+  /** WO-4.2.3: Inline Editing — двойной клик для редактирования */
+  editable?: boolean;
+  /** WO-4.2.3: Тип редактора */
+  editType?: 'text' | 'select' | 'number';
+  /** WO-4.2.3: Опции для select */
+  editOptions?: { value: string; label: string }[];
 }
 
 type DensityMode = 'compact' | 'standard' | 'comfortable';
@@ -84,6 +90,8 @@ interface DataGridProps<T> {
   variant?: DataGridVariant;
   stickyHeader?: boolean;
   rowClassName?: (item: T) => string;
+  /** WO-4.2.3: Inline Editing — колбэк при изменении значения */
+  onCellEdit?: (item: T, key: string, value: any) => Promise<void>;
   onColumnReorder?: (columns: Column<T>[]) => void;
 }
 
@@ -129,6 +137,11 @@ export function DataGrid<T>({
   } as const;
 
   const [orderedColumnKeys, setOrderedColumnKeys] = useState<string[] | null>(null);
+  // WO-4.2.3: Inline editing state
+  const [editingCell, setEditingCell] = useState<{ rowId: string; colKey: string } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [editSaving, setEditSaving] = useState(false);
+  const editInputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
 
   const visibleColumns = useMemo(() => {
     const visible = columns.filter((c) => !hiddenColumns.has(String(c.key)));
@@ -577,14 +590,95 @@ export function DataGrid<T>({
                         </button>
                       </td>
                     )}
-                    {visibleColumns.map((column) => (
-                      <td
-                        key={String(column.key)}
-                        className={`${ds.cell} text-slate-700 dark:text-slate-300 ${alignClasses[column.align || 'left']} ${variant === 'bordered' ? 'border border-slate-200 dark:border-slate-700' : ''}`}
-                      >
-                        {column.render ? column.render(item) : String(getValue(item, column.key) ?? '')}
-                      </td>
-                    ))}
+                    {visibleColumns.map((column) => {
+                      const colKey = String(column.key);
+                      const isEditing = editingCell?.rowId === id && editingCell?.colKey === colKey;
+
+                      const startEditing = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (!column.editable || !onCellEdit) return;
+                        const currentVal = String(getValue(item, colKey) ?? '');
+                        setEditValue(currentVal);
+                        setEditingCell({ rowId: id, colKey });
+                        setTimeout(() => {
+                          if (editInputRef.current) editInputRef.current.focus();
+                        }, 50);
+                      };
+
+                      const saveEdit = async () => {
+                        if (!editingCell || !onCellEdit) return;
+                        setEditSaving(true);
+                        try {
+                          const parsedValue = column.editType === 'number' ? Number(editValue) : editValue;
+                          await onCellEdit(item, colKey, parsedValue);
+                          setEditingCell(null);
+                        } catch {
+                          setEditingCell(null);
+                        } finally {
+                          setEditSaving(false);
+                        }
+                      };
+
+                      const cancelEdit = () => {
+                        setEditingCell(null);
+                      };
+
+                      const handleKeyDown = async (e: React.KeyboardEvent) => {
+                        if (e.key === 'Enter') await saveEdit();
+                        if (e.key === 'Escape') cancelEdit();
+                      };
+
+                      return (
+                        <td
+                          key={colKey}
+                          className={`${ds.cell} text-slate-700 dark:text-slate-300 ${alignClasses[column.align || 'left']} ${variant === 'bordered' ? 'border border-slate-200 dark:border-slate-700' : ''} ${
+                            column.editable && onCellEdit ? 'group relative cursor-pointer' : ''
+                          }`}
+                          onDoubleClick={startEditing}
+                        >
+                          {isEditing ? (
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              {column.editType === 'select' && column.editOptions ? (
+                                <select
+                                  ref={editInputRef as any}
+                                  className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onKeyDown={handleKeyDown}
+                                  onBlur={saveEdit}
+                                  disabled={editSaving}
+                                >
+                                  {column.editOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  ref={editInputRef as any}
+                                  type={column.editType === 'number' ? 'number' : 'text'}
+                                  className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onKeyDown={handleKeyDown}
+                                  onBlur={saveEdit}
+                                  disabled={editSaving}
+                                />
+                              )}
+                              {editSaving && <span className="text-xs text-blue-500">...</span>}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              {column.render ? column.render(item) : String(getValue(item, column.key) ?? '')}
+                              {column.editable && onCellEdit && (
+                                <span className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-400 ml-1 transition-opacity">
+                                  ✎
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })
