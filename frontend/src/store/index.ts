@@ -15,5 +15,9 @@ export {
 } from './workspaceStore';
 export {
   useFilterStore,
-  type SavedView,
+  type SavedView as FilterSavedView,
 } from './filterStore';
+export {
+  useSavedViewsStore,
+  type SavedView as DashboardSavedView,
+} from './savedViewsStore';

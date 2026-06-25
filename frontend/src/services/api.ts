@@ -1,3 +1,5 @@
+import { mapApiError, type MappedApiError } from './apiErrorMapper';
+
 const API_BASE = '/api/v1';
 
 let authToken: string | null = localStorage.getItem('token');
@@ -73,6 +75,15 @@ export async function request<T>(
     }
 
     return null as T;
+  }
+
+export function handleApiError(error: unknown): MappedApiError {
+    const mapped = mapApiError(error);
+    if (mapped.retryable) {
+        console.warn('[API] Retryable error:', mapped);
+        // Здесь можно добавить automatic retry logic
+    }
+    return mapped;
 }
 // ─── Types ────────────────────────────────────────────────────────────
 
