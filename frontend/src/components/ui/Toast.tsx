@@ -118,8 +118,11 @@ function ToastNotification({
             ? 'opacity-100 translate-x-0 scale-100'
             : 'opacity-0 translate-x-8 scale-95'
         }
+        ${toast.collapsed ? 'opacity-70 scale-[0.97]' : ''}
       `}
-      role="alert"
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
     >
       {/* Progress bar — animated countdown */}
       <div
@@ -149,34 +152,44 @@ function ToastNotification({
                 text-[11px] font-bold leading-none
                 ${styles.bg} ${styles.text} border ${styles.border}
               `}
+              aria-label={`${toast.count} occurrences`}
             >
               {toast.count}
             </span>
           )}
         </div>
 
-        {/* Optional message */}
-        {toast.message && (
-          <p
-            className={`text-xs mt-0.5 ${styles.text} opacity-80 line-clamp-2`}
-          >
-            {toast.message}
+        {/* Collapsed: show minimal info with "N×" prefix on title */}
+        {toast.collapsed ? (
+          <p className={`text-xs mt-0.5 ${styles.text} opacity-70 line-clamp-1`}>
+            {toast.count}× {toast.message || 'Repeated notification'}
           </p>
-        )}
+        ) : (
+          <>
+            {/* Optional message */}
+            {toast.message && (
+              <p
+                className={`text-xs mt-0.5 ${styles.text} opacity-80 line-clamp-2`}
+              >
+                {toast.message}
+              </p>
+            )}
 
-        {/* Undo action button */}
-        {toast.undo && (
-          <button
-            onClick={handleUndo}
-            className={`
-              mt-1.5 text-xs font-semibold uppercase tracking-wider
-              px-2.5 py-1 rounded-lg
-              hover:bg-black/10 dark:hover:bg-white/10
-              transition-colors ${styles.text}
-            `}
-          >
-            {toast.undo.label}
-          </button>
+            {/* Undo action button */}
+            {toast.undo && (
+              <button
+                onClick={handleUndo}
+                className={`
+                  mt-1.5 text-xs font-semibold uppercase tracking-wider
+                  px-2.5 py-1 rounded-lg
+                  hover:bg-black/10 dark:hover:bg-white/10
+                  transition-colors ${styles.text}
+                `}
+              >
+                {toast.undo.label}
+              </button>
+            )}
+          </>
         )}
       </div>
 

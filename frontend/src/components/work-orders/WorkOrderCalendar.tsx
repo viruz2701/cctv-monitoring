@@ -52,7 +52,7 @@ export interface WorkOrderCalendarProps {
 // WorkOrderCalendar
 // ═══════════════════════════════════════════════════════════════════════
 
-export function WorkOrderCalendar({
+export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
   workOrders,
   technicians,
   currentUserId,
@@ -260,4 +260,4 @@ export function WorkOrderCalendar({
       </div>
     </div>
   );
-}
+});

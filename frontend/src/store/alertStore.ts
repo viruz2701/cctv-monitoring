@@ -34,6 +34,8 @@ export interface ToastAlert {
   count?: number;
   /** Кастомная длительность в ms. Если не указана — используется default по типу */
   duration?: number;
+  /** Флаг: toast свёрнут после 3+ одинаковых */
+  collapsed?: boolean;
 }
 
 // ─── Default durations ──────────────────────────────────────────────
@@ -100,13 +102,17 @@ export const useAlertStore = create<AlertUIState>()((set) => ({
 
       if (existingIndex !== -1) {
         // Группировка: увеличиваем count и обновляем id (сбрасываем таймер)
+        const existing = state.toasts[existingIndex];
+        const newCount = (existing.count ?? 1) + 1;
         const updated = [...state.toasts];
         updated[existingIndex] = {
-          ...updated[existingIndex],
-          count: (updated[existingIndex].count ?? 1) + 1,
+          ...existing,
+          count: newCount,
           id,
           duration,
-          undo: alert.undo ?? updated[existingIndex].undo,
+          undo: alert.undo ?? existing.undo,
+          // После 3 одинаковых — collapse (сворачиваем)
+          collapsed: newCount >= 3 || existing.collapsed === true,
         };
         return { toasts: updated };
       }
