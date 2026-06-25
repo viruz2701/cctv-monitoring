@@ -1,8 +1,31 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Activity, AlertTriangle, CheckCircle, Clock, XCircle, FileText, RefreshCw, Save, X, Edit2 } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  FileText,
+  RefreshCw,
+  Save,
+  X,
+  Edit2,
+} from 'lucide-react';
 import { request } from '../services/api';
-import { Card, DataGrid, Badge, Gauge, StatsCard, Button, useToast } from '../components/ui';
+import { Card, DataGrid, Badge, StatsCard, Button, useToast } from '../components/ui';
+import { SLAGaugePanel } from '../components/sla/SLAGaugePanel';
+import { SLATrendChart } from '../components/sla/SLATrendChart';
+import { SLAHeatmap } from '../components/sla/SLAHeatmap';
+import { SLABreachTimeline } from '../components/sla/SLABreachTimeline';
+
+// ══════════════════════════════════════════════════════════════════
+// P0-4.6: Редизайн SLADashboard
+// Top:    SLAGaugePanel (4 gauge)
+// Middle: SLATrendChart (слева) + SLAHeatmap (справа)
+// Bottom: SLABreachTimeline
+// Ниже свернутые DataGrid для SLA config / compliance (secondary)
+// ══════════════════════════════════════════════════════════════════
 
 interface SLAConfig {
   id: string;
@@ -21,10 +44,89 @@ interface SLAComplianceReport {
   avg_resolution_minutes: number;
 }
 
+// P0-4.4: Мок данных для trend chart (пока API нет)
+function generateMockTrend(days: number): { date: string; compliance: number }[] {
+  const result: { date: string; compliance: number }[] = [];
+  const now = new Date();
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    result.push({
+      date: d.toISOString().slice(0, 10),
+      compliance: 85 + Math.random() * 12 - 3 + Math.sin(i * 0.3) * 5,
+    });
+  }
+  return result;
+}
+
+// P0-4.3: Мок данных для heatmap (пока API нет)
+interface SiteCompliance {
+  siteId: string;
+  siteName: string;
+  weeks: { weekStart: string; compliance: number; total: number; within: number }[];
+}
+
+function generateMockHeatmap(): SiteCompliance[] {
+  const sites = ['HQ-Minsk', 'DC-Brest', 'DC-Gomel', 'Site-Vitebsk', 'Site-Grodno', 'Site-Mogilev'];
+  const now = new Date();
+  return sites.map((name, si) => ({
+    siteId: `site-${si + 1}`,
+    siteName: name,
+    weeks: Array.from({ length: 8 }, (_, wi) => {
+      const d = new Date(now);
+      d.setDate(d.getDate() - (7 - wi) * 7);
+      const total = 10 + Math.floor(Math.random() * 20);
+      const compliance = Math.min(100, Math.max(30, 75 + Math.random() * 25 + Math.sin(si * 2 + wi * 0.7) * 10));
+      const within = Math.round((compliance / 100) * total);
+      return {
+        weekStart: d.toISOString().slice(0, 10),
+        compliance: Math.round(compliance * 10) / 10,
+        total,
+        within,
+      };
+    }),
+  }));
+}
+
+// P0-4.5: Мок данных для breach timeline (пока API нет)
+interface BreachEvent {
+  id: string;
+  siteName: string;
+  priority: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  breachedAt: string;
+  responseTimeMinutes: number;
+  resolutionTimeMinutes: number;
+  description: string;
+}
+
+function generateMockBreaches(): BreachEvent[] {
+  const sites = ['HQ-Minsk', 'DC-Brest', 'DC-Gomel', 'Site-Vitebsk'];
+  const priorities = ['critical', 'high', 'medium', 'low'];
+  const severities: ('critical' | 'high' | 'medium' | 'low')[] = ['critical', 'high', 'medium', 'low'];
+  const now = new Date();
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(now);
+    d.setHours(d.getHours() - Math.random() * 168);
+    const sevIdx = Math.floor(Math.random() * severities.length);
+    return {
+      id: `breach-${i + 1}`,
+      siteName: sites[Math.floor(Math.random() * sites.length)],
+      priority: priorities[Math.floor(Math.random() * priorities.length)],
+      severity: severities[sevIdx],
+      breachedAt: d.toISOString(),
+      responseTimeMinutes: Math.round(15 + Math.random() * 120),
+      resolutionTimeMinutes: Math.round(60 + Math.random() * 480),
+      description: `SLA breach: Response time exceeded threshold for ${priorities[Math.floor(Math.random() * priorities.length)]} priority work order`,
+    };
+  });
+}
+
 const GAUGE_THRESHOLDS = [
-  { value: 90, color: '#16a34a', label: '≥90%' },
-  { value: 70, color: '#d97706', label: '≥70%' },
-  { value: 0, color: '#dc2626', label: '<70%' },
+  { value: 95, color: '#16a34a', label: '≥95%' },
+  { value: 80, color: '#eab308', label: '80–94%' },
+  { value: 60, color: '#f97316', label: '60–79%' },
+  { value: 0, color: '#dc2626', label: '<60%' },
 ];
 
 export const SLADashboard: React.FC = () => {
@@ -39,11 +141,19 @@ export const SLADashboard: React.FC = () => {
 
   // ═══ Inline Editing States ═══
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ response_time_minutes: number; resolution_time_minutes: number }>({
+  const [editForm, setEditForm] = useState<{
+    response_time_minutes: number;
+    resolution_time_minutes: number;
+  }>({
     response_time_minutes: 0,
     resolution_time_minutes: 0,
   });
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // P0-4.4/4.3/4.5: Mock data states
+  const [trendData] = useState(() => generateMockTrend(90));
+  const [heatmapData] = useState(() => generateMockHeatmap());
+  const [breachData] = useState(() => generateMockBreaches());
 
   // SLA-6.3.2: Real-time auto-refresh every 30s
   const fetchData = useCallback(async () => {
@@ -64,7 +174,6 @@ export const SLADashboard: React.FC = () => {
     setLoading(true);
     fetchData().finally(() => setLoading(false));
 
-    // Auto-refresh interval
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(fetchData, 30000); // 30s
 
@@ -99,15 +208,19 @@ export const SLADashboard: React.FC = () => {
       });
       toast.success(t('sla_config_updated') || 'SLA configuration updated');
       setEditingId(null);
-      // Refresh data
       await fetchData();
     } catch (err) {
-      const message = err instanceof Error ? err.message : (t('update_failed') || 'Failed to update');
+      const message =
+        err instanceof Error ? err.message : t('update_failed') || 'Failed to update';
       toast.error(message);
     } finally {
       setSavingId(null);
     }
   };
+
+  // ════════════════════════════════════════════════════════════════
+  // P0-4.2: Computed metrics for SLAGaugePanel
+  // ════════════════════════════════════════════════════════════════
 
   const overallCompliance = useMemo(() => {
     if (reports.length === 0) return 0;
@@ -116,14 +229,67 @@ export const SLADashboard: React.FC = () => {
     return total > 0 ? (within / total) * 100 : 0;
   }, [reports]);
 
+  // MTTR compliance: weighted by response time efficiency
+  const mttrCompliance = useMemo(() => {
+    if (reports.length === 0) return 0;
+    const totalWo = reports.reduce((s, r) => s + r.total_work_orders, 0);
+    if (totalWo === 0) return 0;
+    // Weighted average: lower response time = better compliance
+    const weightedScore = reports.reduce((s, r) => {
+      const maxResponse = 120; // target 2h max
+      const efficiency = Math.max(0, 100 - (r.avg_response_minutes / maxResponse) * 100);
+      return s + efficiency * r.total_work_orders;
+    }, 0);
+    return Math.round((weightedScore / totalWo) * 10) / 10;
+  }, [reports]);
+
+  // Preventive compliance: proxy by non-critical priorities
+  const preventiveCompliance = useMemo(() => {
+    const preventive = reports.filter((r) => r.priority === 'low' || r.priority === 'medium');
+    if (preventive.length === 0) return 85; // fallback
+    const total = preventive.reduce((s, r) => s + r.total_work_orders, 0);
+    const within = preventive.reduce((s, r) => s + r.within_sla, 0);
+    return total > 0 ? Math.round((within / total) * 100 * 10) / 10 : 85;
+  }, [reports]);
+
+  // Emergency response: critical priority compliance
+  const emergencyResponse = useMemo(() => {
+    const critical = reports.filter((r) => r.priority === 'critical');
+    if (critical.length === 0) return 0;
+    const total = critical.reduce((s, r) => s + r.total_work_orders, 0);
+    const within = critical.reduce((s, r) => s + r.within_sla, 0);
+    return total > 0 ? Math.round((within / total) * 100 * 10) / 10 : 0;
+  }, [reports]);
+
   const getComplianceColor = (percent: number) => {
-    if (percent >= 90) return 'success';
-    if (percent >= 70) return 'warning';
+    if (percent >= 95) return 'success';
+    if (percent >= 80) return 'warning';
+    if (percent >= 60) return 'warning';
     return 'danger';
   };
 
+  // ═══ KPI Cards ═══
+  const kpiData = useMemo(() => {
+    if (reports.length === 0) return null;
+    const total = reports.reduce((s, r) => s + r.total_work_orders, 0);
+    const within = reports.reduce((s, r) => s + r.within_sla, 0);
+    const breached = reports.reduce((s, r) => s + r.breached_sla, 0);
+    const atRisk = reports
+      .filter((r) => r.compliance_percent > 0 && r.compliance_percent < 90)
+      .reduce((s, r) => s + r.total_work_orders, 0);
+    return { total, within, breached, atRisk, compliance: overallCompliance };
+  }, [reports, overallCompliance]);
+
+  // ═══ Table Columns ═══
   const configColumns = [
-    { key: 'priority', header: t('priority'), sortable: true, render: (item: SLAConfig) => <Badge variant="info">{t(item.priority)}</Badge> },
+    {
+      key: 'priority',
+      header: t('priority'),
+      sortable: true,
+      render: (item: SLAConfig) => (
+        <Badge variant="info">{t(item.priority)}</Badge>
+      ),
+    },
     {
       key: 'response_time_minutes',
       header: t('response_time'),
@@ -136,7 +302,12 @@ export const SLADashboard: React.FC = () => {
               min={1}
               className="w-24 px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={editForm.response_time_minutes}
-              onChange={(e) => setEditForm(prev => ({ ...prev, response_time_minutes: parseInt(e.target.value) || 0 }))}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  response_time_minutes: parseInt(e.target.value) || 0,
+                }))
+              }
             />
           );
         }
@@ -155,7 +326,12 @@ export const SLADashboard: React.FC = () => {
               min={1}
               className="w-24 px-2 py-1 text-sm border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={editForm.resolution_time_minutes}
-              onChange={(e) => setEditForm(prev => ({ ...prev, resolution_time_minutes: parseInt(e.target.value) || 0 }))}
+              onChange={(e) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  resolution_time_minutes: parseInt(e.target.value) || 0,
+                }))
+              }
             />
           );
         }
@@ -176,10 +352,11 @@ export const SLADashboard: React.FC = () => {
                 className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
                 title={t('save')}
               >
-                {savingId === item.id
-                  ? <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
-                  : <Save className="w-4 h-4 text-emerald-500" />
-                }
+                {savingId === item.id ? (
+                  <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 text-emerald-500" />
+                )}
               </button>
               <button
                 onClick={cancelEditing}
@@ -207,56 +384,96 @@ export const SLADashboard: React.FC = () => {
   ];
 
   const reportColumns = [
-    { key: 'priority', header: t('priority'), sortable: true, render: (item: SLAComplianceReport) => <Badge variant="info">{t(item.priority)}</Badge> },
+    {
+      key: 'priority',
+      header: t('priority'),
+      sortable: true,
+      render: (item: SLAComplianceReport) => (
+        <Badge variant="info">{t(item.priority)}</Badge>
+      ),
+    },
     { key: 'total_work_orders', header: t('total'), sortable: true },
-    { key: 'within_sla', header: t('within_sla'), sortable: true, render: (item: SLAComplianceReport) => <span className="text-green-600">{item.within_sla}</span> },
-    { key: 'breached_sla', header: t('breached'), sortable: true, render: (item: SLAComplianceReport) => <span className="text-red-600">{item.breached_sla}</span> },
+    {
+      key: 'within_sla',
+      header: t('within_sla'),
+      sortable: true,
+      render: (item: SLAComplianceReport) => (
+        <span className="text-green-600">{item.within_sla}</span>
+      ),
+    },
+    {
+      key: 'breached_sla',
+      header: t('breached'),
+      sortable: true,
+      render: (item: SLAComplianceReport) => (
+        <span className="text-red-600">{item.breached_sla}</span>
+      ),
+    },
     {
       key: 'compliance_percent',
       header: t('compliance'),
       sortable: true,
       render: (item: SLAComplianceReport) => (
-        <Badge variant={getComplianceColor(item.compliance_percent) as 'success' | 'warning' | 'danger'}>
+        <Badge
+          variant={
+            getComplianceColor(item.compliance_percent) as
+              | 'success'
+              | 'warning'
+              | 'danger'
+          }
+        >
           {item.compliance_percent.toFixed(1)}%
         </Badge>
       ),
     },
-    { key: 'avg_response_minutes', header: t('avg_response'), sortable: true, render: (item: SLAComplianceReport) => `${item.avg_response_minutes.toFixed(1)} min` },
-    { key: 'avg_resolution_minutes', header: t('avg_resolution'), sortable: true, render: (item: SLAComplianceReport) => `${item.avg_resolution_minutes.toFixed(1)} min` },
+    {
+      key: 'avg_response_minutes',
+      header: t('avg_response'),
+      sortable: true,
+      render: (item: SLAComplianceReport) =>
+        `${item.avg_response_minutes.toFixed(1)} min`,
+    },
+    {
+      key: 'avg_resolution_minutes',
+      header: t('avg_resolution'),
+      sortable: true,
+      render: (item: SLAComplianceReport) =>
+        `${item.avg_resolution_minutes.toFixed(1)} min`,
+    },
   ];
-
-  // ── KPI Cards (SLA-6.3.1) ──────────────────────────────────────────
-
-  const kpiData = useMemo(() => {
-    if (reports.length === 0) return null;
-    const total = reports.reduce((s, r) => s + r.total_work_orders, 0);
-    const within = reports.reduce((s, r) => s + r.within_sla, 0);
-    const breached = reports.reduce((s, r) => s + r.breached_sla, 0);
-    const atRisk = reports.filter(r => r.compliance_percent > 0 && r.compliance_percent < 90)
-      .reduce((s, r) => s + r.total_work_orders, 0);
-    return { total, within, breached, atRisk, compliance: overallCompliance };
-  }, [reports, overallCompliance]);
 
   return (
     <div className="p-6">
+      {/* ═══ Header ═══ */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">{t('sla_dashboard')}</h1>
         <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span>{t('last_updated') || 'Last updated'}: {lastUpdated.toLocaleTimeString()}</span>
+          <span>
+            {t('last_updated') || 'Last updated'}: {lastUpdated.toLocaleTimeString()}
+          </span>
           <button
-            onClick={() => { setAutoRefresh(!autoRefresh); if (!autoRefresh) fetchData(); }}
+            onClick={() => {
+              setAutoRefresh(!autoRefresh);
+              if (!autoRefresh) fetchData();
+            }}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded transition-colors ${
-              autoRefresh ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
+              autoRefresh
+                ? 'bg-blue-50 text-blue-700'
+                : 'bg-slate-100 text-slate-500'
             }`}
-            title={autoRefresh ? (t('disable_auto_refresh') || 'Disable auto-refresh') : (t('enable_auto_refresh') || 'Enable auto-refresh')}
+            title={
+              autoRefresh
+                ? t('disable_auto_refresh') || 'Disable auto-refresh'
+                : t('enable_auto_refresh') || 'Enable auto-refresh'
+            }
           >
             <RefreshCw className={`w-3 h-3 ${autoRefresh ? 'animate-spin' : ''}`} />
-            {autoRefresh ? '30s' : (t('manual') || 'Manual')}
+            {autoRefresh ? '30s' : t('manual') || 'Manual'}
           </button>
         </div>
       </div>
 
-      {/* KPI Cards Row */}
+      {/* ═══ Top Row: KPI StatsCards ═══ */}
       {kpiData && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatsCard
@@ -291,47 +508,58 @@ export const SLADashboard: React.FC = () => {
         </div>
       )}
 
-      {reports.length > 0 && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-2 mb-6">
-            <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="text-lg font-semibold">{t('overall_sla_compliance')}</h3>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            <Gauge
-              value={overallCompliance}
-              max={100}
-              label={t('overall_compliance')}
-              size="lg"
-              thresholds={GAUGE_THRESHOLDS}
-              unit="%"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              {reports.map((r) => (
-                <Gauge
-                  key={r.priority}
-                  value={r.compliance_percent}
-                  max={100}
-                  label={t(r.priority)}
-                  size="md"
-                  thresholds={GAUGE_THRESHOLDS}
-                  unit="%"
-                />
-              ))}
-            </div>
-          </div>
-        </Card>
-      )}
+      {/* ═══ P0-4.2: SLAGaugePanel — 4 gauge метрики ═══ */}
+      <SLAGaugePanel
+        overallCompliance={overallCompliance}
+        mttrCompliance={mttrCompliance}
+        preventiveCompliance={preventiveCompliance}
+        emergencyResponse={emergencyResponse}
+        loading={loading}
+      />
 
+      {/* ═══ P0-4.6: Middle — TrendChart слева + Heatmap справа ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <SLATrendChart data={trendData} loading={loading} />
+        <SLAHeatmap data={heatmapData} loading={loading} />
+      </div>
+
+      {/* ═══ P0-4.5: Bottom — Breach Timeline ═══ */}
+      <SLABreachTimeline breaches={breachData} loading={loading} />
+
+      {/* ═══ Secondary: DataGrid Tables (свернутые под основной view) ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <h3 className="text-lg font-semibold mb-4">{t('sla_configuration')}</h3>
-          <DataGrid data={configs} columns={configColumns} keyExtractor={(item) => item.id} loading={loading} variant="striped" defaultDensity="compact" pageSize={10} exportFilename="sla-config.csv" />
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold">{t('sla_configuration')}</h3>
+          </div>
+          <DataGrid
+            data={configs}
+            columns={configColumns}
+            keyExtractor={(item) => item.id}
+            loading={loading}
+            variant="striped"
+            defaultDensity="compact"
+            pageSize={10}
+            exportFilename="sla-config.csv"
+          />
         </Card>
 
         <Card>
-          <h3 className="text-lg font-semibold mb-4">{t('sla_compliance_30d')}</h3>
-          <DataGrid data={reports} columns={reportColumns} keyExtractor={(item) => item.priority} loading={loading} variant="striped" defaultDensity="standard" pageSize={10} exportFilename="sla-compliance.csv" />
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-lg font-semibold">{t('sla_compliance_30d')}</h3>
+          </div>
+          <DataGrid
+            data={reports}
+            columns={reportColumns}
+            keyExtractor={(item) => item.priority}
+            loading={loading}
+            variant="striped"
+            defaultDensity="standard"
+            pageSize={10}
+            exportFilename="sla-compliance.csv"
+          />
         </Card>
       </div>
     </div>

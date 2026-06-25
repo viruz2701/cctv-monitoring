@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface GaugeProps {
+export interface GaugeProps {
   value: number;
   max?: number;
   label?: string;
@@ -12,6 +12,14 @@ interface GaugeProps {
   className?: string;
 }
 
+// P0-4.1: SLA-стандартные пороги — green ≥95%, yellow 80–94%, orange 60–79%, red <60%
+const DEFAULT_THRESHOLDS = [
+  { value: 95, color: '#16a34a', label: '≥95%' },
+  { value: 80, color: '#eab308', label: '80–94%' },
+  { value: 60, color: '#f97316', label: '60–79%' },
+  { value: 0, color: '#dc2626', label: '<60%' },
+];
+
 export function Gauge({
   value,
   max = 100,
@@ -22,17 +30,22 @@ export function Gauge({
   unit = '%',
   className = '',
 }: GaugeProps) {
-  // SLA-6.3.2: CSS transition для smooth animation
+  // P0-4.1: Mount animation via stroke-dasharray
   const [animatedPct, setAnimatedPct] = React.useState(0);
+  const [mounted, setMounted] = React.useState(false);
+
   React.useEffect(() => {
+    setMounted(true);
     const timer = setTimeout(() => setAnimatedPct(Math.min(100, Math.max(0, (value / max) * 100))), 50);
     return () => clearTimeout(timer);
   }, [value, max]);
+
   const pct = animatedPct;
+  const activeThresholds = thresholds ?? DEFAULT_THRESHOLDS;
   const radius = size === 'lg' ? 52 : size === 'sm' ? 34 : 42;
   const stroke = size === 'lg' ? 10 : size === 'sm' ? 6 : 8;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (pct / 100) * circumference;
+  const offset = mounted ? circumference - (pct / 100) * circumference : circumference;
 
   const sizeClasses = {
     sm: 'w-24 h-24',
@@ -50,16 +63,12 @@ export function Gauge({
   const center = svgSize / 2;
 
   const getColor = (): string => {
-    if (thresholds) {
-      for (let i = thresholds.length - 1; i >= 0; i--) {
-        if (pct >= thresholds[i].value) {
-          return thresholds[i].color;
-        }
+    for (let i = activeThresholds.length - 1; i >= 0; i--) {
+      if (pct >= activeThresholds[i].value) {
+        return activeThresholds[i].color;
       }
     }
-    if (pct >= 80) return '#16a34a';
-    if (pct >= 50) return '#d97706';
-    return '#dc2626';
+    return activeThresholds[activeThresholds.length - 1]?.color ?? '#16a34a';
   };
 
   const fillColor = getColor();
@@ -74,6 +83,7 @@ export function Gauge({
           viewBox={`0 0 ${svgSize} ${svgSize}`}
           className="w-full h-full -rotate-90"
         >
+          {/* Track circle */}
           <circle
             cx={center}
             cy={center}
@@ -83,6 +93,7 @@ export function Gauge({
             strokeWidth={stroke}
             className="text-slate-200 dark:text-slate-700"
           />
+          {/* Arc with mount animation */}
           <circle
             cx={center}
             cy={center}
@@ -93,7 +104,7 @@ export function Gauge({
             strokeDasharray={circumference}
             strokeDashoffset={offset}
             strokeLinecap="round"
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-1000 ease-out"
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -106,9 +117,9 @@ export function Gauge({
         </div>
       </div>
 
-      {thresholds && thresholds.length > 0 && (
+      {activeThresholds.length > 0 && (
         <div className="flex gap-3 mt-2">
-          {thresholds.map((t, i) => (
+          {activeThresholds.map((t, i) => (
             <div key={i} className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
               <span className="text-xs text-slate-500 dark:text-slate-400">{t.label || `${t.value}%`}</span>
