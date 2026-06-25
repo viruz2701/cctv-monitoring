@@ -132,8 +132,20 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	r.Use(securityHeadersMiddleware)
 
 	// CORS middleware (ISO 27001 A.13.2 — whitelist, не wildcard)
+	// OWASP ASVS V13.4: ЗАПРЕЩЕНО использовать wildcard "*" в production.
 	allowedOrigins := cfg.CORSAllowedOrigins
-	if len(allowedOrigins) == 0 || (len(allowedOrigins) == 1 && allowedOrigins[0] == "*") {
+	for _, origin := range allowedOrigins {
+		if origin == "*" {
+			// Wildcard origin — security violation (OWASP ASVS V13.4)
+			// Не fallback, а reject: если в конфиге "*" — используем default whitelist
+			logger.Warn("CORS wildcard origin '*' detected and rejected! Falling back to safe defaults.",
+				"action", "using localhost defaults per OWASP ASVS V13.4",
+			)
+			allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+			break
+		}
+	}
+	if len(allowedOrigins) == 0 {
 		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
 	}
 	r.Use(cors.Handler(cors.Options{

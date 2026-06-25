@@ -1,5 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { maintenanceApi, MaintenanceSchedule, CreateScheduleRequest } from '../services/maintenanceApi';
+// ═══════════════════════════════════════════════════════════════════════
+// MaintenanceContext — React Query backed
+// ARCH-02: Server state managed via React Query, context retained for
+// backward compatibility.
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { createContext, useContext, useCallback } from 'react';
+import type { MaintenanceSchedule, CreateScheduleRequest } from '../services/maintenanceApi';
+import {
+  useMaintenanceSchedules,
+  useCreateMaintenanceSchedule,
+  useUpdateMaintenanceSchedule,
+  useDeleteMaintenanceSchedule,
+  useCompleteMaintenanceSchedule,
+} from '../hooks/useApiQuery';
 import { useAuth } from '../hooks/useAuth';
 
 interface MaintenanceContextType {
@@ -17,60 +30,51 @@ const MaintenanceContext = createContext<MaintenanceContextType | undefined>(und
 
 export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token } = useAuth();
-  const [schedules, setSchedules] = useState<MaintenanceSchedule[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    data: schedules = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useMaintenanceSchedules();
+
+  const createMutation = useCreateMaintenanceSchedule();
+  const updateMutation = useUpdateMaintenanceSchedule();
+  const deleteMutation = useDeleteMaintenanceSchedule();
+  const completeMutation = useCompleteMaintenanceSchedule();
 
   const fetchSchedules = useCallback(async (filters?: Record<string, string>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await maintenanceApi.getSchedules(filters);
-      setSchedules(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch schedules');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await refetch();
+  }, [refetch]);
 
-  const createSchedule = async (data: CreateScheduleRequest): Promise<MaintenanceSchedule> => {
-    const schedule = await maintenanceApi.createSchedule(data);
-    setSchedules((prev) => [...prev, schedule]);
-    return schedule;
-  };
+  const createSchedule = useCallback(async (data: CreateScheduleRequest): Promise<MaintenanceSchedule> => {
+    return createMutation.mutateAsync(data);
+  }, [createMutation]);
 
-  const updateSchedule = async (id: string, data: Partial<CreateScheduleRequest>) => {
-    await maintenanceApi.updateSchedule(id, data);
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...data } as MaintenanceSchedule : s))
-    );
-  };
+  const updateSchedule = useCallback(async (id: string, data: Partial<CreateScheduleRequest>) => {
+    await updateMutation.mutateAsync({ id, data });
+  }, [updateMutation]);
 
-  const deleteSchedule = async (id: string) => {
-    await maintenanceApi.deleteSchedule(id);
-    setSchedules((prev) => prev.filter((s) => s.id !== id));
-  };
+  const deleteSchedule = useCallback(async (id: string) => {
+    await deleteMutation.mutateAsync(id);
+  }, [deleteMutation]);
 
-  const completeSchedule = async (id: string) => {
-    await maintenanceApi.completeSchedule(id);
-    setSchedules((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, last_completed: new Date().toISOString(), next_due: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }
-          : s
-      )
-    );
-  };
-
-  useEffect(() => {
-    if (!token) return;
-    fetchSchedules();
-  }, [fetchSchedules, token]);
+  const completeSchedule = useCallback(async (id: string) => {
+    await completeMutation.mutateAsync(id);
+  }, [completeMutation]);
 
   return (
     <MaintenanceContext.Provider
-      value={{ schedules, loading, error, fetchSchedules, createSchedule, updateSchedule, deleteSchedule, completeSchedule }}
+      value={{
+        schedules,
+        loading,
+        error: queryError instanceof Error ? queryError.message : null,
+        fetchSchedules,
+        createSchedule,
+        updateSchedule,
+        deleteSchedule,
+        completeSchedule,
+      }}
     >
       {children}
     </MaintenanceContext.Provider>

@@ -61,6 +61,10 @@ type Config struct {
 	JiraFallbackDir string `mapstructure:"jira_fallback_dir"`
 
 	// NATS Event Bus
+	// UseNATSKV — использовать NATS JetStream KV для распределённого состояния устройств (ARCH-01).
+	// Если true и NATS доступен — DeviceStateManager работает через NATS KV вместо sync.Map.
+	// Требуется для горизонтального масштабирования (2+ реплики backend).
+	UseNATSKV    bool   `mapstructure:"use_nats_kv"`
 	NATSEmbedded bool   `mapstructure:"nats_embedded"`
 	NATSURL      string `mapstructure:"nats_url"`
 	NATSCreds    string `mapstructure:"nats_creds"`
@@ -292,6 +296,7 @@ func Load() *Config {
 	viper.SetDefault("jira_fallback_dir", "/var/lib/gb-telemetry/fallback/jira")
 
 	// NATS defaults
+	viper.SetDefault("use_nats_kv", false) // ARCH-01: opt-in для NATS KV
 	viper.SetDefault("nats_embedded", false)
 	viper.SetDefault("nats_url", "nats://localhost:4222")
 	viper.SetDefault("nats_tls", false)
@@ -440,6 +445,7 @@ func Load() *Config {
 	bindEnv("jira_fallback_dir", "GB_JIRA_FALLBACK_DIR")
 
 	// NATS
+	bindEnv("use_nats_kv", "GB_USE_NATS_KV")
 	bindEnv("nats_embedded", "GB_NATS_EMBEDDED")
 	bindEnv("nats_url", "GB_NATS_URL")
 	bindEnv("nats_creds", "GB_NATS_CREDS")
@@ -585,6 +591,7 @@ func Load() *Config {
 		JiraEmail:               viper.GetString("jira_email"),
 		JiraAPIToken:            viper.GetString("jira_api_token"),
 		JiraFallbackDir:         viper.GetString("jira_fallback_dir"),
+		UseNATSKV:               viper.GetBool("use_nats_kv"),
 		NATSEmbedded:            viper.GetBool("nats_embedded"),
 		NATSURL:                 viper.GetString("nats_url"),
 		NATSCreds:               viper.GetString("nats_creds"),

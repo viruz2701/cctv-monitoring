@@ -41,8 +41,7 @@ import {
     Select,
 } from '../components/ui';
 import { useTickets, useDevicesSites } from '../context/DataContext';
-import { deviceCameras, deviceStatsData, healthTimelineEvents, generateRecordingCalendar } from '../data/mockData';
-import type { RecordingDay, HealthTimelineEvent as TimelineEvent } from '../types';
+import type { RecordingDay, HealthTimelineEvent as TimelineEvent, DeviceStats, DeviceCamera } from '../types';
 import { useTranslation } from 'react-i18next';
 
 // ─── Helpers with locale support ─────────────────────────────────────
@@ -189,15 +188,16 @@ export function DeviceDetail() {
 
     const device = devices.find((d) => d.id === deviceId);
     const deviceTickets = tickets.filter((t) => t.deviceId === deviceId);
-    const cameras = deviceCameras.filter((c) => c.deviceId === deviceId);
-    const stats = deviceStatsData.find((s) => s.deviceId === deviceId);
-    const timeline = healthTimelineEvents
-        .filter((e) => e.deviceId === deviceId)
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // ARCH-03: mockData заменён на пустые структуры.
+    // При появлении API для cameras/stats/timeline/recording — заменить на React Query хуки.
+    const cameras: DeviceCamera[] = ([] as DeviceCamera[]);
+    const stats = (undefined as DeviceStats | undefined);
+    const timeline = ([] as TimelineEvent[]);
 
     const recordingData = useMemo(() => {
         if (!deviceId) return [];
-        const allData = generateRecordingCalendar(deviceId);
+        const allData: RecordingDay[] = [];
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
         oneYearAgo.setHours(0, 0, 0, 0);

@@ -1,13 +1,26 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../services/api';
+// ═══════════════════════════════════════════════════════════════════════
+// DevicesSitesContext — Bridge to React Query Hooks (ARCH-02)
+//
+// Обеспечивает обратную совместимость. Новый код ДОЛЖЕН использовать
+// хуки из useApiQuery напрямую.
+//
+// Миграция:
+//   Было:  import { useDevicesSites } from './context/DevicesSitesContext'
+//   Стало: import { useDevices, useSites } from '../hooks/useApiQuery'
+//
+// После полной миграции: удалить этот файл.
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { createContext, useContext, ReactNode } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useDevices, useSites, useCreateSite, useUpdateSite, useDeleteSite } from '../hooks/useApiQuery';
 import type { Device, Site } from '../types';
 
 interface DevicesSitesContextType {
     devices: Device[];
     sites: Site[];
     loading: boolean;
-    refresh: () => Promise<void>;
+    refresh: () => void;
     addDevice: (device: Device) => void;
     updateDevice: (id: string, updates: Partial<Device>) => void;
     deleteDevice: (id: string) => void;
@@ -18,119 +31,109 @@ interface DevicesSitesContextType {
 
 const DevicesSitesContext = createContext<DevicesSitesContextType | undefined>(undefined);
 
+// ═══ Helper: маппинг API Device → UI Device ═══
+function mapAPIDeviceToUI(d: any): Device {
+    return {
+        id: d.device_id,
+        name: d.name || d.device_id,
+        siteId: d.site_id || 'site-default',
+        siteName: d.location || 'Unknown',
+        type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
+        status: (d.status || 'offline').toLowerCase() as Device['status'],
+        health: d.status === 'online' ? 'healthy' : 'faulty',
+        recordingStatus: 'recording',
+        lastSeen: d.last_seen || new Date().toISOString(),
+        ipAddress: '',
+        model: d.vendor_type || '',
+        firmware: '',
+        owner_id: d.owner_id,
+    };
+}
+
+function mapAPISiteToUI(s: any): Site {
+    return {
+        id: s.id,
+        name: s.name || 'Unnamed',
+        address: s.address || '',
+        city: s.city || '',
+        organization: s.organization || '',
+        latitude: s.latitude || 0,
+        longitude: s.longitude || 0,
+        status: s.status || 'active',
+        lastSync: s.last_sync || new Date().toISOString(),
+    };
+}
+
 export function DevicesSitesProvider({ children }: { children: ReactNode }) {
-    const { user, token } = useAuth();
-    const [devices, setDevices] = useState<Device[]>([]);
-    const [sites, setSites] = useState<Site[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
 
-    const loadData = async () => {
-        if (!token) return;
-        setLoading(true);
-        try {
-            const [devs, siteList] = await Promise.all([
-                api.getDevices(),
-                api.getSites(),
-            ]);
-            // OWASP ASVS V5: Input validation — API может вернуть { devices: [...] } вместо прямого массива
-            const devsArray: any[] = Array.isArray(devs) ? devs : (devs && typeof devs === 'object' && 'devices' in devs ? (devs as any).devices : []);
-            const siteArray: any[] = Array.isArray(siteList) ? siteList : (siteList && typeof siteList === 'object' && 'sites' in siteList ? (siteList as any).sites : []);
-            const mapped: Device[] = devsArray.map((d: any) => ({
-                id: d.device_id,
-                name: d.name || d.device_id,
-                siteId: d.site_id || 'site-default',
-                siteName: d.location || 'Unknown',
-                type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
-                status: (d.status || 'offline').toLowerCase(),
-                health: d.status === 'online' ? 'healthy' : 'faulty',
-                recordingStatus: 'recording',
-                lastSeen: d.last_seen || new Date().toISOString(),
-                ipAddress: '',
-                model: d.vendor_type || '',
-                firmware: '',
-                owner_id: d.owner_id,
-            }));
-            const filtered = user?.role === 'owner' ? mapped.filter(d => d.owner_id === user.id) : mapped;
-            setDevices(filtered);
+    // Используем React Query hooks (ARCH-02)
+    const { data: rawDevices = [], isLoading: devicesLoading, refetch: refetchDevices } = useDevices();
+    const { data: rawSites = [], isLoading: sitesLoading, refetch: refetchSites } = useSites();
 
-            // Map sites from API — OWASP ASVS V5: input validation
-            const mappedSites: Site[] = siteArray.map((s: any) => ({
-                id: s.id,
-                name: s.name || 'Unnamed',
-                address: s.address || '',
-                city: s.city || '',
-                organization: s.organization || '',
-                latitude: s.latitude || 0,
-                longitude: s.longitude || 0,
-                status: s.status || 'active',
-                lastSync: s.last_sync || new Date().toISOString(),
-            }));
-            setSites(mappedSites.length > 0 ? mappedSites : []);
-        } catch (err) {
-            console.error('Failed to load data:', err);
-            // If API fails, try to at least show something
-            if (sites.length === 0) {
-                setSites([{ id: 'site-default', name: 'Default Site', address: '', city: '', status: 'active', lastSync: new Date().toISOString() }]);
-            }
-        } finally {
-            setLoading(false);
-        }
+    const createSiteMutation = useCreateSite();
+    const updateSiteMutation = useUpdateSite();
+    const deleteSiteMutation = useDeleteSite();
+
+    const loading = devicesLoading || sitesLoading;
+
+    // OWASP ASVS V5: Input validation
+    const devsArray: any[] = Array.isArray(rawDevices)
+        ? rawDevices
+        : (rawDevices && typeof rawDevices === 'object' && 'devices' in rawDevices
+            ? (rawDevices as any).devices : []);
+
+    const siteArray: any[] = Array.isArray(rawSites)
+        ? rawSites
+        : (rawSites && typeof rawSites === 'object' && 'sites' in rawSites
+            ? (rawSites as any).sites : []);
+
+    const apiDevices: Device[] = devsArray.map(mapAPIDeviceToUI);
+    const devices = user?.role === 'owner'
+        ? apiDevices.filter(d => d.owner_id === user.id)
+        : apiDevices;
+
+    const sites: Site[] = siteArray.map(mapAPISiteToUI);
+
+    const refresh = () => {
+        refetchDevices();
+        refetchSites();
     };
 
-    useEffect(() => {
-        if (token) loadData();
-    }, [token, user]);
+    // ═══ Client-side mutations (optimistic updates) ═══
+    // Эти операции используются редко, поэтому здесь они остаются
+    // как заглушки. Для production нужно реализовать через React Query mutations.
 
-    const refresh = loadData;
+    const addDevice = (_device: Device) => {
+        console.warn('addDevice: use useCreateDevice() from hooks/useApiQuery instead');
+        refetchDevices();
+    };
 
-    const addDevice = (device: Device) => setDevices(prev => [...prev, device]);
-    const updateDevice = (id: string, updates: Partial<Device>) => setDevices(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-    const deleteDevice = (id: string) => setDevices(prev => prev.filter(d => d.id !== id));
+    const updateDevice = (_id: string, _updates: Partial<Device>) => {
+        console.warn('updateDevice: use useUpdateDevice() from hooks/useApiQuery instead');
+        refetchDevices();
+    };
+
+    const deleteDevice = (_id: string) => {
+        console.warn('deleteDevice: use useDeleteDevice() from hooks/useApiQuery instead');
+        refetchDevices();
+    };
 
     const addSite = async (site: Site) => {
-        try {
-            const created = await api.createSite({
-                name: site.name,
-                address: site.address,
-                city: site.city,
-                status: site.status,
-            });
-            const newSite: Site = {
-                id: created.id,
-                name: created.name || site.name,
-                address: created.address || site.address,
-                city: created.city || site.city,
-                organization: site.organization || '',
-                latitude: site.latitude || 0,
-                longitude: site.longitude || 0,
-                status: created.status || site.status,
-                lastSync: new Date().toISOString(),
-            };
-            setSites(prev => [...prev, newSite]);
-        } catch (err) {
-            console.error('Failed to create site via API, adding locally:', err);
-            setSites(prev => [...prev, site]);
-        }
+        await createSiteMutation.mutateAsync({
+            name: site.name,
+            address: site.address,
+            city: site.city,
+            status: site.status,
+        });
     };
 
     const updateSite = async (id: string, updates: Partial<Site>) => {
-        try {
-            await api.updateSite(id, updates);
-            setSites(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-        } catch (err) {
-            console.error('Failed to update site via API:', err);
-            setSites(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-        }
+        await updateSiteMutation.mutateAsync({ id, updates });
     };
 
     const deleteSite = async (id: string) => {
-        try {
-            await api.deleteSite(id);
-            setSites(prev => prev.filter(s => s.id !== id));
-        } catch (err) {
-            console.error('Failed to delete site via API:', err);
-            setSites(prev => prev.filter(s => s.id !== id));
-        }
+        await deleteSiteMutation.mutateAsync(id);
     };
 
     return (

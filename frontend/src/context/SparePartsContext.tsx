@@ -1,5 +1,23 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { sparePartsApi, SparePart, CreateSparePartRequest, SparePartCategory } from '../services/sparePartsApi';
+// ═══════════════════════════════════════════════════════════════════════
+// SparePartsContext — React Query backed
+// ARCH-02: Server state managed via React Query, context retained for
+// backward compatibility.
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { createContext, useContext, useCallback } from 'react';
+import type { SparePart, CreateSparePartRequest, SparePartCategory } from '../services/sparePartsApi';
+import {
+  useSpareParts as useQuerySpareParts,
+  useLowStockParts as useQueryLowStockParts,
+  useSparePartCategories as useQuerySparePartCategories,
+  useCreateSparePart,
+  useUpdateSparePart,
+  useDeleteSparePart,
+  useAdjustStock,
+  useCreateSparePartCategory,
+  useUpdateSparePartCategory,
+  useDeleteSparePartCategory,
+} from '../hooks/useApiQuery';
 import { useAuth } from '../hooks/useAuth';
 
 interface SparePartsContextType {
@@ -24,91 +42,77 @@ const SparePartsContext = createContext<SparePartsContextType | undefined>(undef
 
 export const SparePartsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token } = useAuth();
-  const [spareParts, setSpareParts] = useState<SparePart[]>([]);
-  const [lowStockParts, setLowStockParts] = useState<SparePart[]>([]);
-  const [categories, setCategories] = useState<SparePartCategory[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    data: spareParts = [],
+    isLoading: loading,
+    error: queryError,
+    refetch: refetchSpareParts,
+  } = useQuerySpareParts();
+
+  const {
+    data: lowStockParts = [],
+    refetch: refetchLowStock,
+  } = useQueryLowStockParts();
+
+  const {
+    data: categories = [],
+    refetch: refetchCategories,
+  } = useQuerySparePartCategories();
+
+  const createMutation = useCreateSparePart();
+  const updateMutation = useUpdateSparePart();
+  const deleteMutation = useDeleteSparePart();
+  const adjustStockMutation = useAdjustStock();
+  const createCategoryMutation = useCreateSparePartCategory();
+  const updateCategoryMutation = useUpdateSparePartCategory();
+  const deleteCategoryMutation = useDeleteSparePartCategory();
 
   const fetchSpareParts = useCallback(async (filters?: Record<string, string>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await sparePartsApi.getSpareParts(filters);
-      setSpareParts(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch spare parts');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await refetchSpareParts();
+  }, [refetchSpareParts]);
 
   const fetchLowStockParts = useCallback(async () => {
-    try {
-      const data = await sparePartsApi.getLowStockParts();
-      setLowStockParts(data || []);
-    } catch (err) {
-      console.error('Failed to fetch low stock parts:', err);
-    }
-  }, []);
+    await refetchLowStock();
+  }, [refetchLowStock]);
 
   const fetchCategories = useCallback(async () => {
-    try {
-      const data = await sparePartsApi.getCategories();
-      setCategories(data || []);
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-    }
-  }, []);
+    await refetchCategories();
+  }, [refetchCategories]);
 
-  const createSparePart = async (data: CreateSparePartRequest): Promise<SparePart> => {
-    const part = await sparePartsApi.createSparePart(data);
-    setSpareParts((prev) => [...prev, part]);
-    return part;
-  };
+  const createSparePart = useCallback(async (data: CreateSparePartRequest): Promise<SparePart> => {
+    return createMutation.mutateAsync(data);
+  }, [createMutation]);
 
-  const updateSparePart = async (id: string, data: Partial<CreateSparePartRequest>) => {
-    await sparePartsApi.updateSparePart(id, data);
-    setSpareParts((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
-  };
+  const updateSparePart = useCallback(async (id: string, data: Partial<CreateSparePartRequest>) => {
+    await updateMutation.mutateAsync({ id, data });
+  }, [updateMutation]);
 
-  const deleteSparePart = async (id: string) => {
-    await sparePartsApi.deleteSparePart(id);
-    setSpareParts((prev) => prev.filter((p) => p.id !== id));
-  };
+  const deleteSparePart = useCallback(async (id: string) => {
+    await deleteMutation.mutateAsync(id);
+  }, [deleteMutation]);
 
-  const adjustStock = async (id: string, quantity: number) => {
-    await sparePartsApi.adjustStock(id, quantity);
-    setSpareParts((prev) => prev.map((p) => (p.id === id ? { ...p, stock: quantity } : p)));
-  };
+  const adjustStock = useCallback(async (id: string, quantity: number) => {
+    await adjustStockMutation.mutateAsync({ id, quantity });
+  }, [adjustStockMutation]);
 
-  const createCategory = async (data: { name: string; description?: string; color?: string }): Promise<SparePartCategory> => {
-    const cat = await sparePartsApi.createCategory(data);
-    setCategories((prev) => [...prev, cat]);
-    return cat;
-  };
+  const createCategory = useCallback(async (data: { name: string; description?: string; color?: string }): Promise<SparePartCategory> => {
+    return createCategoryMutation.mutateAsync(data);
+  }, [createCategoryMutation]);
 
-  const updateCategory = async (id: string, data: { name?: string; description?: string; color?: string }) => {
-    await sparePartsApi.updateCategory(id, data);
-    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
-  };
+  const updateCategory = useCallback(async (id: string, data: { name?: string; description?: string; color?: string }) => {
+    await updateCategoryMutation.mutateAsync({ id, data });
+  }, [updateCategoryMutation]);
 
-  const deleteCategory = async (id: string) => {
-    await sparePartsApi.deleteCategory(id);
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-  };
-
-  useEffect(() => {
-    if (!token) return;
-    fetchSpareParts();
-    fetchLowStockParts();
-    fetchCategories();
-  }, [fetchSpareParts, fetchLowStockParts, fetchCategories, token]);
+  const deleteCategory = useCallback(async (id: string) => {
+    await deleteCategoryMutation.mutateAsync(id);
+  }, [deleteCategoryMutation]);
 
   return (
     <SparePartsContext.Provider
       value={{
-        spareParts, lowStockParts, categories, loading, error,
+        spareParts, lowStockParts, categories, loading,
+        error: queryError instanceof Error ? queryError.message : null,
         fetchSpareParts, fetchLowStockParts, fetchCategories,
         createSparePart, updateSparePart, deleteSparePart, adjustStock,
         createCategory, updateCategory, deleteCategory,

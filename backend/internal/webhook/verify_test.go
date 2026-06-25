@@ -48,9 +48,9 @@ func TestVerifyHMAC_InvalidSignature(t *testing.T) {
 
 func TestVerifyHMAC_EmptySecret(t *testing.T) {
 	body := `{"event":"test"}`
-	// Empty secret = dev mode, skip verification
-	if !VerifyHMAC("", "any-signature", []byte(body)) {
-		t.Fatal("expected pass with empty secret (dev mode)")
+	// IEC 62443 SR 7.1: Empty secret = Fail Secure, reject
+	if VerifyHMAC("", "any-signature", []byte(body)) {
+		t.Fatal("expected reject with empty secret per IEC 62443 SR 7.1")
 	}
 }
 
@@ -197,7 +197,7 @@ func TestVerifyMiddleware_InvalidSignature(t *testing.T) {
 }
 
 func TestVerifyMiddleware_EmptySecret(t *testing.T) {
-	// Empty secret = dev mode, handler should be called
+	// IEC 62443 SR 7.1: Empty secret = Fail Secure, reject with 500
 	called := false
 	handler := VerifyMiddleware("",
 		WithSignatureHeader("X-Test-Signature"),
@@ -210,11 +210,11 @@ func TestVerifyMiddleware_EmptySecret(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if !called {
-		t.Fatal("handler should be called when secret is empty (dev mode)")
+	if called {
+		t.Fatal("handler should NOT be called with empty secret per IEC 62443 SR 7.1")
 	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", rec.Code)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
 	}
 }
 

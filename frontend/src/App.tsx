@@ -1,5 +1,6 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from './components/layout';
 import { Login, Dashboard, Sites, Devices, DeviceDetail, Tickets, TicketDetail, Reports, Users, Settings, Alerts, Profile, Notifications, TotalCostDashboard, ManagerDashboard, AssetOverview } from './pages';
 
@@ -52,13 +53,28 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return children;
 }
 
+// ── React Query Client (ARCH-02) ─────────────────────────────────────
+// Единый QueryClient для server state.
+// staleTime по умолчанию — 30s (переопределяется в каждом query).
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 2,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+    },
+  },
+});
+
 function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      {/* ═══ ToastProvider вынесен на самый верх ═══ 
-          Все контексты ниже (UsersProvider, SettingsProvider и т.д.) 
-          теперь могут использовать useToast() */}
       <ToastProvider>
+        {/* ═══ ToastProvider вынесен на самый верх ═══
+            Все контексты ниже (UsersProvider, SettingsProvider и т.д.)
+            теперь могут использовать useToast() */}
         <AuthProvider>
           <SettingsProvider>
             <UsersProvider>
@@ -162,8 +178,9 @@ function App() {
             </UsersProvider>
           </SettingsProvider>
         </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

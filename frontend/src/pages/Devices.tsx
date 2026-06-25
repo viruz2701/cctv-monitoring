@@ -31,20 +31,16 @@ import {
     Button,
     Input,
     Select,
-    Table,
-    SearchInput,
-    Pagination,
     Modal,
     ConfirmModal
 } from '../components/ui';
+import { VirtualTable } from '../components/ui/VirtualTable';
 import { useDevicesSites } from '../context/DataContext';
 import type { Device } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { AddDeviceModal } from '../components/AddDeviceModal';
-
-const ITEMS_PER_PAGE = 10;
 
 const typeIcons = {
     camera: <Camera className="w-5 h-5 text-blue-500" />,
@@ -65,11 +61,9 @@ export function Devices() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { devices, sites, addDevice, updateDevice, deleteDevice } = useDevicesSites();
-    const [searchQuery, setSearchQuery] = useState('');
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState('all');
     const [siteFilter, setSiteFilter] = useState(searchParams.get('site') || 'all');
-    const [currentPage, setCurrentPage] = useState(1);
     const [sortColumn, setSortColumn] = useState<string>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -149,15 +143,6 @@ export function Devices() {
 
     const filteredDevices = useMemo(() => {
         let result = [...devices];
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter(
-                (d) =>
-                    d.name.toLowerCase().includes(q) ||
-                    d.ipAddress.toLowerCase().includes(q) ||
-                    d.siteName.toLowerCase().includes(q)
-            );
-        }
         if (siteFilter !== 'all') {
             result = result.filter((d) => d.siteId === siteFilter);
         }
@@ -171,13 +156,8 @@ export function Devices() {
             return sortDirection === 'asc' ? cmp : -cmp;
         });
         return result;
-    }, [devices, searchQuery, siteFilter, statusFilter, sortColumn, sortDirection]);
+    }, [devices, siteFilter, statusFilter, sortColumn, sortDirection]);
 
-    const totalPages = Math.ceil(filteredDevices.length / ITEMS_PER_PAGE);
-    const paginatedDevices = filteredDevices.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
 
     const handleSort = (column: string) => {
         if (sortColumn === column) {
@@ -328,33 +308,24 @@ export function Devices() {
 
             {showFilters && (
                 <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
-                    <div className="flex-1 max-w-md">
-                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('search')}</label>
-                        <SearchInput placeholder={t('search_devices')} onSearch={(q) => { setSearchQuery(q); setCurrentPage(1); }} />
-                    </div>
                     <div className="flex gap-3">
-                        <div className="min-w-[140px]"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('site')}</label><Select value={siteFilter} onChange={(e) => { setSiteFilter(e.target.value); setCurrentPage(1); }} options={[{ value: 'all', label: t('all_sites') }, ...sites.map(s => ({ value: s.id, label: s.name }))]} /></div>
-                        <div className="min-w-[140px]"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('status')}</label><Select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }} options={[{ value: 'all', label: t('all_status') }, { value: 'online', label: t('online') }, { value: 'offline', label: t('offline') }, { value: 'warning', label: t('warning') }]} /></div>
+                        <div className="min-w-[140px]"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('site')}</label><Select value={siteFilter} onChange={(e) => { setSiteFilter(e.target.value); }} options={[{ value: 'all', label: t('all_sites') }, ...sites.map(s => ({ value: s.id, label: s.name }))]} /></div>
+                        <div className="min-w-[140px]"><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">{t('status')}</label><Select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); }} options={[{ value: 'all', label: t('all_status') }, { value: 'online', label: t('online') }, { value: 'offline', label: t('offline') }, { value: 'warning', label: t('warning') }]} /></div>
                     </div>
                 </div>
             )}
 
-            <Table
-                data={paginatedDevices}
+            <VirtualTable
+                data={filteredDevices}
                 columns={columns}
-                keyExtractor={(device) => device.id}
-                onRowClick={(device) => navigate(`/devices/${device.id}`)}
+                keyExtractor={(device: Device) => device.id}
+                onRowClick={(device: Device) => navigate(`/devices/${device.id}`)}
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 emptyMessage={t('no_devices')}
+                maxHeight={700}
             />
-
-            {totalPages > 1 && (
-                <div className="mt-4 flex justify-center">
-                    <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredDevices.length} itemsPerPage={ITEMS_PER_PAGE} />
-                </div>
-            )}
 
             <AddDeviceModal
                 isOpen={showAddDeviceModal}

@@ -7,7 +7,8 @@ import { useUsers } from '../context/UsersContext';
 import { useAuth } from '../hooks/useAuth';
 import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
-import { Button, Card, DataGrid, Badge, Modal, Input, useToast } from '../components/ui';
+import { Button, Card, Badge, Modal, Input, useToast } from '../components/ui';
+import { VirtualTable } from '../components/ui/VirtualTable';
 import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
   CheckSquare, Square, UserCheck, Trash2, Tags, ArrowUpDown,
@@ -508,20 +509,18 @@ export const WorkOrders: React.FC = () => {
           </select>
         </div>
 
-        <DataGrid
+        <VirtualTable
           data={filtered}
           columns={columns}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item: WorkOrder) => item.id}
           loading={loading}
           emptyMessage={t('no_work_orders')}
-          variant="striped"
-          defaultDensity="standard"
-          pageSize={20}
           exportFilename="work-orders.csv"
           selectable
           selectedIds={selectedIds}
-          onSelectionChange={(ids) => setSelectedIds(ids)}
-          onRowClick={(item) => navigate(`/work-orders/${item.id}`)}
+          onSelectionChange={(ids: Set<string>) => setSelectedIds(ids)}
+          onRowClick={(item: WorkOrder) => navigate(`/work-orders/${item.id}`)}
+          maxHeight={650}
         />
       </Card>
 

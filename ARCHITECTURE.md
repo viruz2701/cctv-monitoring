@@ -629,7 +629,14 @@ Mobile & Offline
 Enterprise Integrations
 75%
 🟡
-Overall: 85% → Production-ready foundation, большинство enterprise features реализованы
+Overall: 87% → Production-ready foundation, большинство enterprise features реализованы
+
+## ✅ Последние изменения (2026-06-25)
+- **ARCH-01**: NATS JetStream KV State Manager — распределённое состояние устройств (horizontal scaling)
+- **SEC-02**: SLA Memory Leak — заменён time.AfterFunc на централизованную cleanupLoop с TTL-эвикцией
+- **SEC-03**: CORS Security — reject wildcard `*` origins (OWASP ASVS V13.4)
+- **ARCH-01**: `backend/internal/state/jetstream_manager.go` — новый файл
+- **ARCH-01**: `backend/internal/state/jetstream_manager_test.go` — тесты (graceful skip без NATS)
 Key Metrics
 Metric
 Current
@@ -652,6 +659,15 @@ CMMS Adapters
 ISO 27001 Controls
 80%
 100%
+ARCH-01 (NATS KV State Manager)
+✅ Complete
+—
+SLA Memory Leak (TTL Eviction)
+✅ Fixed
+—
+CORS Security (Wildcard Rejection)
+✅ Fixed
+—
 🗺️ Roadmap (Q3-Q4 2026)
 Phase 1: Foundation & Core CMMS (Недели 1-4)
 Цель: Стабильный MVP с enterprise WO management.
@@ -729,6 +745,10 @@ Workflow DSL (CEL)
 ADR-020
 Custom Fields (JSONB)
 🟡 Planned
+2026-06-25
+ADR-021
+NATS JetStream KV State Manager
+✅ Accepted
 2026-06-25
 🔧 File Structure
 cctv-monitoring/

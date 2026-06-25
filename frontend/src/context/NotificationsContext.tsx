@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import { alerts as initialAlerts } from '../data/mockData';
-import type { Alert, Notification } from '../types';
+import React, { createContext, useContext, ReactNode, useMemo, useCallback } from 'react';
+import type { Notification } from '../types';
+import {
+    useNotifications as useNotificationsQuery,
+    useMarkNotificationRead,
+    useMarkAllNotificationsRead,
+    useDeleteNotification,
+} from '../hooks/useApiQuery';
 
 interface NotificationsContextType {
     notifications: Notification[];
@@ -14,64 +19,80 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
-// Helper to convert Alert to Notification
-const alertToNotification = (alert: Alert): Notification => ({
-    id: alert.id,
-    title: alert.type.charAt(0).toUpperCase() + alert.type.slice(1),
-    message: `${alert.message} - ${alert.deviceName}`,
-    type: alert.type,
-    timestamp: alert.timestamp,
-    read: false, // Default to unread for now
-    link: `/devices/${alert.deviceId}`,
+/**
+ * Map API Notification (snake_case fields, created_at) to local Notification (camelCase, timestamp).
+ */
+const mapApiNotification = (n: {
+    id: string;
+    title: string;
+    message: string;
+    type: 'success' | 'warning' | 'error' | 'info';
+    read: boolean;
+    created_at: string;
+    link?: string;
+}): Notification => ({
+    id: n.id,
+    title: n.title,
+    message: n.message,
+    type: n.type,
+    read: n.read,
+    link: n.link,
+    timestamp: n.created_at,
 });
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-    const [notifications, setNotifications] = useState<Notification[]>(() => {
-        // Spread notifications across Today, Yesterday, and Last 7 Days
-        // so that date grouping is actually useful with mock data
-        const hoursOffsets = [1, 3, 5, 28, 52, 72, 96, 120, 144, 168];
-        return initialAlerts.map((alert, i) => {
-            const offsetHours = hoursOffsets[i % hoursOffsets.length];
-            const ts = new Date();
-            ts.setHours(ts.getHours() - offsetHours);
-            return {
-                ...alertToNotification(alert),
-                timestamp: ts.toISOString(),
-            };
-        });
-    });
+    const { data: apiNotifications = [] } = useNotificationsQuery();
+    const markReadMutation = useMarkNotificationRead();
+    const markAllReadMutation = useMarkAllNotificationsRead();
+    const deleteMutation = useDeleteNotification();
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const notifications = useMemo(
+        () => apiNotifications.map(mapApiNotification),
+        [apiNotifications],
+    );
+
+    const unreadCount = useMemo(
+        () => notifications.filter(n => !n.read).length,
+        [notifications],
+    );
 
     const markAsRead = useCallback((id: string) => {
-        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    }, []);
+        markReadMutation.mutate(id);
+    }, [markReadMutation]);
 
     const markAllAsRead = useCallback(() => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    }, []);
+        markAllReadMutation.mutate();
+    }, [markAllReadMutation]);
 
     const deleteNotification = useCallback((id: string) => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
-    }, []);
+        deleteMutation.mutate(id);
+    }, [deleteMutation]);
 
     const markNotificationsAsRead = useCallback((ids: string[]) => {
-        setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n));
-    }, []);
+        ids.forEach(id => markReadMutation.mutate(id));
+    }, [markReadMutation]);
 
     const deleteNotifications = useCallback((ids: string[]) => {
-        setNotifications(prev => prev.filter(n => !ids.includes(n.id)));
-    }, []);
+        ids.forEach(id => deleteMutation.mutate(id));
+    }, [deleteMutation]);
 
-    const value = {
+    const value = useMemo(() => ({
         notifications,
         unreadCount,
         markAsRead,
         markAllAsRead,
         deleteNotification,
         markNotificationsAsRead,
-        deleteNotifications
-    };
+        deleteNotifications,
+    }), [
+        notifications,
+        unreadCount,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        markNotificationsAsRead,
+        deleteNotifications,
+    ]);
 
     return (
         <NotificationsContext.Provider value={value}>

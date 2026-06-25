@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, AuditLogEntry } from '../services/api';
-import { Card, DataGrid, Button, Badge, Input } from '../components/ui';
+import { Card, Button, Badge, Input } from '../components/ui';
+import { VirtualTable } from '../components/ui/VirtualTable';
 import {
   Search, Download, Eye, EyeOff, Shield,
-  Clock, User, Globe, FileText,
+  Clock, User, Globe, FileText, XCircle,
   AlertTriangle, CheckCircle,
 } from 'lucide-react';
 
@@ -550,17 +551,15 @@ export function AuditLog() {
       {/* Data Table */}
       <Card>
         <div className="p-4">
-          <DataGrid
-            data={entries}
-            columns={columns}
-            keyExtractor={(entry: AuditLogEntry) => entry.id}
-            loading={loading}
-            emptyMessage={t('no_audit_entries') || 'Нет записей аудита'}
-            variant="striped"
-            defaultDensity="compact"
-            pageSize={25}
-            exportFilename={`audit-log-${new Date().toISOString().slice(0, 10)}`}
-          />
+          <VirtualTable
+              data={entries}
+              columns={columns}
+              keyExtractor={(entry: AuditLogEntry) => entry.id}
+              loading={loading}
+              emptyMessage={t('no_audit_entries') || 'Нет записей аудита'}
+              exportFilename={`audit-log-${new Date().toISOString().slice(0, 10)}`}
+              maxHeight={650}
+            />
         </div>
       </Card>
 

@@ -1,6 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { workOrdersApi, WorkOrder, CreateWorkOrderRequest, PartUsage } from '../services/workOrdersApi';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useWorkOrders as useWorkOrdersQuery,
+  useCreateWorkOrder,
+  useUpdateWorkOrder,
+  useDeleteWorkOrder,
+  queryKeys,
+} from '../hooks/useApiQuery';
+import { workOrdersApi, WorkOrder, CreateWorkOrderRequest, PartUsage } from '../services/workOrdersApi';
 
 // ── Bulk Action Types (WO-4.2.1) ────────────────────────────────────
 
@@ -38,115 +46,91 @@ const WorkOrdersContext = createContext<WorkOrdersContextType | undefined>(undef
 
 export const WorkOrdersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token } = useAuth();
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<Record<string, string> | undefined>(undefined);
 
-  const fetchWorkOrders = useCallback(async (filters?: Record<string, string>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await workOrdersApi.getWorkOrders(filters);
-      setWorkOrders(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch work orders');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // ── React Query: work orders list ─────────────────────────────────
+  // ARCH-02: Server state управляется React Query — кэш, рефетч, stale-while-revalidate
+  // Compliance: IEC 62443 SR 7.1 (Resource availability — async data fetching)
+  const {
+    data: workOrders = [],
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: [...queryKeys.workOrders.all, filters],
+    queryFn: () => workOrdersApi.getWorkOrders(filters),
+    enabled: !!token,
+    staleTime: 30_000,
+    refetchInterval: 120_000,
+  });
 
-  const createWorkOrder = async (data: CreateWorkOrderRequest): Promise<WorkOrder> => {
-    const wo = await workOrdersApi.createWorkOrder(data);
-    setWorkOrders((prev) => [...prev, wo]);
-    return wo;
+  // ── React Query Mutations ─────────────────────────────────────────
+  const createMutation = useCreateWorkOrder();
+  const updateMutation = useUpdateWorkOrder();
+  const deleteMutation = useDeleteWorkOrder();
+
+  // ── Context Methods ───────────────────────────────────────────────
+
+  const fetchWorkOrders = useCallback(async (newFilters?: Record<string, string>) => {
+    if (!token) return;
+    setFilters(newFilters);
+    await refetch();
+  }, [refetch, token]);
+
+  const createWorkOrderFn = async (data: CreateWorkOrderRequest): Promise<WorkOrder> => {
+    return createMutation.mutateAsync(data);
   };
 
-  const updateWorkOrder = async (id: string, data: Partial<WorkOrder>) => {
-    await workOrdersApi.updateWorkOrder(id, data);
-    setWorkOrders((prev) => prev.map((wo) => (wo.id === id ? { ...wo, ...data } : wo)));
+  const updateWorkOrderFn = async (id: string, data: Partial<WorkOrder>) => {
+    await updateMutation.mutateAsync({ id, data });
   };
 
-  const deleteWorkOrder = async (id: string) => {
-    await workOrdersApi.deleteWorkOrder(id);
-    setWorkOrders((prev) => prev.filter((wo) => wo.id !== id));
+  const deleteWorkOrderFn = async (id: string) => {
+    await deleteMutation.mutateAsync(id);
   };
+
+  // ── Lifecycle Methods (custom API calls + cache invalidation) ────
+  // Эти методы вызывают специализированные эндпоинты, затем инвалидируют кэш
 
   const assignWorkOrder = async (id: string, userId: string) => {
     await workOrdersApi.assignWorkOrder(id, userId);
-    setWorkOrders((prev) => prev.map((wo) => (wo.id === id ? { ...wo, assigned_to: userId } : wo)));
+    queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
   };
 
   const startWorkOrder = async (id: string) => {
     await workOrdersApi.startWorkOrder(id);
-    setWorkOrders((prev) =>
-      prev.map((wo) => (wo.id === id ? { ...wo, status: 'in_progress', started_at: new Date().toISOString() } : wo))
-    );
+    queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
   };
 
   const completeWorkOrder = async (id: string, notes: string, photos: string[], parts: PartUsage[]) => {
     await workOrdersApi.completeWorkOrder(id, notes, photos, parts);
-    setWorkOrders((prev) =>
-      prev.map((wo) =>
-        wo.id === id
-          ? { ...wo, status: 'completed', completed_at: new Date().toISOString(), notes, photos, parts_used: parts }
-          : wo
-      )
-    );
+    queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
   };
 
   const cancelWorkOrder = async (id: string, reason: string) => {
     await workOrdersApi.cancelWorkOrder(id, reason);
-    setWorkOrders((prev) =>
-      prev.map((wo) => (wo.id === id ? { ...wo, status: 'cancelled', notes: reason } : wo))
-    );
+    queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
   };
 
   // ── Bulk Actions (WO-4.2.1) ──────────────────────────────────────
 
   const bulkActionWorkOrders = async (action: BulkActionType, ids: string[], value?: string) => {
     const response = await workOrdersApi.bulkActions(action, ids, value);
-    // Обновляем локальное состояние на основе результатов
-    if (response.results.length > 0) {
-      setWorkOrders((prev) => {
-        const updated = [...prev];
-        for (const result of response.results) {
-          if (result.status === 'success') {
-            const idx = updated.findIndex((wo) => wo.id === result.id);
-            if (idx !== -1) {
-              switch (action) {
-                case 'status_change':
-                  updated[idx] = { ...updated[idx], status: (value || updated[idx].status) as any };
-                  break;
-                case 'priority_change':
-                  updated[idx] = { ...updated[idx], priority: (value || updated[idx].priority) as any };
-                  break;
-                case 'delete':
-                  updated[idx] = { ...updated[idx], status: 'cancelled' as const };
-                  break;
-                case 'assign':
-                  updated[idx] = { ...updated[idx], assigned_to: value };
-                  break;
-              }
-            }
-          }
-        }
-        return updated;
-      });
-    }
+    queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
     return response;
   };
 
-  useEffect(() => {
-    if (!token) return;
-    fetchWorkOrders();
-  }, [fetchWorkOrders, token]);
+  // ── Error normalisation ───────────────────────────────────────────
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
 
   return (
     <WorkOrdersContext.Provider
       value={{
-        workOrders, loading, error, fetchWorkOrders, createWorkOrder, updateWorkOrder,
-        deleteWorkOrder, assignWorkOrder, startWorkOrder, completeWorkOrder, cancelWorkOrder,
-        bulkActionWorkOrders,
+        workOrders, loading: isFetching, error, fetchWorkOrders,
+        createWorkOrder: createWorkOrderFn, updateWorkOrder: updateWorkOrderFn,
+        deleteWorkOrder: deleteWorkOrderFn, assignWorkOrder, startWorkOrder,
+        completeWorkOrder, cancelWorkOrder, bulkActionWorkOrders,
       }}
     >
       {children}

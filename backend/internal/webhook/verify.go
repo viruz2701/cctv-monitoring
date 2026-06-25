@@ -76,7 +76,12 @@ func WithLogger(logger *slog.Logger) VerifyOption {
 //
 // Возвращает true если подпись валидна.
 //
-// Graceful degradation: если secret пустой — пропускаем проверку (dev mode).
+// Security:
+//   - OWASP ASVS V6.3: пустой secret — SECURITY VIOLATION, reject
+//   - IEC 62443 SR 3.1: Communication integrity — HMAC обязателен
+//   - ISO 27001 A.12.4.2: Protection of log information
+//
+// Graceful degradation: НЕТ. Пустой secret = reject all (fail secure).
 //
 // ⚠ СТБ COMPLIANCE: После добавления bp2012/crypto заменить на bash-256:
 //
@@ -92,9 +97,10 @@ func VerifyHMAC(secret string, sigHeader string, body []byte, opts ...VerifyOpti
 		options.Logger = slog.Default()
 	}
 
-	// Graceful degradation: если секрет не настроен — пропускаем проверку
+	// IEC 62443 SR 7.1: Fail Secure — при отсутствии секрета reject, не allow
 	if secret == "" {
-		return true
+		options.Logger.Warn("webhook: HMAC secret is empty, rejecting request (IEC 62443 SR 7.1)")
+		return false
 	}
 
 	// Если подпись не предоставлена — отклоняем
@@ -140,9 +146,10 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Graceful degradation: если секрет не настроен — пропускаем
+			// IEC 62443 SR 7.1: Fail Secure — reject при отсутствии secret
 			if secret == "" {
-				next.ServeHTTP(w, r)
+				options.Logger.Warn("webhook middleware: HMAC secret empty, rejecting (IEC 62443 SR 7.1)")
+				http.Error(w, `{"error":"webhook not configured"}`, http.StatusInternalServerError)
 				return
 			}
 

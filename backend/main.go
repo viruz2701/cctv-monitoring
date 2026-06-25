@@ -270,7 +270,49 @@ func main() {
 
 	dbWriter := NewDBWriter(database, 1000)
 
-	stateManager := state.NewInMemoryStateManager()
+	// --- NATS Connection (ARCH-01: нужен до State Manager) ---
+	// Опционально: если NATS недоступен — работаем без событийной шины.
+	var natsConn *nats.Conn
+	if cfg.NATSURL != "" {
+		nc, err := nats.Connect(cfg.NATSURL)
+		if err != nil {
+			logger.Debug("NATS not available, continuing without", "error", err)
+		} else {
+			natsConn = nc
+			logger.Info("NATS connected", "url", cfg.NATSURL)
+		}
+	}
+
+	// --- NATS JetStream KV State Manager (ARCH-01) ---
+	// Если NATS доступен — используем распределённое состояние для horizontal scaling.
+	// Иначе — InMemoryStateManager (dev mode).
+	var (
+		stateManager     state.DeviceStateManager
+		jetStreamManager *state.JetStreamStateManager // для graceful shutdown
+	)
+	if natsConn != nil && cfg.UseNATSKV {
+		js, err := natsConn.JetStream()
+		if err != nil {
+			logger.Warn("NATS JetStream not available, falling back to InMemoryStateManager", "error", err)
+			stateManager = state.NewInMemoryStateManager()
+		} else {
+			jsMgr, err := state.NewJetStreamStateManager(js, logger)
+			if err != nil {
+				logger.Warn("JetStream KV state manager failed, falling back to InMemoryStateManager", "error", err)
+				stateManager = state.NewInMemoryStateManager()
+			} else {
+				stateManager = jsMgr
+				jetStreamManager = jsMgr
+				logger.Info("ARCH-01: Using JetStream KV distributed state manager")
+			}
+		}
+	} else {
+		stateManager = state.NewInMemoryStateManager()
+		if natsConn == nil {
+			logger.Debug("NATS not connected, using InMemoryStateManager")
+		}
+	}
+
 	stateWrapper := &stateManagerWrapper{
 		inner:    stateManager,
 		dbWriter: dbWriter,
@@ -380,18 +422,6 @@ func main() {
 		)
 		syncEng.Start(ctx)
 		logger.Info("ITSM sync engine started", "interval", syncInterval)
-	}
-
-	// --- NATS Connection (опционально) ---
-	var natsConn *nats.Conn
-	if cfg.NATSURL != "" {
-		nc, err := nats.Connect(cfg.NATSURL)
-		if err != nil {
-			logger.Debug("NATS not available, continuing without", "error", err)
-		} else {
-			natsConn = nc
-			logger.Info("NATS connected", "url", cfg.NATSURL)
-		}
 	}
 
 	// --- Event Store (DM-1.2.2: NATS JetStream + S3 Cold Storage) ---
@@ -609,7 +639,14 @@ func main() {
 		ffManager.Stop()
 	}
 
-	// 10. NATS drain (если подключен)
+	// 10. JetStream KV State Manager stop (ARCH-01)
+	if jetStreamManager != nil {
+		logger.Info("Shutting down JetStream KV state manager...")
+		jetStreamManager.Stop()
+		logger.Info("JetStream KV state manager stopped")
+	}
+
+	// 11. NATS drain (если подключен)
 	if natsConn != nil {
 		logger.Info("Draining NATS connection...")
 		if err := natsConn.Drain(); err != nil {
@@ -619,12 +656,12 @@ func main() {
 		}
 	}
 
-	// 10. DBWriter drain
+	// 12. DBWriter drain
 	logger.Info("Draining DB writer...")
 	close(dbWriter.ch)
 	logger.Info("DB writer drained")
 
-	// 11. Database connection close
+	// 13. Database connection close
 	logger.Info("Closing database connection...")
 	database.Close()
 	logger.Info("Database connection closed")

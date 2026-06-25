@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -533,15 +534,24 @@ func joinParts(parts []string) string {
 		return parts[0]
 	}
 
-	result := ""
+	// O(n) вместо O(n²): strings.Builder исключает переаллокации при конкатенации
+	var b strings.Builder
+	totalLen := len(parts) * 2 // резервируем под разделители
+	for _, p := range parts {
+		totalLen += len(p)
+	}
+	b.Grow(totalLen)
+
 	for i, p := range parts {
 		if i == len(parts)-1 {
-			result += " and " + p
+			b.WriteString(" and ")
+			b.WriteString(p)
 		} else if i > 0 {
-			result += ", " + p
+			b.WriteString(", ")
+			b.WriteString(p)
 		} else {
-			result += p
+			b.WriteString(p)
 		}
 	}
-	return result
+	return b.String()
 }

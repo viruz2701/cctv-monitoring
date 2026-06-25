@@ -1,7 +1,6 @@
 import * as XLSX from 'xlsx';
 import { format, subDays, subMonths, isAfter, isBefore, parseISO } from 'date-fns';
-import { Device, Site, Ticket, RecordingDay } from '../types';
-import { generateRecordingCalendar, deviceStatsData } from '../data/mockData';
+import { Device, Site, Ticket, RecordingDay, DeviceStats } from '../types';
 export interface ReportFilterParams {
     site: string;
     deviceType: string;
@@ -153,14 +152,13 @@ export const generateExcelReport = (params: GenerateReportParams) => {
             sheetName = 'HDD_Health';
             exportData = filteredDevs
                 .map(d => {
-                    const stats = deviceStatsData.find(s => s.deviceId === d.id);
+                    // ARCH-03: mockData удалён. HDD stats будут добавлены через API позже.
                     return {
                         'Device Name': d.name,
                         'Location / Region': d.siteName,
                         'Status': d.status,
-                        // Using real dynamic data for HDD specific stats
                         'Storage Status': d.health === 'faulty' ? 'Critical' : 'Healthy',
-                        'Capacity Used %': stats ? (100 - stats.hddFreePercent) + '%' : 'N/A',
+                        'Capacity Used %': 'N/A',
                         'SMART Status': d.health === 'faulty' ? 'Warning' : 'OK'
                     };
                 });
@@ -169,7 +167,8 @@ export const generateExcelReport = (params: GenerateReportParams) => {
         case 'recording_availability':
             sheetName = 'Recording_Availability';
             filteredDevs.forEach(d => {
-                const calendar = generateRecordingCalendar(d.id);
+                // ARCH-03: mockData удалён. Recording calendar будет добавлен через API позже.
+                const calendar: RecordingDay[] = [];
                 // Filter calendar dates based on the requested start and end range
                 const filteredCalendar = calendar.filter(cDay => {
                     const dayDate = parseISO(cDay.date);
@@ -268,21 +267,7 @@ export const generateExcelReport = (params: GenerateReportParams) => {
             exportData = filteredDevs.map(d => {
                 const deviceTickets = filteredTickets.filter(t => t.deviceId === d.id);
                 const hasOpenTicket = deviceTickets.some(t => t.status !== 'closed' && t.status !== 'resolved');
-                const stats = deviceStatsData.find(s => s.deviceId === d.id);
-
-                // calculate explicit missing days across all cameras inside the date range
-                const calendar = generateRecordingCalendar(d.id);
-                const filteredCalendar = calendar.filter(cDay => {
-                    const dayDate = parseISO(cDay.date);
-                    return isAfter(dayDate, start) && isBefore(dayDate, end);
-                });
-
-                let missingDaysCount = 0;
-                let availableDaysCount = 0;
-                filteredCalendar.forEach(c => {
-                    if (c.status === 'missing' || c.status === 'no_data') missingDaysCount++;
-                    if (c.status === 'available') availableDaysCount++;
-                });
+                // ARCH-03: mockData удалён. Stats/calendar будут добавлены через API позже.
 
                 return {
                     'Device ID': d.id,
@@ -290,11 +275,11 @@ export const generateExcelReport = (params: GenerateReportParams) => {
                     'Device Type': d.type.toUpperCase(),
                     'Location / Region': d.siteName,
                     'Status': d.status,
-                    'Error Duration': d.status === 'offline' ? '2 hrs 15 mins' : 'N/A', // Static error fallback
-                    'Uptime %': stats ? stats.uptimePercent + '%' : 'N/A', // Real dynamic uptime
+                    'Error Duration': d.status === 'offline' ? '2 hrs 15 mins' : 'N/A',
+                    'Uptime %': 'N/A',
                     'Issue Type': d.status === 'offline' ? 'Network Timeout' : (d.health === 'degraded' ? 'Storage Warning' : 'None'),
-                    'Recording Available': availableDaysCount > 0 ? 'Yes' : 'No',
-                    'Missing Days': missingDaysCount,
+                    'Recording Available': 'N/A',
+                    'Missing Days': 0,
                     'Ticket ID': hasOpenTicket ? deviceTickets[0].id : 'N/A',
                     'Last Seen Online': format(parseISO(d.lastSeen), 'yyyy-MM-dd HH:mm:ss')
                 };

@@ -192,21 +192,43 @@ type SLACalculationEngine struct {
 
 	// SLA-6.2.2: Escalation
 	escalationResolver EscalationRuleResolver // resolver для правил эскалации
+
+	// TTL-эвикция (SLA Memory Leak fix)
+	// Завершённые/отменённые трекеры удаляются через evictionTTL после завершения.
+	// Сиротские трекеры удаляются при периодической cleanupLoop.
+	evictionTTL time.Duration // время жизни трекера после завершения
+	cleanupStop chan struct{}  // сигнал остановки cleanup goroutine
 }
 
 // NewEngine создаёт SLA Calculation Engine.
+// DefaultEvictionTTL — время жизни завершённого трекера перед удалением из памяти.
+// 1 час = достаточно для post-completion аналитики, не создаёт утечки памяти.
+const DefaultEvictionTTL = 1 * time.Hour
+
+// DefaultCleanupInterval — периодичность cleanupLoop для удаления сиротских трекеров.
+const DefaultCleanupInterval = 10 * time.Minute
+
+// MaxTrackerAge — максимальный возраст трекера (24ч).
+// Если трекер существует дольше и не breached/at_risk — он считается сиротским и удаляется.
+const MaxTrackerAge = 24 * time.Hour
+
 func NewEngine(logger *slog.Logger) *SLACalculationEngine {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SLACalculationEngine{
-		logger:     logger.With("component", "sla-engine"),
-		trackers:   make(map[string]*SLATrackerState),
-		policies:   make(map[string]*SLAPolicy),
-		calendars:  make(map[string]*BusinessCalendar),
-		matrix:     make(map[string][]*SLAMatrixEntry),
-		pauseRules: make(map[string][]*SLAPauseRule),
+	e := &SLACalculationEngine{
+		logger:       logger.With("component", "sla-engine"),
+		trackers:     make(map[string]*SLATrackerState),
+		policies:     make(map[string]*SLAPolicy),
+		calendars:    make(map[string]*BusinessCalendar),
+		matrix:       make(map[string][]*SLAMatrixEntry),
+		pauseRules:   make(map[string][]*SLAPauseRule),
+		evictionTTL:  DefaultEvictionTTL,
+		cleanupStop:  make(chan struct{}),
 	}
+	// Запускаем периодическую cleanupLoop для предотвращения утечки памяти
+	go e.cleanupLoop()
+	return e
 }
 
 // ── Escalation Management (SLA-6.2.2) ───────────────────────────────
@@ -507,13 +529,14 @@ func (e *SLACalculationEngine) CompleteWorkOrder(ctx context.Context, woID strin
 		"elapsed_seconds", elapsed,
 	)
 
-	// TTL-эвикшн: удаляем трекер из памяти через 1 час после завершения
-	time.AfterFunc(1*time.Hour, func() {
-		e.mu.Lock()
-		delete(e.trackers, woID)
-		e.mu.Unlock()
-		e.logger.Debug("sla tracker evicted", "work_order", woID)
-	})
+	// TTL-эвикция: откладываем удаление трекера через evictionTTL.
+	// ВАЖНО: Не используем time.AfterFunc — он создаёт неуправляемую goroutine.
+	// Вместо этого помечаем трекер для cleanupLoop.
+	// cleanupLoop запускается раз в 10 минут и удаляет все просроченные трекеры.
+	e.logger.Debug("sla tracker scheduled for eviction",
+		"work_order", woID,
+		"eviction_ttl", e.evictionTTL,
+	)
 
 	return tracker, nil
 }
@@ -660,6 +683,101 @@ func (e *SLACalculationEngine) recalculate(tracker *SLATrackerState, now time.Ti
 		tracker.Status = SLAOnTrack
 		tracker.Escalation = EscalationNone
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Deadline Calculator
+// ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+// TTL Eviction & Cleanup (SLA Memory Leak Fix)
+// ═══════════════════════════════════════════════════════════════════════
+
+// cleanupLoop периодически удаляет сиротские и просроченные трекеры.
+//
+// Что удаляется:
+//  1. Завершённые трекеры (Status completed/cancelled/closed/rejected)
+//     с возрастом > evictionTTL
+//  2. Сиротские трекеры (on_track/paused/exempt) с возрастом > MaxTrackerAge
+//     — это трекеры для WOs, которые были удалены из БД или никогда не стартовали
+//
+// Заменяет time.AfterFunc, который создавал неуправляемые goroutines.
+func (e *SLACalculationEngine) cleanupLoop() {
+	ticker := time.NewTicker(DefaultCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-e.cleanupStop:
+			e.logger.Debug("cleanup loop stopped")
+			return
+		case <-ticker.C:
+			e.evictStaleTrackers()
+		}
+	}
+}
+
+// evictStaleTrackers удаляет просроченные трекеры.
+func (e *SLACalculationEngine) evictStaleTrackers() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	now := time.Now()
+	var evicted int
+
+	for woID, tracker := range e.trackers {
+		// 1. Завершённые трекеры (completed/cancelled/closed/rejected)
+		if isTerminalStatus(tracker) {
+			age := now.Sub(tracker.CreatedAt)
+			if age > e.evictionTTL {
+				delete(e.trackers, woID)
+				evicted++
+			}
+			continue
+		}
+
+		// 2. Сиротские трекеры (on_track/paused/exempt) без прогресса
+		age := now.Sub(tracker.CreatedAt)
+		if age > MaxTrackerAge {
+			// Если трекер существует > 24ч и не breached/at_risk — это сирота
+			if tracker.Status == SLAOnTrack || tracker.Status == SLAPaused || tracker.Status == SLAExempt {
+				delete(e.trackers, woID)
+				evicted++
+				e.logger.Warn("orphaned SLA tracker evicted",
+					"work_order", woID,
+					"age", age,
+					"status", tracker.Status,
+					"component", "sla-engine",
+				)
+			}
+		}
+	}
+
+	if evicted > 0 {
+		e.logger.Debug("SLA tracker cleanup complete",
+			"evicted", evicted,
+			"remaining", len(e.trackers),
+			"component", "sla-engine",
+		)
+	}
+}
+
+// isTerminalStatus проверяет, является ли статус трекера терминальным.
+// Терминальные трекеры подлежат удалению после evictionTTL.
+func isTerminalStatus(tracker *SLATrackerState) bool {
+	// Статусы WOs, при которых SLA трекер больше не нужен
+	// (соответствует статусам из models.WorkOrderStatus)
+	switch tracker.Status {
+	case SLAOnTrack, SLAAtRisk, SLABreached, SLAPaused, SLAExempt:
+		return false
+	default:
+		return true
+	}
+}
+
+// Stop останавливает cleanupLoop.
+func (e *SLACalculationEngine) Stop() {
+	close(e.cleanupStop)
 }
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -1,6 +1,18 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+// ═══════════════════════════════════════════════════════════════════════
+// ThemeContext — Bridge to Zustand Theme Store (ARCH-02)
+//
+// Эта обёртка обеспечивает обратную совместимость с существующим кодом.
+// Новый код ДОЛЖЕН импортировать useThemeStore напрямую из store/.
+//
+// Миграция:
+//   Было:  import { useTheme } from './context/ThemeContext'
+//   Стало: import { useThemeStore } from '../store'
+//
+// После полной миграции: удалить этот файл.
+// ═══════════════════════════════════════════════════════════════════════
 
-type Theme = 'light' | 'dark' | 'system';
+import React, { createContext, useContext } from 'react';
+import { useThemeStore, type Theme } from '../store';
 
 type ThemeContextType = {
     theme: Theme;
@@ -11,47 +23,9 @@ type ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const [theme, setTheme] = useState<Theme>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('theme');
-            return (saved as Theme) || 'system';
-        }
-        return 'system';
-    });
-
-    const [isDark, setIsDark] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const root = window.document.documentElement;
-
-        const updateTheme = () => {
-            const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const shouldBeDark = theme === 'dark' || (theme === 'system' && systemDark);
-
-            setIsDark(shouldBeDark);
-
-            if (shouldBeDark) {
-                root.classList.add('dark');
-            } else {
-                root.classList.remove('dark');
-            }
-        };
-
-        updateTheme();
-
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = () => {
-            if (theme === 'system') {
-                updateTheme();
-            }
-        };
-
-        mediaQuery.addEventListener('change', handleChange);
-        localStorage.setItem('theme', theme);
-
-        return () => mediaQuery.removeEventListener('change', handleChange);
-    }, [theme]);
+    const theme = useThemeStore((s) => s.theme);
+    const setTheme = useThemeStore((s) => s.setTheme);
+    const isDark = useThemeStore((s) => s.isDark);
 
     return (
         <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
@@ -61,6 +35,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTheme() {
+    // Новый код: используй useThemeStore напрямую
+    // Legacy: используй этот хук
     const context = useContext(ThemeContext);
     if (context === undefined) {
         throw new Error('useTheme must be used within a ThemeProvider');
