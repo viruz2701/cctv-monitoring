@@ -80,8 +80,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 COMMENT ON FUNCTION rls_tenant_check(TEXT) IS
-    'F-0.2.3: Проверяет tenant_id строки против session-local app.tenant_id. ' ||
-    'Admin bypass: app.tenant_id = ''*'' пропускает все tenant''ы.';
+    'F-0.2.3: Проверяет tenant_id строки против session-local app.tenant_id. Admin bypass: wildcard пропускает все tenant''ы.';
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 4. Включение RLS и создание политик
