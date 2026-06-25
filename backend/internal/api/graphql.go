@@ -400,9 +400,10 @@ func splitArgs(s string) []string {
 func indexOfMatching(s string, open, close byte) int {
 	depth := 0
 	for i := 0; i < len(s); i++ {
-		if s[i] == open {
+		switch s[i] {
+		case open:
 			depth++
-		} else if s[i] == close {
+		case close:
 			depth--
 			if depth == 0 {
 				return i
