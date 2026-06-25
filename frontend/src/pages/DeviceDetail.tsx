@@ -26,6 +26,7 @@ import {
     ChevronRight,
     Tag,
     QrCode,
+    Shield,
 } from 'lucide-react';
 import {
     Card,
@@ -39,9 +40,11 @@ import {
     Modal,
     Input,
     Select,
+    Tabs,
 } from '../components/ui';
 import { useTickets, useDevicesSites } from '../context/DataContext';
 import type { RecordingDay, HealthTimelineEvent as TimelineEvent, DeviceStats, DeviceCamera } from '../types';
+import { DeviceAuditLog } from '../components/devices/DeviceAuditLog';
 import { useTranslation } from 'react-i18next';
 
 // ─── Helpers with locale support ─────────────────────────────────────
@@ -503,6 +506,9 @@ export function DeviceDetail() {
                     )}
                 </CardBody>
             </Card>
+
+            {/* ═══ Audit Log Tab ═══ */}
+            <DeviceAuditLog deviceId={deviceId || ''} />
 
             {/* Missing Recording Modal */}
             <Modal isOpen={!!selectedRecording} onClose={() => setSelectedRecording(null)} title={t('missing_recording')} size="sm" footer={

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Info, Package, Timer, Camera, Clock, Loader2,
-  CheckCircle, XCircle, ArrowLeft,
+  CheckCircle, XCircle, ArrowLeft, Shield,
 } from 'lucide-react';
 import {
   Button, useToast, Modal,
@@ -20,6 +20,7 @@ import { WODetailParts } from '../components/work-orders/WODetailParts';
 import { WODetailTime } from '../components/work-orders/WODetailTime';
 import { WODetailPhotos } from '../components/work-orders/WODetailPhotos';
 import { WODetailTimeline } from '../components/work-orders/WODetailTimeline';
+import { WOAuditLog } from '../components/work-orders/WOAuditLog';
 
 const typeLabel: Record<string, string> = {
   preventive: 'Плановое',
@@ -363,6 +364,11 @@ export const WorkOrderDetail: React.FC = () => {
       label: t('workOrder.tabHistory') || 'История',
       icon: <Clock className="w-4 h-4" />,
     },
+    {
+      id: 'audit',
+      label: 'Audit Log',
+      icon: <Shield className="w-4 h-4" />,
+    },
   ];
 
   if (loading) {
@@ -527,6 +533,13 @@ export const WorkOrderDetail: React.FC = () => {
             {activeTab === 'history' && loadedTabs.has('history') && (
               <div className="mt-6">
                 <WODetailTimeline events={timelineEvents} />
+              </div>
+            )}
+
+            {/* Audit Log Tab (lazy load) */}
+            {activeTab === 'audit' && loadedTabs.has('audit') && id && (
+              <div className="mt-6">
+                <WOAuditLog workOrderId={id} />
               </div>
             )}
           </Tabs>

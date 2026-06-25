@@ -746,6 +746,7 @@ export const api = {
         user_id?: string;
         action?: string;
         entity_type?: string;
+        entity_id?: string;
         time_from?: string;
         time_to?: string;
         limit?: number;
@@ -754,6 +755,7 @@ export const api = {
         if (params?.user_id) query.append('user_id', params.user_id);
         if (params?.action) query.append('action', params.action);
         if (params?.entity_type) query.append('entity_type', params.entity_type);
+        if (params?.entity_id) query.append('entity_id', params.entity_id);
         if (params?.time_from) query.append('time_from', params.time_from);
         if (params?.time_to) query.append('time_to', params.time_to);
         if (params?.limit) query.append('limit', String(params.limit));
