@@ -28,3 +28,5 @@ export * from './Toast';
 export { CommandPalette } from './CommandPalette';
 export { OnboardingTour } from './OnboardingTour';
 export { EmptyState } from './EmptyState';
+export { Alert } from './Alert';
+export { VisuallyHidden } from './VisuallyHidden';

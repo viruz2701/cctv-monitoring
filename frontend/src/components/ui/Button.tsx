@@ -57,9 +57,10 @@ export function Button({
         ${className}
       `}
             disabled={isDisabled}
+            aria-busy={loading || undefined}
             {...props}
         >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
             {!loading && icon && iconPosition === 'left' && icon}
             {children}
             {!loading && icon && iconPosition === 'right' && icon}

@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useAccessibility';
 
 interface ModalProps {
     isOpen: boolean;
@@ -30,7 +31,10 @@ export function Modal({
     footer,
 }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
-    const modalRef = useRef<HTMLDivElement>(null);
+    const previousFocusRef = useRef<HTMLElement | null>(null);
+
+    // WCAG 2.1 AA: Improved focus trap with restore (UX-14.2.7)
+    const { containerRef: modalRef, handleKeyDown } = useFocusTrap(isOpen);
 
     // Close on escape key
     useEffect(() => {
@@ -48,8 +52,15 @@ export function Modal({
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
+            // Save current focus for restoration
+            previousFocusRef.current = document.activeElement as HTMLElement;
         } else {
             document.body.style.overflow = '';
+            // WCAG 2.1 AA: Return focus after close (UX-14.2.7)
+            requestAnimationFrame(() => {
+                previousFocusRef.current?.focus();
+                previousFocusRef.current = null;
+            });
         }
 
         return () => {
@@ -57,12 +68,19 @@ export function Modal({
         };
     }, [isOpen]);
 
-    // Focus trap
+    // Focus first focusable element inside modal on open
     useEffect(() => {
         if (isOpen && modalRef.current) {
-            modalRef.current.focus();
+            const focusable = modalRef.current.querySelector<HTMLElement>(
+                'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable) {
+                focusable.focus();
+            } else {
+                modalRef.current.focus();
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, modalRef]);
 
     if (!isOpen) return null;
 
@@ -77,14 +95,16 @@ export function Modal({
             ref={overlayRef}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
             onClick={handleOverlayClick}
+            aria-hidden={!isOpen}
         >
             <div
                 ref={modalRef}
                 tabIndex={-1}
-                className={`relative w-full ${sizeClasses[size]} bg-white dark:bg-slate-800 rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-200 border border-slate-200 dark:border-slate-700`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={title ? 'modal-title' : undefined}
+                onKeyDown={handleKeyDown}
+                className={`relative w-full ${sizeClasses[size]} bg-white dark:bg-slate-800 rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-200 border border-slate-200 dark:border-slate-700`}
             >
                 {/* Header */}
                 {(title || showClose) && (
@@ -97,10 +117,10 @@ export function Modal({
                         {showClose && (
                             <button
                                 onClick={onClose}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                                 aria-label="Close modal"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-5 h-5" aria-hidden="true" />
                             </button>
                         )}
                     </div>

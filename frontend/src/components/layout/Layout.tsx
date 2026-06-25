@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -6,12 +6,18 @@ import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
 import { OnboardingTour } from '../ui/OnboardingTour';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import { useSkipLink } from '../../hooks/useAccessibility';
+import { VisuallyHidden } from '../ui/VisuallyHidden';
 
 export function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const location = useLocation();
     const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
+    const liveRegionRef = useRef<HTMLDivElement>(null);
+
+    // WCAG 2.1 AA: Skip-to-content link (UX-14.2.7)
+    const { handleSkip, targetId } = useSkipLink('main-content');
 
     // Initialize WebSocket for real-time alarms (only connects if user is authenticated)
     useAlarmWebSocket();
@@ -51,6 +57,24 @@ export function Layout() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            {/* WCAG 2.1 AA: Skip Link — первый фокусируемый элемент (UX-14.2.7) */}
+            <a
+                href={`#${targetId}`}
+                onClick={handleSkip}
+                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none"
+            >
+                Перейти к основному содержанию
+            </a>
+
+            {/* WCAG 2.1 AA: aria-live region для динамических обновлений (UX-14.2.7) */}
+            <div
+                ref={liveRegionRef}
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+            />
+
             {/* Sidebar */}
             <Sidebar
                 collapsed={sidebarCollapsed}
@@ -64,6 +88,7 @@ export function Layout() {
                 <div
                     className="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"
                     onClick={() => setMobileMenuOpen(false)}
+                    aria-hidden="true"
                 />
             )}
 
@@ -79,8 +104,11 @@ export function Layout() {
             {/* Onboarding Tour — UX-14.1.6 */}
             <OnboardingTour />
 
-            {/* Main Content */}
+            {/* WCAG 2.1 AA: Main content landmark (UX-14.2.7) */}
             <main
+                id={targetId}
+                role="main"
+                tabIndex={-1}
                 className={`transition-all duration-300 pt-16 min-h-screen ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
                     }`}
             >

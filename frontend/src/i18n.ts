@@ -1,5 +1,18 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import be from './locales/be/translation.json';
+import uk from './locales/uk/translation.json';
+import pl from './locales/pl/translation.json';
+import de from './locales/de/translation.json';
+import fr from './locales/fr/translation.json';
+import es from './locales/es/translation.json';
+import pt from './locales/pt/translation.json';
+import it from './locales/it/translation.json';
+import zh from './locales/zh/translation.json';
+import ja from './locales/ja/translation.json';
+import ko from './locales/ko/translation.json';
+import ar from './locales/ar/translation.json';
+import tr from './locales/tr/translation.json';
 
 const resources = {
   en: {
@@ -1156,7 +1169,20 @@ const resources = {
       "total_work_orders": "Всего нарядов",
       "total_cost": "Общая стоимость"
     }
-  }
+  },
+  be: { translation: be },
+  uk: { translation: uk },
+  pl: { translation: pl },
+  de: { translation: de },
+  fr: { translation: fr },
+  es: { translation: es },
+  pt: { translation: pt },
+  it: { translation: it },
+  zh: { translation: zh },
+  ja: { translation: ja },
+  ko: { translation: ko },
+  ar: { translation: ar },
+  tr: { translation: tr }
 };
 
 i18n

@@ -16,6 +16,9 @@ export function Input({
     ...props
 }: InputProps) {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
+    const errorId = error ? `${inputId}-error` : undefined;
+    const helperId = helperText && !error ? `${inputId}-helper` : undefined;
+    const describedBy = errorId || helperId || undefined;
 
     return (
         <div className="w-full">
@@ -29,6 +32,8 @@ export function Input({
             )}
             <input
                 id={inputId}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={describedBy}
                 className={`
           w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg
@@ -50,9 +55,15 @@ export function Input({
                     props.onClick?.(e);
                 }}
             />
-            {error && <p className="mt-1.5 text-sm text-red-600">{error}</p>}
+            {error && (
+                <p id={errorId} className="mt-1.5 text-sm text-red-600" role="alert">
+                    {error}
+                </p>
+            )}
             {helperText && !error && (
-                <p className="mt-1.5 text-sm text-slate-500">{helperText}</p>
+                <p id={helperId} className="mt-1.5 text-sm text-slate-500">
+                    {helperText}
+                </p>
             )}
         </div>
     );
@@ -103,6 +114,7 @@ export function Select({
     ...props
 }: SelectProps) {
     const selectId = id || label?.toLowerCase().replace(/\\s+/g, '-');
+    const errorId = error ? `${selectId}-error` : undefined;
     const hasCustomWidth = className.includes('w-');
 
     return (
@@ -117,6 +129,8 @@ export function Select({
             )}
             <select
                 id={selectId}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={errorId}
                 className={`
           px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg appearance-none
@@ -134,7 +148,11 @@ export function Select({
                     </option>
                 ))}
             </select>
-            {error && <p className="mt-1.5 text-sm text-red-600">{error}</p>}
+            {error && (
+                <p id={errorId} className="mt-1.5 text-sm text-red-600" role="alert">
+                    {error}
+                </p>
+            )}
         </div>
     );
 }
@@ -152,6 +170,7 @@ export function Textarea({
     ...props
 }: TextareaProps) {
     const textareaId = id || label?.toLowerCase().replace(/\s+/g, '-');
+    const errorId = error ? `${textareaId}-error` : undefined;
 
     return (
         <div className="w-full">
@@ -165,6 +184,8 @@ export function Textarea({
             )}
             <textarea
                 id={textareaId}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={errorId}
                 className={`
           w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg
@@ -177,7 +198,11 @@ export function Textarea({
         `}
                 {...props}
             />
-            {error && <p className="mt-1.5 text-sm text-red-600">{error}</p>}
+            {error && (
+                <p id={errorId} className="mt-1.5 text-sm text-red-600" role="alert">
+                    {error}
+                </p>
+            )}
         </div>
     );
 }
