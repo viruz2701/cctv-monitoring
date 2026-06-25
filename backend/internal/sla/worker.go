@@ -22,7 +22,6 @@ package sla
 import (
 	"context"
 	"fmt"
-	"gb-telemetry-collector/internal/telegram"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -160,7 +159,9 @@ type StatusRecorder interface {
 //  5. Сохраняет состояние
 //
 // SLA-6.2.3: Дополнительно запускает checkBreachedSLAs каждые 5 минут
-// для отправки Telegram уведомлений о просроченных SLA.
+// для отправки multi-channel уведомлений о просроченных SLA.
+//
+// P0-1.3: Интеграция с SLABreachNotifier (Telegram/SMS/Email).
 type SLAWorker struct {
 	engine    *SLACalculationEngine
 	provider  WorkOrderProvider
@@ -169,8 +170,8 @@ type SLAWorker struct {
 	cfg       WorkerConfig
 	logger    *slog.Logger
 
-	// SLA-6.2.3: Telegram bot для отправки breach уведомлений (опционально)
-	telegramBot *telegram.Bot
+	// P0-1.3: Multi-channel notifier (Telegram/SMS/Email)
+	notifier *SLABreachNotifier
 
 	// Состояние
 	ctx    context.Context
@@ -186,8 +187,8 @@ type SLAWorker struct {
 
 // NewSLAWorker создаёт SLA Worker.
 //
-// telegramBot — опциональный параметр для отправки SLA breach уведомлений (SLA-6.2.3).
-// Может быть nil, если Telegram уведомления не нужны.
+// notifier — опциональный multi-channel notifier (Telegram/SMS/Email).
+// P0-1.3: Заменяет telegramBot на SLABreachNotifier.
 func NewSLAWorker(
 	engine *SLACalculationEngine,
 	provider WorkOrderProvider,
@@ -195,7 +196,7 @@ func NewSLAWorker(
 	recorder StatusRecorder,
 	cfg WorkerConfig,
 	logger *slog.Logger,
-	telegramBot *telegram.Bot,
+	notifier *SLABreachNotifier,
 ) *SLAWorker {
 	cfg.validate()
 	if logger == nil {
@@ -205,20 +206,20 @@ func NewSLAWorker(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	w := &SLAWorker{
-		engine:      engine,
-		provider:    provider,
-		publisher:   publisher,
-		recorder:    recorder,
-		cfg:         cfg,
-		logger:      logger.With("component", "sla-worker"),
-		telegramBot: telegramBot,
-		ctx:         ctx,
-		cancel:      cancel,
+		engine:    engine,
+		provider:  provider,
+		publisher: publisher,
+		recorder:  recorder,
+		cfg:       cfg,
+		logger:    logger.With("component", "sla-worker"),
+		notifier:  notifier,
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 	w.lastRunDuration.Store(time.Duration(0))
 
-	if telegramBot != nil {
-		w.logger.Info("SLA breach Telegram notifications enabled",
+	if notifier != nil {
+		w.logger.Info("SLA breach multi-channel notifications enabled",
 			"check_interval", BreachCheckInterval,
 		)
 	}
@@ -250,8 +251,8 @@ func (w *SLAWorker) Start() error {
 		go w.saveLoop()
 	}
 
-	// SLA-6.2.3: Запускаем breach check worker (каждые 5 минут)
-	if w.telegramBot != nil {
+	// SLA-6.2.3 + P0-1.3: Запускаем breach check worker (каждые 5 минут)
+	if w.notifier != nil {
 		w.wg.Add(1)
 		go w.breachCheckLoop()
 	}
@@ -309,8 +310,8 @@ func (w *SLAWorker) runLoop() {
 func (w *SLAWorker) breachCheckLoop() {
 	defer w.wg.Done()
 
-	if w.telegramBot == nil {
-		w.logger.Debug("SLA breach check disabled: no telegram bot configured")
+	if w.notifier == nil {
+		w.logger.Debug("SLA breach check disabled: no notifier configured")
 		return
 	}
 
@@ -406,84 +407,10 @@ func (w *SLAWorker) checkBreachedSLAs() {
 			)
 		}
 	}
-
-	// 2. Группируем по assignee для отправки уведомлений
-	if w.telegramBot != nil {
-		byAssignee := make(map[string][]BreachedWorkOrder)
-		for _, b := range breached {
-			assigneeID := b.AssignedTo
-			if assigneeID == "" {
-				assigneeID = "unassigned"
-			}
-			byAssignee[assigneeID] = append(byAssignee[assigneeID], b)
-		}
-
-		// 3. Отправляем уведомления
-		for assigneeID, orders := range byAssignee {
-			w.sendBreachNotification(ctx, assigneeID, orders)
-		}
-	}
-}
-
-// sendBreachNotification отправляет уведомление о breach для конкретного assignee.
-//
-// Формат сообщения:
-//
-//	⚠️ SLA Breach!
-//	Наряд: {title}
-//	Приоритет: {priority}
-//	Дедлайн: {deadline}
-//	Устройство: {device_name}
-func (w *SLAWorker) sendBreachNotification(_ context.Context, assigneeID string, orders []BreachedWorkOrder) {
-	chatID, err := parseChatID(assigneeID)
-	if err != nil {
-		w.logger.Warn("invalid assignee chat_id for SLA breach notification",
-			"assignee_id", assigneeID,
-			"error", err,
-		)
-		return
-	}
-
-	// Если breaches много — отправляем сводку одним сообщением
-	if len(orders) == 1 {
-		wo := orders[0]
-		msg := fmt.Sprintf("⚠️ *SLA Breach!*\n\n"+
-			"📋 Наряд: %s\n"+
-			"🏷 Приоритет: *%s*\n"+
-			"⏰ Дедлайн: %s\n"+
-			"📹 Устройство: %s\n"+
-			"🆔 ID: %s",
-			escapeMarkdown(wo.Title),
-			escapeMarkdown(wo.Priority),
-			wo.SLADeadline.Format("2006-01-02 15:04 UTC"),
-			escapeMarkdown(wo.DeviceName),
-			wo.ID,
-		)
-		w.telegramBot.SendTextMessage(chatID, msg)
-	} else {
-		// Сводка для нескольких breaches
-		msg := fmt.Sprintf("⚠️ *SLA Breach Report*\n\nОбнаружено нарушений: *%d*\n\n", len(orders))
-		for i, wo := range orders {
-			if i >= 10 {
-				msg += fmt.Sprintf("\n... и ещё %d", len(orders)-i)
-				break
-			}
-			msg += fmt.Sprintf("%d. *%s*\n", i+1, escapeMarkdown(wo.Title))
-			msg += fmt.Sprintf("   Приоритет: %s | Дедлайн: %s\n",
-				escapeMarkdown(wo.Priority),
-				wo.SLADeadline.Format("2006-01-02 15:04"),
-			)
-		}
-		w.telegramBot.SendTextMessage(chatID, msg)
-	}
-
-	w.logger.Info("SLA breach notification sent",
-		"assignee_id", assigneeID,
-		"breach_count", len(orders),
-	)
 }
 
 // parseChatID преобразует строку assigneeID в int64 chat_id.
+// Используется в notifier.go для Telegram.
 func parseChatID(id string) (int64, error) {
 	if id == "" || id == "unassigned" {
 		return 0, fmt.Errorf("cannot send notification for unassigned work order")

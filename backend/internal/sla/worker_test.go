@@ -395,7 +395,7 @@ func TestCheckBreachedSLAs_NoTelegramBot(t *testing.T) {
 	engine := NewEngine(logger)
 	provider := &mockWorkOrderProvider{}
 
-	// Без telegram bot — не должно паниковать
+	// Без notifier — не должно паниковать
 	w := NewSLAWorker(engine, provider, nil, nil, WorkerConfig{}, logger, nil)
 	w.checkBreachedSLAs() // should not panic
 }
@@ -417,7 +417,7 @@ func TestBreachCheckLoop_StartWithBreachCheck(t *testing.T) {
 	engine := NewEngine(logger)
 	provider := &mockWorkOrderProvider{}
 
-	// With finder but without telegram bot — breach check should be disabled but Start should work
+	// With finder but without notifier — breach check should be disabled but Start should work
 	engine.SetBreachedFinder(&mockBreachedFinder{})
 
 	w := NewSLAWorker(engine, provider, nil, nil, WorkerConfig{
