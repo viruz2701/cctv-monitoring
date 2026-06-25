@@ -27,7 +27,8 @@ describe('Tooltip', () => {
         // Tooltip should be visible (opacity-100 instead of opacity-0)
         const tooltipEl = document.querySelector('[role="tooltip"]');
         expect(tooltipEl).toBeInTheDocument();
-        expect(tooltipEl.className).toContain('opacity-100');
+        expect(tooltipEl).toBeTruthy();
+        expect(tooltipEl!.className).toContain('opacity-100');
     });
 
     it('has role="tooltip" in DOM', () => {
@@ -50,7 +51,8 @@ describe('Tooltip', () => {
         );
 
         let tooltip = document.querySelector('[role="tooltip"]');
-        expect(tooltip.className).toContain('top-full');
+        expect(tooltip).toBeTruthy();
+        expect(tooltip!.className).toContain('top-full');
 
         rerender(
             <Tooltip content="Content" position="left">
@@ -59,7 +61,8 @@ describe('Tooltip', () => {
         );
 
         tooltip = document.querySelector('[role="tooltip"]');
-        expect(tooltip.className).toContain('right-full');
+        expect(tooltip).toBeTruthy();
+        expect(tooltip!.className).toContain('right-full');
 
         rerender(
             <Tooltip content="Content" position="right">
@@ -68,7 +71,8 @@ describe('Tooltip', () => {
         );
 
         tooltip = document.querySelector('[role="tooltip"]');
-        expect(tooltip.className).toContain('left-full');
+        expect(tooltip).toBeTruthy();
+        expect(tooltip!.className).toContain('left-full');
     });
 
     it('hides tooltip on mouse leave', async () => {
@@ -84,10 +88,12 @@ describe('Tooltip', () => {
 
         // Show
         await user.hover(trigger);
-        expect(tooltipEl.className).toContain('opacity-100');
+        expect(tooltipEl).toBeTruthy();
+        expect(tooltipEl!.className).toContain('opacity-100');
 
         // Hide
         await user.unhover(trigger);
-        expect(tooltipEl.className).toContain('opacity-0');
+        expect(tooltipEl).toBeTruthy();
+        expect(tooltipEl!.className).toContain('opacity-0');
     });
 });

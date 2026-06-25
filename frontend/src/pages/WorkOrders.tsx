@@ -622,7 +622,7 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     notes: '',
   });
 
-  const siteDevices = devices.filter(d => d.siteId === selectedSiteId);
+  const siteDevices = devices.filter((d: any) => d.siteId === selectedSiteId);
 
   const toast = useToast();
 
@@ -691,7 +691,7 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           required disabled={!selectedSiteId}
         >
           <option value="">{t('select_device') || 'Select device...'}</option>
-          {siteDevices.map(dev => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
+          {siteDevices.map((dev: any) => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
         </select>
         {woTouched.has('deviceId') && woErrors.deviceId && (
           <p className="mt-1 text-sm text-red-600">{woErrors.deviceId}</p>

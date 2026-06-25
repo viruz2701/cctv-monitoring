@@ -196,34 +196,42 @@ export function weightedFuzzySearch<T extends SearchableItem>(
   const results: FuzzyResult<T>[] = [];
 
   for (const item of items) {
-    let best: { score: number; matchField: 'label' | 'keywords' | 'description'; matchType: 'exact' | 'startsWith' | 'contains' | 'fuzzy' } | null = null;
+    let bestScore = -Infinity;
+    let bestField: 'label' | 'keywords' | 'description' = 'label';
+    let bestMatchType: 'exact' | 'startsWith' | 'contains' | 'fuzzy' = 'contains';
 
     // 1. Label (highest priority)
     if (fields.includes('label')) {
       const labelResult = scoreLabelMatch(item.label, queryLower);
-      if (labelResult && (!best || labelResult.score > best.score)) {
-        best = { score: labelResult.score, matchField: 'label', matchType: labelResult.matchType };
+      if (labelResult && labelResult.score > bestScore) {
+        bestScore = labelResult.score;
+        bestField = 'label';
+        bestMatchType = labelResult.matchType;
       }
     }
 
     // 2. Keywords (medium priority)
     if (fields.includes('keywords') && item.keywords.length > 0) {
       const kwResult = scoreKeywordMatch(item.keywords, queryLower);
-      if (kwResult && (!best || kwResult.score > best.score)) {
-        best = { score: kwResult.score, matchField: 'keywords', matchType: kwResult.matchType };
+      if (kwResult && kwResult.score > bestScore) {
+        bestScore = kwResult.score;
+        bestField = 'keywords';
+        bestMatchType = kwResult.matchType;
       }
     }
 
     // 3. Description (lowest priority)
     if (fields.includes('description')) {
       const descResult = scoreDescriptionMatch(item.description, queryLower);
-      if (descResult && (!best || descResult.score > best.score)) {
-        best = { score: descResult.score, matchField: 'description', matchType: descResult.matchType };
+      if (descResult && descResult.score > bestScore) {
+        bestScore = descResult.score;
+        bestField = 'description';
+        bestMatchType = descResult.matchType;
       }
     }
 
-    if (best && best.score >= threshold) {
-      results.push({ item, ...best });
+    if (bestScore >= threshold) {
+      results.push({ item, score: bestScore, matchField: bestField, matchType: bestMatchType });
     }
   }
 

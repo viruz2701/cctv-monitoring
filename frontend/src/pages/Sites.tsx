@@ -305,7 +305,7 @@ export function Sites() {
         return result;
     }, [sites, searchQuery, statusFilter]);
 
-    const getSiteDevices = (siteId: string) => devices.filter(d => d.siteId === siteId);
+    const getSiteDevices = (siteId: string) => devices.filter((d: any) => d.siteId === siteId);
 
     const getTechnicianName = (techId: string) => {
         const tech = technicians.find(t => t.id === techId);
@@ -358,7 +358,7 @@ export function Sites() {
                 return (
                     <div className="flex flex-col gap-1">
                         <Badge variant="neutral">{siteDevices.length} {t('devices')}</Badge>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{siteDevices.filter(d => d.status === 'online').length} {t('online')}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{siteDevices.filter((d: any) => d.status === 'online').length} {t('online')}</span>
                     </div>
                 );
             },
@@ -500,7 +500,7 @@ export function Sites() {
                                 <Camera className="w-4 h-4" /> {t('connected_devices')}
                             </h4>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {getSiteDevices(site.id).map(device => (
+                                {getSiteDevices(site.id).map((device: any) => (
                                     <div key={device.id} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                                         <div className={`w-2 h-2 rounded-full ${device.status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
                                         <div><p className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{device.ipAddress}</p></div>

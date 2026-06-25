@@ -117,7 +117,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
         const query = searchQuery.toLowerCase();
         return {
             sites: sites.filter(s => s.name.toLowerCase().includes(query) || s.address.toLowerCase().includes(query)).slice(0, 3),
-            devices: devices.filter(d => d.name.toLowerCase().includes(query) || d.type.toLowerCase().includes(query)).slice(0, 3)
+            devices: devices.filter((d: any) => d.name.toLowerCase().includes(query) || d.type.toLowerCase().includes(query)).slice(0, 3)
         };
     }, [searchQuery, sites, devices]);
 
