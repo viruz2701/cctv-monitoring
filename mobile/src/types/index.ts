@@ -80,10 +80,7 @@ export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
   WorkOrderDetail: { workOrderId: string };
-  Checklist: { workOrder: WorkOrder };
-  PhotoCapture: { workOrder: WorkOrder; checklist: ChecklistItem[] };
-  Verification: { workOrder: WorkOrder; checklist: ChecklistItem[]; photos: string[] };
-  Signature: { workOrder: WorkOrder; checklist: ChecklistItem[]; photos: string[]; verificationToken: string };
+  CompleteWorkOrder: { workOrder: WorkOrder }; // Unified wizard
   QRScanner: undefined;
 };
 
@@ -140,5 +137,6 @@ export interface VerificationResponse {
 
 export type MainTabParamList = {
   Dashboard: undefined;
+  Map: undefined;
   Profile: undefined;
 };

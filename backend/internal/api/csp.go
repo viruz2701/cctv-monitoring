@@ -5,14 +5,31 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
 // NonceContextKey — ключ контекста для CSP nonce.
 const NonceContextKey contextKey = "csp-nonce"
 
+// cspLogger — пакетный логгер для CSP nonce. По умолчанию slog.Default().
+// Можно переопределить через SetCSPLogger для тестов.
+var cspLogger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+// SetCSPLogger устанавливает логгер для CSP nonce.
+// Используется в тестах для подавления логов.
+func SetCSPLogger(logger *slog.Logger) {
+	if logger != nil {
+		cspLogger = logger
+	}
+}
+
 // CSPNonceMiddleware генерирует уникальный nonce для каждого запроса,
 // сохраняет его в контексте и выставляет в заголовке X-CSP-Nonce.
+//
+// Graceful degradation: при ошибке crypto/rand nonce будет пустым,
+// но сервер продолжит работу (ADR-004).
 func CSPNonceMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce := generateNonce()
@@ -28,13 +45,16 @@ func NonceFromContext(ctx context.Context) string {
 	return nonce
 }
 
-// generateNonce создаёт криптографически безопасный nonce (16 байт, base64).
-// Fail Secure: при ошибке crypto/rand паникуем (P2 из compliance framework).
+// generateNonce создаёт CSP nonce (16 байт, base64).
+// При ошибке crypto/rand логирует ошибку и возвращает пустой nonce.
+// Graceful degradation: CSP будет менее безопасен, но сервер продолжит работу.
 func generateNonce() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fail Secure: crypto/rand failure — критическая ошибка
-		panic("crypto/rand.Read failed: " + err.Error())
+		cspLogger.Error("csp: crypto/rand.Read failed, using empty nonce",
+			"error", err,
+		)
+		return ""
 	}
 	return base64.StdEncoding.EncodeToString(b)
 }

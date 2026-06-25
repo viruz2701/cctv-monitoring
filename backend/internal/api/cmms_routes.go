@@ -135,6 +135,7 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 		r.Post("/api/v1/mobile/push-token", s.registerMobilePushToken)
 		r.Get("/api/v1/mobile/profile", s.getMobileTechnicianProfile)
 		r.Get("/api/v1/mobile/stats", s.getMobileTechnicianStats)
+		r.Get("/api/v1/mobile/devices", s.listMobileDevices)
 	})
 }
 

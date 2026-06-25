@@ -1,14 +1,11 @@
 package servicenow
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
+
+	"gb-telemetry-collector/internal/webhook"
 )
 
 // WebhookHandler обрабатывает входящие webhook-уведомления от ServiceNow.
@@ -37,25 +34,21 @@ func (h *WebhookHandler) OnAssetUpdate(fn func(assetID string, changes map[strin
 	h.onAssetUpdate = fn
 }
 
-// ServeHTTP реализует http.Handler с HMAC-SHA256 верификацией.
+// ServeHTTP реализует http.Handler с HMAC-SHA256 верификацией через единый webhook пакет.
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		h.logger.Error("servicenow webhook: read body", "error", err)
-		http.Error(w, "read error", http.StatusBadRequest)
-		return
-	}
+	handler := webhook.ServeHTTPWithVerify(h.secret, h.handleVerified,
+		webhook.WithSignatureHeader("X-SN-Signature"),
+		webhook.WithLogger(h.logger),
+	)
+	handler.ServeHTTP(w, r)
+}
 
-	if !h.verifySignature(r.Header.Get("X-SN-Signature"), body) {
-		h.logger.Warn("servicenow webhook: invalid signature")
-		http.Error(w, "invalid signature", http.StatusUnauthorized)
-		return
-	}
-
+// handleVerified вызывается после успешной HMAC-верификации.
+func (h *WebhookHandler) handleVerified(w http.ResponseWriter, r *http.Request, body []byte) {
 	var event snWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		h.logger.Error("servicenow webhook: unmarshal", "error", err)
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		webhook.JSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
@@ -70,7 +63,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.onWorkOrderUpdate != nil {
 			if err := h.onWorkOrderUpdate(event.RecordID, event.Changes); err != nil {
 				h.logger.Error("servicenow webhook: onWorkOrderUpdate", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				webhook.JSONError(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
@@ -78,30 +71,13 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if h.onAssetUpdate != nil {
 			if err := h.onAssetUpdate(event.RecordID, event.Changes); err != nil {
 				h.logger.Error("servicenow webhook: onAssetUpdate", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				webhook.JSONError(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
-}
-
-// verifySignature проверяет HMAC-SHA256 подпись.
-func (h *WebhookHandler) verifySignature(sigHeader string, body []byte) bool {
-	if h.secret == "" {
-		return true
-	}
-	if sigHeader == "" {
-		return false
-	}
-
-	mac := hmac.New(sha256.New, []byte(h.secret))
-	mac.Write(body)
-	expected := hex.EncodeToString(mac.Sum(nil))
-
-	return hmac.Equal([]byte(sigHeader), []byte(expected))
+	webhook.JSONOK(w)
 }
 
 // snWebhookEvent — структура входящего webhook от ServiceNow.
@@ -113,38 +89,9 @@ type snWebhookEvent struct {
 }
 
 // WebhookVerify — middleware для chi, проверяет HMAC-SHA256 подпись.
+// Использует единый webhook.VerifyMiddleware.
 func WebhookVerify(secret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if secret == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			sig := r.Header.Get("X-SN-Signature")
-			if sig == "" {
-				http.Error(w, "missing signature", http.StatusUnauthorized)
-				return
-			}
-
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "read error", http.StatusBadRequest)
-				return
-			}
-			r.Body.Close()
-
-			mac := hmac.New(sha256.New, []byte(secret))
-			mac.Write(body)
-			expected := hex.EncodeToString(mac.Sum(nil))
-
-			if !hmac.Equal([]byte(sig), []byte(expected)) {
-				http.Error(w, "invalid signature", http.StatusUnauthorized)
-				return
-			}
-
-			r.Body = io.NopCloser(bytes.NewReader(body))
-			next.ServeHTTP(w, r)
-		})
-	}
+	return webhook.VerifyMiddleware(secret,
+		webhook.WithSignatureHeader("X-SN-Signature"),
+	)
 }

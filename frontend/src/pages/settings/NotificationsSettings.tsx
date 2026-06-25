@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Shield, Database, Mail, MessageCircle, Loader, CheckCircle } from 'lucide-react';
+import { Bell, Shield, Database, Mail, MessageCircle, Smartphone, Loader, CheckCircle } from 'lucide-react';
 import { Card, CardHeader, CardBody, Input, Button, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
@@ -7,7 +7,7 @@ import type { AppSettings } from '../../types';
 
 interface Props {
   notifications: AppSettings['notifications'];
-  onNotificationChange: (field: keyof AppSettings['notifications'], value: boolean) => void;
+  onNotificationChange: (field: keyof AppSettings['notifications'], value: any) => void;
 }
 
 export const NotificationsSettings: React.FC<Props> = ({ notifications, onNotificationChange }) => {
@@ -110,6 +110,166 @@ export const NotificationsSettings: React.FC<Props> = ({ notifications, onNotifi
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {t('email_notifications_desc') || 'Receive alert summaries and daily reports via email'}
             </p>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* SMS NOTIFICATIONS (RocketSMS) */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <Smartphone className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          <span>{t('sms_notifications') || 'SMS Уведомления'}</span>
+        </CardHeader>
+        <CardBody>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+              <div>
+                <p className="font-medium text-slate-900 dark:text-white">
+                  {t('sms_enabled') || 'SMS уведомления'}
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {t('sms_enabled_desc') || 'Отправка SMS при нарушении SLA через RocketSMS'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={notifications.smsEnabled}
+                  onChange={(e) => onNotificationChange('smsEnabled', e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:bg-violet-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+
+            {notifications.smsEnabled && (
+              <>
+                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-white">
+                      {t('sms_critical_only') || 'Только критические'}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {t('sms_critical_only_desc') || 'Отправлять SMS только для CRITICAL/HIGH приоритетов'}
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={notifications.smsForCriticalOnly}
+                      onChange={(e) => onNotificationChange('smsForCriticalOnly', e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:ring-2 peer-focus:ring-violet-500 rounded-full peer peer-checked:bg-violet-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+                  </label>
+                </div>
+
+                <div className="p-4 bg-violet-50 dark:bg-violet-900/20 rounded-lg space-y-3">
+                  <p className="text-sm font-medium text-violet-800 dark:text-violet-200">
+                    {t('rocketsms_settings') || 'Настройки RocketSMS'}
+                  </p>
+                  <Input
+                    label={t('rocketsms_login') || 'Логин'}
+                    value={notifications.rocketsms?.login || ''}
+                    onChange={(e) => onNotificationChange('rocketsms', { ...notifications.rocketsms, login: e.target.value })}
+                    placeholder="your_rocketsms_login"
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      label={t('rocketsms_sender') || 'Отправитель (SMS)'}
+                      value={notifications.rocketsms?.sender || 'CCTV'}
+                      onChange={(e) => onNotificationChange('rocketsms', { ...notifications.rocketsms, sender: e.target.value })}
+                      placeholder="CCTV"
+                    />
+                    <Input
+                      label={t('rocketsms_api_url') || 'API URL'}
+                      value={notifications.rocketsms?.apiUrl || 'https://api.rocketsms.by'}
+                      onChange={(e) => onNotificationChange('rocketsms', { ...notifications.rocketsms, apiUrl: e.target.value })}
+                      placeholder="https://api.rocketsms.by"
+                    />
+                  </div>
+                  <p className="text-xs text-violet-600 dark:text-violet-400">
+                    {t('rocketsms_password_hint') || 'Пароль RocketSMS настраивается через переменную окружения ROCKET_SMS_PASSWORD'}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* EMAIL FOR MANAGERS */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <Mail className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          <span>{t('email_for_managers') || 'Email для менеджеров'}</span>
+        </CardHeader>
+        <CardBody>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+              <div>
+                <p className="font-medium text-slate-900 dark:text-white">
+                  {t('email_managers_enabled') || 'Уведомления менеджеров'}
+                </p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {t('email_managers_desc') || 'Отправлять email менеджерам при критическом SLA и breach'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={notifications.emailForManagers}
+                  onChange={(e) => onNotificationChange('emailForManagers', e.target.checked)}
+                />
+                <div className="w-11 h-6 bg-slate-300 dark:bg-slate-700 peer-focus:ring-2 peer-focus:ring-emerald-500 rounded-full peer peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {t('email_managers_hint') || 'Email менеджеров настраивается в профилях пользователей (роль manager/owner)'}
+            </p>
+
+            {(notifications.emailForManagers || notifications.smtp?.host) && (
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg space-y-3">
+                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                  {t('smtp_settings') || 'Настройки SMTP'}
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label={t('smtp_host') || 'SMTP Host'}
+                    value={notifications.smtp?.host || ''}
+                    onChange={(e) => onNotificationChange('smtp', { ...notifications.smtp, host: e.target.value })}
+                    placeholder="smtp.gmail.com"
+                  />
+                  <Input
+                    label={t('smtp_port') || 'SMTP Port'}
+                    type="number"
+                    value={notifications.smtp?.port || 587}
+                    onChange={(e) => onNotificationChange('smtp', { ...notifications.smtp, port: parseInt(e.target.value) || 587 })}
+                    placeholder="587"
+                  />
+                </div>
+                <Input
+                  label={t('smtp_user') || 'SMTP User'}
+                  value={notifications.smtp?.user || ''}
+                  onChange={(e) => onNotificationChange('smtp', { ...notifications.smtp, user: e.target.value })}
+                  placeholder="user@example.com"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label={t('smtp_from') || 'From (отправитель)'}
+                    value={notifications.smtp?.from || ''}
+                    onChange={(e) => onNotificationChange('smtp', { ...notifications.smtp, from: e.target.value })}
+                    placeholder="cctv@example.com"
+                  />
+                  <div className="flex items-end pb-2">
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                      {t('smtp_password_hint') || 'Пароль SMTP через SMTP_PASSWORD'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </CardBody>
       </Card>

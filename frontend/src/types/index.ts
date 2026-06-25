@@ -314,6 +314,20 @@ export interface AppSettings {
         storageWarnings: boolean;
         dailyReports: boolean;
         mobilePush: boolean;
+        smsEnabled: boolean;
+        smsForCriticalOnly: boolean;
+        emailForManagers: boolean;
+        rocketsms: {
+            login: string;
+            sender: string;
+            apiUrl: string;
+        };
+        smtp: {
+            host: string;
+            port: number;
+            user: string;
+            from: string;
+        };
     };
     system: {
         healthCheckInterval: number;

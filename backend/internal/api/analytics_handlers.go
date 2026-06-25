@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
 
 	"gb-telemetry-collector/internal/auth"
@@ -175,6 +176,75 @@ func (s *Server) getTCOPerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, results)
+}
+
+// ---------- Downtime Cost by Site (BIZ-01) ----------
+
+// getDowntimeCostsBySite возвращает стоимость простоев с группировкой по объектам.
+// GET /api/v1/analytics/downtime-costs
+//
+// BIZ-01: TCO и стоимость простоя — аргумент для продажи директору.
+// Формула: Total Downtime Cost = Σ(downtime_hours × cost_per_hour)
+//
+// Compliance:
+//   - OWASP ASVS V4.1 (RBAC — admin/manager/support only)
+//   - OWASP ASVS V7.1 (Error handling)
+//   - ISO 27001 A.12.6.1 (Cost tracking)
+func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
+		respondError(w, r, NewForbiddenError("forbidden"))
+		return
+	}
+
+	// Используем существующий TCO per device с группировкой
+	tcoResults, err := s.db.GetTCOPerDevice(r.Context(), models.TCOFilter{Limit: 500})
+	if err != nil {
+		s.logger.Error("failed to get downtime costs", "error", err)
+		respondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	var totalDowntimeCost float64
+	totalDevices := len(tcoResults)
+	devicesWithDowntime := 0
+	topByDowntime := make([]map[string]interface{}, 0)
+
+	for _, d := range tcoResults {
+		totalDowntimeCost += d.TotalDowntimeCost
+		if d.TotalDowntimeCost > 0 {
+			devicesWithDowntime++
+			topByDowntime = append(topByDowntime, map[string]interface{}{
+				"device_id":          d.DeviceID,
+				"device_name":        d.DeviceName,
+				"device_type":        d.DeviceType,
+				"downtime_cost":      d.TotalDowntimeCost,
+				"downtime_events":    d.TotalDowntimeEvents,
+				"tco":                d.TCO,
+			})
+		}
+	}
+
+	// Сортируем по убыванию downtime cost
+	sort.Slice(topByDowntime, func(i, j int) bool {
+		ci := topByDowntime[i]["downtime_cost"].(float64)
+		cj := topByDowntime[j]["downtime_cost"].(float64)
+		return ci > cj
+	})
+
+	// Лимитируем топ-20
+	if len(topByDowntime) > 20 {
+		topByDowntime = topByDowntime[:20]
+	}
+
+	result := map[string]interface{}{
+		"total_downtime_cost":  totalDowntimeCost,
+		"total_devices":        totalDevices,
+		"devices_with_downtime": devicesWithDowntime,
+		"top_by_downtime_cost": topByDowntime,
+	}
+
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ---------- Work Order Cost Summary (WO-4.4.5) ----------

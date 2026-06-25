@@ -56,8 +56,8 @@ export default function WorkOrderDetailScreen({ route }: Props) {
     ]);
   };
 
-  const handleOpenChecklist = () => {
-    navigation.navigate('Checklist', { workOrder });
+  const handleComplete = () => {
+    navigation.navigate('CompleteWorkOrder', { workOrder });
   };
 
   const handleScanQR = () => {
@@ -140,12 +140,14 @@ export default function WorkOrderDetailScreen({ route }: Props) {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleOpenChecklist}
-          >
-            <Text style={styles.secondaryButtonText}>Чек-лист</Text>
-          </TouchableOpacity>
+          {workOrder.status === 'in_progress' && (
+            <TouchableOpacity
+              style={[styles.button, styles.completeButton]}
+              onPress={handleComplete}
+            >
+              <Text style={styles.buttonText}>✅ Завершить наряд</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.button, styles.outlineButton]}
@@ -253,8 +255,8 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#2563eb',
   },
-  secondaryButton: {
-    backgroundColor: '#1e40af',
+  completeButton: {
+    backgroundColor: '#16a34a',
   },
   outlineButton: {
     backgroundColor: '#fff',
@@ -262,11 +264,6 @@ const styles = StyleSheet.create({
     borderColor: '#2563eb',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

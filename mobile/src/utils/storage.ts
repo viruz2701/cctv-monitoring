@@ -6,6 +6,7 @@ const KEYS = {
   USER: 'user',
   SYNC_QUEUE: 'syncQueue',
   PUSH_TOKEN: 'pushToken',
+  DEVICE_MAP_CACHE: 'deviceMapCache',
 } as const;
 
 export const storage = {
@@ -59,6 +60,19 @@ export const storage = {
 
   async setPushToken(token: string): Promise<void> {
     return AsyncStorage.setItem(KEYS.PUSH_TOKEN, token);
+  },
+
+  // Generic key-value methods for offline cache
+  async getItem(key: string): Promise<string | null> {
+    return AsyncStorage.getItem(key);
+  },
+
+  async setItem(key: string, value: string): Promise<void> {
+    return AsyncStorage.setItem(key, value);
+  },
+
+  async removeItem(key: string): Promise<void> {
+    return AsyncStorage.removeItem(key);
   },
 
   async clearAll(): Promise<void> {

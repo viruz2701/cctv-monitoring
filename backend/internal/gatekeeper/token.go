@@ -1,10 +1,11 @@
 package gatekeeper
 
 import (
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"gb-telemetry-collector/internal/auth"
 )
 
 // VerificationClaims — клеймы verification-токена.
@@ -25,18 +26,16 @@ const (
 	VerificationTokenTTL = 10 * time.Minute
 )
 
-// getJWTSecret возвращает JWT_SECRET из переменных окружения.
-func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		panic("JWT_SECRET environment variable is required")
-	}
-	return []byte(secret)
-}
-
 // GenerateVerificationToken создаёт JWT-токен, подтверждающий успешную верификацию.
 // Токен действует 10 минут и должен быть передан в CompleteWorkOrder.
+//
+// Возвращает error если JWT_SECRET не установлен (graceful degradation).
 func GenerateVerificationToken(workOrderID, technicianID string, gpsPassed, exifPassed, aiPassed, gpsSkipped bool) (string, error) {
+	secret, err := auth.GetJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	now := time.Now()
 	claims := VerificationClaims{
 		WorkOrderID:  workOrderID,
@@ -55,13 +54,20 @@ func GenerateVerificationToken(workOrderID, technicianID string, gpsPassed, exif
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getJWTSecret())
+	return token.SignedString(secret)
 }
 
 // ValidateVerificationToken проверяет verification-токен и возвращает клеймы.
+//
+// Возвращает error если JWT_SECRET не установлен или токен невалиден.
 func ValidateVerificationToken(tokenString string) (*VerificationClaims, error) {
+	secret, err := auth.GetJWTSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &VerificationClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return getJWTSecret(), nil
+		return secret, nil
 	})
 	if err != nil {
 		return nil, err

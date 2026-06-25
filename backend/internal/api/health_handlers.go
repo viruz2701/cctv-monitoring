@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"gb-telemetry-collector/internal/auth"
 )
 
 const healthCheckTimeout = 5 * time.Second
@@ -26,11 +28,11 @@ type healthDetail struct {
 
 // poolStats — статистика пула соединений PostgreSQL.
 type poolStats struct {
-	MaxConns        int32 `json:"max_conns"`
-	AcquiredConns   int32 `json:"acquired_conns"`
-	IdleConns       int32 `json:"idle_conns"`
+	MaxConns          int32 `json:"max_conns"`
+	AcquiredConns     int32 `json:"acquired_conns"`
+	IdleConns         int32 `json:"idle_conns"`
 	ConstructingConns int32 `json:"constructing_conns"`
-	TotalConns      int32 `json:"total_conns"`
+	TotalConns        int32 `json:"total_conns"`
 }
 
 func (s *Server) mountHealthRoutes(r chi.Router) {
@@ -144,6 +146,18 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 			Status: "unavailable",
 			Error:  err.Error(),
 		}
+	}
+
+	// Check JWT_SECRET (SEC-02: graceful degradation)
+	if !auth.IsJWTSecretSet() {
+		statusCode = http.StatusServiceUnavailable
+		response.Status = "degraded"
+		response.Dependencies["auth"] = healthDetail{
+			Status: "unavailable",
+			Error:  "JWT_SECRET not configured — authentication unavailable",
+		}
+	} else {
+		response.Dependencies["auth"] = healthDetail{Status: "ok"}
 	}
 
 	// Check NATS connection (если сконфигурирован)

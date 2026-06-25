@@ -923,4 +923,23 @@ export const api = {
             method: 'POST',
         });
     },
+
+    // ── RCA Graph (AI-01) ────────────────────────────────────────────
+
+    async getRCAGraph(deviceId: string): Promise<{
+        nodes: Array<{
+            id: string;
+            type: string;
+            data: { label: string; device_type: string; status: string; is_root_cause: boolean; is_failed: boolean; is_healthy: boolean };
+            position: { x: number; y: number };
+        }>;
+        edges: Array<{ id: string; source: string; target: string; type: string; animated: boolean }>;
+        root_cause_id: string;
+        failed_device_id: string;
+        impact_description: string;
+        recommendation: string;
+        blast_radius: number;
+    }> {
+        return request(`/rca/${deviceId}`);
+    },
 };

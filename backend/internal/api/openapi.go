@@ -464,6 +464,9 @@ func DefaultRoutes() []RouteMeta {
 		{GET, "/api/v1/reports/sla-compliance", "Reports", "SLA compliance report", "Get SLA compliance report", "getSLAComplianceReport", true, true, false},
 		{GET, "/api/v1/reports/export", "Reports", "Export report", "Export report as CSV/PDF", "exportReport", true, true, false},
 
+		// RCA (AI-01)
+		{GET, "/api/v1/rca/{id}", "RCA", "RCA Graph", "Get RCA visualization graph for device", "getRCAGraph", true, true, false},
+
 		// WebSocket
 		{GET, "/api/v1/ws", "WebSocket", "WebSocket connection", "Real-time event stream via WebSocket", "websocketConnect", true, false, false},
 	}

@@ -402,6 +402,117 @@ func (s *Server) registerMobilePushToken(w http.ResponseWriter, r *http.Request)
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "registered"})
 }
 
+// ---------- Mobile Devices (Offline Map: UX-02) ----------
+
+// MobileDeviceMapData — лёгкая структура для карты устройств
+// Содержит только поля, необходимые для отображения на карте (OWASP ASVS V8 — Data Protection)
+type MobileDeviceMapData struct {
+	DeviceID   string  `json:"device_id"`
+	Name       string  `json:"name"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Status     string  `json:"status"`
+	DeviceType string  `json:"device_type"`
+	SiteName   string  `json:"site_name,omitempty"`
+	Health     string  `json:"health"`
+}
+
+// listMobileDevices возвращает компактный список устройств с координатами для карты.
+// GET /api/v1/mobile/devices
+// Соответствует:
+//   - OWASP ASVS V4 (RBAC — только свои устройства)
+//   - OWASP ASVS V5 (Whitelist validation)
+//   - OWASP ASVS V7 (Error handling — no information leakage)
+//   - OWASP ASVS V8 (Data Protection — только необходимые поля)
+//   - ISO 27001 A.12.6.1 (Capacity management — лимит страницы)
+func (s *Server) listMobileDevices(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		respondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+
+	// Фильтры (V5 — whitelist validation)
+	statusFilter := r.URL.Query().Get("status")
+	deviceTypeFilter := r.URL.Query().Get("device_type")
+	siteID := r.URL.Query().Get("site_id")
+	search := r.URL.Query().Get("search")
+
+	// Валидация статуса
+	if statusFilter != "" {
+		valid := false
+		for _, s := range validStatuses {
+			if s == statusFilter {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			respondError(w, r, NewValidationError("invalid status: must be ONLINE, OFFLINE, or WARNING"))
+			return
+		}
+	}
+
+	// Валидация device_type
+	if deviceTypeFilter != "" {
+		valid := false
+		for _, dt := range validDeviceTypes {
+			if dt == deviceTypeFilter {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			respondError(w, r, NewValidationError("invalid device_type: must be camera, nvr, dvr, or switch"))
+			return
+		}
+	}
+
+	filter := models.ListDevicesFilter{
+		Page:       1,
+		PageSize:   500,
+		Status:     statusFilter,
+		DeviceType: deviceTypeFilter,
+		SiteID:     siteID,
+		Search:     search,
+	}
+
+	result, err := s.deviceService.ListDevices(r.Context(), claims.UserID, claims.Role, filter)
+	if err != nil {
+		respondError(w, r, NewInternalError("failed to list devices", err))
+		return
+	}
+
+	// Маппинг в компактный формат для карты (V8 — только необходимые поля)
+	devices := make([]MobileDeviceMapData, 0, len(result.Devices))
+	for _, d := range result.Devices {
+		fullDevice, err := s.deviceService.GetDevice(r.Context(), claims.UserID, claims.Role, d.DeviceID)
+		if err != nil || fullDevice == nil {
+			continue
+		}
+		// Пропускаем устройства без координат
+		if fullDevice.Latitude == 0 && fullDevice.Longitude == 0 {
+			continue
+		}
+
+		devices = append(devices, MobileDeviceMapData{
+			DeviceID:   fullDevice.DeviceID,
+			Name:       fullDevice.Name,
+			Latitude:   fullDevice.Latitude,
+			Longitude:  fullDevice.Longitude,
+			Status:     string(fullDevice.Status),
+			DeviceType: string(fullDevice.DeviceType),
+			SiteName:   fullDevice.Location,
+			Health:     string(fullDevice.Health),
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"devices": devices,
+		"total":   len(devices),
+	})
+}
+
 // ---------- Mobile Technician Profile ----------
 
 // getMobileTechnicianProfile возвращает профиль текущего техника

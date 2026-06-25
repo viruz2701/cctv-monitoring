@@ -2,17 +2,27 @@ package api
 
 import (
 	"encoding/base64"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
+func init() {
+	// Подавляем логи CSP в тестах
+	SetCSPLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
 // ── Nonce Generation Tests (OWASP ASVS V5.3.3) ──────────────────────────
 
 // TestGenerateNonceLength проверяет длину nonce (16 байт → 24 символа base64).
 func TestGenerateNonceLength(t *testing.T) {
 	nonce := generateNonce()
+	if nonce == "" {
+		t.Fatal("expected non-empty nonce")
+	}
 	if len(nonce) != 24 {
 		t.Errorf("expected nonce length 24 (16 bytes base64), got %d: %q", len(nonce), nonce)
 	}
@@ -21,6 +31,9 @@ func TestGenerateNonceLength(t *testing.T) {
 // TestGenerateNonceBase64 проверяет что nonce — валидный base64.
 func TestGenerateNonceBase64(t *testing.T) {
 	nonce := generateNonce()
+	if nonce == "" {
+		t.Fatal("expected non-empty nonce")
+	}
 	decoded, err := base64.StdEncoding.DecodeString(nonce)
 	if err != nil {
 		t.Errorf("nonce is not valid base64: %v", err)
@@ -35,6 +48,9 @@ func TestGenerateNonceUniqueness(t *testing.T) {
 	nonces := make(map[string]bool)
 	for i := 0; i < 100; i++ {
 		nonce := generateNonce()
+		if nonce == "" {
+			t.Fatal("unexpected empty nonce")
+		}
 		if nonces[nonce] {
 			t.Errorf("duplicate nonce after %d iterations: %s", i, nonce)
 		}
@@ -45,6 +61,9 @@ func TestGenerateNonceUniqueness(t *testing.T) {
 // TestGenerateNonceCSPFormat проверяет что nonce пригоден для CSP.
 func TestGenerateNonceCSPFormat(t *testing.T) {
 	nonce := generateNonce()
+	if nonce == "" {
+		t.Fatal("expected non-empty nonce")
+	}
 	// CSP nonce должен содержать только base64 символы
 	for _, c := range nonce {
 		if !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=", c) {

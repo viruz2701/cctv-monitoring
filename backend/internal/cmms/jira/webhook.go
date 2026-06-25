@@ -1,14 +1,11 @@
 package jira
 
 import (
-	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
+
+	"gb-telemetry-collector/internal/webhook"
 )
 
 // WebhookHandler обрабатывает входящие webhook-уведомления от Jira.
@@ -37,25 +34,23 @@ func (h *WebhookHandler) OnAssetUpdate(fn func(assetID string, changes map[strin
 	h.onAssetUpdate = fn
 }
 
-// ServeHTTP реализует http.Handler с HMAC-SHA256 верификацией.
+// ServeHTTP реализует http.Handler с HMAC-SHA256 верификацией через единый webhook пакет.
+// Jira использует заголовок X-Hub-Signature-256 с префиксом "sha256=".
 func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
-		h.logger.Error("jira webhook: read body", "error", err)
-		http.Error(w, "read error", http.StatusBadRequest)
-		return
-	}
+	handler := webhook.ServeHTTPWithVerify(h.secret, h.handleVerified,
+		webhook.WithSignatureHeader("X-Hub-Signature-256"),
+		webhook.WithSignaturePrefix("sha256="),
+		webhook.WithLogger(h.logger),
+	)
+	handler.ServeHTTP(w, r)
+}
 
-	if !h.verifySignature(r.Header.Get("X-Hub-Signature-256"), body) {
-		h.logger.Warn("jira webhook: invalid signature")
-		http.Error(w, "invalid signature", http.StatusUnauthorized)
-		return
-	}
-
+// handleVerified вызывается после успешной HMAC-верификации.
+func (h *WebhookHandler) handleVerified(w http.ResponseWriter, r *http.Request, body []byte) {
 	var event jiraWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		h.logger.Error("jira webhook: unmarshal", "error", err)
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		webhook.JSONError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
@@ -78,7 +73,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := h.onWorkOrderUpdate(event.Issue.Key, changes); err != nil {
 				h.logger.Error("jira webhook: onWorkOrderUpdate", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				webhook.JSONError(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
@@ -90,35 +85,13 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := h.onAssetUpdate(event.Issue.Key, changes); err != nil {
 				h.logger.Error("jira webhook: onAssetUpdate", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				webhook.JSONError(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
-}
-
-func (h *WebhookHandler) verifySignature(sigHeader string, body []byte) bool {
-	if h.secret == "" {
-		return true
-	}
-	if sigHeader == "" {
-		return false
-	}
-
-	// Jira использует префикс "sha256="
-	sig := sigHeader
-	if len(sigHeader) > 7 && sigHeader[:7] == "sha256=" {
-		sig = sigHeader[7:]
-	}
-
-	mac := hmac.New(sha256.New, []byte(h.secret))
-	mac.Write(body)
-	expected := hex.EncodeToString(mac.Sum(nil))
-
-	return hmac.Equal([]byte(sig), []byte(expected))
+	webhook.JSONOK(w)
 }
 
 // jiraWebhookEvent — структура входящего webhook от Jira.
@@ -145,43 +118,10 @@ type jiraWebhookIssueFields struct {
 }
 
 // WebhookVerify — middleware для chi, проверяет Jira HMAC-SHA256 подпись.
+// Использует единый webhook.VerifyMiddleware с префиксом "sha256=".
 func WebhookVerify(secret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if secret == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			sig := r.Header.Get("X-Hub-Signature-256")
-			if sig == "" {
-				http.Error(w, "missing signature", http.StatusUnauthorized)
-				return
-			}
-
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "read error", http.StatusBadRequest)
-				return
-			}
-			r.Body.Close()
-
-			rawSig := sig
-			if len(sig) > 7 && sig[:7] == "sha256=" {
-				rawSig = sig[7:]
-			}
-
-			mac := hmac.New(sha256.New, []byte(secret))
-			mac.Write(body)
-			expected := hex.EncodeToString(mac.Sum(nil))
-
-			if !hmac.Equal([]byte(rawSig), []byte(expected)) {
-				http.Error(w, "invalid signature", http.StatusUnauthorized)
-				return
-			}
-
-			r.Body = io.NopCloser(bytes.NewReader(body))
-			next.ServeHTTP(w, r)
-		})
-	}
+	return webhook.VerifyMiddleware(secret,
+		webhook.WithSignatureHeader("X-Hub-Signature-256"),
+		webhook.WithSignaturePrefix("sha256="),
+	)
 }

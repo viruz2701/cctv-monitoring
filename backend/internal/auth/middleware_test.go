@@ -109,7 +109,11 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := token.SignedString(getJWTSecret())
+	secret, err := GetJWTSecret()
+	if err != nil {
+		t.Fatalf("get JWT secret: %v", err)
+	}
+	tokenStr, err := token.SignedString(secret)
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}
@@ -140,7 +144,11 @@ func TestAuthMiddleware_SessionTimeout(t *testing.T) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := token.SignedString(getJWTSecret())
+	secret, err := GetJWTSecret()
+	if err != nil {
+		t.Fatalf("get JWT secret: %v", err)
+	}
+	tokenStr, err := token.SignedString(secret)
 	if err != nil {
 		t.Fatalf("sign token: %v", err)
 	}

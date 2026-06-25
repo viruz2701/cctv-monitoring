@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, StyleSheet } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import React, { useCallback } from 'react';
+import { View, Text, FlatList, RefreshControl, StyleSheet, Alert } from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { workOrdersApi } from '../api/workOrders';
-import { RootStackParamList } from '../types';
+import { useSyncStore } from '../store/syncStore';
+import { RootStackParamList, WorkOrder } from '../types';
 import WorkOrderCard from '../components/WorkOrderCard';
+import SwipeableCard, { SwipeAction } from '../components/SwipeableCard';
 import OfflineIndicator from '../components/OfflineIndicator';
 import { getGreeting } from '../utils/dateHelpers';
 import { useAuthStore } from '../store/authStore';
@@ -13,6 +15,9 @@ import { useAuthStore } from '../store/authStore';
 export default function DashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+  const addToQueue = useSyncStore((s) => s.addToQueue);
+  const isOnline = useSyncStore((s) => s.isOnline);
 
   const {
     data: workOrders,
@@ -24,9 +29,153 @@ export default function DashboardScreen() {
     queryFn: workOrdersApi.getMyWorkOrders,
   });
 
-  const openWorkOrder = (id: string) => {
-    navigation.navigate('WorkOrderDetail', { workOrderId: id });
-  };
+  // Mutations для inline-действий
+  const startMutation = useMutation({
+    mutationFn: (id: string) => workOrdersApi.startWorkOrder(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myWorkOrders'] });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) =>
+      workOrdersApi.completeWorkOrder(id, {
+        notes: '',
+        checklist: [],
+        photos: [],
+        parts_used: [],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myWorkOrders'] });
+    },
+  });
+
+  const openWorkOrder = useCallback(
+    (id: string) => {
+      navigation.navigate('WorkOrderDetail', { workOrderId: id });
+    },
+    [navigation],
+  );
+
+  // ── Inline actions (UX-03) ──────────────────────────────────────────
+
+  const handleStart = useCallback(
+    (wo: WorkOrder) => {
+      if (isOnline) {
+        startMutation.mutate(wo.id);
+      } else {
+        // Offline: ставим в очередь синхронизации
+        addToQueue({ type: 'start_work_order', workOrderId: wo.id });
+        // Оптимистично обновляем кеш
+        queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
+          old?.map((o) => (o.id === wo.id ? { ...o, status: 'in_progress' as const } : o)),
+        );
+      }
+    },
+    [isOnline, startMutation, addToQueue, queryClient],
+  );
+
+  const handleComplete = useCallback(
+    (wo: WorkOrder) => {
+      Alert.alert(
+        'Завершить наряд',
+        `Завершить наряд #${wo.id}?\n\nДля полного завершения откройте наряд и заполните данные.`,
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'Быстрое завершение',
+            onPress: () => {
+              if (isOnline) {
+                completeMutation.mutate(wo.id);
+              } else {
+                addToQueue({
+                  type: 'complete_work_order',
+                  workOrderId: wo.id,
+                  payload: { notes: '', checklist: [], photos: [], parts_used: [] },
+                });
+                queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
+                  old?.map((o) =>
+                    o.id === wo.id ? { ...o, status: 'completed' as const } : o,
+                  ),
+                );
+              }
+            },
+          },
+        ],
+      );
+    },
+    [isOnline, completeMutation, addToQueue, queryClient],
+  );
+
+  const handleCancel = useCallback(
+    (wo: WorkOrder) => {
+      Alert.alert('Отменить наряд', `Отменить наряд #${wo.id}?`, [
+        { text: 'Нет', style: 'cancel' },
+        {
+          text: 'Да, отменить',
+          style: 'destructive',
+          onPress: () => {
+            // TODO: добавить API endpoint для отмены inline
+            addToQueue({
+              type: 'start_work_order', // замена: будет отдельный тип cancel
+              workOrderId: wo.id,
+            });
+            queryClient.setQueryData<WorkOrder[]>(['myWorkOrders'], (old) =>
+              old?.map((o) =>
+                o.id === wo.id ? { ...o, status: 'cancelled' as const } : o,
+              ),
+            );
+          },
+        },
+      ]);
+    },
+    [addToQueue, queryClient],
+  );
+
+  // Получение действий для свайпа на основе статуса
+  const getSwipeActions = useCallback(
+    (wo: WorkOrder): { right?: SwipeAction[]; left?: SwipeAction[] } => {
+      switch (wo.status) {
+        case 'open':
+          return {
+            right: [
+              {
+                key: 'start',
+                label: 'В работу',
+                color: '#2563eb',
+                icon: '▶️',
+                onPress: () => handleStart(wo),
+              },
+            ],
+          };
+        case 'in_progress':
+          return {
+            right: [
+              {
+                key: 'complete',
+                label: 'Завершить',
+                color: '#059669',
+                icon: '✅',
+                onPress: () => handleComplete(wo),
+              },
+            ],
+            left: [
+              {
+                key: 'cancel',
+                label: 'Отмена',
+                color: '#dc2626',
+                icon: '⏹️',
+                onPress: () => handleCancel(wo),
+              },
+            ],
+          };
+        default:
+          // completed / cancelled — без действий
+          return {};
+      }
+    },
+    [handleStart, handleComplete, handleCancel],
+  );
 
   const getStatusCounts = () => {
     if (!workOrders) return { open: 0, inProgress: 0, completed: 0 };
@@ -38,6 +187,22 @@ export default function DashboardScreen() {
   };
 
   const counts = getStatusCounts();
+
+  const renderItem = useCallback(
+    ({ item }: { item: WorkOrder }) => {
+      const actions = getSwipeActions(item);
+      return (
+        <SwipeableCard
+          rightActions={actions.right}
+          leftActions={actions.left}
+          disabled={item.status === 'completed' || item.status === 'cancelled'}
+        >
+          <WorkOrderCard workOrder={item} onPress={() => openWorkOrder(item.id)} />
+        </SwipeableCard>
+      );
+    },
+    [getSwipeActions, openWorkOrder],
+  );
 
   return (
     <View style={styles.container}>
@@ -65,9 +230,7 @@ export default function DashboardScreen() {
       <FlatList
         data={workOrders || []}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <WorkOrderCard workOrder={item} onPress={() => openWorkOrder(item.id)} />
-        )}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} />

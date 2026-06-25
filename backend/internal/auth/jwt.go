@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -20,18 +19,15 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		panic("JWT_SECRET environment variable is required")
-	}
-	return []byte(secret)
-}
-
 // AccessTokenTTL — время жизни access token (15 минут, OWASP ASVS V3.3.1).
 const AccessTokenTTL = 15 * time.Minute
 
 func GenerateJWT(userID, username, role string) (string, error) {
+	secret, err := GetJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
@@ -42,12 +38,17 @@ func GenerateJWT(userID, username, role string) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getJWTSecret())
+	return token.SignedString(secret)
 }
 
 func ValidateJWT(tokenString string) (*Claims, error) {
+	secret, err := GetJWTSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return getJWTSecret(), nil
+		return secret, nil
 	})
 	if err != nil {
 		return nil, err
@@ -60,6 +61,11 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 
 // GenerateTempToken generates a short-lived token for 2FA verification step (5 minutes).
 func GenerateTempToken(userID, username, role string) (string, error) {
+	secret, err := GetJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	claims := Claims{
 		UserID:   userID,
 		Username: username,
@@ -71,13 +77,18 @@ func GenerateTempToken(userID, username, role string) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getJWTSecret())
+	return token.SignedString(secret)
 }
 
 // ValidateTempToken validates a temporary 2FA token.
 func ValidateTempToken(tokenString string) (*Claims, error) {
+	secret, err := GetJWTSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return getJWTSecret(), nil
+		return secret, nil
 	})
 	if err != nil {
 		return nil, err

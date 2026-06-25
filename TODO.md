@@ -435,3 +435,482 @@ Next Review: 2026-07-01 (через 1 неделю)
 Owner: System Architect + Product Owner
 Approval: Engineering Director + CTO
 Документ является living document. Все изменения фиксируются в этом файле и в git history с указанием причины. Версионирование через semantic versioning (Major.Minor.Patch).
+
+ Strategic Shift (v5.0)
+Ключевые изменения:
+🔴 СТБ криптография поднята до P0 (юридический блокатор для РБ)
+⚡ Performance issues добавлены как критические (утечки памяти, O(n²) алгоритмы)
+📱 Mobile-first UX — упрощение до 3 кликов для завершения наряда
+🎯 RCA визуализация — киллер-фича для диспетчеров
+💰 TCO и стоимость простоя — бизнес-метрики для продаж
+🗺️ Offline-карта объектов — must-have для мобильных техников
+🔴 CRITICAL: Блокеры для Production (Этап 0 — 2 недели)
+SEC-01: СТБ Криптография (bp2012/crypto)
+Приоритет: 🔴 CRITICAL · 8 SP
+Статус: 🚫 BLOCKED (нет сертифицированного SDK от ОАЦ)
+Обоснование: Нарушение законодательства РБ для КИИ-систем
+
+Блокирующий фактор: `github.com/bp2012/crypto` недоступен в Go-экосистеме.
+
+Что уже готово (ожидает SDK):
+- ✅ Абстракция: `internal/stb/crypto.go` — `CryptoProvider` interface с `StandardCrypto` fallback
+- ✅ Заглушки: `internal/crypto/stb_stubs.go` — belt/bign/bash API placeholders
+- ✅ `internal/auth/jwt.go` — использует `jwt.SigningMethodHS256` (заменить на bign-curve256v1)
+- ✅ `internal/audit/signer.go` — HMAC-SHA256 (заменить на bash-256 HMAC)
+- ✅ `internal/crypto/aes.go` — AES-256-GCM (заменить на belt-GCM)
+
+После получения SDK (один PR):
+1. Добавить `github.com/bp2012/crypto` в go.mod
+2. Создать `beltCrypto`, `bignCrypto`, `bashCrypto` реализации `CryptoProvider`
+3. Заменить `DefaultCrypto = NewStandardCrypto()` на `NewBeltCrypto()`
+4. Обновить JWT подпись на bign-curve256v1
+5. Обновить audit HMAC на bash-256
+SEC-02: Исправление Panic → Error ✅ DONE
+Приоритет: 🔴 CRITICAL · 3 SP
+Обоснование: CrashLoopBackOff в Kubernetes при отсутствии конфига
+
+Статус: **✅ Исправлено** (PR #... от 2026-06-25)
+
+Что было сделано:
+1. ✅ `internal/crypto/aes.go` — `getEncryptionKey()` уже возвращал error (было исправлено ранее)
+2. ✅ `internal/featureflag/manager.go` — `NewManager()` уже возвращал error (было исправлено ранее)
+3. ✅ `internal/auth/jwt.go` — удалён `getJWTSecret()` с panic, вызов через `auth.GetJWTSecret() ([]byte, error)`
+4. ✅ `internal/gatekeeper/token.go` — удалён дубликат `getJWTSecret()`, вызов через `auth.GetJWTSecret()`
+5. ✅ `internal/api/csp.go` — `generateNonce()` больше не паникует при ошибке crypto/rand, логирует и возвращает пустой nonce
+6. ✅ Health check — `/health/ready` возвращает 503 с `"JWT_SECRET not configured"` при отсутствии JWT_SECRET
+
+Создан shared helper:
+- `internal/auth/jwt_secret.go` — `GetJWTSecret() ([]byte, error)` + `IsJWTSecretSet() bool`
+PERF-01: SLA Memory Leak ✅ DONE
+Приоритет: 🔴 CRITICAL · 4 SP
+Обоснование: При 10 000+ нарядов/месяц сервер съест всю память
+
+Статус: **✅ Исправлено** (реализация обнаружена в коде)
+
+Текущая реализация в `internal/sla/engine.go`:
+- `CompleteWorkOrder()` вызывает `time.AfterFunc(1*time.Hour, func() { delete(e.trackers, woID) })`
+- TTL-эвикшн: трекеры удаляются через 1 час после завершения WO
+- Ручной worker loop не требуется — `time.AfterFunc` достаточно
+
+
+PERF-02: O(n²) сортировка в Event Replay ✅ DONE
+Приоритет: 🔴 CRITICAL · 2 SP
+Обоснование: При восстановлении проекций за год — часы вместо секунд
+
+Статус: **✅ Исправлено** (реализация обнаружена в коде)
+
+Текущая реализация в `internal/events/store.go`:
+- `Replay()` использует `sort.Slice(all, func(i, j int) bool { return all[i].Timestamp.Before(all[j].Timestamp) })`
+- Алгоритм: O(n log n) — TimSort (стандартная сортировка Go)
+
+SEC-03: Предсказуемый Reset Token ✅ DONE
+Приоритет: 🔴 CRITICAL · 1 SP
+
+Статус: **✅ Исправлено** (реализация обнаружена в коде)
+
+Текущая реализация в `internal/auth/password.go`:
+- `GenerateResetToken()` использует `crypto/rand.Read(b)` и возвращает `error` при неудаче
+- Никакого fallback на "emergency" — безопасно с самого начала
+
+SEC-04: CORS Wildcard Default ✅ DONE
+Приоритет: 🟠 HIGH · 1 SP
+
+Статус: **✅ Исправлено** (реализация обнаружена в коде)
+
+Текущая реализация в `internal/config/config.go`:
+- Дефолт: `viper.SetDefault("cors_allowed_origins", []string{"http://localhost:5173", "http://localhost:8080"})`
+- Явные origins, НЕ `["*"]` (безопасно с самого начала)
+
+SEC-05: Webhook HMAC Unification ✅ DONE
+Приоритет: 🟠 HIGH · 3 SP
+Обоснование: Подделка webhook-запросов в ServiceNow/TOIR адаптерах
+
+Статус: **✅ Исправлено** (PR #... от 2026-06-25)
+
+Что сделано:
+1. ✅ Создан `internal/webhook/verify.go` — единый модуль HMAC-верификации:
+   - `VerifyHMAC(secret, sigHeader, body, opts...) bool` — основная функция
+   - `VerifyMiddleware(secret, opts...) func(http.Handler) http.Handler` — chi middleware
+   - `ServeHTTPWithVerify(secret, handler, opts...) http.Handler` — обёртка для inline
+   - `WithSignaturePrefix("sha256=")` — опция для Jira
+   - `WithSignatureHeader("X-SN-Signature")` — опция для кастомного заголовка
+2. ✅ Рефакторинг `servicenow/webhook.go` — использует `webhook.ServeHTTPWithVerify`
+3. ✅ Рефакторинг `toir/webhook.go` — использует `webhook.ServeHTTPWithVerify`
+4. ✅ Рефакторинг `jira/webhook.go` — использует `webhook.ServeHTTPWithVerify` + `WithSignaturePrefix("sha256=")`
+5. ✅ 18 unit-тестов в `webhook/verify_test.go`
+6. ✅ Функции `WebhookVerify()` сохранены как middleware для обратной совместимости
+📱 ЭТАП 1: MVP 2.0 — Умный Техник (4 недели)
+Цель: Дать техникам инструмент, который делает их работу в 2 раза быстрее.
+UX-01: Упрощение завершения наряда (Mobile)
+Приоритет: 🟠 HIGH · 5 SP
+Проблема: Техник кликает 10 раз для завершения (Verification → Photo → Signature → Complete)
+Решение: Объединить в один мастер-процесс "Закрытие наряда"
+UI Flow:
+
+
+[Наряд #123] → [Кнопка "Завершить"] → 
+  Экран 1: Чек-лист (галочки) → 
+  Экран 2: Фото + GPS (auto-verification для не-КИИ) → 
+  Экран 3: Подпись → 
+  [Готово]
+  
+
+
+Acceptance:
+Максимум 3 экрана для завершения
+Verification опциональна (toggle в настройках объекта)
+Offline-режим работает seamlessly
+UX-02: Offline-карта объектов
+Приоритет: 🟠 HIGH · 6 SP
+Обоснование: Техники работают в подвалах/на крышах без связи
+Задачи:
+Кешировать координаты устройств при синхронизации
+Использовать react-native-maps с offline tiles
+Показывать маршрут между устройствами
+Фильтрация по статусу (offline/maintenance/operational)
+Implementation:
+
+
+// mobile/src/hooks/useOfflineMap.ts
+const useOfflineMap = () => {
+  const [devices, setDevices] = useState<Device[]>([]);
+  
+  useEffect(() => {
+    // При онлайн — загрузить и закешировать
+    if (isOnline) {
+      api.getDevices().then(data => {
+        setDevices(data);
+        AsyncStorage.setItem('offline_devices', JSON.stringify(data));
+      });
+    } else {
+      // При офлайн — взять из кеша
+      AsyncStorage.getItem('offline_devices').then(cached => {
+        if (cached) setDevices(JSON.parse(cached));
+      });
+    }
+  }, [isOnline]);
+  
+  return devices;
+};
+
+
+UX-03: Inline Editing в мобильном списке
+Приоритет: 🟠 HIGH · 3 SP
+Задача: Быстрое изменение статуса прямо в списке (без открытия деталей)
+Implementation:
+// Swipe-to-change-status
+<Swipeable
+  renderRightActions={() => (
+    <View style={styles.actionButton}>
+      <Text>Завершить</Text>
+    </View>
+  )}
+  onSwipeableRightOpen={() => completeWorkOrder(wo.id)}
+>
+  <WorkOrderCard wo={wo} />
+</Swipeable>
+NOTIF-01: SLA Breach уведомления (Telegram/SMS)
+Приоритет: 🟠 HIGH · 4 SP
+Задача: Отправлять уведомления при приближении дедлайна (75%, 90%, 100%)
+Channels:
+Telegram Bot (уже есть)
+SMS через gateway (для критических объектов)
+Email (для менеджеров)
+Implementation:
+// internal/sla/notifier.go
+func (n *Notifier) CheckBreaches(ctx context.Context) error {
+    wos := n.repo.FindAtRisk(ctx) // 75% SLA использовано
+    for _, wo := range wos {
+        n.telegram.Send(wo.Assignee.TelegramID, 
+            fmt.Sprintf("⚠️ Наряд #%s: осталось %s", wo.ID, wo.TimeLeft))
+        if wo.Priority == "CRITICAL" {
+            n.sms.Send(wo.Manager.Phone, 
+                fmt.Sprintf("КРИТИЧНО: Наряд #%s под угрозой срыва", wo.ID))
+        }
+    }
+    return nil
+}
+
+ЭТАП 2: Predictive & RCA (6 недель) — КЛЮЧЕВОЙ
+Цель: Показать уникальную ценность для бизнеса (снижение времени простоя).
+AI-01: RCA Визуализация графа
+Приоритет: 🟠 HIGH · 8 SP
+Обоснование: Киллер-фича для диспетчеров — видеть первопричину
+Задачи:
+Создать React-компонент <RCAGraph> с react-flow
+Backend: API /api/v1/rca/{device_id} возвращает граф
+UI: При клике на "Камера оффлайн" показывать связку Site → Switch → NVR → Camera
+Highlight root cause (красным)
+UI Mockup:
+┌─────────────────────────────────────────┐
+│  Инцидент: Камера #45 оффлайн          │
+│                                         │
+│  ┌────────┐    ┌────────┐    ┌────────┐│
+│  │ Site-1 │───▶│Switch-1│───▶│  NVR-1 ││
+│  └────────┘    └────────┘    └────────┘│
+│                                  │      │
+│                            ┌─────▼─────┐│
+│                            │ Камера #45││
+│                            │  🔴 DOWN  ││
+│                            └───────────┘│
+│                                         │
+│  💡 Рекомендация: Проверьте Switch-1   │
+│     (5 камер затронуто)                │
+└─────────────────────────────────────────┘
+Backend API:
+// GET /api/v1/rca/{device_id}
+type RCAGraph struct {
+    RootCause    *Device   `json:"root_cause"`
+    AffectedDevices []Device `json:"affected_devices"`
+    Path         []Device  `json:"path"` // от root до target
+    Recommendation string  `json:"recommendation"`
+}
+
+AI-02: Predictive Maintenance (XGBoost)
+Приоритет: 🟠 HIGH · 10 SP
+Обоснование: УТП — "система сама знает, что скоро сломается"
+Задачи:
+Собрать training data из work_orders + telemetry
+Обучить XGBoost модель (features: error_count, offline_ratio, cpu_temp, etc.)
+Backend: /api/v1/predictions — список устройств с высоким риском
+UI: Widget "Прогноз отказов" в дашборде
+Mobile: Push-уведомления техникам
+Features для модели:
+features = [
+    'offline_ratio_7d',      # % времени офлайн за 7 дней
+    'error_count_7d',        # количество ошибок
+    'cpu_temp_avg',          # средняя температура CPU
+    'reboot_count_30d',      # количество перезагрузок
+    'bitrate_variance',      # вариативность битрейта
+    'days_since_last_pm',    # дней с последнего ТО
+    'vendor',                # Hikvision/Dahua/Axis (one-hot)
+    'device_age_days',       # возраст устройства
+]
+UI Widget:
+┌─────────────────────────────────────────┐
+│  🔮 Прогноз отказов (следующие 7 дней) │
+│                                         │
+│  Камера #123  ████████░░ 80% риск       │
+│  ⚠️ Причина: SMART ошибки HDD растут   │
+│  💡 Рекомендация: Замена HDD           │
+│                                         │
+│  NVR #45      ██████░░░░ 60% риск       │
+│  ⚠️ Причина: CPU temp > 85°C 3 дня     │
+│  💡 Рекомендация: Проверка вентиляции  │
+└─────────────────────────────────────────┘
+BIZ-01: TCO и стоимость простоя
+Приоритет: 🟠 HIGH · 6 SP
+Обоснование: Аргумент для продажи директору — "$200 упущенной выгоды за 2 часа простоя"
+Задачи:
+Добавить поле downtime_cost_per_hour в sites
+Backend: расчет Total Downtime Cost = Σ(downtime_hours × cost_per_hour)
+UI: Dashboard "Стоимость простоев" с breakdown по объектам
+Export в PDF для отчетов руководству
+Formula:
+-- TCO per device
+SELECT 
+    d.id,
+    d.name,
+    COALESCE(d.purchase_cost, 0) +
+    COALESCE(SUM(l.hours * l.rate), 0) +  -- Labor
+    COALESCE(SUM(p.cost), 0) +            -- Parts
+    COALESCE(SUM(dt.hours * s.downtime_cost_per_hour), 0) AS total_cost
+FROM devices d
+LEFT JOIN work_orders wo ON d.id = wo.device_id
+LEFT JOIN labor l ON wo.id = l.work_order_id
+LEFT JOIN parts_used p ON wo.id = p.work_order_id
+LEFT JOIN downtime dt ON d.id = dt.device_id
+LEFT JOIN sites s ON d.site_id = s.id
+GROUP BY d.id;
+┌─────────────────────────────────────────┐
+│  💰 Стоимость простоев (этот месяц)    │
+│                                         │
+│  Общая: $12,450                         │
+│                                         │
+│  По объектам:                           │
+│  Супермаркет "Центральный"  $4,200      │
+│  ТРЦ "Мега"                $3,100       │
+│  Офис "Бизнес-Плаза"       $2,800       │
+│                                         │
+│  Топ-5 устройств по стоимости:          │
+│  1. Камера #123  $1,200 (12 часов)     │
+│  2. NVR #45      $980 (8 часов)        │
+└─────────────────────────────────────────┘
+AI-03: Condition-Based Maintenance (Meter Triggers)
+Приоритет: 🟠 HIGH · 5 SP
+Задача: Автоматическое создание нарядов при достижении thresholds
+Examples:
+CPU temp > 85°C 10 минут → Create Preventive WO
+Error count > 100 за день → Create Diagnostic WO
+Offline ratio > 20% за неделю → Create Inspection WO
+Implementation:
+// internal/meter/trigger.go
+func (t *TriggerService) Evaluate(ctx context.Context, reading MeterReading) error {
+    triggers := t.repo.FindActiveByMeter(ctx, reading.MeterID)
+    for _, trigger := range triggers {
+        if trigger.Condition.Met(reading.Value) {
+            wo := &WorkOrder{
+                Type:     "preventive",
+                Priority: trigger.Priority,
+                DeviceID: reading.DeviceID,
+                Title:    fmt.Sprintf("Автоматическое ТО: %s", trigger.Name),
+            }
+            t.cmms.CreateWorkOrder(ctx, wo)
+        }
+    }
+    return nil
+}
+ ЭТАП 3: Enterprise Readiness (Параллельно с Этапом 2)
+INT-01: ServiceNow Bi-Directional Sync
+Приоритет: 🟡 MEDIUM · 8 SP
+Задачи:
+Маппинг статусов (CCTV ↔ ServiceNow)
+Синхронизация комментариев
+Webhook для real-time updates
+Conflict resolution strategy
+INT-02: SAML 2.0 / LDAP
+Приоритет: 🟡 MEDIUM · 6 SP
+Обоснование: Must-have для госсектора и крупных enterprise
+Задачи:
+Интеграция с crewjam/saml (MIT)
+LDAP authentication через go-ldap/ldap
+UI: Настройка SSO в Settings
+Auto-provisioning пользователей
+UI-01: Журнал аудита (UI)
+Приоритет: 🟡 MEDIUM · 4 SP
+Задача: Отдельная вкладка для просмотра audit_log с фильтрацией
+Features:
+Фильтры по пользователю, действию, дате, IP
+Export в CSV
+Детали события (JSON diff)
+📊 Сводная таблица задач
+ID
+Epic
+Задача
+SP
+Приоритет
+Статус
+SEC-01
+Compliance
+СТБ Криптография
+8
+🔴 CRITICAL
+🚫 BLOCKED
+SEC-02
+Compliance
+Исправление Panic
+3
+🔴 CRITICAL
+✅ DONE
+PERF-01
+Performance
+SLA Memory Leak
+4
+🔴 CRITICAL
+✅ DONE
+PERF-02
+Performance
+O(n²) сортировка
+2
+🔴 CRITICAL
+✅ DONE
+SEC-03
+Security
+Predictable Reset Token
+1
+🔴 CRITICAL
+✅ DONE
+SEC-04
+Security
+CORS Wildcard
+1
+🟠 HIGH
+✅ DONE
+SEC-05
+Security
+Webhook HMAC Unification
+3
+🟠 HIGH
+✅ DONE
+UX-01
+Mobile
+Упрощение завершения наряда
+5
+🟠 HIGH
+✅ DONE
+UX-02
+Mobile
+Offline-карта объектов
+6
+🟠 HIGH
+⏳
+UX-03
+Mobile
+Inline Editing
+3
+🟠 HIGH
+⏳
+NOTIF-01
+Notifications
+SLA Breach Telegram/SMS
+4
+🟠 HIGH
+⏳
+AI-01
+RCA
+Визуализация графа
+8
+🟠 HIGH
+⏳
+AI-02
+Predictive
+XGBoost интеграция
+10
+🟠 HIGH
+⏳
+BIZ-01
+Analytics
+TCO и стоимость простоя
+6
+🟠 HIGH
+⏳
+AI-03
+Automation
+Condition-Based Maintenance
+5
+🟠 HIGH
+⏳
+INT-01
+Integration
+ServiceNow Bi-Dir Sync
+8
+🟡 MEDIUM
+⏳
+INT-02
+Integration
+SAML 2.0 / LDAP
+6
+🟡 MEDIUM
+⏳
+UI-01
+UI
+Журнал аудита
+4
+🟡 MEDIUM
+⏳
+Итого: 87 SP (~11 недель для команды из 3 senior)
+🎯 Итоговое резюме
+Что взяли из альтернативного роадмапа:
+✅ СТБ криптография как абсолютный приоритет (юридический блокатор)
+✅ Performance issues (SLA memory leak, O(n²) сортировка)
+✅ Mobile-first подход (упрощение до 3 кликов, offline-карта)
+✅ RCA визуализация как киллер-фича
+✅ TCO и стоимость простоя для бизнес-аргументации
+✅ Условная верификация (опциональна для не-КИИ объектов)
+Что оставили из нашего роадмапа:
+✅ Headless CMMS Architecture (Adapter Pattern)
+✅ Work Order Lifecycle (Bulk Actions, Inline Editing, 3-Column Layout)
+✅ Advanced SLA Engine (Business Hours, Pause Logic, Matrix)
+✅ Inventory & Procurement (Purchase Orders, Stock Management)
+✅ Workforce Management (Teams, Skills, Workload Planning)
+✅ Workflow Engine (CEL-based DSL, Visual Builder)

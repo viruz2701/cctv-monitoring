@@ -22,6 +22,7 @@ import (
 	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/sip"
@@ -79,6 +80,9 @@ type Server struct {
 
 	// reCAPTCHA validator for public work request submission (WO-4.1.1)
 	recaptchaValidator *recaptcha.Validator
+
+	// RCA Engine (CCTV-2.1.3, AI-01)
+	rcaEngine *rca.RCAEngine
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

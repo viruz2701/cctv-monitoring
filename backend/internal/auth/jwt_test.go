@@ -8,6 +8,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// getTestJWTSecret — вспомогательная функция для тестов, возвращает JWT_SECRET
+// или паникует если не установлен (в тестах это ок).
+func getTestJWTSecret() []byte {
+	secret, err := GetJWTSecret()
+	if err != nil {
+		panic("JWT_SECRET not set: " + err.Error())
+	}
+	return secret
+}
+
 func TestMain(m *testing.M) {
 	// Set JWT secret for tests
 	os.Setenv("JWT_SECRET", "test-secret-key-min-32-chars-long-for-hs256!")
@@ -95,7 +105,7 @@ func TestExpiredJWT(t *testing.T) {
 		},
 	}
 	expiredToken := jwt.NewWithClaims(jwt.SigningMethodHS256, expiredClaims)
-	tokenString, err := expiredToken.SignedString(getJWTSecret())
+	tokenString, err := expiredToken.SignedString(getTestJWTSecret())
 	if err != nil {
 		t.Fatalf("failed to sign expired token: %v", err)
 	}
@@ -107,6 +117,7 @@ func TestExpiredJWT(t *testing.T) {
 }
 
 func TestGenerateRefreshToken(t *testing.T) {
+	_ = getTestJWTSecret() // ensure JWT_SECRET is set
 	token, hash, expiresAt, err := GenerateRefreshToken()
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken failed: %v", err)
