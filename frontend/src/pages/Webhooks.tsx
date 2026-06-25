@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, WebhookEndpoint } from '../services/api';
 import { Card, Button, Badge, Input, Modal, useToast, EmptyState } from '../components/ui';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 import {
   Webhook, Plus, Trash2, Play, RefreshCw,
   CheckCircle, XCircle, Clock, AlertTriangle,
@@ -24,6 +25,7 @@ const EVENT_OPTIONS = [
 export function Webhooks() {
   const { t } = useTranslation();
   const toast = useToast();
+  const { confirm, ConfirmDialog } = useConfirmAction();
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
@@ -73,7 +75,13 @@ export function Webhooks() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(t('webhook_delete_confirm'))) return;
+    const confirmed = await confirm({
+      title: t('delete_webhook') || 'Delete Webhook',
+      message: t('webhook_delete_confirm'),
+      confirmText: t('delete') || 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await api.deleteWebhook(id);
       toast.success(t('webhook_deleted'));
@@ -237,6 +245,8 @@ export function Webhooks() {
           </div>
         </div>
       </Modal>
+
+      {ConfirmDialog}
     </div>
   );
 }

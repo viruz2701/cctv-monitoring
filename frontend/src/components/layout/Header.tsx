@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
     Bell,
@@ -8,7 +8,10 @@ import {
     LogOut,
     Settings,
     Menu,
-    X
+    X,
+    Sun,
+    Moon,
+    Monitor
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useDevicesSites } from '../../context/DevicesSitesContext';
@@ -16,6 +19,7 @@ import { LanguageSwitcher } from '../LanguageSwitcher';
 import { useNotifications } from '../../context/NotificationsContext';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
+import { useThemeStore, type Theme } from '../../store/themeStore';
 
 interface HeaderProps {
     onMobileMenuToggle?: () => void;
@@ -30,6 +34,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const { unreadCount, notifications, markAllAsRead } = useNotifications();
     const { devices, sites } = useDevicesSites();
 
+    const { theme, setTheme } = useThemeStore();
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -64,6 +69,24 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
             devices: devices.filter(d => d.name.toLowerCase().includes(query) || d.type.toLowerCase().includes(query)).slice(0, 3)
         };
     }, [searchQuery, sites, devices]);
+
+    const themeCycle: Theme[] = ['light', 'dark', 'system'];
+    const themeIcons: Record<Theme, React.ReactNode> = {
+        light: <Sun className="w-5 h-5" />,
+        dark: <Moon className="w-5 h-5" />,
+        system: <Monitor className="w-5 h-5" />,
+    };
+    const themeLabels: Record<Theme, string> = {
+        light: t('theme_light') || 'Light',
+        dark: t('theme_dark') || 'Dark',
+        system: t('theme_system') || 'System',
+    };
+
+    const cycleTheme = useCallback(() => {
+        const currentIndex = themeCycle.indexOf(theme);
+        const nextTheme = themeCycle[(currentIndex + 1) % themeCycle.length];
+        setTheme(nextTheme);
+    }, [theme, setTheme]);
 
     const handleSearchSelect = (path: string) => {
         setSearchQuery('');
@@ -139,6 +162,20 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                             )}
                         </div>
                     </div>
+
+                    {/* Theme Toggle */}
+                    <button
+                        onClick={cycleTheme}
+                        title={themeLabels[theme]}
+                        className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg group"
+                    >
+                        <span className="block transition-transform duration-300 ease-in-out group-active:rotate-90">
+                            {themeIcons[theme]}
+                        </span>
+                        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 text-xs font-medium text-white bg-slate-800 dark:bg-slate-700 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            {themeLabels[theme]}
+                        </span>
+                    </button>
 
                     {/* Notifications */}
                     <div className="relative">

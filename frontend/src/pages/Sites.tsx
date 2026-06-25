@@ -1,5 +1,7 @@
 import { generateUUID } from '../utils/uuid';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { siteSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Building2,
@@ -57,6 +59,9 @@ export function Sites() {
     const [selectedSite, setSelectedSite] = useState<Site | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
 
+    // Zod валидация для формы сайта
+    const { errors: siteErrors, validate: validateSite, validateField: validateSiteField, touched: siteTouched, reset: resetSiteValidation } = useFormValidation(siteSchema);
+
     const [formData, setFormData] = useState({
         name: '',
         address: '',
@@ -92,6 +97,7 @@ export function Sites() {
         setSelectedSite(null);
         setSiteAssignments([]);
         setAssignForm({ technician_id: '', is_primary: false });
+        resetSiteValidation();
     };
 
     const handleSearch = (query: string) => {
@@ -170,6 +176,17 @@ export function Sites() {
 
     const handleSaveSite = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const validationData = {
+            name: formData.name,
+            address: formData.address,
+            city: formData.city,
+            status: formData.status as 'active' | 'inactive' | 'maintenance',
+            organization: formData.organization || undefined,
+        };
+
+        if (!validateSite(validationData)) return;
+
         try {
             if (selectedSite) {
                 await updateSite(selectedSite.id, {
@@ -394,8 +411,24 @@ export function Sites() {
                 }
             >
                 <form id="site-form" onSubmit={handleSaveSite} className="space-y-4">
-                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('site_name')}</label><Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={t('site_name_placeholder')} required /></div>
-                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('organization') || 'Organization'}</label><Input value={formData.organization} onChange={e => setFormData({ ...formData, organization: e.target.value })} placeholder={t('organization_placeholder') || 'Organization name'} /></div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('site_name')}</label>
+                        <Input
+                            value={formData.name}
+                            onChange={e => {
+                                const newData = { ...formData, name: e.target.value };
+                                setFormData(newData);
+                                validateSiteField('name', { name: newData.name, address: newData.address, city: newData.city, status: newData.status as any });
+                            }}
+                            placeholder={t('site_name_placeholder')}
+                            error={siteTouched.has('name') ? siteErrors.name : undefined}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('organization') || 'Organization'}</label>
+                        <Input value={formData.organization} onChange={e => setFormData({ ...formData, organization: e.target.value })} placeholder={t('organization_placeholder') || 'Organization name'} />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('latitude') || 'Latitude'}</label>
@@ -452,9 +485,42 @@ export function Sites() {
                             </Button>
                         )}
                     </div>
-                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('address')}</label><Input value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder={t('address_placeholder')} required /></div>
-                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('city')}</label><Input value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder={t('city_placeholder')} required /></div>
-                    <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('status')}</label><Select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} options={[{ value: 'active', label: t('active') }, { value: 'inactive', label: t('inactive') }, { value: 'maintenance', label: t('maintenance') }]} /></div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('address')}</label>
+                        <Input
+                            value={formData.address}
+                            onChange={e => {
+                                const newData = { ...formData, address: e.target.value };
+                                setFormData(newData);
+                                validateSiteField('address', { name: newData.name, address: newData.address, city: newData.city, status: newData.status as any });
+                            }}
+                            placeholder={t('address_placeholder')}
+                            error={siteTouched.has('address') ? siteErrors.address : undefined}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('city')}</label>
+                        <Input
+                            value={formData.city}
+                            onChange={e => {
+                                const newData = { ...formData, city: e.target.value };
+                                setFormData(newData);
+                                validateSiteField('city', { name: newData.name, address: newData.address, city: newData.city, status: newData.status as any });
+                            }}
+                            placeholder={t('city_placeholder')}
+                            error={siteTouched.has('city') ? siteErrors.city : undefined}
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('status')}</label>
+                        <Select
+                            value={formData.status}
+                            onChange={e => setFormData({ ...formData, status: e.target.value })}
+                            options={[{ value: 'active', label: t('active') }, { value: 'inactive', label: t('inactive') }, { value: 'maintenance', label: t('maintenance') }]}
+                        />
+                    </div>
                 </form>
 
                 {/* Technician Assignments Section (only when editing) */}

@@ -35,7 +35,7 @@ export function StatsCard({
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-300">{title}</p>
                     <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{value}</p>
                     {subtitle && (
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{subtitle}</p>
                     )}
                     {trend && (
                         <div className="mt-2 flex items-center gap-1">
@@ -50,7 +50,7 @@ export function StatsCard({
                             >
                                 {trend.value}%
                             </span>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">{trend.label}</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-300">{trend.label}</span>
                         </div>
                     )}
                 </div>
@@ -96,7 +96,7 @@ export function MiniStatsCard({
                 </div>
                 <div>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-300">{title}</p>
                 </div>
             </div>
         </div>

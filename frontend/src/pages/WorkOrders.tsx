@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { workOrderSchema } from '../lib/validations';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useWorkOrders, BulkActionType } from '../context/WorkOrdersContext';
@@ -8,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
 import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable } from '../components/ui';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 import { VirtualTable } from '../components/ui/VirtualTable';
 import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
@@ -229,6 +232,7 @@ export const WorkOrders: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { confirm, ConfirmDialog } = useConfirmAction();
   const { workOrders, loading, startWorkOrder, completeWorkOrder, cancelWorkOrder, updateWorkOrder, bulkActionWorkOrders } = useWorkOrders();
   const { users } = useUsers();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -290,6 +294,18 @@ export const WorkOrders: React.FC = () => {
 
   const handleBulkAction = useCallback(async (action: BulkActionType, value?: string) => {
     if (selectedIds.size === 0) return;
+
+    // UX-14.1.10: Confirm bulk delete
+    if (action === 'delete') {
+      const ok = await confirm({
+        title: t('bulk_delete_title') || 'Delete Work Orders',
+        message: t('bulk_delete_confirm', { count: selectedIds.size }) || `Are you sure you want to delete ${selectedIds.size} work order(s)?`,
+        confirmText: t('delete') || 'Delete',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+
     setBulkLoading(true);
     setBulkError(null);
     try {
@@ -304,7 +320,7 @@ export const WorkOrders: React.FC = () => {
     } finally {
       setBulkLoading(false);
     }
-  }, [selectedIds, bulkActionWorkOrders]);
+  }, [selectedIds, bulkActionWorkOrders, confirm, t]);
 
   const columns = [
     {
@@ -415,7 +431,16 @@ export const WorkOrders: React.FC = () => {
             </Button>
           )}
           {(item.status === 'open' || item.status === 'in_progress') && (
-            <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); cancelWorkOrder(item.id, 'Cancelled by user'); }} icon={<XCircle size={14} />}>
+            <Button size="sm" variant="danger" onClick={async (e) => {
+              e.stopPropagation();
+              const ok = await confirm({
+                title: t('cancel_work_order') || 'Cancel Work Order',
+                message: t('cancel_work_order_confirm') || 'Are you sure you want to cancel this work order?',
+                confirmText: t('cancel') || 'Cancel',
+                variant: 'warning',
+              });
+              if (ok) cancelWorkOrder(item.id, 'Cancelled by user');
+            }} icon={<XCircle size={14} />}>
               {t('cancel')}
             </Button>
           )}
@@ -545,6 +570,8 @@ export const WorkOrders: React.FC = () => {
       >
         <CreateWorkOrderForm onClose={() => setShowCreateModal(false)} />
       </Modal>
+
+      {ConfirmDialog}
     </div>
   );
 };
@@ -559,6 +586,9 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const { sites, devices } = useDevicesSites();
   const { users } = useUsers();
   const technicians = users.filter(u => u.role === 'technician');
+
+  // Zod валидация для формы создания work order
+  const { errors: woErrors, validate: validateWO, validateField: validateWOField, touched: woTouched, reset: resetWOValidation } = useFormValidation(workOrderSchema);
 
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -593,6 +623,19 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       toast.error(t('select_device_required') || 'Select a device');
       return;
     }
+
+    // Валидация полей, которые есть в форме (deviceId, type, priority, assignedTo)
+    const validationData = {
+      title: formData.notes || 'Work Order',
+      description: formData.notes || 'Work order description',
+      deviceId: selectedDeviceId,
+      type: formData.type,
+      priority: formData.priority,
+      assignedTo: selectedTechnicianId || undefined,
+    };
+
+    if (!validateWO(validationData)) return;
+
     try {
       await createWorkOrder({
         device_id: selectedDeviceId,
@@ -624,11 +667,29 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       {/* Device select */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('device') || 'Device'}</label>
-        <select value={selectedDeviceId} onChange={e => setSelectedDeviceId(e.target.value)}
-          className="w-full border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600" required disabled={!selectedSiteId}>
+        <select
+          value={selectedDeviceId}
+          onChange={e => {
+            setSelectedDeviceId(e.target.value);
+            const validationData = {
+              title: formData.notes || 'Work Order',
+              description: formData.notes || 'Work order description',
+              deviceId: e.target.value,
+              type: formData.type,
+              priority: formData.priority,
+              assignedTo: selectedTechnicianId || undefined,
+            };
+            validateWOField('deviceId', validationData);
+          }}
+          className={`w-full border rounded px-3 py-2 dark:bg-slate-800 ${woTouched.has('deviceId') && woErrors.deviceId ? 'border-red-500' : 'dark:border-slate-600'}`}
+          required disabled={!selectedSiteId}
+        >
           <option value="">{t('select_device') || 'Select device...'}</option>
           {siteDevices.map(dev => <option key={dev.id} value={dev.id}>{dev.name}</option>)}
         </select>
+        {woTouched.has('deviceId') && woErrors.deviceId && (
+          <p className="mt-1 text-sm text-red-600">{woErrors.deviceId}</p>
+        )}
       </div>
 
       {/* Technician select */}

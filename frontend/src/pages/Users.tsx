@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Edit, Trash2, Shield, User as UserIcon, Filter, Key } from 'lucide-react';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { userSchema } from '../lib/validations';
 import {
     Card, CardHeader, CardBody, Table, Button, SearchInput,
     Modal, ConfirmModal, Input, Select, Badge, RoleBadge, useToast
@@ -52,6 +54,9 @@ export function Users() {
     const [resetPasswordForm, setResetPasswordForm] = useState({ userId: '', newPassword: '', confirm: '' });
     const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
     const [resetPasswordError, setResetPasswordError] = useState('');
+
+    // Zod валидация для формы пользователя
+    const { errors: userErrors, validate: validateUser, validateField: validateUserField, touched: userTouched, reset: resetUserValidation } = useFormValidation(userSchema);
 
     const [formData, setFormData] = useState({
         username: '',
@@ -157,6 +162,20 @@ export function Users() {
 
     const handleSubmit = async () => {
         setSubmitting(true);
+
+        // Zod валидация
+        const validationData = {
+            username: formData.username,
+            email: formData.email,
+            role: formData.role as 'admin' | 'manager' | 'technician' | 'viewer',
+            password: formData.password || undefined,
+        };
+
+        if (!validateUser(validationData)) {
+            setSubmitting(false);
+            return;
+        }
+
         try {
             if (selectedUser) {
                 await updateUser(selectedUser.id, {
@@ -365,17 +384,51 @@ export function Users() {
                     </CardBody>
                 </Card>
 
-                <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={selectedUser ? t('edit_user') : t('add_user')} size="md"
-                    footer={<div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowAddModal(false)} disabled={submitting}>{t('cancel')}</Button><Button onClick={handleSubmit} disabled={submitting}>{submitting ? t('saving') : (selectedUser ? t('save') : t('add'))}</Button></div>}>
+                <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); resetUserValidation(); }} title={selectedUser ? t('edit_user') : t('add_user')} size="md"
+                    footer={<div className="flex justify-end gap-3"><Button variant="outline" onClick={() => { setShowAddModal(false); resetUserValidation(); }} disabled={submitting}>{t('cancel')}</Button><Button onClick={handleSubmit} disabled={submitting}>{submitting ? t('saving') : (selectedUser ? t('save') : t('add'))}</Button></div>}>
                     <div className="space-y-4">
                         {!selectedUser && (
-                            <Input label={t('username') || 'Username'} placeholder="johndoe" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} required />
+                            <Input
+                                label={t('username') || 'Username'}
+                                placeholder="johndoe"
+                                value={formData.username}
+                                onChange={(e) => {
+                                    const newData = { ...formData, username: e.target.value };
+                                    setFormData(newData);
+                                    validateUserField('username', { username: newData.username, email: newData.email, role: newData.role as any, password: newData.password || undefined });
+                                }}
+                                error={userTouched.has('username') ? userErrors.username : undefined}
+                                required
+                            />
                         )}
                         <Input label={t('full_name')} placeholder="John Doe" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-                        <Input label={t('primary_email')} type="email" placeholder="john@company.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                        <Input
+                            label={t('primary_email')}
+                            type="email"
+                            placeholder="john@company.com"
+                            value={formData.email}
+                            onChange={(e) => {
+                                const newData = { ...formData, email: e.target.value };
+                                setFormData(newData);
+                                validateUserField('email', { username: newData.username, email: newData.email, role: newData.role as any, password: newData.password || undefined });
+                            }}
+                            error={userTouched.has('email') ? userErrors.email : undefined}
+                        />
                         {!selectedUser && (
                             <div>
-                                <Input label={t('password')} type="password" placeholder="••••••••" value={formData.password} onChange={handlePasswordChange} required />
+                                <Input
+                                    label={t('password')}
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={formData.password}
+                                    onChange={(e) => {
+                                        handlePasswordChange(e);
+                                        const newData = { ...formData, password: e.target.value };
+                                        validateUserField('password', { username: newData.username, email: newData.email, role: newData.role as any, password: newData.password || undefined });
+                                    }}
+                                    error={userTouched.has('password') ? userErrors.password : undefined}
+                                    required
+                                />
                                 {passwordStrength && (
                                     <div className="mt-2">
                                         <div className="flex items-center gap-2">

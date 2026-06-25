@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { apiKeySchema } from '../lib/validations';
 import { api } from '../services/api';
-import { Button, Modal, Input, Badge, useToast, EmptyState } from '../components/ui';
+import { Button, Modal, Input, Badge, useToast, EmptyState, ConfirmModal } from '../components/ui';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 import { Plus, Trash2, Copy, Key, Calendar, Shield } from 'lucide-react';
 
 interface APIKey {
@@ -16,11 +19,14 @@ interface APIKey {
 export function APIKeys() {
     const { t } = useTranslation();
     const toast = useToast();
+    const { confirm, ConfirmDialog } = useConfirmAction();
     const [keys, setKeys] = useState<APIKey[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [newKey, setNewKey] = useState<string>('');
+    // Zod валидация для формы API ключа
+    const { errors: apiKeyErrors, validate: validateApiKey, validateField: validateApiKeyField, touched: apiKeyTouched, reset: resetApiKeyValidation } = useFormValidation(apiKeySchema);
     const [formData, setFormData] = useState({
         name: '',
         permissions: ['read'],
@@ -45,6 +51,13 @@ export function APIKeys() {
     };
 
     const handleCreate = async () => {
+        const validationData = {
+            name: formData.name,
+            permissions: formData.permissions as Array<'read' | 'write' | 'admin'>,
+        };
+
+        if (!validateApiKey(validationData)) return;
+
         try {
             const data = await api.createAPIKey({
                 name: formData.name,
@@ -54,6 +67,7 @@ export function APIKeys() {
             setNewKey(data.api_key);
             setShowCreateModal(false);
             setShowKeyModal(true);
+            resetApiKeyValidation();
             setFormData({ name: '', permissions: ['read'], expires_at: '' });
             loadKeys();
         } catch (err: any) {
@@ -62,7 +76,13 @@ export function APIKeys() {
     };
 
     const handleRevoke = async (id: string) => {
-        if (!confirm(t('api_key_revoke_confirm'))) return;
+        const confirmed = await confirm({
+            title: t('revoke_api_key') || 'Revoke API Key',
+            message: t('api_key_revoke_confirm'),
+            confirmText: t('revoke') || 'Revoke',
+            variant: 'danger',
+        });
+        if (!confirmed) return;
         try {
             await api.revokeAPIKey(id);
             toast.success(t('api_key_revoked'));
@@ -203,7 +223,7 @@ export function APIKeys() {
             {/* Create API Key Modal */}
             <Modal
                 isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
+                onClose={() => { setShowCreateModal(false); resetApiKeyValidation(); }}
                 title={t('create_api_key')}
                 size="md"
             >
@@ -211,8 +231,13 @@ export function APIKeys() {
                     <Input
                         label={t('name')}
                         value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onChange={(e) => {
+                            const newData = { ...formData, name: e.target.value };
+                            setFormData(newData);
+                            validateApiKeyField('name', { name: newData.name, permissions: newData.permissions as any });
+                        }}
                         placeholder={t('api_key_name_placeholder')}
+                        error={apiKeyTouched.has('name') ? apiKeyErrors.name : undefined}
                     />
                     <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -225,11 +250,12 @@ export function APIKeys() {
                                         type="checkbox"
                                         checked={formData.permissions.includes(option.value)}
                                         onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setFormData({ ...formData, permissions: [...formData.permissions, option.value] });
-                                            } else {
-                                                setFormData({ ...formData, permissions: formData.permissions.filter(p => p !== option.value) });
-                                            }
+                                            const updated = e.target.checked
+                                                ? [...formData.permissions, option.value]
+                                                : formData.permissions.filter(p => p !== option.value);
+                                            const newData = { ...formData, permissions: updated };
+                                            setFormData(newData);
+                                            validateApiKeyField('permissions', { name: newData.name, permissions: newData.permissions as any });
                                         }}
                                         className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                     />
@@ -237,6 +263,9 @@ export function APIKeys() {
                                 </label>
                             ))}
                         </div>
+                        {apiKeyTouched.has('permissions') && apiKeyErrors.permissions && (
+                            <p className="mt-1.5 text-sm text-red-600">{apiKeyErrors.permissions}</p>
+                        )}
                     </div>
                     <Input
                         label={t('expires_at')}
@@ -245,10 +274,10 @@ export function APIKeys() {
                         onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
                     />
                     <div className="flex justify-end gap-3 pt-4">
-                        <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
+                        <Button variant="ghost" onClick={() => { setShowCreateModal(false); resetApiKeyValidation(); }}>
                             {t('cancel')}
                         </Button>
-                        <Button onClick={handleCreate} disabled={!formData.name}>
+                        <Button onClick={handleCreate}>
                             {t('create')}
                         </Button>
                     </div>
@@ -297,6 +326,8 @@ export function APIKeys() {
                     </div>
                 </div>
             </Modal>
+
+            {ConfirmDialog}
         </div>
     );
 }

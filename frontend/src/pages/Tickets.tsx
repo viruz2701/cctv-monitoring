@@ -1,5 +1,7 @@
 import { generateUUID } from '../utils/uuid';
 import React, { useState, useMemo, useEffect } from 'react';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { ticketSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Filter,
@@ -46,6 +48,9 @@ export function Tickets() {
         }
     }, [searchParams]);
 
+    // Zod валидация для формы создания тикета
+    const { errors: ticketErrors, validate: validateTicket, validateField: validateTicketField, touched: ticketTouched, reset: resetTicketValidation } = useFormValidation(ticketSchema);
+
     const [newTicket, setNewTicket] = useState({
         title: '',
         description: '',
@@ -64,6 +69,17 @@ export function Tickets() {
         e.preventDefault();
         const selectedDevice = devices.find(d => d.id === newTicket.deviceId);
         if (!selectedDevice) return;
+
+        const validationData = {
+            title: newTicket.title,
+            description: newTicket.description,
+            priority: newTicket.priority as 'critical' | 'high' | 'medium' | 'low',
+            deviceId: selectedDevice.id,
+            siteId: newTicket.siteId || undefined,
+        };
+
+        if (!validateTicket(validationData)) return;
+
         const ticket: TicketType = {
             id: `TKT-${generateUUID()}`,
             title: newTicket.title,
@@ -80,6 +96,7 @@ export function Tickets() {
         };
         addTicket(ticket);
         setShowCreateModal(false);
+        resetTicketValidation();
         setNewTicket({
             title: '',
             description: '',
@@ -265,12 +282,12 @@ export function Tickets() {
 
             <Modal
                 isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
+                onClose={() => { setShowCreateModal(false); resetTicketValidation(); }}
                 title={t('create_new_ticket')}
                 size="md"
                 footer={
                     <div className="flex justify-end gap-3">
-                        <Button variant="outline" onClick={() => setShowCreateModal(false)}>{t('cancel')}</Button>
+                        <Button variant="outline" onClick={() => { setShowCreateModal(false); resetTicketValidation(); }}>{t('cancel')}</Button>
                         <Button variant="primary" onClick={() => { const form = document.getElementById('create-ticket-form') as HTMLFormElement; form?.requestSubmit(); }}>{t('create')}</Button>
                     </div>
                 }
@@ -278,11 +295,31 @@ export function Tickets() {
                 <form id="create-ticket-form" onSubmit={handleCreateTicket} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('title')}</label>
-                        <Input value={newTicket.title} onChange={e => setNewTicket({ ...newTicket, title: e.target.value })} placeholder={t('title_placeholder')} required />
+                        <Input
+                            value={newTicket.title}
+                            onChange={e => {
+                                const data = { ...newTicket, title: e.target.value };
+                                setNewTicket(data);
+                                validateTicketField('title', { title: data.title, description: data.description, priority: data.priority as any });
+                            }}
+                            placeholder={t('title_placeholder')}
+                            error={ticketTouched.has('title') ? ticketErrors.title : undefined}
+                            required
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('description')}</label>
-                        <Input value={newTicket.description} onChange={e => setNewTicket({ ...newTicket, description: e.target.value })} placeholder={t('description_placeholder')} required />
+                        <Input
+                            value={newTicket.description}
+                            onChange={e => {
+                                const data = { ...newTicket, description: e.target.value };
+                                setNewTicket(data);
+                                validateTicketField('description', { title: data.title, description: data.description, priority: data.priority as any });
+                            }}
+                            placeholder={t('description_placeholder')}
+                            error={ticketTouched.has('description') ? ticketErrors.description : undefined}
+                            required
+                        />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpareParts } from '../context/SparePartsContext';
-import { Button, PartCard, Modal, Input, Badge, useToast, EmptyState, SkeletonCard } from '../components/ui';
+import { Button, PartCard, Modal, Input, Badge, useToast, EmptyState, SkeletonCard, ConfirmModal } from '../components/ui';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 import { Plus, Search, AlertTriangle, RefreshCw, ShoppingCart, Tag, Edit, Trash2 } from 'lucide-react';
 
 const CATEGORY_COLORS = [
@@ -12,6 +13,7 @@ const CATEGORY_COLORS = [
 export const SpareParts: React.FC = () => {
   const { t } = useTranslation();
   const toast = useToast();
+  const { confirm, ConfirmDialog } = useConfirmAction();
   const { spareParts, categories, loading, createCategory, updateCategory, deleteCategory } = useSpareParts();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
@@ -175,7 +177,10 @@ export const SpareParts: React.FC = () => {
                     <Edit className="w-4 h-4 text-slate-500" />
                   </button>
                   <button
-                    onClick={() => { if (confirm('Delete category?')) deleteCategory(cat.id); }}
+                    onClick={async () => {
+                      const ok = await confirm({ title: t('delete_category') || 'Delete Category', message: t('delete_category_confirm') || 'Are you sure you want to delete this category?', variant: 'danger' });
+                      if (ok) deleteCategory(cat.id);
+                    }}
                     className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
                   >
                     <Trash2 className="w-4 h-4 text-red-500" />
@@ -317,6 +322,8 @@ export const SpareParts: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      {ConfirmDialog}
     </div>
   );
 };

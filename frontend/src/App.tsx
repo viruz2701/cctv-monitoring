@@ -1,8 +1,8 @@
-import { ReactNode, useState } from 'react';
+import { lazy, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from './components/layout';
-import { Login, Dashboard, Sites, Devices, DeviceDetail, Tickets, TicketDetail, Reports, Users, Settings, Alerts, Profile, Notifications, TotalCostDashboard, ManagerDashboard, AssetOverview } from './pages';
+import { Layout, PageSuspense } from './components/layout';
+import { Login, DeviceDetail, TicketDetail, Reports, Users, Settings, Profile, Notifications, TotalCostDashboard, ManagerDashboard, AssetOverview } from './pages';
 
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './hooks/useAuth';
@@ -17,7 +17,17 @@ import { MaintenanceProvider } from './context/MaintenanceContext';
 import { WorkOrdersProvider } from './context/WorkOrdersContext';
 import { SparePartsProvider } from './context/SparePartsContext';
 import { ToastProvider } from './components/ui';
-import { Analytics } from './pages/Analytics';
+
+// ── Lazy-loaded pages ─────────────────────────────────────────────────────
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Sites = lazy(() => import('./pages/Sites').then((m) => ({ default: m.Sites })));
+const Devices = lazy(() => import('./pages/Devices').then((m) => ({ default: m.Devices })));
+const Tickets = lazy(() => import('./pages/Tickets').then((m) => ({ default: m.Tickets })));
+const Alerts = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })));
+const WorkOrders = lazy(() => import('./pages/WorkOrders').then((m) => ({ default: m.WorkOrders })));
+const Analytics = lazy(() => import('./pages/Analytics').then((m) => ({ default: m.Analytics })));
+
+// ── Static page imports ───────────────────────────────────────────────────
 import { Logs } from './pages/Logs';
 import { AuditLog } from './pages/AuditLog';
 import { MeterDashboard } from './pages/MeterDashboard';
@@ -31,7 +41,6 @@ import { VendorPerformance } from './pages/VendorPerformance';
 import { OnCallSchedule } from './pages/OnCallSchedule';
 import { ExecutiveDashboard } from './pages/ExecutiveDashboard';
 import { MaintenanceSchedules } from './pages/MaintenanceSchedules';
-import { WorkOrders } from './pages/WorkOrders';
 import { SpareParts } from './pages/SpareParts';
 import { WorkOrderDetail } from './pages/WorkOrderDetail';
 import { TechnicianDashboard } from './pages/TechnicianDashboard';
@@ -74,9 +83,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <ToastProvider>
-        {/* ═══ ToastProvider вынесен на самый верх ═══
+        {/*
+            ToastProvider вынесен на самый верх
             Все контексты ниже (UsersProvider, SettingsProvider и т.д.)
-            теперь могут использовать useToast() */}
+            теперь могут использовать useToast()
+        */}
         <AuthProvider>
           <SettingsProvider>
             <UsersProvider>
@@ -101,68 +112,68 @@ function App() {
                                 <Layout />
                               </ProtectedRoute>
                             }>
-                              <Route path="/dashboard" element={<Dashboard />} />
-                              <Route path="/sites" element={<Sites />} />
-                              <Route path="/sites/device/:deviceId" element={<DeviceDetail />} />
-                              <Route path="/devices" element={<Devices />} />
-                              <Route path="/devices/:deviceId" element={<DeviceDetail />} />
-                              <Route path="/tickets" element={<Tickets />} />
-                              <Route path="/tickets/:ticketId" element={<TicketDetail />} />
-                              <Route path="/alerts" element={<Alerts />} />
-                              <Route path="/notifications" element={<Notifications />} />
-                              
+                              <Route path="/dashboard" element={<PageSuspense><Dashboard /></PageSuspense>} />
+                              <Route path="/sites" element={<PageSuspense><Sites /></PageSuspense>} />
+                              <Route path="/sites/device/:deviceId" element={<PageSuspense><DeviceDetail /></PageSuspense>} />
+                              <Route path="/devices" element={<PageSuspense><Devices /></PageSuspense>} />
+                              <Route path="/devices/:deviceId" element={<PageSuspense><DeviceDetail /></PageSuspense>} />
+                              <Route path="/tickets" element={<PageSuspense><Tickets /></PageSuspense>} />
+                              <Route path="/tickets/:ticketId" element={<PageSuspense><TicketDetail /></PageSuspense>} />
+                              <Route path="/alerts" element={<PageSuspense><Alerts /></PageSuspense>} />
+                              <Route path="/notifications" element={<PageSuspense><Notifications /></PageSuspense>} />
+
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
-                                <Route path="/reports" element={<Reports />} />
+                                <Route path="/reports" element={<PageSuspense><Reports /></PageSuspense>} />
                               </Route>
-                              
+
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support', 'owner']} />}>
-                                <Route path="/analytics" element={<Analytics />} />
+                                <Route path="/analytics" element={<PageSuspense><Analytics /></PageSuspense>} />
                               </Route>
-                              
+
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support']} />}>
-                                <Route path="/logs" element={<Logs />} />
-                              <Route path="/audit-log" element={<AuditLog />} />
+                                <Route path="/logs" element={<PageSuspense><Logs /></PageSuspense>} />
+                                <Route path="/audit-log" element={<PageSuspense><AuditLog /></PageSuspense>} />
                               </Route>
 
                               {/* Admin Only Routes */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
-                                <Route path="/users" element={<Users />} />
-                                <Route path="/api-keys" element={<APIKeys />} />
-                              <Route path="/webhooks" element={<Webhooks />} />
-                              <Route path="/workload-analytics" element={<WorkloadAnalytics />} />
-                              <Route path="/executive-dashboard" element={<ExecutiveDashboard />} />
+                                <Route path="/users" element={<PageSuspense><Users /></PageSuspense>} />
+                                <Route path="/api-keys" element={<PageSuspense><APIKeys /></PageSuspense>} />
+                                <Route path="/webhooks" element={<PageSuspense><Webhooks /></PageSuspense>} />
+                                <Route path="/workload-analytics" element={<PageSuspense><WorkloadAnalytics /></PageSuspense>} />
+                                <Route path="/executive-dashboard" element={<PageSuspense><ExecutiveDashboard /></PageSuspense>} />
                               </Route>
 
                               {/* Admin Only Routes - Settings */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
-                                <Route path="/settings" element={<Settings />} />
+                                <Route path="/settings" element={<PageSuspense><Settings /></PageSuspense>} />
                               </Route>
 
                               {/* Profile Route - Accessible to all authenticated users */}
-                              <Route path="/profile" element={<Profile />} />
+                              <Route path="/profile" element={<PageSuspense><Profile /></PageSuspense>} />
 
                               {/* CMMS Routes */}
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
-                                <Route path="/maintenance" element={<MaintenanceSchedules />} />
-                                <Route path="/work-orders" element={<WorkOrders />} />
-                                <Route path="/work-orders/:id" element={<WorkOrderDetail />} />
-                                <Route path="/spare-parts" element={<SpareParts />} />
-                                <Route path="/technician-dashboard" element={<TechnicianDashboard />} />
+                                <Route path="/maintenance" element={<PageSuspense><MaintenanceSchedules /></PageSuspense>} />
+                                <Route path="/work-orders" element={<PageSuspense><WorkOrders /></PageSuspense>} />
+                                <Route path="/work-orders/:id" element={<PageSuspense><WorkOrderDetail /></PageSuspense>} />
+                                <Route path="/spare-parts" element={<PageSuspense><SpareParts /></PageSuspense>} />
+                                <Route path="/technician-dashboard" element={<PageSuspense><TechnicianDashboard /></PageSuspense>} />
                               </Route>
 
                               <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>
-                                <Route path="/manager-dashboard" element={<ManagerDashboard />} />
-                                <Route path="/asset-overview" element={<AssetOverview />} />
-                                <Route path="/sla" element={<SLADashboard />} />
-                                <Route path="/maintenance-reports" element={<MaintenanceReports />} />
-                              <Route path="/meter-dashboard" element={<MeterDashboard />} />
-                              <Route path="/wo-aging" element={<WOAging />} />
-                              <Route path="/location-tree" element={<LocationTree />} />
-                              <Route path="/cost-dashboard" element={<TotalCostDashboard />} />
-                              <Route path="/vendor-performance" element={<VendorPerformance />} />
-                              <Route path="/on-call" element={<OnCallSchedule />} />
-                              <Route path="/compliance-shield" element={<ComplianceShield />} />
-                              <Route path="/predictive-maintenance" element={<PredictiveMaintenance />} />
+                                <Route path="/manager-dashboard" element={<PageSuspense><ManagerDashboard /></PageSuspense>} />
+                                <Route path="/asset-overview" element={<PageSuspense><AssetOverview /></PageSuspense>} />
+                                <Route path="/sla" element={<PageSuspense><SLADashboard /></PageSuspense>} />
+                                <Route path="/maintenance-reports" element={<PageSuspense><MaintenanceReports /></PageSuspense>} />
+                                <Route path="/meter-dashboard" element={<PageSuspense><MeterDashboard /></PageSuspense>} />
+                                <Route path="/wo-aging" element={<PageSuspense><WOAging /></PageSuspense>} />
+                                <Route path="/location-tree" element={<PageSuspense><LocationTree /></PageSuspense>} />
+                                <Route path="/cost-dashboard" element={<PageSuspense><TotalCostDashboard /></PageSuspense>} />
+                                <Route path="/vendor-performance" element={<PageSuspense><VendorPerformance /></PageSuspense>} />
+                                <Route path="/on-call" element={<PageSuspense><OnCallSchedule /></PageSuspense>} />
+                                <Route path="/compliance-shield" element={<PageSuspense><ComplianceShield /></PageSuspense>} />
+                                <Route path="/predictive-maintenance" element={<PageSuspense><PredictiveMaintenance /></PageSuspense>} />
                               </Route>
                             </Route>
 

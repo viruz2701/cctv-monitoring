@@ -1,19 +1,25 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
+import { ShortcutsCheatsheet } from '../ui/ShortcutsCheatsheet';
 import { OnboardingTour } from '../ui/OnboardingTour';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useSkipLink } from '../../hooks/useAccessibility';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import type { Shortcut } from '../../hooks/useKeyboardShortcuts';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
 
 export function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
     const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
+    const openCommandPalette = useCommandPaletteStore((s) => s.open);
     const liveRegionRef = useRef<HTMLDivElement>(null);
 
     // WCAG 2.1 AA: Skip-to-content link (UX-14.2.7)
@@ -38,22 +44,59 @@ export function Layout() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Global keyboard shortcut: Cmd+K / Ctrl+K to open Command Palette
-    const handleKeyDown = useCallback(
-        (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleCommandPalette();
-            }
+    // UX-14.1.8: Глобальные клавиатурные шорткаты
+    const shortcuts: Shortcut[] = [
+        // ── Navigation ────────────────────────────────────────────────
+        {
+            key: 'n',
+            ctrl: true,
+            meta: true,
+            handler: () => navigate('/work-orders'),
+            description: 'Создать новый Work Order',
+            category: 'navigation',
         },
-        [toggleCommandPalette]
-    );
+        {
+            key: 'd',
+            ctrl: true,
+            meta: true,
+            handler: () => navigate('/dashboard'),
+            description: 'Перейти на Dashboard',
+            category: 'navigation',
+        },
+        {
+            key: ',',
+            ctrl: true,
+            meta: true,
+            handler: () => navigate('/settings'),
+            description: 'Открыть Settings',
+            category: 'navigation',
+        },
+        // ── Actions ──────────────────────────────────────────────────
+        {
+            key: 'k',
+            ctrl: true,
+            meta: true,
+            handler: () => openCommandPalette(),
+            description: 'Открыть Command Palette',
+            category: 'actions',
+        },
+        {
+            key: '/',
+            ctrl: true,
+            meta: true,
+            handler: () => setCheatsheetOpen((prev) => !prev),
+            description: 'Показать список шорткатов',
+            category: 'actions',
+        },
+        {
+            key: '?',
+            handler: () => setCheatsheetOpen((prev) => !prev),
+            description: 'Показать список шорткатов',
+            category: 'actions',
+        },
+    ];
 
-    useEffect(() => {
-        document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [handleKeyDown]);
+    useKeyboardShortcuts(shortcuts);
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -103,6 +146,13 @@ export function Layout() {
 
             {/* Onboarding Tour — UX-14.1.6 */}
             <OnboardingTour />
+
+            {/* Keyboard Shortcuts Cheatsheet (⌘/) — UX-14.1.8 */}
+            <ShortcutsCheatsheet
+                isOpen={cheatsheetOpen}
+                onClose={() => setCheatsheetOpen(false)}
+                shortcuts={shortcuts}
+            />
 
             {/* WCAG 2.1 AA: Main content landmark (UX-14.2.7) */}
             <main

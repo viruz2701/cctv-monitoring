@@ -1,14 +1,16 @@
 // ═══════════════════════════════════════════════════════════════════════
-// Command Palette (⌘K)
-// UX-14.1.5: Linear-style command palette для быстрой навигации
+// Command Palette (⌘K) v2
+// UX-14.2.6: Global Search (⌘K) — weighted fuzzy search + recent + categories
 //
 // Features:
 //   - ⌘K / Ctrl+K для открытия
-//   - Fuzzy search по страницам и действиям
-//   - Группировка по категориям с иконками
-//   - Навигация стрелками + Enter
-//   - Escape для закрытия
-//   - Подсветка совпадений в результатах
+//   - Weighted fuzzy search (label > keywords > description)
+//   - Recent commands (последние 5, localStorage)
+//   - Группировка по категориям с иконками на группу
+//   - Action commands (New WO, New Ticket, Toggle Dark Mode, Shortcuts)
+//   - Навигация стрелками + Enter + Tab trap
+//   - Подсветка совпадений через getCharMatches
+//   - Keyboard Shortshots как команда
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -36,23 +38,21 @@ import {
   Search,
   Camera,
   Command,
+  PlusCircle,
+  SunMoon,
+  Keyboard,
+  History,
+  Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
+import { useThemeStore, type Theme } from '../../store/themeStore';
+import { weightedFuzzySearch, getCharMatches } from '../../lib/fuzzySearch';
+import type { SearchableItem } from '../../lib/fuzzySearch';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════
-
-interface CommandItem {
-  id: string;
-  label: string;
-  description?: string;
-  path: string;
-  category: CommandCategory;
-  icon: LucideIcon;
-  keywords: string[];
-}
 
 type CommandCategory =
   | 'dashboard'
@@ -61,11 +61,25 @@ type CommandCategory =
   | 'monitoring'
   | 'reports'
   | 'administration'
-  | 'analytics';
+  | 'analytics'
+  | 'actions';
+
+interface CommandItem extends SearchableItem {
+  id: string;
+  label: string;
+  description?: string;
+  path?: string;
+  category: CommandCategory;
+  icon: LucideIcon;
+  keywords: string[];
+  /** If set, this is an action command (no navigation) */
+  action?: () => void;
+}
 
 interface CategoryGroup {
   key: CommandCategory;
   label: string;
+  icon: LucideIcon;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -73,17 +87,24 @@ interface CategoryGroup {
 // ═══════════════════════════════════════════════════════════════════════
 
 const CATEGORIES: CategoryGroup[] = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'inventory', label: 'Inventory & Assets' },
-  { key: 'maintenance', label: 'Maintenance & CMMS' },
-  { key: 'monitoring', label: 'Monitoring & Alerts' },
-  { key: 'reports', label: 'Reports & Analytics' },
-  { key: 'administration', label: 'Administration' },
-  { key: 'analytics', label: 'Advanced Analytics' },
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'inventory', label: 'Inventory & Assets', icon: Camera },
+  { key: 'maintenance', label: 'Maintenance & CMMS', icon: Ticket },
+  { key: 'monitoring', label: 'Monitoring & Alerts', icon: Activity },
+  { key: 'reports', label: 'Reports & Analytics', icon: FileText },
+  { key: 'administration', label: 'Administration', icon: Settings },
+  { key: 'analytics', label: 'Advanced Analytics', icon: TrendingUp },
+  { key: 'actions', label: 'Actions', icon: Sparkles },
 ];
 
-const ALL_COMMANDS: CommandItem[] = [
-  // ── Dashboard ─────────────────────────────────────────────────────
+const CATEGORY_ICONS: Record<CommandCategory, LucideIcon> = Object.fromEntries(
+  CATEGORIES.map((c) => [c.key, c.icon])
+) as Record<CommandCategory, LucideIcon>;
+
+// ── Navigation commands ─────────────────────────────────────────────
+
+const NAV_COMMANDS: CommandItem[] = [
+  // Dashboard
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -92,6 +113,15 @@ const ALL_COMMANDS: CommandItem[] = [
     category: 'dashboard',
     icon: LayoutDashboard,
     keywords: ['home', 'overview', 'main', 'health'],
+  },
+  {
+    id: 'go-dashboard',
+    label: 'Go to Dashboard',
+    description: 'Navigate to main dashboard',
+    path: '/dashboard',
+    category: 'dashboard',
+    icon: LayoutDashboard,
+    keywords: ['go', 'navigate', 'open'],
   },
   {
     id: 'manager-dashboard',
@@ -121,7 +151,7 @@ const ALL_COMMANDS: CommandItem[] = [
     keywords: ['technician', 'tech', 'field', 'work'],
   },
 
-  // ── Inventory & Assets ────────────────────────────────────────────
+  // Inventory & Assets
   {
     id: 'sites',
     label: 'Sites',
@@ -130,6 +160,15 @@ const ALL_COMMANDS: CommandItem[] = [
     category: 'inventory',
     icon: MapPin,
     keywords: ['location', 'site', 'address', 'building'],
+  },
+  {
+    id: 'go-devices',
+    label: 'Go to Devices',
+    description: 'All CCTV devices',
+    path: '/devices',
+    category: 'inventory',
+    icon: HardDrive,
+    keywords: ['go', 'navigate', 'camera', 'nvr'],
   },
   {
     id: 'devices',
@@ -168,7 +207,7 @@ const ALL_COMMANDS: CommandItem[] = [
     keywords: ['hierarchy', 'tree', 'organization', 'structure'],
   },
 
-  // ── Maintenance & CMMS ────────────────────────────────────────────
+  // Maintenance & CMMS
   {
     id: 'work-orders',
     label: 'Work Orders',
@@ -224,7 +263,7 @@ const ALL_COMMANDS: CommandItem[] = [
     keywords: ['aging', 'overdue', 'pending', 'backlog', 'wo'],
   },
 
-  // ── Monitoring & Alerts ───────────────────────────────────────────
+  // Monitoring & Alerts
   {
     id: 'alerts',
     label: 'Alerts',
@@ -262,7 +301,7 @@ const ALL_COMMANDS: CommandItem[] = [
     keywords: ['sla', 'uptime', 'agreement', 'compliance'],
   },
 
-  // ── Reports & Analytics ────────────────────────────────────────────
+  // Reports & Analytics
   {
     id: 'reports',
     label: 'Reports',
@@ -308,8 +347,17 @@ const ALL_COMMANDS: CommandItem[] = [
     icon: TrendingUp,
     keywords: ['predictive', 'failure', 'prediction', 'ml', 'ai', 'machine learning', 'forecast'],
   },
+  {
+    id: 'compliance-shield',
+    label: 'Compliance Shield',
+    description: 'Compliance & Fines risk assessment',
+    path: '/compliance-shield',
+    category: 'analytics',
+    icon: Shield,
+    keywords: ['compliance', 'fines', 'risk', 'shield', 'exposure', 'downtime', 'financial'],
+  },
 
-  // ── Administration ─────────────────────────────────────────────────
+  // Administration
   {
     id: 'users',
     label: 'Users',
@@ -382,54 +430,78 @@ const ALL_COMMANDS: CommandItem[] = [
     icon: Ticket,
     keywords: ['support', 'help', 'issue', 'request'],
   },
-  {
-    id: 'compliance-shield',
-    label: 'Compliance Shield',
-    description: 'Compliance & Fines risk assessment',
-    path: '/compliance-shield',
-    category: 'analytics',
-    icon: Shield,
-    keywords: ['compliance', 'fines', 'risk', 'shield', 'exposure', 'downtime', 'financial'],
-  },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════
-// Fuzzy match
-// ═══════════════════════════════════════════════════════════════════════
+// ── Action commands ─────────────────────────────────────────────────
 
-function fuzzyMatch(text: string, query: string): boolean {
-  const lower = text.toLowerCase();
-  const q = query.toLowerCase();
-  let qi = 0;
-  for (let i = 0; i < lower.length && qi < q.length; i++) {
-    if (lower[i] === q[qi]) qi++;
-  }
-  return qi === q.length;
+function createActionCommands(
+  navigate: ReturnType<typeof useNavigate>,
+  isDark: boolean,
+  setTheme: (theme: Theme) => void,
+  onOpenShortcuts: () => void
+): CommandItem[] {
+  return [
+    {
+      id: 'new-work-order',
+      label: 'New Work Order',
+      description: 'Create a new work order',
+      path: '/work-orders',
+      category: 'actions',
+      icon: PlusCircle,
+      keywords: ['create', 'new', 'wo', 'add', 'maintenance', 'job'],
+      action: () => navigate('/work-orders'),
+    },
+    {
+      id: 'new-ticket',
+      label: 'New Ticket',
+      description: 'Create a new support ticket',
+      path: '/tickets',
+      category: 'actions',
+      icon: PlusCircle,
+      keywords: ['create', 'new', 'support', 'issue', 'add'],
+      action: () => navigate('/tickets'),
+    },
+    {
+      id: 'toggle-dark-mode',
+      label: 'Toggle Dark Mode',
+      description: 'Switch between light and dark theme',
+      category: 'actions',
+      icon: SunMoon,
+      keywords: ['theme', 'dark', 'light', 'mode', 'appearance', 'toggle'],
+      action: () => {
+        const next: Theme = isDark ? 'light' : 'dark';
+        setTheme(next);
+      },
+    },
+    {
+      id: 'keyboard-shortcuts',
+      label: 'Keyboard Shortcuts',
+      description: 'View all keyboard shortcuts (⌘/)',
+      category: 'actions',
+      icon: Keyboard,
+      keywords: ['shortcuts', 'keys', 'hotkeys', 'help', 'cheatsheet'],
+      action: onOpenShortcuts,
+    },
+  ];
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Highlight matching text
+// Highlight matching text (v2 — uses getCharMatches)
 // ═══════════════════════════════════════════════════════════════════════
 
 function HighlightMatch({ text, query }: { text: string; query: string }) {
+  const chars = useMemo(() => getCharMatches(text, query), [text, query]);
+
   if (!query.trim()) return <>{text}</>;
-
-  const lower = text.toLowerCase();
-  const q = query.toLowerCase();
-  const parts: { char: string; match: boolean }[] = [];
-  let qi = 0;
-
-  for (let i = 0; i < text.length; i++) {
-    const isMatch = qi < q.length && lower[i] === q[qi];
-    if (isMatch) qi++;
-    parts.push({ char: text[i], match: isMatch });
-  }
 
   return (
     <>
-      {parts.map((p, i) =>
-        p.match ? (
-          <span key={i} className="text-blue-600 dark:text-blue-400 font-semibold underline decoration-blue-300/50 decoration-2 underline-offset-2">
+      {chars.map((p, i) =>
+        p.matched ? (
+          <span
+            key={i}
+            className="text-blue-600 dark:text-blue-400 font-semibold underline decoration-blue-300/50 decoration-2 underline-offset-2"
+          >
             {p.char}
           </span>
         ) : (
@@ -445,46 +517,59 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 // ═══════════════════════════════════════════════════════════════════════
 
 export function CommandPalette() {
-  const { isOpen, close } = useCommandPaletteStore();
+  const { isOpen, close, recentCommands, addRecent, clearRecent } = useCommandPaletteStore();
+  const themeStore = useThemeStore();
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // UX-14.2.8: Focus trap when palette is open
-  const { containerRef: paletteRef, handleKeyDown: handleTrapKeyDown } = useFocusTrap(isOpen, { restoreFocus: true });
+  const { containerRef: paletteRef, handleKeyDown: handleTrapKeyDown } = useFocusTrap(isOpen, {
+    restoreFocus: true,
+  });
 
-  // Filter commands based on fuzzy match
-  const filtered = useMemo(() => {
-    if (!query.trim()) {
-      // When empty, show all grouped by category
-      return ALL_COMMANDS;
-    }
-    return ALL_COMMANDS.filter(
-      (cmd) =>
-        fuzzyMatch(cmd.label, query) ||
-        fuzzyMatch(cmd.description ?? '', query) ||
-        cmd.keywords.some((kw) => fuzzyMatch(kw, query))
-    );
-  }, [query]);
+  // Build action commands (needs hooks inside component)
+  const actionCommands = useMemo(
+    () => createActionCommands(navigate, themeStore.isDark, themeStore.setTheme, () => setShowShortcuts(true)),
+    [navigate, themeStore.isDark, themeStore.setTheme]
+  );
+
+  // All commands (memoized static reference)
+  const allCommands = useMemo<CommandItem[]>(() => [...NAV_COMMANDS, ...actionCommands], [actionCommands]);
+
+  // ── Weighted fuzzy search ──────────────────────────────────────────
+  const searchResults = useMemo(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return null; // null means "show all grouped"
+    return weightedFuzzySearch(allCommands, query, { threshold: 10 });
+  }, [query, allCommands]);
+
+  // Filtered commands (for non-empty query)
+  const filteredCommands = useMemo(() => {
+    if (!searchResults) return allCommands;
+    return searchResults.map((r) => r.item);
+  }, [searchResults, allCommands]);
 
   // Group filtered results by category
   const grouped = useMemo(() => {
     const groups = new Map<CommandCategory, CommandItem[]>();
-    for (const cmd of filtered) {
+    const items = searchResults ? filteredCommands : allCommands;
+
+    for (const cmd of items) {
       const existing = groups.get(cmd.category) ?? [];
       existing.push(cmd);
       groups.set(cmd.category, existing);
     }
-    return CATEGORIES.filter((cat) => (groups.get(cat.key)?.length ?? 0) > 0).map(
-      (cat) => ({
-        ...cat,
-        items: groups.get(cat.key) ?? [],
-      })
-    );
-  }, [filtered]);
+
+    return CATEGORIES.filter((cat) => (groups.get(cat.key)?.length ?? 0) > 0).map((cat) => ({
+      ...cat,
+      items: groups.get(cat.key) ?? [],
+    }));
+  }, [searchResults, filteredCommands, allCommands]);
 
   // Flatten for keyboard index
   const flatItems = useMemo(() => {
@@ -497,6 +582,14 @@ export function CommandPalette() {
     return items;
   }, [grouped]);
 
+  // Build recent command items (only when query is empty)
+  const recentItems = useMemo(() => {
+    if (query.trim()) return [];
+    return recentCommands
+      .map((id) => allCommands.find((c) => c.id === id))
+      .filter((c): c is CommandItem => c !== undefined);
+  }, [recentCommands, allCommands, query]);
+
   // Reset selection when results change
   useEffect(() => {
     setSelectedIndex(0);
@@ -505,12 +598,12 @@ export function CommandPalette() {
   // Auto-focus input
   useEffect(() => {
     if (isOpen) {
-      // Small delay to ensure DOM is ready
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
       setQuery('');
       setSelectedIndex(0);
+      setShowShortcuts(false);
     }
   }, [isOpen]);
 
@@ -525,10 +618,16 @@ export function CommandPalette() {
 
   const executeCommand = useCallback(
     (item: CommandItem) => {
+      addRecent(item.id);
       close();
-      navigate(item.path);
+
+      if (item.action) {
+        item.action();
+      } else if (item.path) {
+        navigate(item.path);
+      }
     },
-    [close, navigate]
+    [addRecent, close, navigate]
   );
 
   const handleKeyDown = useCallback(
@@ -560,8 +659,9 @@ export function CommandPalette() {
   if (!isOpen) return null;
 
   const hasResults = flatItems.length > 0;
+  const hasRecent = recentItems.length > 0 && !query.trim();
 
-  // UX-14.2.8: Combine palette keyboard handler with focus trap handler
+  // Combine palette keyboard handler with focus trap handler
   const combinedKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Tab') {
@@ -573,144 +673,315 @@ export function CommandPalette() {
     [handleTrapKeyDown, handleKeyDown]
   );
 
-  return createPortal(
-    <div
-      ref={paletteRef}
-      tabIndex={-1}
-      className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
-      onKeyDown={combinedKeyDown}
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={close}
-      />
-
-      {/* Palette */}
-      <div
-        className="relative w-full max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-bottom-8 duration-200"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-      >
-        {/* Search Input */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-800">
-          <Search className="w-5 h-5 text-slate-400 flex-shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pages, actions, settings..."
-            className="flex-1 text-base bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border-0 outline-none focus:outline-none focus:ring-0"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
-            <Command className="w-3 h-3" />
-            <span>K</span>
-          </kbd>
-          {query && (
+  const resultsNode = (
+    <div ref={listRef} className="max-h-[50vh] overflow-y-auto overscroll-contain py-2">
+      {/* Recent commands section (only when empty query) */}
+      {hasRecent && (
+        <>
+          <div className="px-5 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <History className="w-3 h-3" />
+            <span>Recent</span>
             <button
-              onClick={() => setQuery('')}
-              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              aria-label="Clear search"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearRecent();
+              }}
+              className="ml-auto text-[10px] font-normal text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              aria-label="Clear recent searches"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              Clear
             </button>
-          )}
+          </div>
+          {recentItems.map((item) => {
+            const flatIdx = flatItems.findIndex((f) => f.item.id === item.id);
+            const isSelected = flatIdx === selectedIndex;
+            const Icon = item.icon;
+
+            return (
+              <button
+                key={item.id}
+                data-selected={isSelected ? 'true' : undefined}
+                onClick={() => executeCommand(item)}
+                onMouseEnter={() => setSelectedIndex(flatIdx >= 0 ? flatIdx : 0)}
+                className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors ${
+                  isSelected
+                    ? 'bg-purple-50 dark:bg-purple-900/20 text-slate-900 dark:text-white'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 ${
+                    isSelected
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{item.label}</div>
+                  {item.description && (
+                    <div className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                      {item.description}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-xs text-slate-400 dark:text-slate-500 font-mono hidden sm:block">
+                  {item.path}
+                </div>
+              </button>
+            );
+          })}
+
+          {/* Separator */}
+          <div className="mx-5 my-1 border-t border-slate-200 dark:border-slate-700/50" />
+        </>
+      )}
+
+      {/* No results */}
+      {!hasResults && (
+        <div className="px-6 py-12 text-center">
+          <Search className="w-8 h-8 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            No results for "<span className="text-slate-700 dark:text-slate-300">{query}</span>"
+          </p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            Try a different search term
+          </p>
         </div>
+      )}
 
-        {/* Results */}
-        <div
-          ref={listRef}
-          className="max-h-[50vh] overflow-y-auto overscroll-contain py-2"
-        >
-          {!hasResults && (
-            <div className="px-6 py-12 text-center">
-              <Search className="w-8 h-8 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                No results for "<span className="text-slate-700 dark:text-slate-300">{query}</span>"
-              </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                Try a different search term
-              </p>
+      {/* Grouped results */}
+      {grouped.map((group) => {
+        const GroupIcon = group.icon;
+        return (
+          <div key={group.key}>
+            <div className="px-5 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <GroupIcon className="w-3 h-3" />
+              <span>{group.label}</span>
             </div>
-          )}
+            {group.items.map((item) => {
+              const flatIdx = flatItems.findIndex((f) => f.item.id === item.id);
+              const isSelected = flatIdx === selectedIndex;
+              const Icon = item.icon;
 
-          {grouped.map((group) => (
-            <div key={group.key}>
-              <div className="px-5 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                {group.label}
-              </div>
-              {group.items.map((item) => {
-                const flatIdx = flatItems.findIndex(
-                  (f) => f.item.id === item.id
-                );
-                const isSelected = flatIdx === selectedIndex;
-                const Icon = item.icon;
-
-                return (
-                  <button
-                    key={item.id}
-                    data-selected={isSelected ? 'true' : undefined}
-                    onClick={() => executeCommand(item)}
-                    onMouseEnter={() => setSelectedIndex(flatIdx)}
-                    className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors ${
+              return (
+                <button
+                  key={item.id}
+                  data-selected={isSelected ? 'true' : undefined}
+                  onClick={() => executeCommand(item)}
+                  onMouseEnter={() => setSelectedIndex(flatIdx)}
+                  className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors ${
+                    isSelected
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-slate-900 dark:text-white'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 ${
                       isSelected
-                        ? 'bg-blue-50 dark:bg-blue-900/20 text-slate-900 dark:text-white'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                     }`}
                   >
-                    <div
-                      className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 ${
-                        isSelected
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      <HighlightMatch text={item.label} query={query} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        <HighlightMatch text={item.label} query={query} />
+                    {item.description && (
+                      <div className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        <HighlightMatch text={item.description} query={query} />
                       </div>
-                      {item.description && (
-                        <div className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                          <HighlightMatch text={item.description} query={query} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-shrink-0 text-xs text-slate-400 dark:text-slate-500 font-mono hidden sm:block">
-                      {item.path}
-                    </div>
-                  </button>
-                );
-              })}
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 text-xs text-slate-400 dark:text-slate-500 font-mono hidden sm:block">
+                    {item.path}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <>
+      {createPortal(
+        <div
+          ref={paletteRef}
+          tabIndex={-1}
+          className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
+          onKeyDown={combinedKeyDown}
+        >
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={close}
+          />
+
+          {/* Palette */}
+          <div
+            className="relative w-full max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-bottom-8 duration-200"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
+          >
+            {/* Search Input */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+              <Search className="w-5 h-5 text-slate-400 flex-shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search pages, actions, settings... (try ⌘N for new WO)"
+                className="flex-1 text-base bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border-0 outline-none focus:outline-none focus:ring-0"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700">
+                <Command className="w-3 h-3" />
+                <span>K</span>
+              </kbd>
+              {query && (
+                <button
+                  onClick={() => setQuery('')}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Results */}
+            {resultsNode}
+
+            {/* Footer */}
+            <div className="px-5 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↑</kbd>
+                <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↓</kbd>
+                <span>navigate</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↵</kbd>
+                <span>open</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">⎋</kbd>
+                <span>close</span>
+              </span>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Shortcuts Cheatsheet modal — rendered inline for state sharing */}
+      {showShortcuts && (
+        <ShortcutsCheatsheetModal onClose={() => setShowShortcuts(false)} />
+      )}
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Inline Shortcuts Cheatsheet (lazy import pattern)
+// ═══════════════════════════════════════════════════════════════════════
+
+function ShortcutsCheatsheetModal({ onClose }: { onClose: () => void }) {
+  const { shortcuts } = useKeyboardShortcutsInline();
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full mx-4 max-h-[70vh] overflow-y-auto p-6 animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <Keyboard className="w-5 h-5 text-slate-500" />
+            Keyboard Shortcuts
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Close shortcuts"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="space-y-4">
+          {shortcuts.map((section, idx) => (
+            <div key={idx}>
+              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                {section.category}
+              </h3>
+              <div className="divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                {section.items.map((item, iidx) => (
+                  <div
+                    key={iidx}
+                    className="flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-800/50"
+                  >
+                    <span className="text-sm text-slate-700 dark:text-slate-200">{item.label}</span>
+                    <kbd className="inline-flex items-center gap-0.5 px-2.5 py-1 text-xs font-mono font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm whitespace-nowrap">
+                      {item.keys}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
-
-        {/* Footer */}
-        <div className="px-5 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↑</kbd>
-            <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↓</kbd>
-            <span>navigate</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">↵</kbd>
-            <span>open</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-800 rounded text-[10px] font-medium text-slate-500 dark:text-slate-400">⎋</kbd>
-            <span>close</span>
-          </span>
-        </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
+}
+
+/** Inline shortcut definitions (no external dependency) */
+interface ShortcutSection {
+  category: string;
+  items: { label: string; keys: string }[];
+}
+
+function useKeyboardShortcutsInline(): { shortcuts: ShortcutSection[] } {
+  const isMac = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('mac');
+  const mod = isMac ? '⌘' : 'Ctrl';
+
+  const shortcuts: ShortcutSection[] = [
+    {
+      category: 'Navigation',
+      items: [
+        { label: 'Open Command Palette', keys: `${mod}K` },
+        { label: 'Go to Dashboard', keys: `${mod}D` },
+        { label: 'Go to Devices', keys: `${mod}E` },
+        { label: 'Go to Work Orders', keys: `${mod}W` },
+        { label: 'Go to Alerts', keys: `${mod}A` },
+      ],
+    },
+    {
+      category: 'Actions',
+      items: [
+        { label: 'New Work Order', keys: `${mod}N` },
+        { label: 'Refresh current view', keys: `${mod}R` },
+        { label: 'Fullscreen', keys: 'F11' },
+      ],
+    },
+    {
+      category: 'Modals',
+      items: [
+        { label: 'Open Keyboard Shortcuts', keys: `${mod}/` },
+        { label: 'Close modal / palette', keys: 'Esc' },
+      ],
+    },
+  ];
+
+  return { shortcuts };
 }

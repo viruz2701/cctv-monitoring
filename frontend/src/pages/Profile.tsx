@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { z } from 'zod';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { profileSchema } from '../lib/validations';
 import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, X, Edit2, MapPin, Briefcase, Trash2, Clock, Calendar, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar } from '../components/ui';
@@ -14,14 +15,6 @@ export function Profile() {
     const { theme, setTheme, isDark } = useTheme();
     const toast = useToast();
 
-    const profileSchema = z.object({
-        name: z.string().min(2, t('name_min_length') || 'Name must be at least 2 characters'),
-        email: z.string().email(t('invalid_email') || 'Invalid email address'),
-        phone: z.string().min(10, t('phone_min_length') || 'Phone number must be at least 10 digits').optional().or(z.literal('')),
-        location: z.string().max(100, t('location_max_length') || 'Location is too long').optional(),
-        avatar: z.string().optional(),
-    });
-
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,9 +28,9 @@ export function Profile() {
         }
     };
 
+    const { errors: profileErrors, validate: validateProfile, validateField: validateProfileField, touched: profileTouched, reset: resetProfileValidation } = useFormValidation(profileSchema);
     const [isEditing, setIsEditing] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-    const [errors, setErrors] = useState<Record<string, string>>({});
     const [formData, setFormData] = useState(() => ({
         name: user?.name ?? '',
         email: user?.email ?? '',
@@ -311,25 +304,15 @@ export function Profile() {
     };
 
     const handleSave = () => {
-        const result = profileSchema.safeParse(formData);
-        if (!result.success) {
-            const formattedErrors: Record<string, string> = {};
-            const issues = result.error?.errors || result.error?.issues || [];
-            if (issues.length > 0) {
-                issues.forEach((err: any) => {
-                    const path = err.path?.[0];
-                    if (path) {
-                        formattedErrors[path] = err.message;
-                        toast.error(err.message);
-                    }
-                });
-            } else {
-                toast.error(t('form_errors') || 'Please check the form for errors');
-            }
-            setErrors(formattedErrors);
-            return;
-        }
-        setErrors({});
+        const validationData = {
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone || undefined,
+            location: formData.location || undefined,
+        };
+
+        if (!validateProfile(validationData)) return;
+
         updateUser({ name: formData.name, email: formData.email, avatar: formData.avatar });
         toast.success(t('profile_updated') || 'Profile updated successfully');
         setIsEditing(false);
@@ -433,8 +416,8 @@ export function Profile() {
                                 <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em] mb-1.5 block">{t('full_name')}</label>
                                 {isEditing ? (
                                     <>
-                                        <input type="text" name="name" value={formData.name} onChange={handleChange} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${errors.name ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
-                                        {errors.name && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.name}</p>}
+                                        <input type="text" name="name" value={formData.name} onChange={(e) => { handleChange(e); validateProfileField('name', { name: e.target.value, email: formData.email }); }} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${profileTouched.has('name') && profileErrors.name ? 'border-red-500' : profileTouched.has('name') && !profileErrors.name ? 'border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
+                                        {profileTouched.has('name') && profileErrors.name && <p className="text-red-500 text-[10px] mt-1 ml-1">{profileErrors.name}</p>}
                                     </>
                                 ) : (
                                     <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-xl">
@@ -446,8 +429,8 @@ export function Profile() {
                                 <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em] mb-1.5 block">{t('primary_email')}</label>
                                 {isEditing ? (
                                     <>
-                                        <input type="email" name="email" value={formData.email} onChange={handleChange} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${errors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
-                                        {errors.email && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.email}</p>}
+                                        <input type="email" name="email" value={formData.email} onChange={(e) => { handleChange(e); validateProfileField('email', { name: formData.name, email: e.target.value }); }} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${profileTouched.has('email') && profileErrors.email ? 'border-red-500' : profileTouched.has('email') && !profileErrors.email ? 'border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
+                                        {profileTouched.has('email') && profileErrors.email && <p className="text-red-500 text-[10px] mt-1 ml-1">{profileErrors.email}</p>}
                                     </>
                                 ) : (
                                     <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-xl">
@@ -459,8 +442,8 @@ export function Profile() {
                                 <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em] mb-1.5 block">{t('contact_number')}</label>
                                 {isEditing ? (
                                     <>
-                                        <input type="text" name="phone" value={formData.phone} onChange={handleChange} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
-                                        {errors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.phone}</p>}
+                                        <input type="text" name="phone" value={formData.phone} onChange={(e) => { handleChange(e); validateProfileField('phone', { name: formData.name, email: formData.email, phone: e.target.value || undefined }); }} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${profileTouched.has('phone') && profileErrors.phone ? 'border-red-500' : profileTouched.has('phone') && !profileErrors.phone ? 'border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
+                                        {profileTouched.has('phone') && profileErrors.phone && <p className="text-red-500 text-[10px] mt-1 ml-1">{profileErrors.phone}</p>}
                                     </>
                                 ) : (
                                     <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-xl">
@@ -472,8 +455,8 @@ export function Profile() {
                                 <label className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-[0.1em] mb-1.5 block">{t('location_profile')}</label>
                                 {isEditing ? (
                                     <>
-                                        <input type="text" name="location" value={formData.location} onChange={handleChange} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${errors.location ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
-                                        {errors.location && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.location}</p>}
+                                        <input type="text" name="location" value={formData.location} onChange={(e) => { handleChange(e); validateProfileField('location', { name: formData.name, email: formData.email, location: e.target.value || undefined }); }} className={`w-full px-3 py-2.5 bg-white dark:bg-slate-900 border ${profileTouched.has('location') && profileErrors.location ? 'border-red-500' : profileTouched.has('location') && !profileErrors.location ? 'border-emerald-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm`} />
+                                        {profileTouched.has('location') && profileErrors.location && <p className="text-red-500 text-[10px] mt-1 ml-1">{profileErrors.location}</p>}
                                     </>
                                 ) : (
                                     <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-xl">

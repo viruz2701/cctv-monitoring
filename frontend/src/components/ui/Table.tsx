@@ -46,7 +46,7 @@ export function Table<T>({
         const colKey = String(column.key);
 
         if (sortColumn !== colKey) {
-            return <ChevronsUpDown className="w-4 h-4 text-slate-400" />;
+            return <ChevronsUpDown className="w-4 h-4 text-slate-500" />;
         }
 
         return sortDirection === 'asc' ? (
@@ -114,7 +114,7 @@ export function Table<T>({
                             <tr>
                                 <td
                                     colSpan={columns.length}
-                                    className="px-4 py-12 text-center text-slate-500 dark:text-slate-400"
+                                    className="px-4 py-12 text-center text-slate-500 dark:text-slate-300"
                                 >
                                     {emptyMessage}
                                 </td>
@@ -221,7 +221,7 @@ export function Pagination({
 
     return (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
-            <div className="text-sm text-slate-500 dark:text-slate-400 text-center sm:text-left">
+            <div className="text-sm text-slate-500 dark:text-slate-300 text-center sm:text-left">
                 Showing <span className="font-medium">{startItem}</span> to{' '}
                 <span className="font-medium">{endItem}</span> of{' '}
                 <span className="font-medium">{totalItems}</span> results
@@ -240,7 +240,7 @@ export function Pagination({
                     {getPageNumbers().map((page, index) => {
                         if (page === '...') {
                             return (
-                                <span key={`ellipsis-${index}`} className="px-2 text-slate-400 dark:text-slate-500">
+                                <span key={`ellipsis-${index}`} className="px-2 text-slate-500 dark:text-slate-400">
                                     ...
                                 </span>
                             );
@@ -261,7 +261,7 @@ export function Pagination({
                 </div>
 
                 {/* Show current page indicator on mobile */}
-                <span className="sm:hidden text-sm text-slate-500 dark:text-slate-400">
+                <span className="sm:hidden text-sm text-slate-500 dark:text-slate-300">
                     {currentPage} / {totalPages}
                 </span>
 

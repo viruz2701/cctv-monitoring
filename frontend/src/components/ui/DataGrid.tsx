@@ -117,6 +117,8 @@ export function DataGrid<T>({
   variant = 'default',
   stickyHeader = false,
   rowClassName,
+  onCellEdit,
+  onColumnReorder,
 }: DataGridProps<T>) {
   const [search, setSearch] = useState('');
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
@@ -272,7 +274,7 @@ export function DataGrid<T>({
   const renderSortIcon = useCallback((column: Column<T>) => {
     if (!column.sortable) return null;
     const colKey = String(column.key);
-    if (sortColumn !== colKey) return <ChevronsUpDown className="w-4 h-4 text-slate-400" aria-hidden="true" />;
+    if (sortColumn !== colKey) return <ChevronsUpDown className="w-4 h-4 text-slate-500" aria-hidden="true" />;
     return sortDirection === 'asc' ? (
       <ChevronUp className="w-4 h-4 text-blue-600" aria-hidden="true" />
     ) : (
@@ -323,7 +325,7 @@ export function DataGrid<T>({
         >
           <div className="flex items-center gap-2">
             {selectable && selectedIds && selectedIds.size > 0 && (
-              <span className="text-sm text-slate-600 dark:text-slate-400" aria-live="polite">
+              <span className="text-sm text-slate-600 dark:text-slate-300" aria-live="polite">
                 {selectedIds.size} selected
               </span>
             )}
@@ -331,7 +333,7 @@ export function DataGrid<T>({
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" aria-hidden="true" />
               <input
                 type="text"
                 placeholder="Search..."
@@ -471,7 +473,7 @@ export function DataGrid<T>({
                 >
                   <button
                     onClick={toggleSelectAll}
-                    className="text-slate-400 hover:text-blue-600"
+                    className="text-slate-500 hover:text-blue-600"
                     aria-label={allSelected ? 'Deselect all rows' : 'Select all rows'}
                   >
                     {allSelected ? <CheckSquare size={16} className="text-blue-600" aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
@@ -544,7 +546,7 @@ export function DataGrid<T>({
               <tr>
                 <td
                   colSpan={colCount}
-                  className="px-4 py-12 text-center text-slate-500 dark:text-slate-400"
+                  className="px-4 py-12 text-center text-slate-500 dark:text-slate-300"
                   role="status"
                 >
                   <div className="flex flex-col items-center gap-3">
@@ -583,7 +585,7 @@ export function DataGrid<T>({
                       <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleSelect(id)}
-                          className="text-slate-400 hover:text-blue-600"
+                          className="text-slate-500 hover:text-blue-600"
                           aria-label={isSelected ? `Deselect row ${rowIdx + 1}` : `Select row ${rowIdx + 1}`}
                         >
                           {isSelected ? <CheckSquare size={16} className="text-blue-600" aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
@@ -694,7 +696,7 @@ export function DataGrid<T>({
           role="navigation"
           aria-label="Pagination"
         >
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-xs text-slate-500 dark:text-slate-300">
             {safePage * pageSizeVal + 1}–{Math.min((safePage + 1) * pageSizeVal, filteredData.length)} of {filteredData.length}
           </span>
           <div className="flex items-center gap-1">
@@ -716,7 +718,7 @@ export function DataGrid<T>({
                   className={`w-7 h-7 text-xs rounded ${
                     page === safePage
                       ? 'bg-blue-600 text-white'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
                   aria-label={`Page ${page + 1}`}
                   aria-current={page === safePage ? 'page' : undefined}

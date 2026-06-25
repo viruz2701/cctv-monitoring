@@ -1,5 +1,7 @@
 import { generateUUID } from '../utils/uuid';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useFormValidation } from '../hooks/useFormValidation';
+import { deviceSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search,
@@ -74,7 +76,8 @@ export function Devices() {
     const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
 
-    // Форма для редактирования (только для обычных устройств, без P2P)
+    // Zod валидация для формы редактирования
+    const { errors: editErrors, validate: validateEdit, validateField: validateEditField, touched: editTouched } = useFormValidation(deviceSchema);
     const [editFormData, setEditFormData] = useState({
         name: '',
         type: 'camera' as Device['type'],
@@ -115,6 +118,17 @@ export function Devices() {
     const handleSaveEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedDevice) return;
+
+        const validationData = {
+            name: editFormData.name,
+            ipAddress: editFormData.ipAddress,
+            siteId: editFormData.siteId,
+            type: editFormData.type,
+            model: editFormData.model || undefined,
+        };
+
+        if (!validateEdit(validationData)) return;
+
         const selectedSite = sites.find(s => s.id === editFormData.siteId);
         const siteName = selectedSite?.name || 'Unknown';
         updateDevice(selectedDevice.id, {
@@ -357,10 +371,55 @@ export function Devices() {
                     title={t('edit_device')}
                 >
                     <form onSubmit={handleSaveEdit} className="space-y-4">
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('device_name')}</label><Input value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} required /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('device_type')}</label><Select value={editFormData.type} onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value as any })} options={[{ value: 'camera', label: t('camera') }, { value: 'nvr', label: 'NVR' }, { value: 'dvr', label: 'DVR' }, { value: 'switch', label: t('switch') }]} /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('site')}</label><Select value={editFormData.siteId} onChange={(e) => { const site = sites.find(s => s.id === e.target.value); setEditFormData({ ...editFormData, siteId: e.target.value, siteName: site?.name || '' }); }} options={sites.map(site => ({ value: site.id, label: site.name }))} /></div>
-                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('ip_address')}</label><Input value={editFormData.ipAddress} onChange={(e) => setEditFormData({ ...editFormData, ipAddress: e.target.value })} required /></div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('device_name')}</label>
+                            <Input
+                                value={editFormData.name}
+                                onChange={(e) => {
+                                    const newData = { ...editFormData, name: e.target.value };
+                                    setEditFormData(newData);
+                                    validateEditField('name', { ...newData, type: newData.type, siteId: newData.siteId, ipAddress: newData.ipAddress });
+                                }}
+                                error={editTouched.has('name') ? editErrors.name : undefined}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('device_type')}</label>
+                            <Select
+                                value={editFormData.type}
+                                onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value as any })}
+                                options={[{ value: 'camera', label: t('camera') }, { value: 'nvr', label: 'NVR' }, { value: 'dvr', label: 'DVR' }, { value: 'switch', label: t('switch') }]}
+                                error={editTouched.has('type') ? editErrors.type : undefined}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('site')}</label>
+                            <Select
+                                value={editFormData.siteId}
+                                onChange={(e) => {
+                                    const site = sites.find(s => s.id === e.target.value);
+                                    const newData = { ...editFormData, siteId: e.target.value, siteName: site?.name || '' };
+                                    setEditFormData(newData);
+                                    validateEditField('siteId', { ...newData, name: newData.name, type: newData.type, ipAddress: newData.ipAddress });
+                                }}
+                                options={sites.map(site => ({ value: site.id, label: site.name }))}
+                                error={editTouched.has('siteId') ? editErrors.siteId : undefined}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('ip_address')}</label>
+                            <Input
+                                value={editFormData.ipAddress}
+                                onChange={(e) => {
+                                    const newData = { ...editFormData, ipAddress: e.target.value };
+                                    setEditFormData(newData);
+                                    validateEditField('ipAddress', { ...newData, name: newData.name, type: newData.type, siteId: newData.siteId });
+                                }}
+                                error={editTouched.has('ipAddress') ? editErrors.ipAddress : undefined}
+                                required
+                            />
+                        </div>
                         <div className="flex justify-end gap-3 mt-6"><Button type="button" variant="outline" onClick={() => setSelectedDevice(null)}>{t('cancel')}</Button><Button type="submit" variant="primary">{t('save')}</Button></div>
                     </form>
                 </Modal>

@@ -96,14 +96,14 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                             <h1 className="text-lg font-bold text-white whitespace-nowrap">
                                 CCTV Monitor
                             </h1>
-                            <p className="text-xs text-slate-400 dark:text-slate-300">Health Dashboard</p>
+                            <p className="text-xs text-slate-300 dark:text-slate-300">Health Dashboard</p>
                         </div>
                     )}
                 </Link>
                 {mobileOpen && (
                     <button
                         onClick={onMobileClose}
-                        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        className="lg:hidden p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                         aria-label="Close menu"
                     >
                         <X className="w-5 h-5" />

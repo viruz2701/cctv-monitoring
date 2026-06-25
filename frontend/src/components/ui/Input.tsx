@@ -39,7 +39,7 @@ export function Input({
           bg-white dark:bg-slate-900 border rounded-lg
           placeholder:text-slate-400
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-          disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
+          disabled:bg-slate-50 disabled:text-slate-600 disabled:cursor-not-allowed
           ${error ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-slate-300 dark:border-slate-700'}
           ${className}
         `}
@@ -135,7 +135,7 @@ export function Select({
           px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg appearance-none
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-          disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
+          disabled:bg-slate-50 disabled:text-slate-600 disabled:cursor-not-allowed
           ${error ? 'border-red-300' : 'border-slate-300 dark:border-slate-700'}
           ${hasCustomWidth ? '' : 'w-full'}
           ${className}
@@ -191,7 +191,7 @@ export function Textarea({
           bg-white dark:bg-slate-900 border rounded-lg
           placeholder:text-slate-400
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-          disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
+          disabled:bg-slate-50 disabled:text-slate-600 disabled:cursor-not-allowed
           resize-y min-h-[100px]
           ${error ? 'border-red-300' : 'border-slate-300 dark:border-slate-700'}
           ${className}
