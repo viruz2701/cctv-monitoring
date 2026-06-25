@@ -1141,3 +1141,126 @@ func (db *DB) SetFeatureFlagEnabled(ctx context.Context, key string, enabled boo
 	}
 	return nil
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Alarms
+// ═══════════════════════════════════════════════════════════════════════
+
+// GetAlarms возвращает список тревог, опционально фильтруя по device_id.
+// Если device_id пустой — возвращает все тревоги.
+func (db *DB) GetAlarms(deviceID string) ([]models.Alarm, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var rows pgx.Rows
+	var err error
+	if deviceID != "" {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT time, device_id, priority, method, COALESCE(description, ''), COALESCE(image_path, '')
+			FROM alarms
+			WHERE device_id = $1
+			ORDER BY time DESC
+			LIMIT 100
+		`, deviceID)
+	} else {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT time, device_id, priority, method, COALESCE(description, ''), COALESCE(image_path, '')
+			FROM alarms
+			ORDER BY time DESC
+			LIMIT 100
+		`)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alarms []models.Alarm
+	for rows.Next() {
+		var a models.Alarm
+		if err := rows.Scan(&a.Timestamp, &a.DeviceID, &a.Priority, &a.Method, &a.Description, &a.ImagePath); err != nil {
+			return nil, err
+		}
+		alarms = append(alarms, a)
+	}
+	return alarms, rows.Err()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tickets (all)
+// ═══════════════════════════════════════════════════════════════════════
+
+// GetTickets возвращает все тикеты, отсортированные по дате создания (сначала новые).
+func (db *DB) GetTickets() ([]Ticket, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, title, COALESCE(description, ''), COALESCE(device_id, ''),
+		       COALESCE(priority, 'medium'), COALESCE(status, 'open'), COALESCE(assignee, ''),
+		       created_at, updated_at
+		FROM tickets
+		ORDER BY created_at DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tickets []Ticket
+	for rows.Next() {
+		var t Ticket
+		if err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.DeviceID,
+			&t.Priority, &t.Status, &t.Assignee, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		tickets = append(tickets, t)
+	}
+	return tickets, rows.Err()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Notifications
+// ═══════════════════════════════════════════════════════════════════════
+
+// Notification — модель уведомления.
+type Notification struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Title     string    `json:"title"`
+	Message   string    `json:"message"`
+	Type      string    `json:"type"`
+	Link      string    `json:"link,omitempty"`
+	Read      bool      `json:"read"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// GetNotifications возвращает все уведомления, отсортированные по дате (сначала новые).
+func (db *DB) GetNotifications() ([]Notification, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, COALESCE(user_id, ''), title, COALESCE(message, ''),
+		       COALESCE(type, 'info'), COALESCE(link, ''), COALESCE(read, false), created_at
+		FROM notifications
+		ORDER BY created_at DESC
+		LIMIT 100
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var notifications []Notification
+	for rows.Next() {
+		var n Notification
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Title, &n.Message,
+			&n.Type, &n.Link, &n.Read, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		notifications = append(notifications, n)
+	}
+	return notifications, rows.Err()
+}

@@ -17,11 +17,11 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 	// [x] V4 — Access Control (RBAC в хендлерах)
 	// [x] V5 — Validation (whitelist через Validator)
 	// [x] V7 — Error Handling (через respondError)
-	r.Post("/api/v1/devices", s.handleCreateDevice)         // C — Create
-	r.Get("/api/v1/devices", s.handleListDevices)           // R — List (с пагинацией)
-	r.Get("/api/v1/devices/{id}", s.handleGetDevice)        // R — Read
-	r.Put("/api/v1/devices/{id}", s.handleUpdateDevice)     // U — Update
-	r.Delete("/api/v1/devices/{id}", s.handleDeleteDevice)  // D — Delete (soft)
+	r.Post("/api/v1/devices", s.handleCreateDevice)               // C — Create
+	r.Get("/api/v1/devices", s.handleListDevices)                 // R — List (с пагинацией)
+	r.Get("/api/v1/devices/{id}", s.handleGetDevice)              // R — Read
+	r.Put("/api/v1/devices/{id}", s.handleUpdateDevice)           // U — Update
+	r.Delete("/api/v1/devices/{id}", s.handleDeleteDevice)        // D — Delete (soft)
 	r.Post("/api/v1/devices/{id}/restore", s.handleRestoreDevice) // Restore
 
 	// ── Status ───────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 	r.Get("/api/v1/analytics/predictions", s.getPredictions)
 	r.Get("/api/v1/analytics/reliability", s.getReliability)
 	r.Get("/api/v1/analytics/tco", s.getTCOPerDevice)
-	r.Get("/api/v1/analytics/wo-costs", s.getWorkOrderCosts) // WO-4.4.5
+	r.Get("/api/v1/analytics/wo-costs", s.getWorkOrderCosts)            // WO-4.4.5
 	r.Get("/api/v1/analytics/downtime-costs", s.getDowntimeCostsBySite) // BIZ-01
 
 	// ── Логи ─────────────────────────────────────────────────────────
@@ -46,4 +46,13 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 
 	// ── RCA (AI-01) ────────────────────────────────────────────────────
 	r.Get("/api/v1/rca/{id}", s.handleRCAGraph)
+
+	// ── Alarms (для фронтенда) ─────────────────────────────────────────
+	r.Get("/api/v1/alarms", s.handleListAlarms)
+
+	// ── Tickets (для фронтенда) ────────────────────────────────────────
+	r.Get("/api/v1/tickets", s.handleListTickets)
+
+	// ── Notifications (для фронтенда) ──────────────────────────────────
+	r.Get("/api/v1/notifications", s.handleListNotifications)
 }
