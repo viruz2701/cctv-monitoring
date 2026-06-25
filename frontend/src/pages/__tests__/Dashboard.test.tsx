@@ -4,6 +4,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { Dashboard } from '../Dashboard';
+import { SettingsProvider } from '../../context/SettingsContext';
+import { AuthProvider } from '../../hooks/useAuth';
+
+vi.mock('../../hooks/useAuth', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useAuth: () => ({ user: { role: 'admin', name: 'Test' }, token: 'test-token', logout: vi.fn() }),
+}));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
@@ -12,29 +19,19 @@ const queryClient = new QueryClient({
 function renderWithProviders(ui: React.ReactElement) {
   return render(
     <MemoryRouter>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SettingsProvider>{ui}</SettingsProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </MemoryRouter>
   );
 }
 
-// Mock all contexts and hooks used by Dashboard
-vi.mock('../../context/DataContext', () => ({
-  useTickets: () => ({ tickets: [] }),
-  useAlerts: () => ({ alerts: [] }),
-  useDevicesSites: () => ({
-    devices: [],
-    sites: [],
-  }),
-  useSettings: () => ({
-    dashboardConfig: {
-      showStatsRow: true,
-      showTicketStats: true,
-      showRecentAlerts: true,
-      showLatestTickets: true,
-      showQuickActions: true,
-    },
-    updateDashboardConfig: vi.fn(),
-  }),
+vi.mock('../../services/api', () => ({
+  api: {
+    getDashboardStats: () => Promise.resolve(null),
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -44,20 +41,15 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../hooks/useApiQuery', () => ({
-  useDevices: () => ({ data: [], isLoading: false }),
-  useSites: () => ({ data: [], isLoading: false }),
-  useAlerts: () => ({ data: [], isLoading: false }),
-  useTickets: () => ({ data: [], isLoading: false }),
-  useAlarms: () => ({ data: [], isLoading: false }),
-}));
-
 vi.mock('../../components/dashboard/AlertBanner', () => ({
   AlertBanner: () => <div data-testid="alert-banner" />,
 }));
 
 vi.mock('react-grid-layout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="grid-layout">{children}</div>,
+  ResponsiveGridLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-grid">{children}</div>,
+  useContainerWidth: () => 800,
+  WidthProvider: (c: any) => c,
 }));
 
 vi.mock('recharts', () => ({
@@ -91,7 +83,8 @@ describe('Dashboard', () => {
 
   it('shows customize layout button', async () => {
     renderWithProviders(<Dashboard />);
-    const btn = await screen.findByText('customize_layout', {}, { timeout: 3000 });
+    // The customize button is available via text 'customize_layout' or aria-label
+    const btn = await screen.findByRole('button', { name: /customize/i }, { timeout: 3000 });
     expect(btn).toBeTruthy();
   });
 

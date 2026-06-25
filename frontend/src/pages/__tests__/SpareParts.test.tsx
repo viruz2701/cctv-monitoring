@@ -28,6 +28,14 @@ vi.mock('../../hooks/useApiQuery', () => ({
   useLowStockParts: () => ({ data: [mockParts[0]], isLoading: false }),
   useSparePartCategories: () => ({ data: ['storage', 'optics'], isLoading: false }),
   useCreateSparePartCategory: () => ({ mutateAsync: vi.fn() }),
+  useUpdateSparePartCategory: () => ({ mutateAsync: vi.fn() }),
+  useDeleteSparePartCategory: () => ({ mutateAsync: vi.fn() }),
+  useCreateSparePart: () => ({ mutateAsync: vi.fn() }),
+  useUpdateSparePart: () => ({ mutateAsync: vi.fn() }),
+  useDeleteSparePart: () => ({ mutateAsync: vi.fn() }),
+  useAdjustStock: () => ({ mutateAsync: vi.fn() }),
+  useDevices: () => ({ data: [], isLoading: false }),
+  useSites: () => ({ data: [], isLoading: false }),
 }));
 
 describe('SpareParts', () => {
@@ -37,9 +45,9 @@ describe('SpareParts', () => {
     expect(title).toBeTruthy();
   });
 
-  it('shows low stock alert badge when parts below minimum', async () => {
+  it('shows low stock indicator when parts below minimum', async () => {
     renderWithProviders(<SpareParts />);
-    const badge = await screen.findByText('low_stock_alerts', {}, { timeout: 3000 });
+    const badge = await screen.findByText('Low Stock', {}, { timeout: 3000 });
     expect(badge).toBeTruthy();
   });
 
