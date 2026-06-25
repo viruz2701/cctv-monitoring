@@ -117,3 +117,188 @@ textarea,
 .card-container {
   border-radius: calc(var(--radius) + 0.25rem);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FullCalendar Custom Styles (WO Calendar — P0-6)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Dark mode overrides ──────────────────────────────────────────────── */
+.dark .fc {
+  --fc-page-bg-color: #1e293b;
+  --fc-neutral-bg-color: #0f172a;
+  --fc-neutral-text-color: #94a3b8;
+  --fc-border-color: #334155;
+  --fc-button-text-color: #e2e8f0;
+  --fc-button-bg-color: #334155;
+  --fc-button-border-color: #475569;
+  --fc-button-hover-bg-color: #475569;
+  --fc-button-hover-border-color: #64748b;
+  --fc-button-active-bg-color: #2563eb;
+  --fc-button-active-border-color: #3b82f6;
+  --fc-today-bg-color: rgba(37, 99, 235, 0.08);
+  --fc-event-bg-color: #1e293b;
+  --fc-event-border-color: #334155;
+  --fc-event-text-color: #f1f5f9;
+  --fc-more-link-bg-color: #334155;
+  --fc-more-link-text-color: #94a3b8;
+  --fc-event-selected-overlay-color: rgba(0, 0, 0, 0.3);
+}
+
+.fc {
+  font-size: 0.875rem;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.fc .fc-button {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  box-shadow: none;
+}
+
+.fc .fc-daygrid-day-frame {
+  min-height: 80px;
+  cursor: pointer;
+}
+
+.fc .fc-daygrid-day-top {
+  padding: 2px 4px;
+}
+
+.fc .fc-daygrid-day-number {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  padding: 2px 4px;
+}
+
+.dark .fc .fc-daygrid-day-number {
+  color: #94a3b8;
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+  color: var(--color-primary);
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.1);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Event styling ────────────────────────────────────────────────────── */
+.fc .fc-daygrid-event {
+  border-radius: 0.25rem;
+  border-width: 1px;
+  padding: 0;
+  margin: 1px 2px;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.fc .fc-daygrid-event:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.fc .fc-daygrid-more-link {
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.fc .fc-daygrid-event-dot {
+  display: none;
+}
+
+.fc .fc-event-main {
+  padding: 0;
+}
+
+.fc-custom-event {
+  width: 100%;
+}
+
+/* ── Tooltip ───────────────────────────────────────────────────────────── */
+.wo-cal-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  max-width: 250px;
+  padding: 8px 12px;
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.dark .wo-cal-tooltip {
+  background: #0f172a;
+  border-color: #475569;
+}
+
+.wo-cal-tooltip .tip-title {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wo-cal-tooltip .tip-body div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wo-cal-tooltip .tip-body span {
+  color: #94a3b8;
+}
+
+.wo-cal-tooltip .tip-body strong {
+  color: #f1f5f9;
+  text-transform: capitalize;
+}
+
+/* ── Technician / Priority colour indicators ──────────────────────────── */
+.wo-assigned {
+  opacity: 1;
+}
+
+.wo-unassigned {
+  opacity: 0.6;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .fc .fc-toolbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .fc .fc-toolbar-title {
+    font-size: 1rem;
+  }
+  .fc .fc-button {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.5rem;
+  }
+  .fc .fc-daygrid-day-frame {
+    min-height: 60px;
+  }
+}

@@ -14,10 +14,11 @@ import { SavedViews } from '../components/ui/SavedViews';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { QuickFilters, useQuickFilter, type QuickFilterKey } from '../components/work-orders/QuickFilters';
 import { WOKanbanBoard } from '../components/work-orders/WOKanbanBoard';
+import { WorkOrderCalendar } from '../components/work-orders/WorkOrderCalendar';
 import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
   CheckSquare, Square, UserCheck, Trash2, Tags, ArrowUpDown,
-  Loader2, ChevronDown, User, AlertOctagon, LayoutGrid, List,
+  Loader2, ChevronDown, User, AlertOctagon, LayoutGrid, List, Calendar,
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -114,7 +115,7 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
 // Work Orders Page
 // ═══════════════════════════════════════════════════════════════════════
 
-type ViewMode = 'table' | 'kanban';
+type ViewMode = 'table' | 'kanban' | 'calendar';
 
 export const WorkOrders: React.FC = () => {
   const { t } = useTranslation();
@@ -253,6 +254,16 @@ export const WorkOrders: React.FC = () => {
   const handleKanbanStatusChange = useCallback(async (id: string, newStatus: string) => {
     await updateWorkOrder(id, { status: newStatus as WorkOrder['status'] });
   }, [updateWorkOrder]);
+
+  // ── Calendar date change handler (drag-and-drop) ─────────────────
+  const handleCalendarDateChange = useCallback(async (id: string, newDate: string) => {
+    await updateWorkOrder(id, { sla_deadline: newDate });
+  }, [updateWorkOrder]);
+
+  // ── Calendar date click handler (create WO on date) ──────────────
+  const handleCalendarDateClick = useCallback((date: Date) => {
+    setShowCreateModal(true);
+  }, []);
 
   // ── Table columns ────────────────────────────────────────────────
   const columns = [
@@ -401,7 +412,7 @@ export const WorkOrders: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{t('work_orders')}</h1>
         <div className="flex gap-3 items-center">
-          {/* View Toggle: Table ↔ Kanban */}
+          {/* View Toggle: Table ↔ Kanban ↔ Calendar */}
           <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
             <button
               onClick={() => setViewMode('table')}
@@ -428,6 +439,19 @@ export const WorkOrders: React.FC = () => {
               aria-pressed={viewMode === 'kanban'}
             >
               <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`p-2 transition-colors ${
+                viewMode === 'calendar'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+              }`}
+              title={t('calendar_view') || 'Calendar View'}
+              aria-label={t('calendar_view') || 'Calendar View'}
+              aria-pressed={viewMode === 'calendar'}
+            >
+              <Calendar size={18} />
             </button>
           </div>
 
@@ -512,12 +536,21 @@ export const WorkOrders: React.FC = () => {
             persistId="work-orders"
             bulkActions={bulkActions}
           />
-        ) : (
+        ) : viewMode === 'kanban' ? (
           <WOKanbanBoard
             workOrders={filtered}
             onStatusChange={handleKanbanStatusChange}
             onCardClick={(wo) => navigate(`/work-orders/${wo.id}`)}
             currentUserId={user?.id}
+          />
+        ) : (
+          <WorkOrderCalendar
+            workOrders={filtered}
+            technicians={technicians}
+            currentUserId={user?.id}
+            onDateChange={handleCalendarDateChange}
+            onEventClick={(wo) => navigate(`/work-orders/${wo.id}`)}
+            onDateClick={handleCalendarDateClick}
           />
         )}
       </Card>
