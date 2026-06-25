@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-// useAccessibility — WCAG 2.1 AA compliance hooks (UX-14.2.7)
+// useAccessibility — WCAG 2.1 AA compliance hooks (UX-14.2.7, UX-14.2.8)
 // ═══════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useCallback } from 'react';
@@ -75,24 +75,72 @@ export function announce(message: string, priority: 'polite' | 'assertive' = 'po
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// useFocusTrap — фокус-труппинг для модалок и панелей
+// useRestoreFocus — сохраняет и восстанавливает фокус при открытии/закрытии
+// UX-14.2.8: Focus Management — restore focus on close
 // ───────────────────────────────────────────────────────────────────────
-export function useFocusTrap(isActive: boolean) {
-    const containerRef = useRef<HTMLDivElement>(null);
+export function useRestoreFocus(isActive: boolean) {
     const previousFocusRef = useRef<HTMLElement | null>(null);
 
-    // Save and restore focus
     useEffect(() => {
         if (isActive) {
             previousFocusRef.current = document.activeElement as HTMLElement;
         } else if (previousFocusRef.current) {
+            const element = previousFocusRef.current;
+            previousFocusRef.current = null;
             // Restore focus after a microtask to let DOM settle
             requestAnimationFrame(() => {
-                previousFocusRef.current?.focus();
-                previousFocusRef.current = null;
+                element.focus({ preventScroll: true });
             });
         }
+
+        return () => {
+            // Cleanup: restore focus if component unmounts while active
+            if (!isActive && previousFocusRef.current) {
+                const element = previousFocusRef.current;
+                previousFocusRef.current = null;
+                requestAnimationFrame(() => {
+                    element.focus({ preventScroll: true });
+                });
+            }
+        };
     }, [isActive]);
+
+    return previousFocusRef;
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// useFocusTrap — фокус-труппинг для модалок и панелей
+// Tab/Shift+Tab цикл внутри контейнера
+// UX-14.2.8: Focus Management — focus trap with restore
+// ───────────────────────────────────────────────────────────────────────
+export function useFocusTrap(isActive: boolean, options?: { restoreFocus?: boolean }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const restoreFocus = options?.restoreFocus ?? true;
+    useRestoreFocus(restoreFocus ? isActive : false);
+
+    const focusFirstElement = useCallback(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const focusable = container.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+
+        if (focusable.length > 0) {
+            focusable[0].focus({ preventScroll: true });
+        } else {
+            container.setAttribute('tabindex', '-1');
+            container.focus({ preventScroll: true });
+        }
+    }, []);
+
+    // Auto-focus first element when trap activates
+    useEffect(() => {
+        if (isActive) {
+            // Small delay to ensure DOM is ready
+            requestAnimationFrame(focusFirstElement);
+        }
+    }, [isActive, focusFirstElement]);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
@@ -116,19 +164,55 @@ export function useFocusTrap(isActive: boolean) {
             if (e.shiftKey) {
                 if (document.activeElement === firstElement) {
                     e.preventDefault();
-                    lastElement.focus();
+                    lastElement.focus({ preventScroll: true });
                 }
             } else {
                 if (document.activeElement === lastElement) {
                     e.preventDefault();
-                    firstElement.focus();
+                    firstElement.focus({ preventScroll: true });
                 }
             }
         },
         [isActive]
     );
 
-    return { containerRef, handleKeyDown };
+    return { containerRef, handleKeyDown, focusFirstElement };
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// useTabIndex — управление tabIndex для элементов вне модалки
+// UX-14.2.8: Focus Management — disable tabIndex when modal is open
+// ───────────────────────────────────────────────────────────────────────
+export function useTabIndex(
+    isActive: boolean,
+    selector = 'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])'
+) {
+    const previousValuesRef = useRef<Map<Element, string | null>>(new Map());
+
+    useEffect(() => {
+        if (isActive) {
+            const elements = document.querySelectorAll<HTMLElement>(selector);
+            previousValuesRef.current = new Map();
+
+            elements.forEach((el) => {
+                // Save current tabindex
+                previousValuesRef.current.set(el, el.getAttribute('tabindex'));
+                el.setAttribute('tabindex', '-1');
+            });
+
+            return () => {
+                // Restore tabindex values
+                previousValuesRef.current.forEach((savedValue, el) => {
+                    if (savedValue === null) {
+                        el.removeAttribute('tabindex');
+                    } else {
+                        el.setAttribute('tabindex', savedValue);
+                    }
+                });
+                previousValuesRef.current.clear();
+            };
+        }
+    }, [isActive, selector]);
 }
 
 // ───────────────────────────────────────────────────────────────────────

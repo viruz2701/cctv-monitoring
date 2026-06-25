@@ -12,6 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useFocusTrap } from '../../hooks/useAccessibility';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
@@ -452,6 +453,9 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // UX-14.2.8: Focus trap when palette is open
+  const { containerRef: paletteRef, handleKeyDown: handleTrapKeyDown } = useFocusTrap(isOpen, { restoreFocus: true });
+
   // Filter commands based on fuzzy match
   const filtered = useMemo(() => {
     if (!query.trim()) {
@@ -557,10 +561,24 @@ export function CommandPalette() {
 
   const hasResults = flatItems.length > 0;
 
+  // UX-14.2.8: Combine palette keyboard handler with focus trap handler
+  const combinedKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        handleTrapKeyDown(e);
+        return;
+      }
+      handleKeyDown(e);
+    },
+    [handleTrapKeyDown, handleKeyDown]
+  );
+
   return createPortal(
     <div
+      ref={paletteRef}
+      tabIndex={-1}
       className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
-      onKeyDown={handleKeyDown}
+      onKeyDown={combinedKeyDown}
     >
       {/* Backdrop */}
       <div

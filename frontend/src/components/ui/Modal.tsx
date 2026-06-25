@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { useFocusTrap } from '../../hooks/useAccessibility';
+import { useFocusTrap, useTabIndex } from '../../hooks/useAccessibility';
 
 interface ModalProps {
     isOpen: boolean;
@@ -31,10 +31,12 @@ export function Modal({
     footer,
 }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
-    const previousFocusRef = useRef<HTMLElement | null>(null);
 
-    // WCAG 2.1 AA: Improved focus trap with restore (UX-14.2.7)
+    // UX-14.2.8: Focus trap with Tab/Shift+Tab cycle + auto-restore on close
     const { containerRef: modalRef, handleKeyDown } = useFocusTrap(isOpen);
+
+    // UX-14.2.8: Disable tabIndex for elements outside modal
+    useTabIndex(isOpen);
 
     // Close on escape key
     useEffect(() => {
@@ -52,35 +54,14 @@ export function Modal({
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = 'hidden';
-            // Save current focus for restoration
-            previousFocusRef.current = document.activeElement as HTMLElement;
         } else {
             document.body.style.overflow = '';
-            // WCAG 2.1 AA: Return focus after close (UX-14.2.7)
-            requestAnimationFrame(() => {
-                previousFocusRef.current?.focus();
-                previousFocusRef.current = null;
-            });
         }
 
         return () => {
             document.body.style.overflow = '';
         };
     }, [isOpen]);
-
-    // Focus first focusable element inside modal on open
-    useEffect(() => {
-        if (isOpen && modalRef.current) {
-            const focusable = modalRef.current.querySelector<HTMLElement>(
-                'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            );
-            if (focusable) {
-                focusable.focus();
-            } else {
-                modalRef.current.focus();
-            }
-        }
-    }, [isOpen, modalRef]);
 
     if (!isOpen) return null;
 
