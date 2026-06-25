@@ -16,6 +16,11 @@ func (s *Server) mountIntegrationRoutes(r chi.Router) {
 	r.Post("/api/v1/atlas/sync-asset/{deviceId}", s.atlasSyncAsset)
 }
 
+// mountGraphQLRoute регистрирует GraphQL read-only endpoint (INT-13.2.4).
+func (s *Server) mountGraphQLRoute(r chi.Router) {
+	r.Post("/api/v1/graphql", s.handleGraphQL)
+}
+
 // mountWebhookRoutes регистрирует ITSM webhook-эндпоинты (rate-limited, HMAC).
 func (s *Server) mountWebhookRoutes(r chi.Router) {
 	if s.syncEngine == nil {

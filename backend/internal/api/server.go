@@ -224,6 +224,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// Feature Flag domain (F-0.2.4)
 		s.mountFeatureFlagRoutes(r)
+
+		// GraphQL read-only endpoint (INT-13.2.4)
+		s.mountGraphQLRoute(r)
 	})
 
 	// ── External API key auth ────────────────────────────────────────
