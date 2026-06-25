@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
-import { Button, Modal, Input, Badge, useToast } from '../components/ui';
+import { Button, Modal, Input, Badge, useToast, EmptyState } from '../components/ui';
 import { Plus, Trash2, Copy, Key, Calendar, Shield } from 'lucide-react';
 
 interface APIKey {
@@ -101,12 +101,18 @@ export function APIKeys() {
                     <p className="mt-4 text-slate-500 dark:text-slate-400">{t('loading')}</p>
                 </div>
             ) : keys.length === 0 ? (
-                <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <Key className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
-                    <p className="mt-4 text-slate-500 dark:text-slate-400">{t('no_api_keys')}</p>
-                    <Button onClick={() => setShowCreateModal(true)} className="mt-4" icon={<Plus className="w-4 h-4" />}>
-                        {t('create_first_key')}
-                    </Button>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <EmptyState
+                        icon={<Key className="w-12 h-12" />}
+                        title={t('no_api_keys') || 'No API keys'}
+                        description={t('api_keys_empty_desc') || 'Create API keys to integrate CCTV Monitor with your external tools and automations'}
+                        hint={t('api_keys_hint') || 'Keys support granular permissions and expiration dates'}
+                        action={{
+                            label: t('create_first_key') || 'Create Key',
+                            onClick: () => setShowCreateModal(true),
+                        }}
+                        size="md"
+                    />
                 </div>
             ) : (
                 <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">

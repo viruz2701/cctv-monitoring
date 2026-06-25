@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, WebhookEndpoint } from '../services/api';
-import { Card, Button, Badge, Input, Modal, useToast } from '../components/ui';
+import { Card, Button, Badge, Input, Modal, useToast, EmptyState } from '../components/ui';
 import {
   Webhook, Plus, Trash2, Play, RefreshCw,
   CheckCircle, XCircle, Clock, AlertTriangle,
@@ -130,10 +130,15 @@ export function Webhooks() {
           <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
         </div>
       ) : webhooks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 bg-white rounded-xl border border-slate-200">
-          <Webhook className="w-12 h-12 text-slate-300 mb-4" />
-          <p className="text-sm text-slate-500">{t('no_webhooks') || 'Нет вебхуков'}</p>
-          <Button onClick={openCreate} className="mt-4">{t('create_first_webhook') || 'Создать'}</Button>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+          <EmptyState
+            icon={<Webhook className="w-12 h-12" />}
+            title={t('no_webhooks') || 'No webhooks'}
+            description={t('webhooks_empty_desc') || 'Configure webhooks to receive real-time events from CCTV Monitor in your external systems'}
+            hint={t('webhooks_hint') || 'Supports work order, alarm, device, and SLA events'}
+            action={{ label: t('create_webhook') || 'Create Webhook', onClick: openCreate }}
+            size="md"
+          />
         </div>
       ) : (
         <div className="space-y-3">

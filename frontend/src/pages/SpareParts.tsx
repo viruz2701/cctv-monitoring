@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpareParts } from '../context/SparePartsContext';
-import { Button, PartCard, Modal, Input, Badge, useToast } from '../components/ui';
+import { Button, PartCard, Modal, Input, Badge, useToast, EmptyState } from '../components/ui';
 import { Plus, Search, AlertTriangle, RefreshCw, ShoppingCart, Tag, Edit, Trash2 } from 'lucide-react';
 
 const CATEGORY_COLORS = [
@@ -137,8 +137,18 @@ export const SpareParts: React.FC = () => {
             );
           })}
           {filtered.length === 0 && (
-            <div className="col-span-full text-center py-12 text-slate-500 dark:text-slate-400">
-              {search ? 'No parts match your search' : t('no_parts')}
+            <div className="col-span-full">
+              <EmptyState
+                icon={search ? <Search className="w-12 h-12" /> : <ShoppingCart className="w-12 h-12" />}
+                title={search ? (t('no_search_results') || 'No results') : (t('no_parts') || 'No spare parts')}
+                description={search ? (t('try_different_search') || 'Try a different search term') : (t('add_first_part_desc') || 'Add your first spare part to start tracking inventory')}
+                hint={search ? undefined : (t('spare_parts_hint') || 'Track stock levels, reorder points, and costs')}
+                action={search ? undefined : {
+                  label: t('add_part') || 'Add Part',
+                  onClick: () => setShowCreateModal(true),
+                }}
+                size="md"
+              />
             </div>
           )}
         </div>

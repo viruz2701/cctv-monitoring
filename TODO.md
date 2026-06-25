@@ -141,6 +141,7 @@ Onboarding Tour
 4
 react-joyride для новых пользователей
 -50% time-to-value
+✅ DONE (commit b9d5b08)
 UX-14.1.7
 Empty States с CTA
 3
@@ -335,6 +336,7 @@ UX
 Onboarding Tour
 4
 ⚡ -50% time-to-value
+✅ DONE (commit b9d5b08)
 UX-14.1.7
 UX
 Empty States с CTA
