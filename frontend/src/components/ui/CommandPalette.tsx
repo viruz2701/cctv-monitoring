@@ -372,6 +372,15 @@ const ALL_COMMANDS: CommandItem[] = [
     icon: Ticket,
     keywords: ['support', 'help', 'issue', 'request'],
   },
+  {
+    id: 'compliance-shield',
+    label: 'Compliance Shield',
+    description: 'Compliance & Fines risk assessment',
+    path: '/compliance-shield',
+    category: 'analytics',
+    icon: Shield,
+    keywords: ['compliance', 'fines', 'risk', 'shield', 'exposure', 'downtime', 'financial'],
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════

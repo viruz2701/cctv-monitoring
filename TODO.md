@@ -147,6 +147,7 @@ Empty States с CTA
 3
 Illustrative empty states во всех списках
 +30% conversion
+✅ DONE (commit c8d3b0c)
 UX-14.1.8
 Keyboard Shortcuts
 3
@@ -342,6 +343,7 @@ UX
 Empty States с CTA
 3
 ⚡ +30% conversion
+✅ DONE (commit c8d3b0c)
 KF-15.1.1
 Killer
 Compliance & Fines Shield
@@ -367,6 +369,7 @@ CCTV Core
 XGBoost Failure Prediction
 4
 🧠 AI
+✅ DONE (pre-existing — Python XGBoost pipeline + Go API + TimescaleDB)
 Итого P0: ~70 SP
 🟠 P1 / HIGH (Q4 2026)
 ID

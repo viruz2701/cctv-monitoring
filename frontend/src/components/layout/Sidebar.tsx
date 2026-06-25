@@ -54,6 +54,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/manager-dashboard', label: t('manager_dashboard') || 'Manager Dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'] },
         { path: '/cost-dashboard', label: t('cost_dashboard') || 'Cost Dashboard', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/vendor-performance', label: t('vendor_performance') || 'Vendors', icon: Truck, roles: ['admin', 'manager'] },
+        { path: '/compliance-shield', label: t('compliance_shield') || 'Compliance Shield', icon: Shield, roles: ['admin', 'manager'] },
         { path: '/sla', label: t('sla') || 'SLA', icon: TrendingUp, roles: ['admin', 'manager'] },
         { path: '/maintenance-reports', label: t('maintenance_reports') || 'Maintenance Reports', icon: FileText, roles: ['admin', 'manager'] },
         { path: '/executive-dashboard', label: t('executive_dashboard') || 'Executive', icon: BarChart3, roles: ['admin', 'manager'] },

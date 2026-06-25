@@ -16,12 +16,13 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"gb-telemetry-collector/internal/audit"
-	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/cmms/factory"
+	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/service"
@@ -83,6 +84,9 @@ type Server struct {
 
 	// RCA Engine (CCTV-2.1.3, AI-01)
 	rcaEngine *rca.RCAEngine
+
+	// Compliance Engine (KF-15.1.1)
+	complianceEngine *compliance.Engine
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -190,6 +194,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Device Service ────────────────────────────────────────────────
 	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
 
+	// ── Compliance Engine (KF-15.1.1) ─────────────────────────────────
+	s.complianceEngine = compliance.NewEngine(nil, logger, nil)
+
 	go s.wsHub.Run()
 
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
@@ -236,6 +243,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// Feature Flag domain (F-0.2.4)
 		s.mountFeatureFlagRoutes(r)
+
+		// Compliance & Fines Shield (KF-15.1.1)
+		s.mountComplianceRoutes(r)
 
 		// GraphQL read-only endpoint (INT-13.2.4)
 		s.mountGraphQLRoute(r)

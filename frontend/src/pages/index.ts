@@ -24,4 +24,4 @@ export * from './Profile';
 export * from './AuditLog';
 export * from './Notifications';
 export * from './WorkOrderDetail';
-
+export { ComplianceShield } from './ComplianceShield';
