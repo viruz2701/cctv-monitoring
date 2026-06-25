@@ -30,7 +30,7 @@ import {
     HelpCircle,
     AlertTriangle,
 } from 'lucide-react';
-import { api, type DeviceDetectionResult, type CapacityResult } from '../../services/api';
+import { api, type DeviceDetectionResult, type CapacityResult, type CameraSpec, type CameraModelSummary } from '../../services/api';
 import { workOrdersApi } from '../../services/workOrdersApi';
 import { useSites } from '../../hooks/useApiQuery';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -52,6 +52,11 @@ interface WizardState {
     detection: DeviceDetectionResult | null;
     detectionLoading: boolean;
     detectionError: string | null;
+    // Step 1 — camera specs search (P0-9)
+    cameraSearchQuery: string;
+    cameraSearchResults: CameraModelSummary[];
+    cameraSearchLoading: boolean;
+    selectedCameraSpec: CameraSpec | null;
     // Step 2
     compatibilityChecked: boolean;
     // Step 3 — capacity
@@ -78,6 +83,11 @@ const defaultWizardState = (): WizardState => ({
     detection: null,
     detectionLoading: false,
     detectionError: null,
+    // Camera specs search (P0-9)
+    cameraSearchQuery: '',
+    cameraSearchResults: [],
+    cameraSearchLoading: false,
+    selectedCameraSpec: null,
     compatibilityChecked: false,
     resolution: '1080p',
     fps: 30,
@@ -188,6 +198,41 @@ export function DeviceWizard({ onClose, onComplete }: DeviceWizardProps) {
             });
         }
     }, [wizard.ipOrDomain, wizard.username, wizard.password, update]);
+
+    // ── Camera Specs Search (P0-9) ────────────────────────────────────
+
+    const handleCameraSearch = useCallback(async () => {
+        const q = wizard.cameraSearchQuery.trim();
+        if (q.length < 2) return;
+        update({ cameraSearchLoading: true });
+
+        try {
+            const result = await api.searchCameraModels(q);
+            update({
+                cameraSearchResults: result.models,
+                cameraSearchLoading: false,
+            });
+        } catch {
+            update({ cameraSearchLoading: false });
+        }
+    }, [wizard.cameraSearchQuery, update]);
+
+    const handleSelectCameraModel = useCallback(async (brand: string, model: string) => {
+        try {
+            const spec = await api.getCameraSpecs(brand, model);
+            update({
+                selectedCameraSpec: spec,
+                cameraSearchQuery: `${brand} ${model}`,
+                cameraSearchResults: [],
+                // Auto-fill capacity params from specs
+                resolution: spec.resolution || '1080p',
+                fps: spec.max_fps || 30,
+                poeWattage: spec.power_watts || 12.95,
+            });
+        } catch {
+            // Silently fail — user can still use manual entry
+        }
+    }, [update]);
 
     // ── Step 2: Compatibility Check ──────────────────────────────────
 
@@ -417,6 +462,131 @@ export function DeviceWizard({ onClose, onComplete }: DeviceWizardProps) {
                     </div>
                 </div>
             )}
+
+            {/* ── Camera Specs Search (P0-9) ────────────────────────── */}
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-5 mt-5">
+                <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 mb-4">
+                    <Monitor className="w-5 h-5 text-slate-600 dark:text-slate-400 mt-0.5 shrink-0" />
+                    <div className="text-sm text-slate-700 dark:text-slate-300">
+                        <p className="font-medium mb-1">Camera Database</p>
+                        <p className="text-slate-500 dark:text-slate-400">
+                            Search our camera specs database to auto-fill resolution, PoE, and protocol info.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex gap-2">
+                    <div className="flex-1">
+                        <Input
+                            value={wizard.cameraSearchQuery}
+                            onChange={(e) => update({ cameraSearchQuery: e.target.value })}
+                            placeholder="Search by brand or model (e.g. Hikvision DS-2CD)"
+                            onKeyDown={(e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') handleCameraSearch();
+                            }}
+                        />
+                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={handleCameraSearch}
+                        disabled={wizard.cameraSearchQuery.trim().length < 2 || wizard.cameraSearchLoading}
+                        icon={wizard.cameraSearchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    >
+                        Search
+                    </Button>
+                </div>
+
+                {/* Search results */}
+                {wizard.cameraSearchResults.length > 0 && (
+                    <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                        {wizard.cameraSearchResults.map((cm) => (
+                            <button
+                                key={cm.id}
+                                type="button"
+                                onClick={() => handleSelectCameraModel(cm.brand, cm.model)}
+                                className={`w-full text-left p-3 rounded-lg border text-sm transition-colors ${
+                                    wizard.selectedCameraSpec?.brand === cm.brand && wizard.selectedCameraSpec?.model === cm.model
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <span className="font-medium text-slate-900 dark:text-white">{cm.brand}</span>
+                                        <span className="text-slate-500 mx-1">/</span>
+                                        <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{cm.model}</span>
+                                    </div>
+                                    <div className="flex gap-2 text-xs">
+                                        {cm.type && (
+                                            <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-400 capitalize">
+                                                {cm.type}
+                                            </span>
+                                        )}
+                                        {cm.resolution && (
+                                            <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 rounded text-indigo-600 dark:text-indigo-400">
+                                                {cm.resolution}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {wizard.cameraSearchLoading && (
+                    <div className="flex items-center gap-2 mt-3 text-sm text-slate-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Searching...
+                    </div>
+                )}
+
+                {/* Selected camera spec details */}
+                {wizard.selectedCameraSpec && (
+                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-sm font-medium mb-3">
+                            <CheckCircle className="w-4 h-4" />
+                            Selected: {wizard.selectedCameraSpec.brand} {wizard.selectedCameraSpec.model}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+                            {wizard.selectedCameraSpec.type && (
+                                <div><span className="text-slate-500">Type:</span> <span className="font-medium text-slate-700 dark:text-slate-300 capitalize">{wizard.selectedCameraSpec.type}</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.resolution && (
+                                <div><span className="text-slate-500">Resolution:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.resolution}</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.max_fps && (
+                                <div><span className="text-slate-500">Max FPS:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.max_fps}</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.lens_mm && (
+                                <div><span className="text-slate-500">Lens:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.lens_mm}</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.poe_class && (
+                                <div><span className="text-slate-500">PoE:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.poe_class} ({wizard.selectedCameraSpec.power_watts}W)</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.infrared !== undefined && (
+                                <div><span className="text-slate-500">IR:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.infrared ? 'Yes' : 'No'}</span></div>
+                            )}
+                            {wizard.selectedCameraSpec.protocols && wizard.selectedCameraSpec.protocols.length > 0 && (
+                                <div className="col-span-full">
+                                    <span className="text-slate-500">Protocols:</span>{' '}
+                                    {wizard.selectedCameraSpec.protocols.map((p) => (
+                                        <span key={p} className="inline-block px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-[10px] font-medium mr-1">
+                                            {p}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {wizard.selectedCameraSpec.outdoor_rating && (
+                                <div><span className="text-slate-500">Rating:</span> <span className="font-medium text-slate-700 dark:text-slate-300">{wizard.selectedCameraSpec.outdoor_rating}</span></div>
+                            )}
+                        </div>
+                        <div className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400">
+                            ✓ Capacity params auto-filled from specs
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 

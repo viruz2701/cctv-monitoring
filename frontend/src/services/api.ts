@@ -431,6 +431,45 @@ export interface DashboardStats {
     avg_response_time_hours: number;
 }
 
+// ─── Camera Specs Types (P0-9) ─────────────────────────────────────────
+
+export interface CameraSpec {
+    id: number;
+    brand: string;
+    model: string;
+    type?: string;
+    resolution?: string;
+    max_fps?: number;
+    lens_mm?: string;
+    infrared?: boolean;
+    poe?: boolean;
+    poe_class?: string;
+    power_watts?: number;
+    storage_days_estimate?: number;
+    bandwidth_mbps?: number;
+    protocols?: string[];
+    onvif_profile?: string;
+    audio_support?: boolean;
+    outdoor_rating?: string;
+    weight_grams?: number;
+    dimensions?: string;
+    notes?: string;
+    created_at: string;
+}
+
+export interface CameraBrand {
+    brand: string;
+    count: number;
+}
+
+export interface CameraModelSummary {
+    id: number;
+    brand: string;
+    model: string;
+    type?: string;
+    resolution?: string;
+}
+
 // ─── API Methods ──────────────────────────────────────────────────────
 
 export const api = {
@@ -1067,5 +1106,42 @@ export const api = {
         blast_radius: number;
     }> {
         return request(`/rca/${deviceId}`);
+    },
+
+    // ── Camera Specs Database (P0-9) ──────────────────────────────────
+
+    async listCameraBrands(): Promise<{ brands: CameraBrand[] }> {
+        return request<{ brands: CameraBrand[] }>('/camera-models/brands');
+    },
+
+    async listCameraModels(brand: string): Promise<{ brand: string; models: CameraModelSummary[] }> {
+        return request<{ brand: string; models: CameraModelSummary[] }>(
+            `/camera-models/models?brand=${encodeURIComponent(brand)}`
+        );
+    },
+
+    async searchCameraModels(query: string): Promise<{ query: string; models: CameraModelSummary[] }> {
+        return request<{ query: string; models: CameraModelSummary[] }>(
+            `/camera-models/search?q=${encodeURIComponent(query)}`
+        );
+    },
+
+    async getCameraSpecs(brand: string, model: string): Promise<CameraSpec> {
+        return request<CameraSpec>(
+            `/camera-models/${encodeURIComponent(brand)}/${encodeURIComponent(model)}`
+        );
+    },
+
+    async importCameraSpecs(data: CameraSpec[]): Promise<{ message: string; inserted: number; updated: number; skipped: number; errors: number }> {
+        return request('/camera-models/import', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async seedCameraSpecs(): Promise<{ message: string }> {
+        return request('/camera-models/seed', {
+            method: 'POST',
+        });
     },
 };

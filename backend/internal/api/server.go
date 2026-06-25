@@ -279,6 +279,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		// Feature Flag domain (F-0.2.4)
 		s.mountFeatureFlagRoutes(r)
 
+		// Camera Specs Database (P0-9)
+		s.mountCameraModelRoutes(r)
+
 		// Compliance & Fines Shield (KF-15.1.1)
 		s.mountComplianceRoutes(r)
 
