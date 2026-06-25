@@ -9,14 +9,15 @@ import { useUsers } from '../context/UsersContext';
 import { useAuth } from '../hooks/useAuth';
 import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
-import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable } from '../components/ui';
+import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable, DataGrid } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
 import { useConfirmAction } from '../hooks/useConfirmAction';
-import { VirtualTable } from '../components/ui/VirtualTable';
+import { QuickFilters, useQuickFilter, type QuickFilterKey } from '../components/work-orders/QuickFilters';
+import { WOKanbanBoard } from '../components/work-orders/WOKanbanBoard';
 import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
   CheckSquare, Square, UserCheck, Trash2, Tags, ArrowUpDown,
-  Loader2, ChevronDown, User, AlertOctagon,
+  Loader2, ChevronDown, User, AlertOctagon, LayoutGrid, List,
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -40,7 +41,6 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
   const [saving, setSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close on click outside or Escape
   useEffect(() => {
     if (!editing) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -51,7 +51,6 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setEditing(false);
     };
-    // Small delay to prevent immediate close from the click that opened it
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);
@@ -112,122 +111,10 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// Bulk Action Bar Component (WO-4.2.1)
-// ═══════════════════════════════════════════════════════════════════════
-
-interface BulkActionBarProps {
-  selectedCount: number;
-  onClear: () => void;
-  onAction: (action: BulkActionType, value?: string) => Promise<void>;
-  loading: boolean;
-}
-
-const BulkActionBar: React.FC<BulkActionBarProps> = ({ selectedCount, onClear, onAction, loading }) => {
-  const { t } = useTranslation();
-  const [showActions, setShowActions] = useState(false);
-  const [statusValue, setStatusValue] = useState('');
-  const [priorityValue, setPriorityValue] = useState('');
-
-  const handleAction = async (action: BulkActionType, value?: string) => {
-    await onAction(action, value);
-    setShowActions(false);
-    setStatusValue('');
-    setPriorityValue('');
-  };
-
-  if (selectedCount === 0) return null;
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-4 animate-fadeIn">
-      <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
-        <CheckSquare size={16} />
-        <span>{t('selected_count', { count: selectedCount })}</span>
-      </div>
-
-      <div className="h-5 w-px bg-blue-200 dark:bg-blue-700" />
-
-      {loading ? (
-        <Loader2 size={16} className="animate-spin text-blue-600" />
-      ) : (
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Bulk Status Change */}
-          <div className="flex items-center gap-1">
-            <select
-              value={statusValue}
-              onChange={(e) => {
-                setStatusValue(e.target.value);
-                if (e.target.value) handleAction('status_change', e.target.value);
-              }}
-              className="text-xs border rounded px-2 py-1.5 dark:bg-slate-800 dark:border-slate-600"
-            >
-              <option value="">{t('change_status')}</option>
-              <option value="open">{t('open')}</option>
-              <option value="in_progress">{t('in_progress')}</option>
-              <option value="completed">{t('completed')}</option>
-              <option value="cancelled">{t('cancelled')}</option>
-              <option value="on_hold">{t('on_hold')}</option>
-            </select>
-          </div>
-
-          {/* Bulk Priority Change */}
-          <div className="flex items-center gap-1">
-            <select
-              value={priorityValue}
-              onChange={(e) => {
-                setPriorityValue(e.target.value);
-                if (e.target.value) handleAction('priority_change', e.target.value);
-              }}
-              className="text-xs border rounded px-2 py-1.5 dark:bg-slate-800 dark:border-slate-600"
-            >
-              <option value="">{t('change_priority')}</option>
-              <option value="critical">{t('critical')}</option>
-              <option value="high">{t('high')}</option>
-              <option value="medium">{t('medium')}</option>
-              <option value="low">{t('low')}</option>
-            </select>
-          </div>
-
-          {/* Bulk Assign */}
-          <Button
-            size="sm"
-            variant="secondary"
-            icon={<UserCheck size={14} />}
-            onClick={() => handleAction('assign', '')}
-            title={t('bulk_assign')}
-          >
-            {t('assign')}
-          </Button>
-
-          {/* Bulk Delete */}
-          <Button
-            size="sm"
-            variant="danger"
-            icon={<Trash2 size={14} />}
-            onClick={() => handleAction('delete')}
-            title={t('bulk_delete')}
-          >
-            {t('delete')}
-          </Button>
-        </div>
-      )}
-
-      <div className="ml-auto">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onClear}
-          icon={<XCircle size={14} />}
-        >
-          {t('clear_selection')}
-        </Button>
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════
 // Work Orders Page
 // ═══════════════════════════════════════════════════════════════════════
+
+type ViewMode = 'table' | 'kanban';
 
 export const WorkOrders: React.FC = () => {
   const { t } = useTranslation();
@@ -242,15 +129,18 @@ export const WorkOrders: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [quickFilter, setQuickFilter] = useState<'all' | 'mine' | 'overdue' | 'critical'>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+
+  // Quick filter synced with URL
+  const [quickFilter, setQuickFilter] = useQuickFilter();
 
   // UX-14.3.2: Apply saved view
   const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
     const filters = view.filters;
     if (filters.filterStatus !== undefined) setFilterStatus(filters.filterStatus);
     if (filters.filterPriority !== undefined) setFilterPriority(filters.filterPriority);
-    if (filters.quickFilter) setQuickFilter(filters.quickFilter as 'all' | 'mine' | 'overdue' | 'critical');
-  }, []);
+    if (filters.quickFilter) setQuickFilter(filters.quickFilter as QuickFilterKey);
+  }, [setQuickFilter]);
 
   const technicians = users.filter(u => u.role === 'technician');
 
@@ -262,6 +152,7 @@ export const WorkOrders: React.FC = () => {
       const isOverdue = wo.sla_deadline && new Date(wo.sla_deadline) < new Date();
       if (!notFinished || !isOverdue) return false;
     }
+    if (quickFilter === 'unassigned' && wo.assigned_to) return false;
     if (quickFilter === 'critical' && wo.priority !== 'critical') return false;
 
     // Dropdown filters
@@ -304,7 +195,6 @@ export const WorkOrders: React.FC = () => {
   const handleBulkAction = useCallback(async (action: BulkActionType, value?: string) => {
     if (selectedIds.size === 0) return;
 
-    // UX-14.1.10: Confirm bulk delete
     if (action === 'delete') {
       const ok = await confirm({
         title: t('bulk_delete_title') || 'Delete Work Orders',
@@ -331,6 +221,40 @@ export const WorkOrders: React.FC = () => {
     }
   }, [selectedIds, bulkActionWorkOrders, confirm, t]);
 
+  // ── Bulk Actions for DataGrid ────────────────────────────────────
+  const bulkActions = [
+    {
+      label: t('assign') || 'Assign',
+      icon: <UserCheck size={14} />,
+      variant: 'primary' as const,
+      onClick: (items: WorkOrder[]) => {
+        handleBulkAction('assign', '');
+      },
+    },
+    {
+      label: t('change_priority') || 'Priority',
+      icon: <Tags size={14} />,
+      variant: 'secondary' as const,
+      onClick: (items: WorkOrder[]) => {
+        handleBulkAction('status_change', '');
+      },
+    },
+    {
+      label: t('delete') || 'Cancel',
+      icon: <Trash2 size={14} />,
+      variant: 'danger' as const,
+      onClick: (items: WorkOrder[]) => {
+        handleBulkAction('delete');
+      },
+    },
+  ];
+
+  // ── Kanban status change handler ─────────────────────────────────
+  const handleKanbanStatusChange = useCallback(async (id: string, newStatus: string) => {
+    await updateWorkOrder(id, { status: newStatus as WorkOrder['status'] });
+  }, [updateWorkOrder]);
+
+  // ── Table columns ────────────────────────────────────────────────
   const columns = [
     {
       key: 'device_name',
@@ -477,6 +401,36 @@ export const WorkOrders: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{t('work_orders')}</h1>
         <div className="flex gap-3 items-center">
+          {/* View Toggle: Table ↔ Kanban */}
+          <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+              }`}
+              title={t('table_view') || 'Table View'}
+              aria-label={t('table_view') || 'Table View'}
+              aria-pressed={viewMode === 'table'}
+            >
+              <List size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`p-2 transition-colors ${
+                viewMode === 'kanban'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+              }`}
+              title={t('kanban_view') || 'Kanban View'}
+              aria-label={t('kanban_view') || 'Kanban View'}
+              aria-pressed={viewMode === 'kanban'}
+            >
+              <LayoutGrid size={18} />
+            </button>
+          </div>
+
           <SavedViews
             page="work-orders"
             currentFilterState={{
@@ -502,44 +456,18 @@ export const WorkOrders: React.FC = () => {
           </div>
         )}
 
-        {/* Bulk Action Bar */}
-        <BulkActionBar
-          selectedCount={selectedIds.size}
-          onClear={() => setSelectedIds(new Set())}
-          onAction={handleBulkAction}
-          loading={bulkLoading}
-        />
-
         {/* Quick Filters (WO-4.2.2) */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-1">
-            {t('quick_filters')}:
-          </span>
-          {([
-            { key: 'all', label: t('all'), icon: null },
-            { key: 'mine', label: t('my_work_orders'), icon: <User size={14} /> },
-            { key: 'overdue', label: t('overdue'), icon: <Clock size={14} /> },
-            { key: 'critical', label: t('critical'), icon: <AlertOctagon size={14} /> },
-          ] as const).map(({ key, label, icon }) => (
-            <button
-              key={key}
-              onClick={() => {
-                setQuickFilter(key);
-                // Сбрасываем dropdown фильтры при переключении quick filter
-                setFilterStatus('');
-                setFilterPriority('');
-              }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                quickFilter === key
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'
-              }`}
-            >
-              {icon}
-              {label}
-            </button>
-          ))}
-        </div>
+        <QuickFilters
+          workOrders={workOrders}
+          activeFilter={quickFilter}
+          currentUserId={user?.id}
+          onChange={(filter) => {
+            setQuickFilter(filter);
+            setFilterStatus('');
+            setFilterPriority('');
+          }}
+          className="mb-4"
+        />
 
         {/* Filters */}
         <div className="flex gap-4 mb-4">
@@ -567,19 +495,31 @@ export const WorkOrders: React.FC = () => {
           </select>
         </div>
 
-        <VirtualTable
-          data={filtered}
-          columns={columns}
-          keyExtractor={(item: WorkOrder) => item.id}
-          loading={loading}
-          emptyMessage={t('no_work_orders')}
-          exportFilename="work-orders.csv"
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={(ids: Set<string>) => setSelectedIds(ids)}
-          onRowClick={(item: WorkOrder) => navigate(`/work-orders/${item.id}`)}
-          maxHeight={650}
-        />
+        {/* Table / Kanban View */}
+        {viewMode === 'table' ? (
+          <DataGrid
+            data={filtered}
+            columns={columns}
+            keyExtractor={(item: WorkOrder) => item.id}
+            loading={loading}
+            emptyMessage={t('no_work_orders')}
+            exportFilename="work-orders.csv"
+            selectable
+            selectedIds={selectedIds}
+            onSelectionChange={(ids: Set<string>) => setSelectedIds(ids)}
+            onRowClick={(item: WorkOrder) => navigate(`/work-orders/${item.id}`)}
+            stickyHeader
+            persistId="work-orders"
+            bulkActions={bulkActions}
+          />
+        ) : (
+          <WOKanbanBoard
+            workOrders={filtered}
+            onStatusChange={handleKanbanStatusChange}
+            onCardClick={(wo) => navigate(`/work-orders/${wo.id}`)}
+            currentUserId={user?.id}
+          />
+        )}
       </Card>
 
       <Modal
@@ -606,26 +546,20 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const { users } = useUsers();
   const technicians = users.filter(u => u.role === 'technician');
 
-  // Zod валидация для формы создания work order
   const { errors: woErrors, validate: validateWO, validateField: validateWOField, touched: woTouched, reset: resetWOValidation } = useFormValidation(workOrderSchema);
 
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState('');
 
-  // WO-4.2.4: Auto-assign technician when site is selected
-  // При выборе сайта пытаемся подтянуть закрепленного техника
   useEffect(() => {
     if (selectedSiteId && technicians.length > 0) {
-      // Если техник уже выбран и сайт не менялся — не сбрасываем
-      // Иначе пытаемся найти подходящего техника
-      // В реальной системе здесь должен быть запрос к TechnicianSiteAssignments API
-      // Пока используем fallback: первый техник в списке
       setSelectedTechnicianId(technicians[0].id);
     } else {
       setSelectedTechnicianId('');
     }
   }, [selectedSiteId, technicians]);
+
   const [formData, setFormData] = useState({
     type: 'corrective' as 'preventive' | 'corrective' | 'emergency',
     priority: 'medium' as 'critical' | 'high' | 'medium' | 'low',
@@ -643,7 +577,6 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       return;
     }
 
-    // Валидация полей, которые есть в форме (deviceId, type, priority, assignedTo)
     const validationData = {
       title: formData.notes || 'Work Order',
       description: formData.notes || 'Work order description',
@@ -673,7 +606,6 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Site select */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('site') || 'Site'}</label>
         <select value={selectedSiteId} onChange={e => { setSelectedSiteId(e.target.value); setSelectedDeviceId(''); }}
@@ -683,7 +615,6 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         </select>
       </div>
 
-      {/* Device select */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('device') || 'Device'}</label>
         <select
@@ -711,7 +642,6 @@ const CreateWorkOrderForm: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         )}
       </div>
 
-      {/* Technician select */}
       <div>
         <label className="block text-sm font-medium mb-1">{t('assigned_to') || 'Assigned to'}</label>
         <select value={selectedTechnicianId} onChange={e => setSelectedTechnicianId(e.target.value)}

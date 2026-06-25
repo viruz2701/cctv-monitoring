@@ -79,6 +79,13 @@ const variantStyles: Record<DataGridVariant, {
   },
 };
 
+interface BulkAction<T> {
+  label: string;
+  icon?: React.ReactNode;
+  variant?: 'primary' | 'secondary' | 'danger';
+  onClick: (selectedItems: T[]) => void;
+}
+
 interface DataGridProps<T> {
   data: T[];
   columns: Column<T>[];
@@ -96,6 +103,8 @@ interface DataGridProps<T> {
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
   toolbar?: React.ReactNode;
+  /** Bulk action buttons shown when items are selected */
+  bulkActions?: BulkAction<T>[];
   pageSize?: number;
   defaultDensity?: DensityMode;
   variant?: DataGridVariant;
@@ -130,6 +139,7 @@ export function DataGrid<T>({
   selectedIds,
   onSelectionChange,
   toolbar,
+  bulkActions,
   pageSize,
   defaultDensity = 'standard',
   variant = 'default',
@@ -576,6 +586,48 @@ export function DataGrid<T>({
                 <RotateCcw size={12} />
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk Action Bar ────────────────────────────────────────── */}
+      {selectable && selectedIds && selectedIds.size > 0 && bulkActions && bulkActions.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-300">
+            <CheckSquare size={16} />
+            <span>{selectedIds.size} selected</span>
+          </div>
+          <div className="h-5 w-px bg-blue-200 dark:bg-blue-700" />
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const selectedItems = data.filter((item) => selectedIds.has(keyExtractor(item)));
+              return bulkActions.map((action, idx) => {
+                const btnVariant = action.variant === 'danger'
+                  ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/40'
+                  : action.variant === 'primary'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/40'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700';
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => action.onClick(selectedItems)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${btnVariant}`}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </button>
+                );
+              });
+            })()}
+          </div>
+          <div className="ml-auto">
+            <button
+              onClick={() => onSelectionChange?.(new Set())}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
+            >
+              <X size={14} />
+              Clear
+            </button>
           </div>
         </div>
       )}

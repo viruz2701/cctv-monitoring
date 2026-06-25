@@ -132,7 +132,7 @@
 - [ ] Интеграция с Gatekeeper verification
 
 ### P0-9: Camera Specs Database Integration
-- [ ] Импортировать `cameras.json` из cctv-camera-database в PostgreSQL reference: https://github.com/viruz2701/cctv-camera-database
+- [ ] Импортировать `cameras.json` из cctv-camera-database в PostgreSQL reference:https://github.com/ch-bas/cctv-camera-database
 - [ ] Создать API endpoint `/api/v1/camera-models/{brand}/{model}`
 - [ ] Интегрировать в Device Creation Wizard (автозаполнение)
 - [ ] Добавить compatibility checker (PoE, protocols)
