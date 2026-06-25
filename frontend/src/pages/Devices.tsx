@@ -25,6 +25,7 @@ import {
     Edit,
     Trash2,
     Cloud,
+    Zap,
 } from 'lucide-react';
 import {
     Card,
@@ -48,6 +49,7 @@ import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { formatDistanceToNow } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { AddDeviceModal } from '../components/AddDeviceModal';
+import { DeviceWizard } from '../components/devices/DeviceWizard';
 
 const typeIcons = {
     camera: <Camera className="w-5 h-5 text-blue-500" />,
@@ -117,6 +119,7 @@ export function Devices() {
     const [sortColumn, setSortColumn] = useState<string>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+    const [showWizard, setShowWizard] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
@@ -371,6 +374,13 @@ export function Devices() {
                         {t('filter')}
                     </Button>
                     <PermissionGuard requiredRole={['admin', 'manager']}>
+                        <Button
+                            variant="primary"
+                            icon={<Zap className="w-4 h-4" />}
+                            onClick={() => setShowWizard(true)}
+                        >
+                            Smart Onboarding
+                        </Button>
                         <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowAddDeviceModal(true)}>
                             {t('add_device')}
                         </Button>
@@ -425,6 +435,24 @@ export function Devices() {
                 onClose={() => setShowAddDeviceModal(false)}
                 onSuccess={handleAddDeviceSuccess}
             />
+
+            {/* Smart Onboarding Wizard (P1-7) */}
+            <Modal
+                isOpen={showWizard}
+                onClose={() => setShowWizard(false)}
+                title="Smart Device Onboarding"
+                size="xl"
+            >
+                <div className="min-h-[400px]">
+                    <DeviceWizard
+                        onClose={() => setShowWizard(false)}
+                        onComplete={(deviceId) => {
+                            setShowWizard(false);
+                            if (deviceId) navigate(`/work-orders/${deviceId}`);
+                        }}
+                    />
+                </div>
+            </Modal>
 
             {/* Модальное окно редактирования (только для обычных устройств) */}
             {selectedDevice && !selectedDevice.p2p_brand && (

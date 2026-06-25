@@ -93,6 +93,55 @@ export interface Device {
     cloud_status?: string;
 }
 
+// ── Device Auto-Detect Types (Onboarding Wizard) ────────────────────
+
+export interface DeviceDetectionResult {
+    detected: boolean;
+    model?: string;
+    vendor?: 'hikvision' | 'dahua' | 'onvif' | 'rtsp' | 'unknown';
+    firmware?: string;
+    mac_address?: string;
+    protocols: string[];
+    /** ONVIF Profile S (streaming) support */
+    onvif_profile_s: boolean;
+    /** ONVIF Profile T (advanced) support */
+    onvif_profile_t: boolean;
+    rtsp_supported: boolean;
+    http_api_supported: boolean;
+    snapshot_url?: string;
+    stream_urls?: string[];
+    error?: string;
+}
+
+export interface CapacityParams {
+    resolution: string;       // e.g. "4K", "1080p", "720p"
+    fps: number;
+    codec: 'H.264' | 'H.265' | 'MJPEG';
+    retention_days: number;
+    cameras_count: number;
+    poe_wattage?: number;     // per camera, e.g. 12.95 (802.3af)
+}
+
+export interface CapacityResult {
+    bandwidth_mbps: number;
+    storage_gb: number;
+    poe_budget_watts: number;
+    recommended_nvr: string;
+    warnings: string[];
+}
+
+export interface WorkOrderCreate {
+    title: string;
+    device_id?: string;
+    site_id: string;
+    work_type: 'installation' | 'maintenance' | 'repair' | 'inspection';
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    scheduled_date: string;
+    assigned_to?: string;
+    estimated_hours?: number;
+}
+
 export interface Alarm {
     device_id: string;
     priority: number;
@@ -445,6 +494,33 @@ export const api = {
 
     async getDeviceImages(deviceId: string): Promise<string[]> {
         return request<string[]>(`/images/device/${deviceId}`);
+    },
+
+    // ── Device Auto-Detect (Onboarding Wizard) ─────────────────────────
+
+    /**
+     * Auto-detect device model and capabilities by IP/domain
+     * Attempts ONVIF Profile S/T, HTTP API (Hikvision/Dahua), RTSP
+     */
+    async detectDevice(
+        ipOrDomain: string,
+        options?: { username?: string; password?: string; port?: number }
+    ): Promise<DeviceDetectionResult> {
+        const params = new URLSearchParams({ target: ipOrDomain });
+        if (options?.username) params.append('username', options.username);
+        if (options?.password) params.append('password', options.password);
+        if (options?.port) params.append('port', String(options.port));
+        return request<DeviceDetectionResult>(`/devices/detect?${params.toString()}`);
+    },
+
+    /**
+     * Calculate bandwidth / storage / PoE budget for a detected device
+     */
+    async calculateDeviceCapacity(params: CapacityParams): Promise<CapacityResult> {
+        return request<CapacityResult>('/devices/calculate-capacity', {
+            method: 'POST',
+            body: JSON.stringify(params),
+        });
     },
 
     // ── Alarms ─────────────────────────────────────────────────────────
