@@ -50,6 +50,7 @@ const Notifications = lazy(() => import('./pages/Notifications').then((m) => ({ 
 const TotalCostDashboard = lazy(() => import('./pages/TotalCostDashboard').then((m) => ({ default: m.TotalCostDashboard })));
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard').then((m) => ({ default: m.ManagerDashboard })));
 const AssetOverview = lazy(() => import('./pages/AssetOverview').then((m) => ({ default: m.AssetOverview })));
+const AdvancedAnalytics = lazy(() => import('./pages/AdvancedAnalytics').then((m) => ({ default: m.AdvancedAnalytics })));
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -121,6 +122,7 @@ function App() {
                     <Route path="/logs" element={<PageSuspense><Logs /></PageSuspense>} />
                     <Route path="/audit-log" element={<PageSuspense><AuditLog /></PageSuspense>} />
                     <Route path="/blackbox" element={<PageSuspense><BlackBox /></PageSuspense>} />
+                    <Route path="/advanced-analytics" element={<PageSuspense><AdvancedAnalytics /></PageSuspense>} />
                   </Route>
 
                   {/* Admin Only Routes */}

@@ -45,12 +45,19 @@ import {
   Sparkles,
   Video,
   Archive,
+  Server,
+  Wrench,
+  Package,
+  User,
+  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useThemeStore, type Theme } from '../../store/themeStore';
 import { weightedFuzzySearch, getCharMatches } from '../../lib/fuzzySearch';
 import type { SearchableItem } from '../../lib/fuzzySearch';
+import { useSearchEntities } from '../../hooks/useSearchEntities';
+import type { EntityResult } from '../../hooks/useSearchEntities';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -350,6 +357,15 @@ const NAV_COMMANDS: CommandItem[] = [
     keywords: ['insights', 'analysis', 'data', 'metrics', 'statistics'],
   },
   {
+    id: 'advanced-analytics',
+    label: 'Advanced Analytics',
+    description: 'Predictive maintenance, cost analysis & vendor performance',
+    path: '/advanced-analytics',
+    category: 'analytics',
+    icon: BarChart3,
+    keywords: ['advanced', 'predictive', 'cost', 'vendor', 'tco', 'mtbf', 'mttr'],
+  },
+  {
     id: 'predictive-maintenance',
     label: 'Predictive Maintenance',
     description: 'ML-powered failure prediction dashboard',
@@ -536,6 +552,26 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 // Component
 // ═══════════════════════════════════════════════════════════════════════
 
+// ── Entity result icons ──────────────────────────────────────────────
+
+const ENTITY_TYPE_ICONS: Record<string, LucideIcon> = {
+  site: MapPin,
+  device: HardDrive,
+  'work-order': Ticket,
+  'spare-part': Package,
+  user: User,
+};
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  site: 'Site',
+  device: 'Device',
+  'work-order': 'Work Order',
+  'spare-part': 'Spare Part',
+  user: 'User',
+};
+
+// ── Component ────────────────────────────────────────────────────────
+
 export function CommandPalette() {
   const { isOpen, close, recentCommands, addRecent, clearRecent } = useCommandPaletteStore();
   const themeStore = useThemeStore();
@@ -546,6 +582,9 @@ export function CommandPalette() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // P2-4: Entity search via API (debounced 300ms)
+  const entitySearch = useSearchEntities(query, isOpen);
 
   // UX-14.2.8: Focus trap when palette is open
   const { containerRef: paletteRef, handleKeyDown: handleTrapKeyDown } = useFocusTrap(isOpen, {
@@ -693,6 +732,10 @@ export function CommandPalette() {
     [handleTrapKeyDown, handleKeyDown]
   );
 
+  const hasEntityResults = entitySearch.results.length > 0 && query.trim().length >= 2;
+
+  const flatIdxOffset = (hasRecent ? recentItems.length + 1 : 0) + (hasEntityResults ? entitySearch.results.length + 1 : 0);
+
   const resultsNode = (
     <div ref={listRef} className="max-h-[50vh] overflow-y-auto overscroll-contain py-2">
       {/* Recent commands section (only when empty query) */}
@@ -758,15 +801,84 @@ export function CommandPalette() {
         </>
       )}
 
+      {/* P2-4: Entity search results (API-driven, debounced) */}
+      {hasEntityResults && (
+        <>
+          <div className="px-5 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <Search className="w-3 h-3" />
+            <span>Search results ({entitySearch.total})</span>
+            {entitySearch.isFetching && (
+              <Loader2 className="w-3 h-3 ml-1 animate-spin text-blue-500" />
+            )}
+          </div>
+          {entitySearch.results.map((entity, idx) => {
+            const flatIdx = idx;
+            const isSelected = flatIdx === selectedIndex;
+            const EntityIcon = ENTITY_TYPE_ICONS[entity.type] || Search;
+
+            return (
+              <button
+                key={`entity-${entity.type}-${entity.id}`}
+                data-selected={isSelected ? 'true' : undefined}
+                onClick={() => {
+                  addRecent(`entity-${entity.type}-${entity.id}`);
+                  close();
+                  navigate(entity.path);
+                }}
+                onMouseEnter={() => setSelectedIndex(flatIdx)}
+                className={`w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors ${
+                  isSelected
+                    ? 'bg-amber-50 dark:bg-amber-900/20 text-slate-900 dark:text-white'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0 ${
+                    isSelected
+                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  <EntityIcon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate flex items-center gap-2">
+                    <HighlightMatch text={entity.label} query={query} />
+                    <span className="text-[10px] font-normal text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                      {ENTITY_TYPE_LABELS[entity.type] || entity.type}
+                    </span>
+                  </div>
+                  {entity.description && (
+                    <div className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                      {entity.description}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-xs text-slate-400 dark:text-slate-500 font-mono hidden sm:block">
+                  {entity.path}
+                </div>
+              </button>
+            );
+          })}
+
+          {/* Separator */}
+          <div className="mx-5 my-1 border-t border-slate-200 dark:border-slate-700/50" />
+        </>
+      )}
+
       {/* No results */}
-      {!hasResults && (
+      {!hasResults && !hasEntityResults && (
         <div className="px-6 py-12 text-center">
           <Search className="w-8 h-8 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-            No results for "<span className="text-slate-700 dark:text-slate-300">{query}</span>"
+            {query.trim().length >= 2 ? (
+              <>No results for "<span className="text-slate-700 dark:text-slate-300">{query}</span>"</>
+            ) : (
+              <>Type to search pages, commands, or entities</>
+            )}
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Try a different search term
+            {query.trim().length >= 2 ? 'Try a different search term' : 'Search across sites, devices, work orders, and more'}
           </p>
         </div>
       )}
@@ -858,7 +970,7 @@ export function CommandPalette() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search pages, actions, settings... (try ⌘N for new WO)"
+                placeholder="Search pages, entities, actions... (try ⌘N for new WO)"
                 className="flex-1 text-base bg-transparent text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border-0 outline-none focus:outline-none focus:ring-0"
                 autoComplete="off"
                 spellCheck={false}

@@ -17,6 +17,8 @@ import {
     Star,
     StarOff,
     X,
+    TreePine,
+    Table2,
 } from 'lucide-react';
 import {
     Card,
@@ -36,6 +38,8 @@ import {
 import { SavedViews } from '../components/ui/SavedViews';
 import { useDevices, useSites, useCreateSite, useUpdateSite, useDeleteSite } from '../hooks/useApiQuery';
 import { useUsers } from '../hooks/useApiQuery';
+import { Breadcrumbs } from '../components/ui/Breadcrumbs';
+import { AssetTree } from '../components/organisms/AssetTree';
 import { api, TechnicianSiteAssignment } from '../services/api';
 import { useToast } from '../components/ui/Toast';
 import type { Site, Device } from '../types';
@@ -100,6 +104,8 @@ export function Sites() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedSite, setSelectedSite] = useState<Site | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
+    const [viewMode, setViewMode] = useState<'table' | 'tree'>('table');
+    const [treeBreadcrumbs, setTreeBreadcrumbs] = useState<Array<{ id: string; name: string; type: string }>>([]);
 
     // UX-14.3.2: Apply saved view
     const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
@@ -398,6 +404,33 @@ export function Sites() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{t('sites_subtitle')}</p>
                 </div>
                 <div className="flex gap-3">
+                    {/* View Toggle: Table ↔ Tree */}
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                viewMode === 'table'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                            title={t('table_view') || 'Table view'}
+                        >
+                            <Table2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{t('table') || 'Table'}</span>
+                        </button>
+                        <button
+                            onClick={() => setViewMode('tree')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                viewMode === 'tree'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                            title={t('tree_view') || 'Tree view'}
+                        >
+                            <TreePine className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{t('tree') || 'Tree'}</span>
+                        </button>
+                    </div>
                     <SavedViews
                         page="sites"
                         currentFilterState={{
@@ -407,9 +440,11 @@ export function Sites() {
                         onApplyView={handleApplyView}
                     />
                     <Button variant={showFilters ? 'primary' : 'outline'} icon={<Filter className="w-4 h-4" />} onClick={() => setShowFilters(!showFilters)}>{t('filter')}</Button>
-                    <PermissionGuard requiredRole={['admin']}>
-                        <Button icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>{t('add_site')}</Button>
-                    </PermissionGuard>
+                    {viewMode === 'table' && (
+                        <PermissionGuard requiredRole={['admin']}>
+                            <Button icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>{t('add_site')}</Button>
+                        </PermissionGuard>
+                    )}
                 </div>
             </div>
 
@@ -431,7 +466,27 @@ export function Sites() {
                 </div>
             )}
 
-            {isLoading ? (
+            {viewMode === 'tree' ? (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                    {treeBreadcrumbs.length > 0 && (
+                        <div className="mb-3">
+                            <Breadcrumbs
+                                items={treeBreadcrumbs.map((crumb, idx) => ({
+                                    label: crumb.name,
+                                    href: idx < treeBreadcrumbs.length - 1 ? undefined : undefined,
+                                }))}
+                            />
+                        </div>
+                    )}
+                    <AssetTree
+                        hideStats
+                        hideSearch={false}
+                        onNodeSelect={(node, crumbs) =>
+                            setTreeBreadcrumbs(crumbs.map((c) => ({ id: c.id, name: c.name, type: c.type })))
+                        }
+                    />
+                </div>
+            ) : isLoading ? (
                 <SkeletonTable rows={5} columns={5} />
             ) : (
                 <Table<Site>

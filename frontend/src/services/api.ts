@@ -159,6 +159,64 @@ export interface Prediction {
     model_version?: string;
 }
 
+export interface CostData {
+    site_id: string;
+    site_name: string;
+    device_type: string;
+    device_count: number;
+    maintenance_cost: number;
+    energy_cost: number;
+    labor_cost: number;
+    spare_parts_cost: number;
+    total_cost: number;
+    month: string;
+}
+
+export interface CostTrend {
+    month: string;
+    maintenance_cost: number;
+    energy_cost: number;
+    labor_cost: number;
+    spare_parts_cost: number;
+    total_cost: number;
+}
+
+export interface TopExpensiveDevice {
+    device_id: string;
+    device_name: string;
+    site_name: string;
+    total_cost: number;
+    breakdown: {
+        maintenance: number;
+        energy: number;
+        labor: number;
+        spare_parts: number;
+    };
+}
+
+export interface VendorReliability {
+    vendor: string;
+    device_count: number;
+    mtbf_hours: number;
+    mttr_minutes: number;
+    failure_rate: number;
+    score: number;
+}
+
+export interface SLAMetrics {
+    overall_compliance: number;
+    total_breaches: number;
+    avg_response_time: number;
+    avg_resolution_time: number;
+}
+
+export interface ReliabilityData {
+    vendors: VendorReliability[];
+    overall_mtbf: number;
+    overall_mttr: number;
+    total_devices: number;
+}
+
 export interface ParsedLog {
     device_id: string;
     log_level: string;
@@ -602,6 +660,41 @@ export const api = {
         return request<{ status: string }>('/analytics/predictions/run', {
             method: 'POST',
         });
+    },
+
+    // ── Cost Analysis ────────────────────────────────────────────────────
+
+    async getCostData(params?: { site_id?: string; months?: number }): Promise<CostData[]> {
+        const query = new URLSearchParams();
+        if (params?.site_id) query.append('site_id', params.site_id);
+        if (params?.months) query.append('months', String(params.months));
+        const qs = query.toString() ? `?${query.toString()}` : '';
+        const data = await request<CostData[] | null>(`/analytics/cost${qs}`);
+        return data || [];
+    },
+
+    async getCostTrend(months?: number): Promise<CostTrend[]> {
+        const query = months ? `?months=${months}` : '';
+        const data = await request<CostTrend[] | null>(`/analytics/cost/trend${query}`);
+        return data || [];
+    },
+
+    async getTopExpensiveDevices(limit?: number): Promise<TopExpensiveDevice[]> {
+        const query = limit ? `?limit=${limit}` : '';
+        const data = await request<TopExpensiveDevice[] | null>(`/analytics/cost/top${query}`);
+        return data || [];
+    },
+
+    // ── Reliability ───────────────────────────────────────────────────────
+
+    async getReliabilityData(): Promise<ReliabilityData> {
+        return request<ReliabilityData>('/analytics/reliability');
+    },
+
+    // ── SLA Metrics ───────────────────────────────────────────────────────
+
+    async getSLAMetrics(): Promise<SLAMetrics> {
+        return request<SLAMetrics>('/analytics/sla');
     },
 
     // ── Logs ───────────────────────────────────────────────────────────

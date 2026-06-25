@@ -72,6 +72,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         { path: '/users', label: t('users'), icon: Users, roles: ['admin'] },
         { path: '/settings', label: t('settings'), icon: Settings, roles: ['admin'] },
         { path: '/analytics', label: t('analytics'), icon: TrendingUp, roles: ['admin', 'support', 'owner'] },
+        { path: '/advanced-analytics', label: 'Advanced Analytics', icon: BarChart3, roles: ['admin', 'support'] },
         { path: '/audit-log', label: t('audit_log') || 'Audit Log', icon: Shield, roles: ['admin', 'support'] },
         { path: '/logs', label: t('logs'), icon: FileText, roles: ['admin', 'support'] },
         { path: '/blackbox', label: 'Black Box', icon: Archive, roles: ['admin', 'support'] },
