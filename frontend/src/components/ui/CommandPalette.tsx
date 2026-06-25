@@ -43,6 +43,7 @@ import {
   Keyboard,
   History,
   Sparkles,
+  Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
@@ -429,6 +430,15 @@ const NAV_COMMANDS: CommandItem[] = [
     category: 'administration',
     icon: Ticket,
     keywords: ['support', 'help', 'issue', 'request'],
+  },
+  {
+    id: 'tutorials',
+    label: 'Tutorials',
+    description: 'Video tutorials and onboarding guides',
+    path: '/tutorials',
+    category: 'administration',
+    icon: Video,
+    keywords: ['help', 'guide', 'video', 'learn', 'onboarding', 'training'],
   },
 ];
 

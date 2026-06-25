@@ -8,3 +8,12 @@ export { useAlertStore, useToastAlerts, useAlertFilters, useSelectedAlertIds } f
 export type { ToastAlert } from './alertStore';
 export { useCommandPaletteStore } from './commandPaletteStore';
 export { useOnboardingStore } from './onboardingStore';
+export {
+  useWorkspaceStore,
+  type Workspace,
+  type WidgetLayout,
+} from './workspaceStore';
+export {
+  useFilterStore,
+  type SavedView,
+} from './filterStore';

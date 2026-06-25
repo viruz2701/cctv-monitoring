@@ -49,6 +49,7 @@ import { MaintenanceReports } from './pages/MaintenanceReports';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ComplianceShield } from './pages/ComplianceShield';
 import { PredictiveMaintenance } from './pages/PredictiveMaintenance';
+import { Tutorials } from './pages/Tutorials';
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -175,6 +176,9 @@ function App() {
                                 <Route path="/compliance-shield" element={<PageSuspense><ComplianceShield /></PageSuspense>} />
                                 <Route path="/predictive-maintenance" element={<PageSuspense><PredictiveMaintenance /></PageSuspense>} />
                               </Route>
+
+                              {/* Tutorials — all roles */}
+                              <Route path="/tutorials" element={<PageSuspense><Tutorials /></PageSuspense>} />
                             </Route>
 
                             {/* Default Redirect */}

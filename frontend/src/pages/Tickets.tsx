@@ -1,5 +1,5 @@
 import { generateUUID } from '../utils/uuid';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { ticketSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -23,6 +23,7 @@ import {
     SkeletonTable,
     SkeletonCard
 } from '../components/ui';
+import { SavedViews } from '../components/ui/SavedViews';
 import { useTickets, useDevicesSites } from '../context/DataContext';
 import { Ticket as TicketType } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
@@ -41,6 +42,14 @@ export function Tickets() {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
+
+    // UX-14.3.2: Apply saved view
+    const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
+        const filters = view.filters;
+        if (filters.searchTerm) setSearchTerm(filters.searchTerm);
+        if (filters.statusFilter) setStatusFilter(filters.statusFilter);
+        if (filters.priorityFilter) setPriorityFilter(filters.priorityFilter);
+    }, []);
 
     React.useEffect(() => {
         if (searchParams.get('action') === 'create') {
@@ -194,6 +203,14 @@ export function Tickets() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{t('tickets_subtitle')}</p>
                 </div>
                 <div className="flex gap-3">
+                    <SavedViews
+                        page="tickets"
+                        currentFilterState={{
+                            filters: { searchTerm, statusFilter, priorityFilter },
+                            sort: { column: 'createdAt', direction: 'desc' },
+                        }}
+                        onApplyView={handleApplyView}
+                    />
                     <Button
                         variant={showFilters ? 'primary' : 'outline'}
                         icon={<Filter className="w-4 h-4" />}

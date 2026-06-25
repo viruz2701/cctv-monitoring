@@ -39,6 +39,7 @@ import {
     SkeletonStatsCard,
 } from '../components/ui';
 import { VirtualTable } from '../components/ui/VirtualTable';
+import { SavedViews } from '../components/ui/SavedViews';
 import { useDevicesSites } from '../context/DataContext';
 import type { Device } from '../types';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
@@ -75,6 +76,17 @@ export function Devices() {
     const [showFilters, setShowFilters] = useState(false);
     const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
+
+    // UX-14.3.2: Apply saved view
+    const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
+        const filters = view.filters;
+        if (filters.statusFilter) setStatusFilter(filters.statusFilter);
+        if (filters.siteFilter) setSiteFilter(filters.siteFilter);
+        if (view.sort.column) {
+            setSortColumn(view.sort.column);
+            setSortDirection(view.sort.direction);
+        }
+    }, []);
 
     // Zod валидация для формы редактирования
     const { errors: editErrors, validate: validateEdit, validateField: validateEditField, touched: editTouched } = useFormValidation(deviceSchema);
@@ -301,6 +313,14 @@ export function Devices() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{t('devices_subtitle')}</p>
                 </div>
                 <div className="flex gap-3">
+                    <SavedViews
+                        page="devices"
+                        currentFilterState={{
+                            filters: { statusFilter, siteFilter },
+                            sort: { column: sortColumn, direction: sortDirection },
+                        }}
+                        onApplyView={handleApplyView}
+                    />
                     <Button
                         variant={showFilters ? 'primary' : 'outline'}
                         icon={<Filter className="w-4 h-4" />}

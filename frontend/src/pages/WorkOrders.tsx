@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
 import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable } from '../components/ui';
+import { SavedViews } from '../components/ui/SavedViews';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { VirtualTable } from '../components/ui/VirtualTable';
 import {
@@ -243,6 +244,14 @@ export const WorkOrders: React.FC = () => {
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<'all' | 'mine' | 'overdue' | 'critical'>('all');
 
+  // UX-14.3.2: Apply saved view
+  const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
+    const filters = view.filters;
+    if (filters.filterStatus !== undefined) setFilterStatus(filters.filterStatus);
+    if (filters.filterPriority !== undefined) setFilterPriority(filters.filterPriority);
+    if (filters.quickFilter) setQuickFilter(filters.quickFilter as 'all' | 'mine' | 'overdue' | 'critical');
+  }, []);
+
   const technicians = users.filter(u => u.role === 'technician');
 
   const filtered = workOrders.filter((wo) => {
@@ -467,9 +476,19 @@ export const WorkOrders: React.FC = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{t('work_orders')}</h1>
-        <Button onClick={() => setShowCreateModal(true)} icon={<Plus size={20} />}>
-          {t('create_work_order')}
-        </Button>
+        <div className="flex gap-3 items-center">
+          <SavedViews
+            page="work-orders"
+            currentFilterState={{
+              filters: { filterStatus, filterPriority, quickFilter },
+              sort: { column: '', direction: 'asc' },
+            }}
+            onApplyView={handleApplyView}
+          />
+          <Button onClick={() => setShowCreateModal(true)} icon={<Plus size={20} />}>
+            {t('create_work_order')}
+          </Button>
+        </div>
       </div>
 
       <Card>

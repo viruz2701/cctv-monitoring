@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     AlertTriangle,
     AlertCircle,
@@ -11,6 +11,7 @@ import {
     CheckCircle
 } from 'lucide-react';
 import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal, SkeletonTable, SkeletonCard } from '../components/ui';
+import { SavedViews } from '../components/ui/SavedViews';
 import { useAlerts } from '../context/DataContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,18 @@ export function Alerts() {
     const [sortColumn, setSortColumn] = useState<string>('timestamp');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
+
+    // UX-14.3.2: Apply saved view
+    const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
+        const filters = view.filters;
+        if (filters.searchTerm) setSearchTerm(filters.searchTerm);
+        if (filters.typeFilter) setTypeFilter(filters.typeFilter);
+        if (filters.statusFilter) setStatusFilter(filters.statusFilter);
+        if (view.sort.column) {
+            setSortColumn(view.sort.column);
+            setSortDirection(view.sort.direction);
+        }
+    }, []);
 
     const handleAction = (alertId: string, action: 'acknowledge' | 'resolve') => {
         const newStatus = action === 'acknowledge' ? 'acknowledged' : 'resolved';
@@ -186,6 +199,14 @@ export function Alerts() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{t('alerts_subtitle')}</p>
                 </div>
                 <div className="flex gap-3">
+                    <SavedViews
+                        page="alerts"
+                        currentFilterState={{
+                            filters: { searchTerm, typeFilter, statusFilter },
+                            sort: { column: sortColumn, direction: sortDirection },
+                        }}
+                        onApplyView={handleApplyView}
+                    />
                     <Button
                         variant={showFilters ? 'primary' : 'outline'}
                         icon={<Filter className="w-4 h-4" />}

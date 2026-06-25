@@ -33,6 +33,7 @@ import {
     SkeletonCard,
     SkeletonTable,
 } from '../components/ui';
+import { SavedViews } from '../components/ui/SavedViews';
 import { useDevicesSites } from '../context/DevicesSitesContext';
 import { useUsers } from '../context/UsersContext';
 import { api, TechnicianSiteAssignment } from '../services/api';
@@ -58,6 +59,21 @@ export function Sites() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedSite, setSelectedSite] = useState<Site | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: '' });
+
+    // UX-14.3.2: Apply saved view
+    const handleApplyView = useCallback((view: import('../store/filterStore').SavedView) => {
+        const filters = view.filters;
+        if (filters.searchQuery !== undefined) {
+            setSearchQuery(filters.searchQuery);
+            if (filters.searchQuery) {
+                setSearchParams({ search: filters.searchQuery });
+                setShowFilters(true);
+            } else {
+                setSearchParams({});
+            }
+        }
+        if (filters.statusFilter) setStatusFilter(filters.statusFilter);
+    }, [setSearchParams]);
 
     // Zod валидация для формы сайта
     const { errors: siteErrors, validate: validateSite, validateField: validateSiteField, touched: siteTouched, reset: resetSiteValidation } = useFormValidation(siteSchema);
@@ -341,6 +357,14 @@ export function Sites() {
                     <p className="text-slate-500 dark:text-slate-400 mt-1">{t('sites_subtitle')}</p>
                 </div>
                 <div className="flex gap-3">
+                    <SavedViews
+                        page="sites"
+                        currentFilterState={{
+                            filters: { searchQuery, statusFilter },
+                            sort: { column: 'name', direction: 'asc' },
+                        }}
+                        onApplyView={handleApplyView}
+                    />
                     <Button variant={showFilters ? 'primary' : 'outline'} icon={<Filter className="w-4 h-4" />} onClick={() => setShowFilters(!showFilters)}>{t('filter')}</Button>
                     <PermissionGuard requiredRole={['admin']}>
                         <Button icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>{t('add_site')}</Button>

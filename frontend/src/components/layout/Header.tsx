@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useDevicesSites } from '../../context/DevicesSitesContext';
 import { LanguageSwitcher } from '../LanguageSwitcher';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { useNotifications } from '../../context/NotificationsContext';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +98,9 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     return (
         <header className={`fixed top-0 right-0 left-0 z-30 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-all duration-300 ${sidebarCollapsed ? 'lg:left-20' : 'lg:left-64'}`}>
             <div className="flex items-center justify-between h-full px-6">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <WorkspaceSwitcher />
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
                     <LanguageSwitcher />
                     <button onClick={onMobileMenuToggle} className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
                         <Menu className="w-5 h-5" />

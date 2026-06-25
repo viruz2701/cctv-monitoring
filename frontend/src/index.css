@@ -1,16 +1,49 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Custom CSS Variables for Enterprise Theme */
+/* ═══════════════════════════════════════════════════════════════════════
+   UX-14.3.4: Theming Engine — CSS Custom Properties
+   
+   Управляются через themeStore.applyTheme():
+     --color-primary: основной цвет (кнопки, ссылки, активные элементы)
+     --color-accent: акцентный цвет (бейджи, выделения)
+     --radius: border-radius для карточек, кнопок, инпутов
+   
+   Theme presets (классы на <html>):
+     .theme-ocean  → сине-голубая схема
+     .theme-forest → зелёная схема
+     .theme-sunset → оранжевая схема
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --color-primary: #0f172a;
+  --color-primary: #2563eb;
+  --color-accent: #6366f1;
+  --radius: 0.5rem;
+
+  /* Legacy variables (backward compatibility) */
   --color-primary-light: #1e293b;
-  --color-accent: #3b82f6;
   --color-accent-hover: #2563eb;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
   --color-info: #06b6d4;
+}
+
+/* ── Theme Presets ───────────────────────────────────────────────────── */
+
+.theme-ocean {
+  --color-primary: #0891b2;
+  --color-accent: #06b6d4;
+}
+
+.theme-forest {
+  --color-primary: #059669;
+  --color-accent: #10b981;
+}
+
+.theme-sunset {
+  --color-primary: #d97706;
+  --color-accent: #f59e0b;
 }
 
 /* Tailwind includes preflight reset, no need for manual reset */
@@ -64,4 +97,23 @@ body {
   to {
     width: 0%;
   }
+}
+
+/* Utility: apply CSS vars to common elements */
+button,
+.button,
+.btn {
+  border-radius: var(--radius);
+}
+
+input,
+select,
+textarea,
+.input-field {
+  border-radius: var(--radius);
+}
+
+.card,
+.card-container {
+  border-radius: calc(var(--radius) + 0.25rem);
 }
