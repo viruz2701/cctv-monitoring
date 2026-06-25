@@ -1,79 +1,50 @@
-import { type Plugin } from 'vite'
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { visualizer } from 'rollup-plugin-visualizer'
+/// <reference types="vitest/config" />
+import { type Plugin } from 'vite';
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+import { playwright } from '@vitest/browser-playwright';
+const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
+// More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 function cspPlugin(): Plugin {
   // Production CSP — без 'unsafe-inline' в script-src (OWASP ASVS V5.3.3)
   // strict-dynamic отключает fallback к 'self' в старых браузерах
   // Для SSR/SPA nonce будет вставляться сервером Go
-  const prodCSP = [
-    "default-src 'self'",
-    "script-src 'self' 'strict-dynamic' blob:",
-    "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: https:",
-    "connect-src 'self' https://nominatim.openstreetmap.org",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join('; ')
+  const prodCSP = ["default-src 'self'", "script-src 'self' 'strict-dynamic' blob:", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com", "img-src 'self' data: https:", "connect-src 'self' https://nominatim.openstreetmap.org", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'"].join('; ');
 
   // Dev CSP — нужен 'unsafe-inline' для HMR и 'wasm-unsafe-eval' для Vite
   // Это приемлемо только для разработки
-  const devCSP = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:",
-    "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: https:",
-    "connect-src 'self' http://localhost:8080 https://nominatim.openstreetmap.org ws: wss:",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join('; ')
-
+  const devCSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com", "img-src 'self' data: https:", "connect-src 'self' http://localhost:8080 https://nominatim.openstreetmap.org ws: wss:", "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'"].join('; ');
   return {
     name: 'vite-plugin-csp',
     transformIndexHtml: {
       order: 'pre',
       handler(_html, ctx) {
-        const csp = ctx.server ? devCSP : prodCSP
-        return [
-          {
-            tag: 'meta',
-            attrs: {
-              'http-equiv': 'Content-Security-Policy',
-              content: csp,
-            },
-            injectTo: 'head',
+        const csp = ctx.server ? devCSP : prodCSP;
+        return [{
+          tag: 'meta',
+          attrs: {
+            'http-equiv': 'Content-Security-Policy',
+            content: csp
           },
-        ]
-      },
-    },
-  }
+          injectTo: 'head'
+        }];
+      }
+    }
+  };
 }
-
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    cspPlugin(),
-    visualizer({
-      filename: 'dist/stats.html',
-      open: true,
-      gzipSize: true,
-      brotliSize: true,
-    }),
-  ],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test-setup.ts'],
-  },
+  plugins: [react(), tailwindcss(), cspPlugin(), visualizer({
+    filename: 'dist/stats.html',
+    open: true,
+    gzipSize: true,
+    brotliSize: true
+  })],
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -82,8 +53,37 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        ws: true,
+        ws: true
       }
     }
+  },
+  test: {
+    projects: [{
+      extends: true,
+      test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: ['./src/test-setup.ts']
+      }
+    }, {
+      extends: true,
+      plugins: [
+      // The plugin will run tests for the stories defined in your Storybook config
+      // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
+      storybookTest({
+        configDir: path.join(dirname, '.storybook')
+      })],
+      test: {
+        name: 'storybook',
+        browser: {
+          enabled: true,
+          headless: true,
+          provider: playwright({}),
+          instances: [{
+            browser: 'chromium'
+          }]
+        }
+      }
+    }]
   }
-})
+});

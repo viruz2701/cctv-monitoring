@@ -31,3 +31,6 @@ dist-ssr
 # Build outputs
 build
 coverage
+
+*storybook.log
+storybook-static
