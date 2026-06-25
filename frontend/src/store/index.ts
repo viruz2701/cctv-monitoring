@@ -6,3 +6,4 @@
 export { useThemeStore, type Theme } from './themeStore';
 export { useAlertStore, useToastAlerts, useAlertFilters, useSelectedAlertIds } from './alertStore';
 export type { ToastAlert } from './alertStore';
+export { useCommandPaletteStore } from './commandPaletteStore';

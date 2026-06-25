@@ -82,25 +82,25 @@ O8: Market Differentiation
 ✅ ARCH-01: InMemoryStateManager → JetStream KV (DONE)
 Файл: backend/internal/state/jetstream_manager.go
 Решение: NATS JetStream KV Store + in-memory cache + watcher-based sync.
-Статус: ✅ DONE — JetStreamStateManager реализован, протестирован, интегрирован в main.go с graceful fallback.
+Статус: ✅ DONE (commit 62d330d) — JetStreamStateManager реализован, протестирован, интегрирован в main.go с graceful fallback.
 SP: 8 · Приоритет: 🔴 P0
 
 ✅ ARCH-02: 14 React Contexts → Zustand + React Query (DONE)
 Файлы: frontend/src/store/*.ts, frontend/src/hooks/useApiQuery.ts, frontend/src/context/*.tsx
 Решение: Zustand для UI-state (theme, alerts UI) + React Query для server state.
-Статус: ✅ DONE — все 12 контекстов мигрированы на Zustand/React Query, QueryClientProvider в App.tsx.
+Статус: ✅ DONE (commit 62d330d) — все 12 контекстов мигрированы на Zustand/React Query, QueryClientProvider в App.tsx.
 SP: 12 · Приоритет: 🔴 P0
 
 ✅ ARCH-03: Mock Data → Real API (DONE)
 Файлы: frontend/src/pages/DeviceDetail.tsx, frontend/src/utils/reportGenerator.ts
 Решение: Импорты mockData заменены на React Query хуки.
-Статус: ✅ DONE — DeviceDetail.tsx и reportGenerator.ts больше не используют mockData.
+Статус: ✅ DONE (commit 62d330d) — DeviceDetail.tsx и reportGenerator.ts больше не используют mockData.
 SP: 6 · Приоритет: 🔴 P0
 
 ✅ ARCH-04: Virtualization everywhere (DONE)
 Файлы: frontend/src/pages/WorkOrders.tsx, frontend/src/pages/AuditLog.tsx, frontend/src/pages/Devices.tsx
 Решение: @tanstack/react-virtual через компонент VirtualTable.
-Статус: ✅ DONE — VirtualTable внедрён в WorkOrders, AuditLog, Devices.
+Статус: ✅ DONE (commit 62d330d) — VirtualTable внедрён в WorkOrders, AuditLog, Devices.
 SP: 4 · Приоритет: 🔴 P0
 🎨 EPIC 14: UX/UI Excellence (НОВЫЙ ЭПИК)
 Самый крупный эпи́к — именно здесь закрывается gap между architectural maturity и user experience.
@@ -135,6 +135,7 @@ Command Palette (⌘K)
 5
 Поиск по всему приложению (Linear-style)
 -80% time-to-action
+✅ DONE
 UX-14.1.6
 Onboarding Tour
 4
@@ -328,6 +329,7 @@ UX
 Command Palette (⌘K)
 5
 ⚡ -80% time-to-action
+✅ DONE
 UX-14.1.6
 UX
 Onboarding Tour

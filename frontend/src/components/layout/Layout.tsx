@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAlarmWebSocket } from '../../services/websocket';
+import { CommandPalette } from '../ui/CommandPalette';
+import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
 export function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const location = useLocation();
+    const toggleCommandPalette = useCommandPaletteStore((s) => s.toggle);
 
     // Initialize WebSocket for real-time alarms (only connects if user is authenticated)
     useAlarmWebSocket();
@@ -27,6 +30,23 @@ export function Layout() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Global keyboard shortcut: Cmd+K / Ctrl+K to open Command Palette
+    const handleKeyDown = useCallback(
+        (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleCommandPalette();
+            }
+        },
+        [toggleCommandPalette]
+    );
+
+    useEffect(() => {
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -51,6 +71,9 @@ export function Layout() {
                 sidebarCollapsed={sidebarCollapsed}
                 onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
             />
+
+            {/* Command Palette (⌘K) — UX-14.1.5 */}
+            <CommandPalette />
 
             {/* Main Content */}
             <main
