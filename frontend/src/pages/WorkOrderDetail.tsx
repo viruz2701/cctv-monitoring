@@ -4,16 +4,21 @@ import { useTranslation } from 'react-i18next';
 import {
   Info, Package, Timer, Camera, Clock, Loader2,
   CheckCircle, XCircle, ArrowLeft, Shield,
+  User, HardDrive, MapPin, Calendar, FileText,
+  AlertTriangle, Wrench, DollarSign, ClipboardList,
+  Play, Square,
 } from 'lucide-react';
 import {
   Button, useToast, Modal,
-  FileUpload, Tabs,
+  FileUpload, Card, CardHeader, CardBody, Badge, SLAProgress,
 } from '../components/ui';
 import { workOrdersApi, WorkOrder, PartUsage, TimeEntry, LaborCost } from '../services/workOrdersApi';
 import { sparePartsApi, SparePart } from '../services/sparePartsApi';
 import { useWorkOrders } from '../context/WorkOrdersContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { ThreeColumnTemplate } from '../components/layout';
+import { SLATimer } from '../components/work-orders/SLATimer';
 import { WODetailHeader } from '../components/work-orders/WODetailHeader';
 import { WODetailInfo } from '../components/work-orders/WODetailInfo';
 import { WODetailParts } from '../components/work-orders/WODetailParts';
@@ -26,6 +31,27 @@ const typeLabel: Record<string, string> = {
   preventive: 'Плановое',
   corrective: 'Корректирующее',
   emergency: 'Аварийное',
+};
+
+const statusLabel: Record<string, string> = {
+  open: 'Открыт',
+  in_progress: 'В работе',
+  completed: 'Завершён',
+  cancelled: 'Отменён',
+};
+
+const priorityVariant: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
+  critical: 'danger',
+  high: 'warning',
+  medium: 'info',
+  low: 'success',
+};
+
+const statusVariant: Record<string, 'neutral' | 'primary' | 'warning' | 'success' | 'danger'> = {
+  open: 'primary',
+  in_progress: 'warning',
+  completed: 'success',
+  cancelled: 'danger',
 };
 
 export const WorkOrderDetail: React.FC = () => {
@@ -45,15 +71,6 @@ export const WorkOrderDetail: React.FC = () => {
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // ── Tabs state ───────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('info');
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(['info']));
-
-  const handleTabChange = useCallback((tabId: string) => {
-    setActiveTab(tabId);
-    setLoadedTabs(prev => new Set(prev).add(tabId));
-  }, []);
 
   // ── Time Tracking state ─────────────────────────────────────────
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -334,42 +351,9 @@ export const WorkOrderDetail: React.FC = () => {
     return events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [workOrder]);
 
-  // ── Tabs configuration ──────────────────────────────────────────
-  const partsCount = workOrder?.parts_used?.length || 0;
+  const isEditable = workOrder?.status === 'open' || workOrder?.status === 'in_progress';
 
-  const tabs = [
-    {
-      id: 'info',
-      label: t('workOrder.tabInfo') || 'Информация',
-      icon: <Info className="w-4 h-4" />,
-    },
-    {
-      id: 'parts',
-      label: t('workOrder.tabParts') || 'Запчасти',
-      icon: <Package className="w-4 h-4" />,
-      badge: partsCount > 0 ? partsCount : undefined,
-    },
-    {
-      id: 'time',
-      label: t('workOrder.tabTime') || 'Время и трудозатраты',
-      icon: <Timer className="w-4 h-4" />,
-    },
-    {
-      id: 'photos',
-      label: t('workOrder.tabPhotos') || 'Фото',
-      icon: <Camera className="w-4 h-4" />,
-    },
-    {
-      id: 'history',
-      label: t('workOrder.tabHistory') || 'История',
-      icon: <Clock className="w-4 h-4" />,
-    },
-    {
-      id: 'audit',
-      label: 'Audit Log',
-      icon: <Shield className="w-4 h-4" />,
-    },
-  ];
+  // ── Loading state ──────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -390,304 +374,581 @@ export const WorkOrderDetail: React.FC = () => {
     );
   }
 
-  return (
-    <PermissionGuard requiredRole={['admin', 'manager', 'technician']}>
-      <div className="p-6 max-w-6xl mx-auto">
-        {/* ═══ HEADER (Sticky, always visible) ═══ */}
-        <WODetailHeader
-          workOrder={workOrder}
-          submitting={submitting}
-          onStart={handleStart}
-          onComplete={() => setCompleteModal(true)}
-          onCancel={() => setCancelModal(true)}
-          onBack={() => navigate('/work-orders')}
+  // ── Left Column: Metadata, SLA, Timeline ─────────────────────────
+
+  const leftColumn = (
+    <>
+      {/* Status & Priority */}
+      <Card>
+        <CardBody>
+          <div className="flex items-center justify-between mb-3">
+            <Badge variant={statusVariant[workOrder.status] || 'neutral'} size="sm">
+              {statusLabel[workOrder.status] || workOrder.status}
+            </Badge>
+            <Badge variant={priorityVariant[workOrder.priority] || 'info'} size="sm">
+              {workOrder.priority}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            {workOrder.type === 'emergency' ? (
+              <AlertTriangle className="w-4 h-4 text-red-500" />
+            ) : workOrder.type === 'preventive' ? (
+              <Wrench className="w-4 h-4" />
+            ) : (
+              <AlertTriangle className="w-4 h-4" />
+            )}
+            <span>{typeLabel[workOrder.type] || workOrder.type}</span>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* SLA Timer */}
+      {workOrder.sla_deadline && workOrder.sla_status && workOrder.sla_status !== 'no_sla' && (
+        <SLATimer
+          deadline={workOrder.sla_deadline}
+          createdAt={workOrder.created_at}
+          status={workOrder.sla_status as 'on_track' | 'at_risk' | 'breached' | 'completed'}
         />
+      )}
 
-        {/* ═══ TABS NAVIGATION ═══ */}
-        <div className="mt-6">
-          <Tabs
-            tabs={tabs}
-            activeTab={activeTab}
-            onChange={handleTabChange}
-            variant="default"
-          >
-            {/* Info Tab */}
-            {activeTab === 'info' && (
-              <div className="mt-6">
-                <WODetailInfo workOrder={workOrder} />
+      {/* Assigned Technician */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <User className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          <span className="text-sm font-medium">Исполнитель</span>
+        </CardHeader>
+        <CardBody>
+          {workOrder.assignee_name ? (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 font-semibold text-sm">
+                {workOrder.assignee_name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{workOrder.assignee_name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Техник</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 dark:text-slate-500 italic">Не назначен</p>
+          )}
+        </CardBody>
+      </Card>
 
-                {/* Checklist with DragDrop (сохраняем DragDropContext) */}
-                {workOrder.checklist?.length > 0 && (
-                  <div className="mt-6">
-                    <DragDropContext
-                      onDragEnd={(result: DropResult) => {
-                        if (!result.destination || !workOrder) return;
-                        const items = Array.from(workOrder.checklist);
-                        const [reordered] = items.splice(result.source.index, 1);
-                        items.splice(result.destination.index, 0, reordered);
-                        setWorkOrder({ ...workOrder, checklist: items });
-                      }}
-                    >
-                      <Droppable droppableId="checklist">
-                        {(provided) => (
+      {/* Timeline */}
+      {timelineEvents.length > 0 && (
+        <WODetailTimeline events={timelineEvents} />
+      )}
+    </>
+  );
+
+  // ── Center Column: Checklist, Notes, Photos, Audit ───────────────
+
+  const centerColumn = (
+    <>
+      {/* Checklist with DragDrop */}
+      {workOrder.checklist?.length > 0 && (
+        <Card>
+          <CardHeader className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <span>
+              Чеклист ({workOrder.checklist.filter(c => c.completed).length}/{workOrder.checklist.length})
+            </span>
+          </CardHeader>
+          <CardBody>
+            <DragDropContext
+              onDragEnd={(result: DropResult) => {
+                if (!result.destination || !workOrder) return;
+                const items = Array.from(workOrder.checklist);
+                const [reordered] = items.splice(result.source.index, 1);
+                items.splice(result.destination.index, 0, reordered);
+                setWorkOrder({ ...workOrder, checklist: items });
+              }}
+            >
+              <Droppable droppableId="checklist">
+                {(provided) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className="space-y-2"
+                  >
+                    {workOrder.checklist.map((item, i) => (
+                      <Draggable key={`checklist-${i}`} draggableId={`checklist-${i}`} index={i}>
+                        {(provided, snapshot) => (
                           <div
-                            {...provided.droppableProps}
                             ref={provided.innerRef}
-                            className="space-y-2"
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`flex items-center gap-3 p-3 rounded-lg text-sm transition-all ${
+                              snapshot.isDragging
+                                ? 'bg-blue-50 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-400'
+                                : item.completed
+                                  ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300'
+                            } ${
+                              snapshot.isDragging ? 'rotate-2' : ''
+                            }`}
+                            onClick={() => {
+                              if (isEditable) {
+                                const updated = { ...workOrder };
+                                updated.checklist = updated.checklist.map((ci, idx) =>
+                                  idx === i ? { ...ci, completed: !ci.completed } : ci
+                                );
+                                setWorkOrder(updated);
+                              }
+                            }}
                           >
-                            {workOrder.checklist.map((item, i) => (
-                              <Draggable key={`checklist-${i}`} draggableId={`checklist-${i}`} index={i}>
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    className={`flex items-center gap-3 p-3 rounded-lg text-sm transition-all ${
-                                      snapshot.isDragging
-                                        ? 'bg-blue-50 dark:bg-blue-900/30 shadow-lg ring-2 ring-blue-400'
-                                        : item.completed
-                                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                                          : 'bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300'
-                                    } ${
-                                      snapshot.isDragging ? 'rotate-2' : ''
-                                    }`}
-                                    onClick={() => {
-                                      if (workOrder.status === 'in_progress' || workOrder.status === 'open') {
-                                        const updated = { ...workOrder };
-                                        updated.checklist = updated.checklist.map((ci, idx) =>
-                                          idx === i ? { ...ci, completed: !ci.completed } : ci
-                                        );
-                                        setWorkOrder(updated);
-                                      }
-                                    }}
-                                  >
-                                    {item.completed ? (
-                                      <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                                    ) : (
-                                      <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center">
-                                        <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                                      </div>
-                                    )}
-                                    <span className="flex-1">{item.task}</span>
-                                    <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">☰</span>
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
+                            {item.completed ? (
+                              <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600 flex-shrink-0 flex items-center justify-center">
+                                <div className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                              </div>
+                            )}
+                            <span className="flex-1">{item.task}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">☰</span>
                           </div>
                         )}
-                      </Droppable>
-                    </DragDropContext>
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
                   </div>
                 )}
+              </Droppable>
+            </DragDropContext>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Notes / Description */}
+      {workOrder.notes && (
+        <Card>
+          <CardHeader className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            <span className="text-sm font-medium">Заметки</span>
+          </CardHeader>
+          <CardBody>
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+              {workOrder.notes}
+            </p>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Photos */}
+      <WODetailPhotos workOrder={workOrder} />
+
+      {/* Audit Log */}
+      {id && <WOAuditLog workOrderId={id} />}
+    </>
+  );
+
+  // ── Right Column: Device Info, Parts, Labor Cost ────────────────
+
+  const rightColumn = (
+    <>
+      {/* Device Info */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <HardDrive className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          <span className="text-sm font-medium">Устройство</span>
+        </CardHeader>
+        <CardBody>
+          <div className="space-y-3">
+            {workOrder.device_name && (
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Название</p>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{workOrder.device_name}</p>
               </div>
             )}
-
-            {/* Parts Tab (lazy load) */}
-            {activeTab === 'parts' && loadedTabs.has('parts') && (
-              <div className="mt-6">
-                <WODetailParts
-                  workOrder={workOrder}
-                  spareParts={spareParts}
-                  selectedPartId={selectedPartId}
-                  partQuantity={partQuantity}
-                  partsCostLoading={partsCostLoading}
-                  onSelectedPartIdChange={setSelectedPartId}
-                  onPartQuantityChange={setPartQuantity}
-                  onAddPart={handleAddPartWithCost}
-                />
-              </div>
-            )}
-
-            {/* Time Tab (lazy load) */}
-            {activeTab === 'time' && loadedTabs.has('time') && (
-              <div className="mt-6">
-                <WODetailTime
-                  timeEntries={timeEntries}
-                  laborCost={laborCost}
-                  elapsed={elapsed}
-                  timeSubmitting={timeSubmitting}
-                  workOrderStatus={workOrder.status}
-                  totalCost={workOrder.total_cost}
-                  totalLaborCost={workOrder.total_labor_cost}
-                  totalPartsCost={workOrder.total_parts_cost}
-                  onStartTimer={handleStartTimer}
-                  onPauseTimer={handlePauseTimer}
-                  onResumeTimer={handleResumeTimer}
-                  onStopTimer={handleStopTimer}
-                  onDeleteTimeEntry={handleDeleteTimeEntry}
-                  formatDuration={formatDuration}
-                />
-              </div>
-            )}
-
-            {/* Photos Tab (lazy load) */}
-            {activeTab === 'photos' && loadedTabs.has('photos') && (
-              <div className="mt-6">
-                <WODetailPhotos workOrder={workOrder} />
-              </div>
-            )}
-
-            {/* History Tab (lazy load) */}
-            {activeTab === 'history' && loadedTabs.has('history') && (
-              <div className="mt-6">
-                <WODetailTimeline events={timelineEvents} />
-              </div>
-            )}
-
-            {/* Audit Log Tab (lazy load) */}
-            {activeTab === 'audit' && loadedTabs.has('audit') && id && (
-              <div className="mt-6">
-                <WOAuditLog workOrderId={id} />
-              </div>
-            )}
-          </Tabs>
-        </div>
-
-        {/* ═══ MODALS ═══ */}
-
-        {/* Complete Modal */}
-        <Modal
-          isOpen={completeModal}
-          onClose={() => setCompleteModal(false)}
-          title="Завершить наряд-заказ"
-          size="lg"
-        >
-          <div className="space-y-6">
-            {/* Notes */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                Заметки о выполнении
-              </label>
-              <textarea
-                value={completeNotes}
-                onChange={(e) => setCompleteNotes(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Опишите выполненные работы..."
-              />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">ID устройства</p>
+              <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">
+                {workOrder.device_id}
+              </code>
             </div>
+            {workOrder.schedule_id && (
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5">Расписание</p>
+                <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">
+                  {workOrder.schedule_id.slice(0, 8)}...
+                </code>
+              </div>
+            )}
+          </div>
+        </CardBody>
+      </Card>
 
-            {/* File Upload */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                Фотографии
-              </label>
-              <FileUpload
-                onUpload={handleFileUpload}
-                accept="image/*"
-                maxFiles={10}
-                maxSizeMB={20}
-                label="Перетащите фото или нажмите для выбора"
-              />
-              {completePhotos.length > 0 && (
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {completePhotos.map((p, i) => (
-                    <div key={i} className="relative aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800">
-                      <img src={p} alt="" className="w-full h-full object-cover" />
+      {/* Dates */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          <span className="text-sm font-medium">Даты</span>
+        </CardHeader>
+        <CardBody>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500 dark:text-slate-400">Создан</span>
+              <span className="text-slate-900 dark:text-white">{new Date(workOrder.created_at).toLocaleString()}</span>
+            </div>
+            {workOrder.started_at && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Начат</span>
+                <span className="text-slate-900 dark:text-white">{new Date(workOrder.started_at).toLocaleString()}</span>
+              </div>
+            )}
+            {workOrder.completed_at && (
+              <div className="flex justify-between">
+                <span className="text-slate-500 dark:text-slate-400">Завершён</span>
+                <span className="text-slate-900 dark:text-white">{new Date(workOrder.completed_at).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* Parts Used (compact) */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <Package className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          <span className="text-sm font-medium">
+            Запчасти ({workOrder.parts_used?.length || 0})
+          </span>
+        </CardHeader>
+        <CardBody>
+          {workOrder.parts_used?.length > 0 ? (
+            <div className="space-y-2">
+              {workOrder.parts_used.map((p, i) => {
+                const part = spareParts.find(sp => sp.id === p.part_id);
+                return (
+                  <div key={i} className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm">
+                    <span className="text-slate-700 dark:text-slate-300 truncate mr-2">
+                      {part?.name || p.part_id}
+                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant="info" size="sm">{p.quantity} шт</Badge>
+                      {part?.cost != null && (
+                        <span className="text-xs text-slate-500">{part.cost * p.quantity}₽</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 dark:text-slate-500 italic text-center py-2">Нет запчастей</p>
+          )}
+          {workOrder.total_parts_cost != null && (
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+              <span className="text-slate-500 dark:text-slate-400">Стоимость запчастей</span>
+              <span className="font-medium text-slate-900 dark:text-white">{workOrder.total_parts_cost.toFixed(2)} ₽</span>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* Labor Cost (compact) */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <DollarSign className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-sm font-medium">Стоимость работ</span>
+        </CardHeader>
+        <CardBody>
+          {laborCost ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Часов</span>
+                <span className="text-slate-900 dark:text-white font-medium">{laborCost.total_hours.toFixed(1)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Ставка</span>
+                <span className="text-slate-900 dark:text-white font-medium">{laborCost.currency}{laborCost.hourly_rate.toFixed(2)}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm font-semibold">
+                <span className="text-emerald-600 dark:text-emerald-400">Всего</span>
+                <span className="text-emerald-700 dark:text-emerald-300">{laborCost.currency}{laborCost.total_cost.toFixed(2)}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 dark:text-slate-500 italic text-center py-2">Нет данных</p>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* Time Tracking (compact) */}
+      <Card>
+        <CardHeader className="flex items-center gap-2">
+          <Timer className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <span className="text-sm font-medium">Учёт времени</span>
+        </CardHeader>
+        <CardBody>
+          {timeEntries.find(e => e.status === 'running' || e.status === 'paused') ? (
+            <div className="text-center">
+              <div className="text-2xl font-mono font-bold text-slate-900 dark:text-white tracking-wider">
+                {formatDuration(elapsed)}
+              </div>
+              <div className="flex justify-center gap-2 mt-3">
+                {timeEntries.find(e => e.status === 'running') ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      icon={<Timer className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        const running = timeEntries.find(e => e.status === 'running');
+                        if (running) handlePauseTimer(running.id);
+                      }}
+                      loading={timeSubmitting}
+                    >
+                      Пауза
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={<XCircle className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        const running = timeEntries.find(e => e.status === 'running');
+                        if (running) handleStopTimer(running.id);
+                      }}
+                      loading={timeSubmitting}
+                    >
+                      Стоп
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<Play className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        const paused = timeEntries.find(e => e.status === 'paused');
+                        if (paused) handleResumeTimer(paused.id);
+                      }}
+                      loading={timeSubmitting}
+                    >
+                      Продолжить
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      icon={<Square className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        const paused = timeEntries.find(e => e.status === 'paused');
+                        if (paused) handleStopTimer(paused.id);
+                      }}
+                      loading={timeSubmitting}
+                    >
+                      Стоп
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <Button
+              fullWidth
+              size="sm"
+              icon={<Play className="w-4 h-4" />}
+              onClick={handleStartTimer}
+              loading={timeSubmitting}
+              disabled={!isEditable}
+            >
+              Начать учёт времени
+            </Button>
+          )}
+
+          {/* Recent entries */}
+          {timeEntries.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {[...timeEntries]
+                .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+                .slice(0, 3)
+                .map(entry => (
+                  <div key={entry.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded text-xs">
+                    <span className="font-mono text-slate-600 dark:text-slate-400">
+                      {formatDuration(entry.total_seconds)}
+                    </span>
+                    <Badge variant={
+                      entry.status === 'running' ? 'success' :
+                      entry.status === 'paused' ? 'warning' : 'neutral'
+                    } size="sm">
+                      {entry.status === 'running' ? 'Активен' :
+                       entry.status === 'paused' ? 'Пауза' : 'Остановлен'}
+                    </Badge>
+                  </div>
+                ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    </>
+  );
+
+  // ── Render ────────────────────────────────────────────────────────
+
+  return (
+    <PermissionGuard requiredRole={['admin', 'manager', 'technician']}>
+      <ThreeColumnTemplate
+        header={
+          <WODetailHeader
+            workOrder={workOrder}
+            submitting={submitting}
+            onStart={handleStart}
+            onComplete={() => setCompleteModal(true)}
+            onCancel={() => setCancelModal(true)}
+            onBack={() => navigate('/work-orders')}
+          />
+        }
+        left={leftColumn}
+        center={centerColumn}
+        right={rightColumn}
+        leftHeader="Метаданные"
+        centerHeader="Основное"
+        rightHeader="Детали"
+      />
+
+      {/* ═══ MODALS ═══ */}
+
+      {/* Complete Modal */}
+      <Modal
+        isOpen={completeModal}
+        onClose={() => setCompleteModal(false)}
+        title="Завершить наряд-заказ"
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+              Заметки о выполнении
+            </label>
+            <textarea
+              value={completeNotes}
+              onChange={(e) => setCompleteNotes(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Опишите выполненные работы..."
+            />
+          </div>
+
+          {/* File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+              Фотографии
+            </label>
+            <FileUpload
+              onUpload={handleFileUpload}
+              accept="image/*"
+              maxFiles={10}
+              maxSizeMB={20}
+              label="Перетащите фото или нажмите для выбора"
+            />
+            {completePhotos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {completePhotos.map((p, i) => (
+                  <div key={i} className="relative aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img src={p} alt="" className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => setCompletePhotos(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute top-1 right-1 p-0.5 bg-red-500 text-white rounded-full"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Parts Selection */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+              Использованные запчасти
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+              {spareParts.map(part => {
+                const used = completeParts.find(p => p.part_id === part.id);
+                return (
+                  <div
+                    key={part.id}
+                    className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm"
+                  >
+                    <span className="text-slate-700 dark:text-slate-300 truncate flex-1 mr-2">
+                      {part.name}
+                    </span>
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => setCompletePhotos(prev => prev.filter((_, j) => j !== i))}
-                        className="absolute top-1 right-1 p-0.5 bg-red-500 text-white rounded-full"
+                        onClick={() => togglePartUsage(part.id, Math.max(0, (used?.quantity || 0) - 1))}
+                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600"
                       >
-                        <XCircle className="w-3.5 h-3.5" />
+                        −
+                      </button>
+                      <span className="w-6 text-center font-mono text-sm">
+                        {used?.quantity || 0}
+                      </span>
+                      <button
+                        onClick={() => togglePartUsage(part.id, (used?.quantity || 0) + 1)}
+                        className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600"
+                      >
+                        +
                       </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Parts Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                Использованные запчасти
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {spareParts.map(part => {
-                  const used = completeParts.find(p => p.part_id === part.id);
-                  return (
-                    <div
-                      key={part.id}
-                      className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-sm"
-                    >
-                      <span className="text-slate-700 dark:text-slate-300 truncate flex-1 mr-2">
-                        {part.name}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => togglePartUsage(part.id, Math.max(0, (used?.quantity || 0) - 1))}
-                          className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600"
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center font-mono text-sm">
-                          {used?.quantity || 0}
-                        </span>
-                        <button
-                          onClick={() => togglePartUsage(part.id, (used?.quantity || 0) + 1)}
-                          className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <Button variant="outline" onClick={() => setCompleteModal(false)}>
-                Отмена
-              </Button>
-              <Button
-                icon={<CheckCircle className="w-4 h-4" />}
-                onClick={handleComplete}
-                loading={submitting}
-              >
-                Завершить
-              </Button>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </Modal>
 
-        {/* Cancel Modal */}
-        <Modal
-          isOpen={cancelModal}
-          onClose={() => setCancelModal(false)}
-          title="Отменить наряд-заказ"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
-                Причина отмены
-              </label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                rows={3}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="Укажите причину отмены..."
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <Button variant="outline" onClick={() => setCancelModal(false)}>
-                Назад
-              </Button>
-              <Button
-                variant="danger"
-                icon={<XCircle className="w-4 h-4" />}
-                onClick={handleCancel}
-                loading={submitting}
-                disabled={!cancelReason.trim()}
-              >
-                Отменить наряд
-              </Button>
-            </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <Button variant="outline" onClick={() => setCompleteModal(false)}>
+              Отмена
+            </Button>
+            <Button
+              icon={<CheckCircle className="w-4 h-4" />}
+              onClick={handleComplete}
+              loading={submitting}
+            >
+              Завершить
+            </Button>
           </div>
-        </Modal>
-      </div>
+        </div>
+      </Modal>
+
+      {/* Cancel Modal */}
+      <Modal
+        isOpen={cancelModal}
+        onClose={() => setCancelModal(false)}
+        title="Отменить наряд-заказ"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+              Причина отмены
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="Укажите причину отмены..."
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <Button variant="outline" onClick={() => setCancelModal(false)}>
+              Назад
+            </Button>
+            <Button
+              variant="danger"
+              icon={<XCircle className="w-4 h-4" />}
+              onClick={handleCancel}
+              loading={submitting}
+              disabled={!cancelReason.trim()}
+            >
+              Отменить наряд
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </PermissionGuard>
   );
 };
