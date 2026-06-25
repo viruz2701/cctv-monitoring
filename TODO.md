@@ -135,7 +135,7 @@ Command Palette (⌘K)
 5
 Поиск по всему приложению (Linear-style)
 -80% time-to-action
-✅ DONE
+✅ DONE (commit b71f7d7)
 UX-14.1.6
 Onboarding Tour
 4
@@ -329,7 +329,7 @@ UX
 Command Palette (⌘K)
 5
 ⚡ -80% time-to-action
-✅ DONE
+✅ DONE (commit b71f7d7)
 UX-14.1.6
 UX
 Onboarding Tour

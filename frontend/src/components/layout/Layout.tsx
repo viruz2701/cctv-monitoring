@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
+import { OnboardingTour } from '../ui/OnboardingTour';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
 export function Layout() {
@@ -74,6 +75,9 @@ export function Layout() {
 
             {/* Command Palette (⌘K) — UX-14.1.5 */}
             <CommandPalette />
+
+            {/* Onboarding Tour — UX-14.1.6 */}
+            <OnboardingTour />
 
             {/* Main Content */}
             <main
