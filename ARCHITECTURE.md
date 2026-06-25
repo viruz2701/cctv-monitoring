@@ -456,6 +456,167 @@ frontend/src/
 │   ├── maintenanceApi.ts
 │   └── p2pApi.ts
 └── hooks/               # Custom hooks
+
+### State Management (ADR-005)
+
+**Принцип разделения ответственности:**
+- **Server State** → React Query (TanStack Query v5). Кеш с автоматической инвалидацией, оптимистичные обновления, рефетч по фокусу.
+- **UI State** → Zustand v5. Лёгкие store-only модули без boilerplate.
+- **URL State** → React Router v7 search params. Фильтры, пагинация, сортировка.
+
+```
+frontend/src/store/
+├── alertStore.ts          # Toast-уведомления, фильтры алертов
+├── commandPaletteStore.ts # Command Palette (Cmd+K)
+└── filterStore.ts         # Глобальные фильтры (дата, сайт, статус)
+```
+
+**Правила:**
+- Zustand store содержит ТОЛЬКО UI-состояние (модалки, фильтры, выделенные элементы)
+- Серверные данные НЕ дублируются в Zustand — только React Query
+- Мутации через React Query `useMutation` с `onSuccess` инвалидацией
+- Для optimistic updates — `onMutate` + `onSettled`
+
+**Пример (Zustand):** [`frontend/src/store/alertStore.ts`](frontend/src/store/alertStore.ts)
+```typescript
+interface AlertStore {
+  toasts: ToastAlert[];
+  addToast: (toast: Omit<ToastAlert, 'id'>) => void;
+  removeToast: (id: string) => void;
+  filters: AlertFilters;
+  setFilters: (filters: Partial<AlertFilters>) => void;
+}
+```
+
+**Пример (React Query):** [`frontend/src/hooks/useApiQuery.ts`](frontend/src/hooks/useApiQuery.ts)
+```typescript
+export function useDevices(filters?: DeviceFilters) {
+  return useQuery({
+    queryKey: ['devices', filters],
+    queryFn: () => api.get('/api/devices', { params: filters }),
+    staleTime: 30_000,
+  });
+}
+```
+
+### Component Architecture (Atomic Design)
+
+```
+frontend/src/components/
+├── ui/                    # Atoms — базовые UI-компоненты
+│   ├── Button.tsx
+│   ├── Badge.tsx
+│   ├── Modal.tsx
+│   ├── Input.tsx
+│   ├── Tabs.tsx
+│   ├── Tooltip.tsx
+│   └── __tests__/         # Vitest tests (новые)
+│       ├── Button.test.tsx
+│       ├── Badge.test.tsx
+│       ├── Modal.test.tsx
+│       └── ...
+├── molecules/             # Molecules — композиция атомов
+│   ├── DateRangePicker.tsx
+│   ├── PriorityPicker.tsx
+│   ├── SLAProgressBar.tsx
+│   └── TechnicianSelector.tsx
+├── organisms/             # Organisms — сложные самодостаточные блоки
+│   ├── AssetTree.tsx
+│   └── BeforeAfterSlider.tsx
+├── layout/                # Layout — каркас приложения
+│   ├── Header.tsx
+│   ├── Sidebar.tsx
+│   ├── Layout.tsx
+│   └── ThreeColumnTemplate.tsx
+├── auth/                  # Auth — guards, protected routes
+│   ├── PermissionGuard.tsx
+│   └── RoleProtectedRoute.tsx
+├── dashboard/             # Dashboard — виджеты дашборда
+│   ├── AlertBanner.tsx
+│   └── DragDropDashboard.tsx
+├── work-orders/           # Work Orders — доменные компоненты
+│   ├── QuickFilters.tsx
+│   ├── WOKanbanBoard.tsx
+│   ├── WODetailHeader.tsx
+│   └── ...
+├── devices/               # Devices — доменные компоненты
+├── reports/               # Reports — доменные компоненты
+├── sla/                   # SLA — доменные компоненты
+└── spare-parts/           # Spare Parts — доменные компоненты
+```
+
+**Принципы композиции:**
+- Atoms не имеют бизнес-логики, только presentation + a11y
+- Molecules комбинируют atoms + простую валидацию
+- Organisms содержат бизнес-логику, data fetching, state
+- Domain-компоненты (work-orders/, devices/) используют organisms и molecules
+
+### Design System v2
+
+**Токены (TailwindCSS v4):**
+- Цвета: slate как базовый, blue/accent, emerald/success, amber/warning, red/danger
+- Типографика: system font stack (Inter fallback)
+- Тени: `shadow-sm` для карточек, `shadow-lg` для модалок, `shadow-xl` для dropdown
+- Скругления: `rounded-lg` (8px) для UI, `rounded-2xl` (16px) для модалок
+- Анимации: `transition-all duration-150 ease-in-out` стандарт
+
+**Accessibility (WCAG 2.1 AA):**
+- Все интерактивные элементы имеют `focus-visible` ring
+- Цветовые индикаторы (dot) сопровождаются `aria-label`
+- Модалки используют focus trap + `aria-modal`
+- Tooltip имеет `role="tooltip"`, dismiss via Escape
+- Dropdown имеет `aria-haspopup`, `aria-expanded`, keyboard navigation
+
+**Тёмная тема:**
+- Все компоненты поддерживают `dark:` префиксы
+- Переключение через [`ThemeContext`](frontend/src/context/ThemeContext.tsx)
+- Persistence в localStorage с `prefers-color-scheme` fallback
+
+**Компоненты (56 шт.):**
+- Atoms: Button, Badge, Input, Select, Tabs, Tooltip, Dropdown, Modal, Skeleton, ProgressBar, EmptyState, Alert, Card, Breadcrumbs, VisuallyHidden, Toast
+- Molecules: StatsCard, Gauge, Timeline, QRCode, FileUpload, DateRangePicker, PriorityPicker, SLAProgress, LiveSLATimer
+- Organisms: DataGrid, VirtualTable, ImportWizard, AdvancedSearch, CommandPalette, OnboardingTour, ThemeCustomizer, SavedViews, WorkOrderPrintView
+
+### Performance Patterns
+
+**Code Splitting:**
+```typescript
+// Ленивая загрузка страниц (React.lazy + Suspense)
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const WorkOrders = lazy(() => import('./pages/WorkOrders'));
+
+// PageSuspense — обёртка с Skeleton
+<PageSuspense name="dashboard">
+  <Dashboard />
+</PageSuspense>
+```
+Файл: [`frontend/src/components/layout/PageSuspense.tsx`](frontend/src/components/layout/PageSuspense.tsx)
+
+**Virtual Scrolling:**
+- [`DataGrid`](frontend/src/components/ui/DataGrid.tsx) использует `@tanstack/react-virtual` для рендеринга только видимых строк
+- [`VirtualTable`](frontend/src/components/ui/VirtualTable.tsx) — альтернатива для больших таблиц (10k+ rows)
+
+**React Query Optimizations:**
+- `staleTime: 30s` для списков, `staleTime: 5min` для справочников
+- `gcTime: 5min` для кеширования после unmount
+- `keepPreviousData` для пагинации (без лагов между страницами)
+- Prefetching на hover: `queryClient.prefetchQuery`
+
+**Мемоизация:**
+- React.memo для тяжёлых компонентов (DataGrid rows, таблицы)
+- useMemo для вычисляемых значений (фильтрация, сортировка)
+- useCallback для callback'ов в списках
+
+**Бандл:**
+- Vite 8 с automatic code splitting по routes
+- Lucide icons — tree-shakeable (импорт только нужных иконок)
+- Rollup Plugin Visualizer для анализа бандла: `npm run build && npx vite-bundle-analyzer`
+
+**Тестирование производительности:**
+- Vitest для unit-тестов компонентов
+- React Testing Library для интеграционных тестов
+- Lighthouse CI в CI/CD pipeline (planned)
+
 UX Patterns (from Atlas/Grash/Snipe-IT)
 1. DataGrid Pattern (Snipe-IT)
 Файл: frontend/src/components/ui/DataGrid.tsx

@@ -1,7 +1,9 @@
+import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { WorkOrders } from '../WorkOrders';
 
 // Mock React Query hooks
@@ -60,6 +62,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+// Mock useAuth to avoid AuthProvider requirement
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user', name: 'Test User', role: 'admin' },
+    token: 'test-token',
+  }),
+}));
+
 // Mock modules that might cause issues in test environment
 vi.mock('../../components/work-orders/QuickFilters', () => ({
   QuickFilters: () => null,
@@ -74,9 +84,11 @@ const queryClient = new QueryClient({
 
 function renderWithProviders(ui: React.ReactElement) {
   return render(
-    <QueryClientProvider client={queryClient}>
-      {ui}
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        {ui}
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 

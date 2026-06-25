@@ -1,9 +1,23 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { Dashboard } from '../Dashboard';
 
-// Mock contexts
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
+// Mock all contexts and hooks used by Dashboard
 vi.mock('../../context/DataContext', () => ({
   useTickets: () => ({ tickets: [] }),
   useAlerts: () => ({ alerts: [] }),
@@ -30,6 +44,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('../../hooks/useApiQuery', () => ({
+  useDevices: () => ({ data: [], isLoading: false }),
+  useSites: () => ({ data: [], isLoading: false }),
+  useAlerts: () => ({ data: [], isLoading: false }),
+  useTickets: () => ({ data: [], isLoading: false }),
+  useAlarms: () => ({ data: [], isLoading: false }),
+}));
+
 vi.mock('../../components/dashboard/AlertBanner', () => ({
   AlertBanner: () => <div data-testid="alert-banner" />,
 }));
@@ -53,25 +75,29 @@ vi.mock('recharts', () => ({
 }));
 
 describe('Dashboard', () => {
-  it('renders without crashing', () => {
-    render(<Dashboard />);
-    expect(screen.getByText('total_devices')).toBeTruthy();
+  it('renders without crashing', async () => {
+    renderWithProviders(<Dashboard />);
+    const title = await screen.findByText('total_devices', {}, { timeout: 3000 });
+    expect(title).toBeTruthy();
   });
 
-  it('shows filter controls', () => {
-    render(<Dashboard />);
-    expect(screen.getByText('all_sites')).toBeTruthy();
+  it('shows filter controls', async () => {
+    renderWithProviders(<Dashboard />);
+    const sites = await screen.findByText('all_sites', {}, { timeout: 3000 });
+    expect(sites).toBeTruthy();
     expect(screen.getByText('all_types')).toBeTruthy();
     expect(screen.getByText('all_statuses')).toBeTruthy();
   });
 
-  it('shows customize layout button', () => {
-    render(<Dashboard />);
-    expect(screen.getByText('customize_layout')).toBeTruthy();
+  it('shows customize layout button', async () => {
+    renderWithProviders(<Dashboard />);
+    const btn = await screen.findByText('customize_layout', {}, { timeout: 3000 });
+    expect(btn).toBeTruthy();
   });
 
-  it('shows clear filters button', () => {
-    render(<Dashboard />);
-    expect(screen.getByText('clear_filters')).toBeTruthy();
+  it('shows clear filters button', async () => {
+    renderWithProviders(<Dashboard />);
+    const btn = await screen.findByText('clear_filters', {}, { timeout: 3000 });
+    expect(btn).toBeTruthy();
   });
 });
