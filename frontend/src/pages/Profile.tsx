@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, X, Edit2, MapPin, Briefcase, Trash2, Clock, Calendar, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input } from '../components/ui';
+import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -108,7 +108,47 @@ export function Profile() {
         loadTelegramStatus();
     }, []);
 
-    if (!user) return null;
+    if (!user) {
+        return (
+            <div className="space-y-5 max-w-5xl mx-auto pb-10" aria-label="Loading profile">
+                {/* Profile Header Skeleton */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 md:p-8 shadow-sm">
+                    <div className="flex flex-col md:flex-row items-center md:items-start gap-5">
+                        <SkeletonAvatar size="xl" />
+                        <div className="flex-1 text-center md:text-left min-w-0 space-y-3">
+                            <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 animate-pulse rounded mx-auto md:mx-0" />
+                            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 animate-pulse rounded mx-auto md:mx-0" />
+                        </div>
+                        <div className="flex-shrink-0">
+                            <div className="h-10 w-36 bg-slate-200 dark:bg-slate-700 animate-pulse rounded-xl" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    <div className="lg:col-span-2 space-y-5">
+                        {/* Core Identity Skeleton */}
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 md:p-6 shadow-sm">
+                            <div className="h-3 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded mb-5" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+                                <SkeletonProfileField />
+                                <SkeletonProfileField />
+                                <SkeletonProfileField />
+                                <SkeletonProfileField />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-5">
+                        <SkeletonCard headerLines={1} bodyLines={3} />
+                        <SkeletonCard headerLines={1} bodyLines={3} />
+                        <SkeletonCard headerLines={1} bodyLines={3} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // ═══ Password Change Handlers ═══
     const handlePasswordReset = () => {

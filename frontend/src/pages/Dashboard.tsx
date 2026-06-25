@@ -19,7 +19,7 @@ import {
     Settings,
     GripVertical,
 } from 'lucide-react';
-import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select } from '../components/ui';
+import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../components/ui';
 import { useTickets, useAlerts, useDevicesSites, useSettings } from '../context/DataContext';
 import { AlertBanner } from '../components/dashboard/AlertBanner';
 import { useTranslation } from 'react-i18next';
@@ -68,6 +68,12 @@ export function Dashboard() {
     const { devices, sites } = useDevicesSites();
     const { dashboardConfig, updateDashboardConfig } = useSettings();
     const [isConfigOpen, setIsConfigOpen] = React.useState(false);
+    const [pageLoading, setPageLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        const timer = setTimeout(() => setPageLoading(false), 300);
+        return () => clearTimeout(timer);
+    }, []);
 
     const [selectedSite, setSelectedSite] = React.useState('all');
     const [selectedDeviceType, setSelectedDeviceType] = React.useState('all');
@@ -360,6 +366,49 @@ export function Dashboard() {
         'statsRow', 'ticketStats', 'deviceHealthChart', 'alertTrendChart',
         'ticketTrendChart', 'recentAlerts', 'latestTickets', 'quickActions'
     ];
+
+    if (pageLoading) {
+        return (
+            <div className="space-y-6">
+                {/* Loading Skeleton */}
+                <div className="flex flex-col sm:flex-row gap-4 p-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+                        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                    </div>
+                    <div className="flex items-end gap-2">
+                        <div className="h-10 w-24 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                        <div className="h-10 w-24 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SkeletonChart />
+                    <SkeletonChart />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <SkeletonChart />
+                    <SkeletonCard />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

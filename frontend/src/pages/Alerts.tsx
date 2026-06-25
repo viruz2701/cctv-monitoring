@@ -10,7 +10,7 @@ import {
     Check,
     CheckCircle
 } from 'lucide-react';
-import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal } from '../components/ui';
+import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal, SkeletonTable, SkeletonCard } from '../components/ui';
 import { useAlerts } from '../context/DataContext';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,7 @@ import type { Alert } from '../types';
 export function Alerts() {
     const { t } = useTranslation();
     const { alerts, updateAlertStatus, deleteAlert } = useAlerts();
+    const isLoading = alerts.length === 0;
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -196,12 +197,21 @@ export function Alerts() {
             </div>
 
             {/* Status Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('total_alerts')}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{statusCounts.total}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-red-50 dark:bg-red-900/30 rounded-xl"><AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('active')}</p><p className="text-xl font-bold text-red-600 dark:text-red-400">{statusCounts.active}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 rounded-xl"><Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('acknowledged')}</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{statusCounts.acknowledged}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl"><CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('resolved')}</p><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{statusCounts.resolved}</p></div></div></CardBody></Card>
-            </div>
+            {isLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('total_alerts')}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{statusCounts.total}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-red-50 dark:bg-red-900/30 rounded-xl"><AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('active')}</p><p className="text-xl font-bold text-red-600 dark:text-red-400">{statusCounts.active}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 rounded-xl"><Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('acknowledged')}</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{statusCounts.acknowledged}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl"><CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('resolved')}</p><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{statusCounts.resolved}</p></div></div></CardBody></Card>
+                </div>
+            )}
 
             {showFilters && (
                 <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
@@ -213,19 +223,23 @@ export function Alerts() {
                 </div>
             )}
 
-            <DataGrid
-                data={filteredAlerts}
-                columns={columns}
-                keyExtractor={(item) => item.id}
-                sortColumn={sortColumn}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                emptyMessage={t('no_alerts')}
-                variant="striped"
-                defaultDensity="standard"
-                pageSize={20}
-                exportFilename="alerts.csv"
-            />
+            {isLoading ? (
+                <SkeletonTable rows={8} columns={4} />
+            ) : (
+                <DataGrid
+                    data={filteredAlerts}
+                    columns={columns}
+                    keyExtractor={(item) => item.id}
+                    sortColumn={sortColumn}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    emptyMessage={t('no_alerts')}
+                    variant="striped"
+                    defaultDensity="standard"
+                    pageSize={20}
+                    exportFilename="alerts.csv"
+                />
+            )}
 
             <ConfirmModal
                 isOpen={deleteConfirm.isOpen}

@@ -27,7 +27,9 @@ import {
     Table,
     Modal,
     ConfirmModal,
-    SearchInput
+    SearchInput,
+    SkeletonCard,
+    SkeletonTable,
 } from '../components/ui';
 import { useDevicesSites } from '../context/DevicesSitesContext';
 import { useUsers } from '../context/UsersContext';
@@ -43,6 +45,8 @@ export function Sites() {
     const [searchParams, setSearchParams] = useSearchParams();
     const { sites, devices, addSite, updateSite, deleteSite } = useDevicesSites();
     const { users } = useUsers();
+
+    const isLoading = sites.length === 0 && devices.length === 0;
     const toast = useToast();
 
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -345,32 +349,36 @@ export function Sites() {
                 </div>
             )}
 
-            <Table<Site>
-                data={filteredSites}
-                columns={columns}
-                keyExtractor={(s) => s.id}
-                onRowClick={(s) => toggleExpand(s.id)}
-                expandable={(site) => expandedSiteId === site.id && (
-                    <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700">
-                        <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                            <Camera className="w-4 h-4" /> {t('connected_devices')}
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {getSiteDevices(site.id).map(device => (
-                                <div key={device.id} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <div className={`w-2 h-2 rounded-full ${device.status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                    <div><p className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{device.ipAddress}</p></div>
-                                </div>
-                            ))}
-                            {getSiteDevices(site.id).length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400 italic">{t('no_devices_site')}</p>}
+            {isLoading ? (
+                <SkeletonTable rows={5} columns={5} />
+            ) : (
+                <Table<Site>
+                    data={filteredSites}
+                    columns={columns}
+                    keyExtractor={(s) => s.id}
+                    onRowClick={(s) => toggleExpand(s.id)}
+                    expandable={(site) => expandedSiteId === site.id && (
+                        <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700">
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                                <Camera className="w-4 h-4" /> {t('connected_devices')}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {getSiteDevices(site.id).map(device => (
+                                    <div key={device.id} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        <div className={`w-2 h-2 rounded-full ${device.status === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                        <div><p className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{device.ipAddress}</p></div>
+                                    </div>
+                                ))}
+                                {getSiteDevices(site.id).length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400 italic">{t('no_devices_site')}</p>}
+                            </div>
+                            <div className="mt-4 flex justify-end">
+                                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); navigate(`/devices?site=${site.id}`); }}>{t('view_all_devices')}</Button>
+                            </div>
                         </div>
-                        <div className="mt-4 flex justify-end">
-                            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); navigate(`/devices?site=${site.id}`); }}>{t('view_all_devices')}</Button>
-                        </div>
-                    </div>
-                )}
-                emptyMessage={t('no_sites')}
-            />
+                    )}
+                    emptyMessage={t('no_sites')}
+                />
+            )}
 
             {/* Edit/Create Site Modal */}
             <Modal

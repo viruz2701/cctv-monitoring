@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataGrid, Badge } from '../components/ui';
+import { Card, DataGrid, Badge, SkeletonStatsCard, SkeletonChart, SkeletonTable } from '../components/ui';
 import { api, Prediction } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -48,7 +48,29 @@ export function Analytics() {
   const avgMTTR = mttrTrendData.reduce((a, b) => a + b.mttr, 0) / mttrTrendData.length;
   const availability = ((avgMTBF / (avgMTBF + avgMTTR)) * 100).toFixed(2);
 
-  if (loading) return <div className="p-8 text-center">{t('loading')}</div>;
+  if (loading) return (
+    <div className="space-y-6" aria-label="Loading content">
+      {/* Header skeleton */}
+      <div className="space-y-2">
+        <div className="h-7 w-48 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
+        <div className="h-4 w-64 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
+      </div>
+
+      {/* Stats cards skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <SkeletonStatsCard count={4} withTrend />
+      </div>
+
+      {/* Charts skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SkeletonChart />
+        <SkeletonChart />
+      </div>
+
+      {/* Table skeleton */}
+      <SkeletonTable rows={5} columns={4} />
+    </div>
+  );
   if (error) return <div className="p-8 text-red-500">Error: {error}</div>;
 
   return (

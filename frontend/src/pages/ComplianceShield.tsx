@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
-import { Card, DataGrid, Badge, StatsCard, EmptyState } from '../components/ui';
+import { Card, DataGrid, Badge, StatsCard, EmptyState, SkeletonStatsCard, SkeletonChart, SkeletonTable } from '../components/ui';
 import {
   Shield,
   AlertTriangle,
@@ -384,11 +384,25 @@ export const ComplianceShield: React.FC = () => {
 
       {/* Loading State */}
       {loading && !summary && (
-        <EmptyState
-          icon={<Activity className="w-12 h-12" />}
-          title="Loading compliance data..."
-          description="Please wait while we fetch the latest risk assessment."
-        />
+        <div className="space-y-6">
+          {/* Skeleton KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SkeletonStatsCard />
+            <SkeletonStatsCard />
+            <SkeletonStatsCard />
+            <SkeletonStatsCard />
+          </div>
+
+          {/* Skeleton Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <SkeletonChart />
+            <SkeletonChart />
+            <SkeletonChart />
+          </div>
+
+          {/* Skeleton Table */}
+          <SkeletonTable rows={5} columns={5} />
+        </div>
       )}
 
       {/* KPI Cards */}

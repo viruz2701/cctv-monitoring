@@ -32,7 +32,9 @@ import {
     Input,
     Select,
     Modal,
-    ConfirmModal
+    ConfirmModal,
+    SkeletonTable,
+    SkeletonStatsCard,
 } from '../components/ui';
 import { VirtualTable } from '../components/ui/VirtualTable';
 import { useDevicesSites } from '../context/DataContext';
@@ -61,6 +63,7 @@ export function Devices() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { devices, sites, addDevice, updateDevice, deleteDevice } = useDevicesSites();
+    const isLoading = devices.length === 0 && sites.length === 0;
     const [searchParams] = useSearchParams();
     const [statusFilter, setStatusFilter] = useState('all');
     const [siteFilter, setSiteFilter] = useState(searchParams.get('site') || 'all');
@@ -299,12 +302,21 @@ export function Devices() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><HardDrive className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('total_devices')}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{statusCounts.total}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('online')}</p><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{statusCounts.online}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-red-50 dark:bg-red-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-red-500 rounded-full" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('offline')}</p><p className="text-xl font-bold text-red-600 dark:text-red-400">{statusCounts.offline}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-full" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('warning')}</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{statusCounts.warning}</p></div></div></CardBody></Card>
-            </div>
+            {isLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                    <SkeletonStatsCard />
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><HardDrive className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('total_devices')}</p><p className="text-xl font-bold text-slate-900 dark:text-white">{statusCounts.total}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('online')}</p><p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{statusCounts.online}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-red-50 dark:bg-red-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-red-500 rounded-full" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('offline')}</p><p className="text-xl font-bold text-red-600 dark:text-red-400">{statusCounts.offline}</p></div></div></CardBody></Card>
+                    <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-amber-50 dark:bg-amber-900/30 rounded-xl"><div className="w-5 h-5 flex items-center justify-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-full" /></div></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('warning')}</p><p className="text-xl font-bold text-amber-600 dark:text-amber-400">{statusCounts.warning}</p></div></div></CardBody></Card>
+                </div>
+            )}
 
             {showFilters && (
                 <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
@@ -315,17 +327,21 @@ export function Devices() {
                 </div>
             )}
 
-            <VirtualTable
-                data={filteredDevices}
-                columns={columns}
-                keyExtractor={(device: Device) => device.id}
-                onRowClick={(device: Device) => navigate(`/devices/${device.id}`)}
-                sortColumn={sortColumn}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                emptyMessage={t('no_devices')}
-                maxHeight={700}
-            />
+            {isLoading ? (
+                <SkeletonTable rows={8} columns={6} />
+            ) : (
+                <VirtualTable
+                    data={filteredDevices}
+                    columns={columns}
+                    keyExtractor={(device: Device) => device.id}
+                    onRowClick={(device: Device) => navigate(`/devices/${device.id}`)}
+                    sortColumn={sortColumn}
+                    sortDirection={sortDirection}
+                    onSort={handleSort}
+                    emptyMessage={t('no_devices')}
+                    maxHeight={700}
+                />
+            )}
 
             <AddDeviceModal
                 isOpen={showAddDeviceModal}

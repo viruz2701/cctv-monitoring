@@ -7,7 +7,7 @@ import { useUsers } from '../context/UsersContext';
 import { useAuth } from '../hooks/useAuth';
 import { WorkOrder } from '../services/workOrdersApi';
 import type { User as ApiUser } from '../services/api';
-import { Button, Card, Badge, Modal, Input, useToast } from '../components/ui';
+import { Button, Card, Badge, Modal, Input, useToast, SkeletonTable } from '../components/ui';
 import { VirtualTable } from '../components/ui/VirtualTable';
 import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
@@ -423,6 +423,20 @@ export const WorkOrders: React.FC = () => {
       ),
     },
   ];
+
+  if (loading && workOrders.length === 0) {
+    return (
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="h-8 w-48 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+          <div className="h-10 w-40 bg-gray-200 dark:bg-slate-700 rounded animate-pulse" />
+        </div>
+        <Card>
+          <SkeletonTable rows={8} columns={6} />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">

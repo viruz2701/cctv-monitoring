@@ -17,7 +17,9 @@ import {
     VirtualTable,
     Modal,
     ConfirmModal,
-    SearchInput
+    SearchInput,
+    SkeletonTable,
+    SkeletonCard
 } from '../components/ui';
 import { useTickets, useDevicesSites } from '../context/DataContext';
 import { Ticket as TicketType } from '../types';
@@ -30,6 +32,7 @@ export function Tickets() {
     const [searchParams] = useSearchParams();
     const { tickets, addTicket, deleteTicket } = useTickets();
     const { devices, sites } = useDevicesSites();
+    const isLoading = tickets.length === 0;
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [priorityFilter, setPriorityFilter] = useState<string>('all');
@@ -190,12 +193,21 @@ export function Tickets() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-slate-900 dark:text-white">{tickets.length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('total_tickets')}</p></div></CardBody></Card>
-                <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-red-600 dark:text-red-500">{tickets.filter((t) => t.status === 'open').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('open')}</p></div></CardBody></Card>
-                <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-blue-600 dark:text-blue-500">{tickets.filter((t) => t.status === 'in_progress').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('in_progress')}</p></div></CardBody></Card>
-                <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">{tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('resolved')}</p></div></CardBody></Card>
-            </div>
+            {isLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-slate-900 dark:text-white">{tickets.length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('total_tickets')}</p></div></CardBody></Card>
+                    <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-red-600 dark:text-red-500">{tickets.filter((t) => t.status === 'open').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('open')}</p></div></CardBody></Card>
+                    <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-blue-600 dark:text-blue-500">{tickets.filter((t) => t.status === 'in_progress').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('in_progress')}</p></div></CardBody></Card>
+                    <Card padding="sm"><CardBody><div className="text-center"><p className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">{tickets.filter((t) => t.status === 'resolved' || t.status === 'closed').length}</p><p className="text-sm text-slate-500 dark:text-slate-300">{t('resolved')}</p></div></CardBody></Card>
+                </div>
+            )}
 
             {showFilters && (
                 <div className="flex flex-col sm:flex-row gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 animate-in fade-in slide-in-from-top-2">
@@ -237,15 +249,19 @@ export function Tickets() {
                 </div>
             )}
 
-            <VirtualTable
-                data={filteredTickets}
-                columns={columns}
-                keyExtractor={(ticket) => ticket.id}
-                onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
-                emptyMessage={t('no_tickets')}
-                maxHeight={600}
-                estimateRowHeight={64}
-            />
+            {isLoading ? (
+                <SkeletonTable rows={8} columns={5} />
+            ) : (
+                <VirtualTable
+                    data={filteredTickets}
+                    columns={columns}
+                    keyExtractor={(ticket) => ticket.id}
+                    onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
+                    emptyMessage={t('no_tickets')}
+                    maxHeight={600}
+                    estimateRowHeight={64}
+                />
+            )}
 
             <Modal
                 isOpen={showCreateModal}

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpareParts } from '../context/SparePartsContext';
-import { Button, PartCard, Modal, Input, Badge, useToast, EmptyState } from '../components/ui';
+import { Button, PartCard, Modal, Input, Badge, useToast, EmptyState, SkeletonCard } from '../components/ui';
 import { Plus, Search, AlertTriangle, RefreshCw, ShoppingCart, Tag, Edit, Trash2 } from 'lucide-react';
 
 const CATEGORY_COLORS = [
@@ -99,9 +99,7 @@ export const SpareParts: React.FC = () => {
       {/* Parts grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="animate-pulse bg-white dark:bg-slate-800 rounded-xl p-5 h-48 border border-slate-200 dark:border-slate-700" />
-          ))}
+          <SkeletonCard count={6} />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

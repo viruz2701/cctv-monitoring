@@ -6,6 +6,7 @@ import {
 import { useNotifications } from '../context/NotificationsContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { SkeletonNotification, SkeletonCard } from '../components/ui';
 
 function startOfDay(date: Date): Date {
     const d = new Date(date);
@@ -46,6 +47,11 @@ export function Notifications() {
 
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [pageLoading, setPageLoading] = React.useState(true);
+    React.useEffect(() => {
+        const timer = setTimeout(() => setPageLoading(false), 500);
+        return () => clearTimeout(timer);
+    }, []);
     const navigate = useNavigate();
 
     const timeAgo = (dateStr: string) => {
@@ -137,7 +143,30 @@ export function Notifications() {
 
     return (
         <div className="space-y-4 sm:space-y-6">
-            <div className="sticky top-16 z-20 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-sm pt-2 sm:pt-3 pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-slate-200 dark:border-slate-800 space-y-2 sm:space-y-3">
+            {pageLoading ? (
+                <div className="space-y-6" aria-label="Loading notifications">
+                    {/* Header skeleton */}
+                    <div className="space-y-2">
+                        <div className="h-7 w-48 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
+                        <div className="h-4 w-64 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
+                    </div>
+
+                    {/* Filter pills skeleton */}
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                        {Array.from({ length: 4 }, (_, i) => (
+                            <div
+                                key={i}
+                                className="h-8 w-20 bg-slate-200 dark:bg-slate-700 animate-pulse rounded-full flex-shrink-0"
+                            />
+                        ))}
+                    </div>
+
+                    {/* Notifications skeleton */}
+                    <SkeletonNotification count={5} />
+                </div>
+            ) : (
+                <>
+                    <div className="sticky top-16 z-20 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-sm pt-2 sm:pt-3 pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-slate-200 dark:border-slate-800 space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                         <h1 className="hidden sm:block text-2xl font-bold text-slate-900 dark:text-white">{t('notifications')}</h1>
@@ -228,8 +257,10 @@ export function Notifications() {
                         <p className="text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">{t('no_notifications_match')}</p>
                         {activeFilter !== 'all' && <button onClick={() => setActiveFilter('all')} className="mt-4 text-blue-600 hover:text-blue-700 font-medium text-sm">{t('clear_filters')}</button>}
                     </div>
-                )}
-            </div>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     );
 }

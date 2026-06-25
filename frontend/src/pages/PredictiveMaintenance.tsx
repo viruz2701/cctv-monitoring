@@ -39,7 +39,7 @@ import {
   BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts';
-import { Card, Badge, EmptyState } from '../components/ui';
+import { Card, Badge, EmptyState, SkeletonStatsCard, SkeletonChart, SkeletonTable } from '../components/ui';
 import { StatsCard } from '../components/ui/StatsCard';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useDevices, usePredictions } from '../hooks/useApiQuery';
@@ -284,18 +284,29 @@ export function PredictiveMaintenance() {
   // ── Loading State ──────────────────────────────────────────────────
   if (predictionsLoading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-64 bg-slate-200 dark:bg-slate-700 rounded" />
+      <div className="space-y-6">
+        {/* Title skeleton */}
+        <div className="h-8 w-64 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
+
+        {/* KPI Cards skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-32 bg-slate-200 dark:bg-slate-700 rounded-xl" />
-          ))}
+          <SkeletonStatsCard />
+          <SkeletonStatsCard />
+          <SkeletonStatsCard />
+          <SkeletonStatsCard />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-80 bg-slate-200 dark:bg-slate-700 rounded-xl" />
-          ))}
+
+        {/* Charts skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonChart /> {/* PieChart area */}
+          <div className="lg:col-span-2 space-y-6">
+            <SkeletonChart /> {/* Risk Trend area */}
+            <SkeletonChart /> {/* Failure by Type area */}
+          </div>
         </div>
+
+        {/* At-Risk Devices Table skeleton */}
+        <SkeletonTable rows={5} columns={7} />
       </div>
     );
   }
