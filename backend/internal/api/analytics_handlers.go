@@ -290,3 +290,21 @@ func (s *Server) getWorkOrderCosts(w http.ResponseWriter, r *http.Request) {
 		Breakdown: breakdown,
 	})
 }
+
+// getAnalyticsCost возвращает аналитику затрат (заглушка).
+// TODO: реализовать полноценный запрос к БД.
+func (s *Server) getAnalyticsCost(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, http.StatusOK, []interface{}{})
+}
+
+// getAnalyticsCostTrend возвращает тренд затрат (заглушка).
+// TODO: реализовать полноценный запрос к БД.
+func (s *Server) getAnalyticsCostTrend(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, http.StatusOK, []interface{}{})
+}
+
+// getAnalyticsCostTop возвращает топ дорогих устройств (заглушка).
+// TODO: реализовать полноценный запрос к БД.
+func (s *Server) getAnalyticsCostTop(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, http.StatusOK, []interface{}{})
+}

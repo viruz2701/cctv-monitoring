@@ -38,11 +38,17 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 	r.Get("/api/v1/analytics/wo-costs", s.getWorkOrderCosts)            // WO-4.4.5
 	r.Get("/api/v1/analytics/downtime-costs", s.getDowntimeCostsBySite) // BIZ-01
 
+	// ── Аналитика cost ──────────────────────────────────────────────
+	r.Get("/api/v1/analytics/cost", s.getAnalyticsCost)
+	r.Get("/api/v1/analytics/cost/trend", s.getAnalyticsCostTrend)
+	r.Get("/api/v1/analytics/cost/top", s.getAnalyticsCostTop)
+
 	// ── Логи ─────────────────────────────────────────────────────────
 	r.Get("/api/v1/logs/search", s.searchLogs)
 
 	// ── Audit (ISO 27001 A.12.4) ─────────────────────────────────────
 	r.Get("/api/v1/audit/verify", s.handleAuditVerify)
+	r.Get("/api/v1/audit/log", s.handleListAuditLog)
 
 	// ── RCA (AI-01) ────────────────────────────────────────────────────
 	r.Get("/api/v1/rca/{id}", s.handleRCAGraph)

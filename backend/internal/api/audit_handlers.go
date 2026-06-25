@@ -71,3 +71,10 @@ func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
 		"corrupted_ids": corruptedIDs,
 	})
 }
+
+// handleListAuditLog возвращает записи журнала аудита.
+// GET /api/v1/audit/log?limit=N
+// TODO: реализовать полноценный запрос к БД.
+func (s *Server) handleListAuditLog(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, http.StatusOK, []interface{}{})
+}
