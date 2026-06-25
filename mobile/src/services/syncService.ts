@@ -47,6 +47,8 @@ class SyncService {
   private _listeners: Set<SyncListener> = new Set();
   private _isSyncing = false;
   private _unsubscribeNetInfo: (() => void) | null = null;
+  private _pendingCount: number = 0;
+  private _pendingCountInterval: ReturnType<typeof setInterval> | null = null;
 
   // ── Getters ────────────────────────────────────
 
@@ -60,6 +62,10 @@ class SyncService {
 
   get lastError(): string | null {
     return this._lastError;
+  }
+
+  get pendingCount(): number {
+    return this._pendingCount;
   }
 
   // ── Init ───────────────────────────────────────
@@ -76,6 +82,12 @@ class SyncService {
     const netState = await NetInfo.fetch();
     this._updateStatus(netState.isConnected ?? true ? 'online' : 'offline');
 
+    // Запускаем polling pendingCount
+    await this._refreshPendingCount();
+    this._pendingCountInterval = setInterval(() => {
+      this._refreshPendingCount();
+    }, 5_000);
+
     // Если онлайн — сразу пробуем синхронизировать
     if (this._status === 'online') {
       await this.syncWhenOnline();
@@ -86,6 +98,10 @@ class SyncService {
     if (this._unsubscribeNetInfo) {
       this._unsubscribeNetInfo();
       this._unsubscribeNetInfo = null;
+    }
+    if (this._pendingCountInterval) {
+      clearInterval(this._pendingCountInterval);
+      this._pendingCountInterval = null;
     }
     this._listeners.clear();
   }
@@ -333,10 +349,25 @@ class SyncService {
   private _getState(): SyncState {
     return {
       status: this._status,
-      pendingCount: 0, // будет обновлено асинхронно
+      pendingCount: this._pendingCount,
       lastSyncAt: this._lastSyncAt,
       lastError: this._lastError,
     };
+  }
+
+  /**
+   * Обновить кэшированное количество ожидающих мутаций.
+   */
+  private async _refreshPendingCount(): Promise<void> {
+    try {
+      const count = await getPendingMutationCount();
+      if (count !== this._pendingCount) {
+        this._pendingCount = count;
+        this._notifyListeners();
+      }
+    } catch (error) {
+      console.error('[SyncService] Failed to refresh pending count:', error);
+    }
   }
 }
 

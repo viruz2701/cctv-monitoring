@@ -6,19 +6,58 @@ import {
   RefreshControl,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { workOrdersApi } from '../api/workOrders';
 import { useSyncStore } from '../store/syncStore';
-import { syncService } from '../services/syncService';
+import {
+  syncService,
+  SyncState,
+  SyncStatus,
+} from '../services/syncService';
 import { RootStackParamList, WorkOrder } from '../types';
 import WorkOrderCard from '../components/WorkOrderCard';
 import SwipeableCard, { SwipeAction } from '../components/SwipeableCard';
 import OfflineIndicator from '../components/OfflineIndicator';
 import { getGreeting } from '../utils/dateHelpers';
 import { useAuthStore } from '../store/authStore';
+
+const SYNC_STATUS_CONFIG: Record<
+  SyncStatus,
+  { icon: string; label: string; color: string }
+> = {
+  online: {
+    icon: '🟢',
+    label: 'Синхронизировано',
+    color: '#065f46',
+  },
+  syncing: {
+    icon: '🔄',
+    label: 'Синхронизация...',
+    color: '#92400e',
+  },
+  offline: {
+    icon: '🔴',
+    label: 'Офлайн',
+    color: '#991b1b',
+  },
+};
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function formatSyncTime(timestamp: number | null): string {
+  if (!timestamp) return 'никогда';
+  const diff = Date.now() - timestamp;
+  const seconds = Math.floor(diff / 1000);
+
+  if (seconds < 60) return 'только что';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}м назад`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}ч назад`;
+  return `${Math.floor(seconds / 86400)}д назад`;
+}
 
 export default function DashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -28,6 +67,13 @@ export default function DashboardScreen() {
   const isOnline = useSyncStore((s) => s.isOnline);
   const [offlineOrders, setOfflineOrders] = useState<WorkOrder[] | null>(null);
   const [isOfflineFallback, setIsOfflineFallback] = useState(false);
+
+  // ── Sync state ─────────────────────────────────────────
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('online');
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   // ── Основной запрос с fallback на SQLite ──────────────
 
@@ -72,16 +118,38 @@ export default function DashboardScreen() {
     staleTime: isOnline ? 5 * 60 * 1000 : Infinity, // В офлайне не помечаем как stale
   });
 
-  // ── Обновление при восстановлении сети ────────────────
+  // ── Подписка на статус синхронизации ─────────────────
 
   useEffect(() => {
-    const unsubscribe = syncService.subscribe((state) => {
+    const unsubscribe = syncService.subscribe((state: SyncState) => {
+      setSyncStatus(state.status);
+      setLastSyncAt(state.lastSyncAt);
+      setPendingCount(state.pendingCount);
+
+      // Автоматический refetch при восстановлении сети
       if (state.status === 'online' && isOfflineFallback) {
         refetch();
       }
     });
+
     return () => unsubscribe();
   }, [isOfflineFallback, refetch]);
+
+  // ── Ручная синхронизация (pull-to-refresh) ────────────
+
+  const handleManualSync = useCallback(async () => {
+    if (isManualSyncing) return;
+
+    setIsManualSyncing(true);
+    try {
+      await syncService.syncWhenOnline();
+      await refetch();
+    } catch (error) {
+      console.error('[Dashboard] Manual sync failed:', error);
+    } finally {
+      setIsManualSyncing(false);
+    }
+  }, [isManualSyncing, refetch]);
 
   // ── Мутации ───────────────────────────────────────────
 
@@ -303,6 +371,42 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       <OfflineIndicator showQueueBadge alwaysVisible />
 
+      {/* Статус-бар синхронизации */}
+      <View style={styles.syncStatusBar}>
+        <View style={styles.syncStatusLeft}>
+          {syncStatus === 'syncing' || isManualSyncing ? (
+            <ActivityIndicator size="small" color="#92400e" style={styles.syncSpinner} />
+          ) : (
+            <Text style={styles.syncIcon}>
+              {SYNC_STATUS_CONFIG[syncStatus].icon}
+            </Text>
+          )}
+          <Text
+            style={[
+              styles.syncStatusLabel,
+              { color: SYNC_STATUS_CONFIG[syncStatus].color },
+            ]}
+          >
+            {SYNC_STATUS_CONFIG[syncStatus].label}
+          </Text>
+        </View>
+
+        <View style={styles.syncStatusRight}>
+          {pendingCount > 0 && (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>
+                {pendingCount} ожидает
+              </Text>
+            </View>
+          )}
+          {lastSyncAt !== null && (
+            <Text style={styles.lastSyncText}>
+              {formatSyncTime(lastSyncAt)}
+            </Text>
+          )}
+        </View>
+      </View>
+
       <View style={styles.statsRow}>
         <View style={[styles.statCard, { backgroundColor: '#fef2f2' }]}>
           <Text style={[styles.statNumber, { color: '#dc2626' }]}>{counts.open}</Text>
@@ -337,7 +441,13 @@ export default function DashboardScreen() {
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+          <RefreshControl
+            refreshing={isRefetching || isManualSyncing}
+            onRefresh={handleManualSync}
+            tintColor="#2563eb"
+            title="Синхронизация..."
+            titleColor="#64748b"
+          />
         }
         ListHeaderComponent={
           <Text style={styles.greeting}>
@@ -369,6 +479,54 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f1f5f9',
   },
+  // ── Sync status bar ──────────────────────────────
+  syncStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  syncStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  syncStatusRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  syncIcon: {
+    fontSize: 12,
+  },
+  syncSpinner: {
+    width: 12,
+    height: 12,
+  },
+  syncStatusLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pendingBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+  lastSyncText: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  // ── Greeting ────────────────────────────────────
   greeting: {
     fontSize: 18,
     fontWeight: '600',
