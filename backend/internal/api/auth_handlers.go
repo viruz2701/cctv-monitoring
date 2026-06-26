@@ -57,6 +57,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
+
+	// P1-SEC.1: HttpOnly cookies вместо JSON
+	auth.SetAuthCookies(w, token, refreshToken, nil)
+
 	user.PasswordHash = ""
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"token":         token,

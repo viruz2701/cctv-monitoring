@@ -2,15 +2,19 @@ import { mapApiError, type MappedApiError } from './apiErrorMapper';
 
 const API_BASE = '/api/v1';
 
-let authToken: string | null = localStorage.getItem('token');
+// P1-SEC.1: JWT теперь в HttpOnly cookie, а не в localStorage.
+// authToken используется только как fallback для API клиентов без cookies.
+let authToken: string | null = null;
 
 export function setAuthToken(token: string | null) {
     authToken = token;
-    if (token) {
-        localStorage.setItem('token', token);
-    } else {
-        localStorage.removeItem('token');
-    }
+}
+
+// Получаем CSRF токен из cookie для state-changing запросов
+function getCSRFToken(): string | null {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+    return match ? match[1] : null;
 }
 
 export async function request<T>(
@@ -25,6 +29,15 @@ export async function request<T>(
         Object.assign(headers, options.headers as Record<string, string>);
     }
 
+    // P1-SEC.1: Добавляем CSRF токен для state-changing методов
+    if (options.method && options.method !== 'GET' && options.method !== 'HEAD') {
+        const csrfToken = getCSRFToken();
+        if (csrfToken) {
+            headers['X-CSRF-Token'] = csrfToken;
+        }
+    }
+
+    // P1-SEC.1: JWT теперь в HttpOnly cookie, Authorization header — fallback
     if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
     }
@@ -32,6 +45,8 @@ export async function request<T>(
     const response = await fetch(`${API_BASE}${path}`, {
         ...options,
         headers,
+        // P1-SEC.1: Отправляем cookies с запросом
+        credentials: 'include',
     });
 
     if (!response.ok) {
