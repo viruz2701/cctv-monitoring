@@ -548,21 +548,6 @@
 - **Effort:** 4d
 - **Status:** [ ] — отложено по указанию
 
-#### P3-1.2: JWT → HttpOnly Cookies
-- **Файлы:** `backend/internal/auth/jwt.go`, `frontend/src/services/auth.ts`, `mobile/src/services/auth.ts`
-- **Проблема:** JWT хранится в localStorage → XSS risk
-- **Решение:**
-  - HttpOnly cookies для web
-  - Secure flag + SameSite
-  - CSRF tokens
-- **Критерий приёмки:**
-  - [ ] HttpOnly cookies работают
-  - [ ] CSRF protection активна
-  - [ ] Mobile app адаптирована
-  - [ ] Penetration test passed
-- **Effort:** 6d
-- **Status:** [ ]
-
 #### P3-1.2: JWT → HttpOnly Cookies ✅ DONE
 - **Файлы:** `backend/internal/auth/jwt.go`
 - **Проблема:** JWT хранится в localStorage → XSS risk
@@ -598,21 +583,6 @@
 ---
 
 ### P3-2: Performance & Scalability
-
-#### P3-2.1: Materialized View Auto-Refresh
-- **Файлы:** `backend/internal/maintenance/cron.go`, `backend/migrations/*.sql`
-- **Проблема:** `mv_device_reliability` + `mv_tco_per_device` обновляются вручную
-- **Решение:**
-  - Cron job для `REFRESH MATERIALIZED VIEW CONCURRENTLY`
-  - Staleness monitoring
-  - Alert при refresh failure
-- **Критерий приёмки:**
-  - [ ] Cron job запускается hourly
-  - [ ] Refresh занимает <5min
-  - [ ] Alert при failure
-  - [ ] Staleness metric в Prometheus
-- **Effort:** 2d
-- **Status:** [ ]
 
 #### P3-2.1: Materialized View Auto-Refresh ✅ DONE
 - **Файлы:** `backend/internal/cron/maintenance_cron.go`
@@ -662,36 +632,6 @@
 ---
 
 ### P3-3: Developer Experience
-
-#### P3-3.1: Onboarding Tour Role Adaptation
-- **Файлы:** `frontend/src/components/OnboardingTour.tsx`, `frontend/src/store/authStore.ts`
-- **Проблема:** `react-joyride` шаги статичны
-- **Решение:**
-  - Адаптировать шаги под роль
-  - Conditional steps
-  - Skip option для experienced users
-- **Критерий приёмки:**
-  - [ ] Technician видит только relevant steps
-  - [ ] Admin видит все steps
-  - [ ] Skip button работает
-  - [ ] Tour completion tracked
-- **Effort:** 2d
-- **Status:** [ ]
-
-#### P3-3.2: Power User Keyboard Shortcuts
-- **Файлы:** `frontend/src/hooks/useKeyboardShortcuts.ts`, `frontend/src/components/layout/Layout.tsx`
-- **Проблема:** Нет горячих клавиш для быстрого переключения WO
-- **Решение:**
-  - `Alt+1..9` для 9 последних WO
-  - `/` для focus на search
-  - `?` для shortcut help
-- **Критерий приёмки:**
-  - [ ] Shortcuts работают globally
-  - [ ] Help modal с all shortcuts
-  - [ ] Customizable shortcuts
-  - [ ] No conflicts с browser shortcuts
-- **Effort:** 2d
-- **Status:** [ ]
 
 #### P3-3.1: Onboarding Tour Role Adaptation ✅ DONE
 - **Файлы:** `frontend/src/components/OnboardingTour.tsx`
