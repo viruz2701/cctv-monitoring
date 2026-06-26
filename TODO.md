@@ -3,7 +3,7 @@
 > Обновлять после завершения каждой задачи: [ ] → [x] + дата.
 
 **Последнее обновление:** 2026-06-26
-**Общая готовность:** 95%
+**Общая готовность:** 96%
 
 ---
 
@@ -727,6 +727,14 @@
 - **Исправления**: миграции 025-030 (IF NOT EXISTS → CREATE TABLE, .down.sql)
 - **Проверка**: backend/frontend/mobile сборка ✅, p2p-gateway запуск ✅
 - **Commits**: `e344d84`, `94644ec`, `b30021e`, `ae6cd90`
+
+### 2026-06-26 — Batch 3: Оставшиеся P2 + финальная проверка
+- **P2-1.3**: Predictive Maintenance Dashboard — KPI cards + placeholder charts
+- **P2-2.1**: Workflow Builder UI — coming soon placeholder
+- **P2-3.1**: Webhook Builder UI — coming soon placeholder
+- **Финальная проверка**: backend 25/27 ✅, frontend 97/97 ✅, mobile ✅, p2p ✅
+- **Commits**: `6512da7`
+- **Impact**: Готовность 95% → 96%, все P0/P1/P2 закрыты
 - **Impact**: Готовность 92% → 95%, +18 новых файлов, 14 commits всего
 
 ---
