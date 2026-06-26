@@ -6,9 +6,10 @@
 //   - Email: для менеджеров (через Email sender interface)
 //
 // Уровни оповещения:
-//   75% дедлайна (at_risk) → Telegram предупреждение
-//   90% дедлайна (critical) → Telegram + Email менеджеру
-//   100% дедлайна (breach) → Telegram + SMS (для critical) + Email
+//
+//	75% дедлайна (at_risk) → Telegram предупреждение
+//	90% дедлайна (critical) → Telegram + Email менеджеру
+//	100% дедлайна (breach) → Telegram + SMS (для critical) + Email
 //
 // Compliance:
 //   - ISO 27001 A.12.4.1 (Event logging)
@@ -54,6 +55,17 @@ func (l NotificationLevel) String() string {
 	}
 }
 
+// isCriticalPriority проверяет, является ли приоритет критическим для SMS-оповещения.
+// Case-insensitive, т.к. в БД приоритеты хранятся в lowercase, а не во внешних системах.
+func isCriticalPriority(priority string) bool {
+	switch priority {
+	case "critical", "CRITICAL", "Critical", "high", "HIGH", "High":
+		return true
+	default:
+		return false
+	}
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // SMS Gateway Interface
 // ═══════════════════════════════════════════════════════════════════════
@@ -86,11 +98,11 @@ type EmailSender interface {
 
 // UserContactInfo — контактная информация пользователя для уведомлений.
 type UserContactInfo struct {
-	UserID        string `json:"user_id"`
+	UserID         string `json:"user_id"`
 	TelegramChatID string `json:"telegram_chat_id,omitempty"`
-	PhoneNumber   string `json:"phone_number,omitempty"`
-	Email         string `json:"email,omitempty"`
-	Role          string `json:"role"`
+	PhoneNumber    string `json:"phone_number,omitempty"`
+	Email          string `json:"email,omitempty"`
+	Role           string `json:"role"`
 }
 
 // UserContactProvider — интерфейс для получения контактной информации.
@@ -117,11 +129,11 @@ type UserContactProvider interface {
 //   - IEC 62443 SR 2.8: Audit trail для критических событий
 //   - OWASP ASVS V7.1: Сообщения не содержат sensitive data
 type SLABreachNotifier struct {
-	telegram    TelegramSender
-	sms         SMSProvider
-	email       EmailSender
-	contacts    UserContactProvider
-	logger      *slog.Logger
+	telegram TelegramSender
+	sms      SMSProvider
+	email    EmailSender
+	contacts UserContactProvider
+	logger   *slog.Logger
 }
 
 // TelegramSender — интерфейс для отправки Telegram сообщений.
@@ -277,7 +289,8 @@ func (n *SLABreachNotifier) NotifyBreach(ctx context.Context, wo BreachedWorkOrd
 	}
 
 	// SMS для критических объектов (только CRITICAL/HIGH priority)
-	if n.sms != nil && n.sms.IsAvailable() && (wo.Priority == "CRITICAL" || wo.Priority == "HIGH") {
+	// Case-insensitive: поддерживает как "CRITICAL" (backward compat), так и "critical" (из БД)
+	if n.sms != nil && n.sms.IsAvailable() && isCriticalPriority(wo.Priority) {
 		n.sendSMSBreach(ctx, wo, manager)
 	}
 

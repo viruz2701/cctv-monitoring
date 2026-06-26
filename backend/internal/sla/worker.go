@@ -391,6 +391,7 @@ func (w *SLAWorker) checkBreachedSLAs() {
 			breachedSince = 0
 		}
 
+		// P0-1.3: Выполняем эскалацию (логируется в sla_escalation_log)
 		executed, err := w.engine.CheckEscalation(ctx, b.ID, b.Priority, breachedSince)
 		if err != nil {
 			w.logger.Error("failed to check escalation",
@@ -405,6 +406,27 @@ func (w *SLAWorker) checkBreachedSLAs() {
 				"count", len(executed),
 				"component", "sla-worker",
 			)
+		}
+
+		// P0-1.3: Отправляем multi-channel уведомления (Telegram/SMS/Email)
+		// через SLABreachNotifier. Graceful degradation:
+		//   - Если канал недоступен — уведомление через доступные каналы
+		//   - Если notifier отключён (nil) — пропускаем
+		//
+		// Compliance:
+		//   - ISO 27001 A.12.4.1: Все уведомления логируются в notifier
+		//   - IEC 62443 SR 2.8: Audit trail для breach notifications
+		//   - OWASP ASVS V7.1: Сообщения не содержат sensitive data
+		if w.notifier != nil {
+			if err := w.notifier.NotifyBreach(ctx, b); err != nil {
+				w.logger.Error("failed to send breach notification",
+					"work_order", b.ID,
+					"priority", b.Priority,
+					"device_id", b.DeviceID,
+					"error", err,
+					"component", "sla-worker",
+				)
+			}
 		}
 	}
 }
