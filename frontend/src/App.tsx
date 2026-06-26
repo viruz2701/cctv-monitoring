@@ -31,6 +31,7 @@ const MaintenanceSchedules = lazy(() => import('./pages/MaintenanceSchedules').t
 const SpareParts = lazy(() => import('./pages/SpareParts').then((m) => ({ default: m.SpareParts })));
 const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail').then((m) => ({ default: m.WorkOrderDetail })));
 const TechnicianDashboard = lazy(() => import('./pages/TechnicianDashboard').then((m) => ({ default: m.TechnicianDashboard })));
+const TechnicianWeek = lazy(() => import('./pages/TechnicianWeek').then((m) => ({ default: m.TechnicianWeek })));
 const SLADashboard = lazy(() => import('./pages/SLADashboard').then((m) => ({ default: m.SLADashboard })));
 const MaintenanceReports = lazy(() => import('./pages/MaintenanceReports').then((m) => ({ default: m.MaintenanceReports })));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword').then((m) => ({ default: m.ForgotPassword })));
@@ -148,6 +149,7 @@ function App() {
                     <Route path="/work-orders/:id" element={<PageSuspense><WorkOrderDetail /></PageSuspense>} />
                     <Route path="/spare-parts" element={<PageSuspense><SpareParts /></PageSuspense>} />
                     <Route path="/technician-dashboard" element={<PageSuspense><TechnicianDashboard /></PageSuspense>} />
+                    <Route path="/technician-week" element={<PageSuspense><TechnicianWeek /></PageSuspense>} />
                   </Route>
 
                   <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>

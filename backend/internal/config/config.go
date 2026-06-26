@@ -137,6 +137,10 @@ type Config struct {
 	SAMLMailAttribute  string `mapstructure:"saml_mail_attribute"`
 	SAMLNameAttribute  string `mapstructure:"saml_name_attribute"`
 	SAMLRoleAttribute  string `mapstructure:"saml_role_attribute"`
+
+	// DeepSeek AI API key for AI Assistant Chat (P2-1.2)
+	// Хранится только на сервере, не пробрасывается на клиент.
+	DeepSeekAPIKey string `mapstructure:"deepseek_api_key"`
 }
 
 // EventStoreConfig — настройки Event Store (DM-1.2.2: NATS + S3 Cold Storage)
@@ -516,6 +520,9 @@ func Load() *Config {
 	bindEnv("recaptcha_site_key", "GB_RECAPTCHA_SITE_KEY")
 	bindEnv("recaptcha_enabled", "GB_RECAPTCHA_ENABLED")
 
+	// DeepSeek AI (P2-1.2)
+	bindEnv("deepseek_api_key", "GB_DEEPSEEK_API_KEY")
+
 	// Database
 	bindEnv("database.url", "DATABASE_URL")
 
@@ -666,6 +673,7 @@ func Load() *Config {
 		RecaptchaSecretKey: viper.GetString("recaptcha_secret_key"),
 		RecaptchaSiteKey:   viper.GetString("recaptcha_site_key"),
 		RecaptchaEnabled:   viper.GetBool("recaptcha_enabled"),
+		DeepSeekAPIKey:     viper.GetString("deepseek_api_key"),
 	}
 
 	if cfg.Hikvision.Enabled {

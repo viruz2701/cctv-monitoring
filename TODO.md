@@ -115,3 +115,37 @@ cd backend && go build ./...                   # requires: go mod tidy
 ```bash
 cd frontend && npx tsc --noEmit --pretty      # ✓ OK
 ```
+
+---
+
+# P2-2.3: Resource Planning Calendar — Progress
+
+## Статус выполнения
+
+- [x] P2-2.3: Resource Planning Calendar с FullCalendar resourceTimelineWeek
+
+### Выполненные задачи
+
+- [x] **Install packages**: `@fullcalendar/resource`, `@fullcalendar/resource-timeline`, `@fullcalendar/timeline`
+- [x] **Hook** (`hooks/useTechnicianSchedule.ts`): Загрузка техников (role=technician) и WO, вычисление ScheduleSlot[] с inferred duration, конфликт-детекция (overlap), DayLoad с availability (green/yellow/red), Drag&Drop handler
+- [x] **Component** (`components/planning/TechnicianCalendar.tsx`): FullCalendar resourceTimelineWeek — техники как resources, WO как events, кастомные resource labels с availability dots, conflict badge, tooltip, filter by tech, conflict summary panel
+- [x] **Page** (`pages/TechnicianWeek.tsx`): Страница с React Query-хуками, error/loading state, навигация на WO detail
+- [x] **Route**: `/technician-week` добавлен в App.tsx (admin/manager/technician roles)
+- [x] **CSS**: Print-friendly @media print (скрытие UI, exact colors), resource tooltip, event conflict animation
+- [x] **TypeScript Check**: `npx tsc --noEmit` — ✓ OK
+
+### Файлы
+
+| Файл | Описание |
+|------|----------|
+| [`frontend/src/hooks/useTechnicianSchedule.ts`](frontend/src/hooks/useTechnicianSchedule.ts) | Hook: schedule data, conflicts, availability, DnD |
+| [`frontend/src/components/planning/TechnicianCalendar.tsx`](frontend/src/components/planning/TechnicianCalendar.tsx) | FullCalendar resourceTimelineWeek component |
+| [`frontend/src/pages/TechnicianWeek.tsx`](frontend/src/pages/TechnicianWeek.tsx) | Resource Planning page |
+| [`frontend/src/App.tsx`](frontend/src/App.tsx) | Route: `/technician-week` |
+| [`frontend/src/index.css`](frontend/src/index.css) | Tooltip + print CSS |
+
+### Проверка
+
+```bash
+cd frontend && npx tsc --noEmit --pretty      # ✓ OK
+```

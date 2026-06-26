@@ -293,6 +293,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Get("/api/v1/workspace/layout", s.handleGetLayout)
 		r.Post("/api/v1/workspace/layout", s.handleSaveLayout)
 
+		// AI Assistant Chat (P2-1.2)
+		s.mountAIRoutes(r)
+
 		// Compliance & Fines Shield (KF-15.1.1)
 		s.mountComplianceRoutes(r)
 

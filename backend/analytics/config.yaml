@@ -1,3 +1,4 @@
+# ═══ Database ═══
 db:
   host: localhost
   port: 5432
@@ -5,11 +6,7 @@ db:
   password: gb_password
   database: gb_telemetry
 
-deepseek:
-  api_key: "your-api-key"
-  model: "deepseek-chat"
-  enabled: false   # пока выключим, чтобы не зависеть от API
-
+# ═══ ML Model ═══
 ml:
   feature_columns:
     - offline_ratio
@@ -18,7 +15,47 @@ ml:
     - age_days
     - avg_alarm_priority
     - last_error_code
-  model_path: "/home/viruz/gb-telemetry-collector/analytics/models/xgboost_model.pkl"
+    - unique_error_types
+    - avg_cpu_load
+    - avg_memory_usage
+    - signal_strength
+  label_column: "has_failed"
+  model_path: "models/xgboost_model.pkl"
+  model_metadata_path: "models/xgboost_metadata.json"
+  model_variant: "A"           # A/B testing variant: A | B
+  prediction_window_days: 30
+  train_test_split: 0.2
+  random_state: 42
+  xgboost:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.08
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 3
+    gamma: 0.1
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    scale_pos_weight: 3.0     # imbalance ratio compensation
+    early_stopping_rounds: 20
+    eval_metric: ["auc", "logloss"]
+
+# ═══ LLM Explanation (optional) ═══
 deepseek:
-  enabled: false  # пока отключим, чтобы не требовать API ключ
-  api_key: ""
+  api_key: "your-api-key"
+  model: "deepseek-chat"
+  enabled: false
+
+# ═══ NATS Event Bus ═══
+nats:
+  url: "nats://localhost:4222"
+  topic_prefix: "ml.prediction"   # ml.prediction.{device_id}
+  credentials: ""
+
+# ═══ Service Config ═══
+service:
+  prediction_interval_minutes: 60  # CRON interval
+  probability_threshold: 0.5       # is_actionable threshold
+  min_confidence_threshold: 0.3    # минимальный confidence для публикации
+  ab_testing_enabled: true         # A/B testing включен
+  ab_testing_ratio: 0.5            # 50% устройств — variant B

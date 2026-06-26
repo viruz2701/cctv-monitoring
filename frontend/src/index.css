@@ -304,6 +304,175 @@ textarea,
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   Resource Timeline Tooltip (Technician Calendar — P2-2.3)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.fc-resource-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 8px 12px;
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.dark .fc-resource-tooltip {
+  background: #0f172a;
+  border-color: #475569;
+}
+
+.fc-resource-tooltip .tip-title {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fc-resource-tooltip .tip-body div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fc-resource-tooltip .tip-body span {
+  color: #94a3b8;
+}
+
+.fc-resource-tooltip .tip-body strong {
+  color: #f1f5f9;
+  text-transform: capitalize;
+}
+
+.fc-resource-tooltip .tip-conflict {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+/* ── Technician calendar event styles ──────────────────────────────── */
+.technician-event {
+  cursor: grab;
+  border-radius: 3px;
+  transition: box-shadow 0.15s;
+}
+
+.technician-event:active {
+  cursor: grabbing;
+}
+
+.technician-event.event-conflict {
+  border-style: dashed !important;
+  border-width: 2px !important;
+  animation: pulse-border 2s infinite;
+}
+
+.technician-event.event-in-progress {
+  opacity: 0.85;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #DC2626; }
+  50% { border-color: #FCA5A5; }
+}
+
+/* ── Resource label in timeline ────────────────────────────────────── */
+.fc .fc-timeline-lane-frame {
+  min-height: 48px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Print-friendly styles (P2-2.3)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Hide everything except the calendar */
+  body * {
+    visibility: hidden;
+  }
+
+  .technician-calendar,
+  .technician-calendar *,
+  .technician-week-page,
+  .technician-week-page * {
+    visibility: visible;
+  }
+
+  .technician-calendar,
+  .technician-week-page {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide FullCalendar toolbar buttons (nav, view switcher) */
+  .fc .fc-header-toolbar .fc-button {
+    display: none !important;
+  }
+
+  .fc .fc-header-toolbar .fc-toolbar-title {
+    font-size: 16pt;
+    font-weight: 700;
+  }
+
+  /* Hide filter bar, conflict panel, legend */
+  .technician-calendar > div:first-child,
+  .technician-week-page > div:first-child {
+    display: none !important;
+  }
+
+  /* FullCalendar print adjustments */
+  .fc {
+    font-size: 9pt !important;
+  }
+
+  .fc .fc-timeline-header {
+    font-size: 8pt;
+  }
+
+  .fc .fc-timeline-body {
+    page-break-inside: avoid;
+  }
+
+  .fc .fc-timeline-lane {
+    page-break-inside: avoid;
+    min-height: 36px;
+  }
+
+  .fc-resource-tooltip {
+    display: none !important;
+  }
+
+  /* Reduce colors for print — keep contrast */
+  .technician-event {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .fc .fc-timeline-now-indicator {
+    display: none !important;
+  }
+
+  /* Make table borders sharper for print */
+  .fc .fc-timeline-header-row th,
+  .fc .fc-timeline-lane td {
+    border-color: #ccc !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    WCAG 2.1 SC 2.3.3 — prefers-reduced-motion
    Отключает все анимации/переходы для пользователей с vestibular disorders
    ═══════════════════════════════════════════════════════════════════════ */
