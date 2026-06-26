@@ -15,7 +15,7 @@
 -- 1. Таблица camera_specs — каталог моделей камер
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS camera_specs (
+CREATE TABLE camera_specs (
     id                  SERIAL PRIMARY KEY,
     brand               TEXT NOT NULL,
     model               TEXT NOT NULL,

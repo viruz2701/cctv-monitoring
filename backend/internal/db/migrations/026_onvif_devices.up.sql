@@ -13,7 +13,7 @@
 
 -- ── ONVIF Devices ──────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS onvif_devices (
+CREATE TABLE onvif_devices (
     device_id       TEXT NOT NULL PRIMARY KEY,
     manufacturer    TEXT NOT NULL DEFAULT '',
     model           TEXT NOT NULL DEFAULT '',

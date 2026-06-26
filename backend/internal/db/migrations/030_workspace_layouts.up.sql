@@ -10,12 +10,13 @@
 --   - ISO 27019 PCC.A.12: ICS audit trail
 --   - OWASP ASVS V3.3: Session management — данные привязаны к пользователю
 --   - Приказ ОАЦ № 66 п. 7.18.2: Идентификация пользователей
+--   - P1-1.4: Dashboard Multi-Device Sync
 
 -- ═══════════════════════════════════════════════════════════════════
 -- 1. Таблица workspace_layouts
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS workspace_layouts (
+CREATE TABLE workspace_layouts (
     user_id     TEXT NOT NULL,
     tab_id      TEXT NOT NULL DEFAULT 'overview',
     layout      JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -27,19 +28,14 @@ CREATE TABLE IF NOT EXISTS workspace_layouts (
 
 COMMENT ON TABLE workspace_layouts IS
     'P1-1.4: Dashboard Multi-Device Sync. Хранит layout дашборда '
-    'с привязкой к user_id для синхронизации между устройствами. '
-    'Conflict resolution: last-write-wins.';
-
-COMMENT ON COLUMN workspace_layouts.layout IS
-    'JSONB массив виджетов с их позициями (x, y, w, h)';
-COMMENT ON COLUMN workspace_layouts.visible_widgets IS
-    'Массив ID видимых виджетов на дашборде';
+    'с привязкой к user_id для синхронизации между устройствами.';
 
 -- ═══════════════════════════════════════════════════════════════════
--- 2. Индексы для быстрого поиска
+-- 2. Индексы
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE INDEX IF NOT EXISTS idx_workspace_layouts_user
-    ON workspace_layouts(user_id);
-CREATE INDEX IF NOT EXISTS idx_workspace_layouts_updated
-    ON workspace_layouts(updated_at DESC);
+-- Быстрый поиск по user
+CREATE INDEX idx_workspace_layouts_user ON workspace_layouts (user_id);
+
+-- Сортировка по времени обновления (для conflict resolution)
+CREATE INDEX idx_workspace_layouts_updated ON workspace_layouts (updated_at DESC);

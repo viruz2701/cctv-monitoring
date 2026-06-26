@@ -13,7 +13,7 @@
 
 -- ── Compliance Risks (материализованное представление) ─────────────────
 
-CREATE TABLE IF NOT EXISTS compliance_risks (
+CREATE TABLE compliance_risks (
     device_id           TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
     site_id             TEXT REFERENCES sites(id) ON DELETE SET NULL,
     device_type         TEXT NOT NULL DEFAULT 'camera',
@@ -52,7 +52,7 @@ COMMENT ON COLUMN compliance_risks.risk_level IS
 
 -- ── Compliance Audit Log ──────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS compliance_audit_log (
+CREATE TABLE compliance_audit_log (
     id              BIGSERIAL,
     recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     device_id       TEXT NOT NULL,

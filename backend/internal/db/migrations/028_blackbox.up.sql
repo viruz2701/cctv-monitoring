@@ -16,7 +16,7 @@
 -- 1. Таблица incident_reports — основной пакет доказательств
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS incident_reports (
+CREATE TABLE incident_reports (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     device_id       TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
     site_id         TEXT,
@@ -73,7 +73,7 @@ COMMENT ON COLUMN incident_reports.photos IS
 -- 2. Таблица incident_triggers — audit trail для триггеров (ISO 27001 A.12.4)
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS incident_triggers (
+CREATE TABLE incident_triggers (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     report_id       TEXT NOT NULL REFERENCES incident_reports(id) ON DELETE CASCADE,
     triggered_by    TEXT NOT NULL CHECK (triggered_by IN ('alarm', 'manual', 'sla_breach', 'downtime')),
