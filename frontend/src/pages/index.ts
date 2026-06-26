@@ -28,3 +28,4 @@ export { ComplianceShield } from './ComplianceShield';
 export { PredictiveMaintenance } from './PredictiveMaintenance';
 export { Tutorials } from './Tutorials';
 export { BlackBox } from './BlackBox';
+export { TechnicianWeek } from './TechnicianWeek';

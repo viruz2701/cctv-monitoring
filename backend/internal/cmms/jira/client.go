@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 // Client — HTTP-клиент для Jira Cloud REST API v3.
@@ -47,6 +51,81 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		email:      cfg.Email,
 		apiToken:   cfg.APIToken,
 	}, nil
+}
+
+// OAuth2Config — конфигурация OAuth2 Client Credentials.
+//
+// P2-3.2: OAuth2 for External Adapters
+type OAuth2Config struct {
+	TokenURL     string   `json:"token_url"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// TokenAwareClient — HTTP клиент с OAuth2 токеном и auto-refresh.
+//
+// P2-3.2: OAuth2 for External Adapters
+//   - OAuth2 Client Credentials flow
+//   - Token auto-refresh
+//   - Secure token storage (in-memory)
+//   - Fallback to basic auth
+type TokenAwareClient struct {
+	config *clientcredentials.Config
+	mu     sync.RWMutex
+	token  *oauth2.Token
+	logger *slog.Logger
+}
+
+// NewTokenAwareClient создаёт клиент с OAuth2 Client Credentials.
+func NewTokenAwareClient(cfg OAuth2Config, logger *slog.Logger) *TokenAwareClient {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &TokenAwareClient{
+		config: &clientcredentials.Config{
+			ClientID:     cfg.ClientID,
+			ClientSecret: cfg.ClientSecret,
+			TokenURL:     cfg.TokenURL,
+			Scopes:       cfg.Scopes,
+		},
+		logger: logger.With("component", "oauth2-client"),
+	}
+}
+
+// Client возвращает HTTP клиент с OAuth2 токеном (с auto-refresh).
+func (c *TokenAwareClient) Client(ctx context.Context) *http.Client {
+	return c.config.Client(ctx)
+}
+
+// Token возвращает текущий токен (обновляет если истёк).
+func (c *TokenAwareClient) Token(ctx context.Context) (*oauth2.Token, error) {
+	c.mu.RLock()
+	token := c.token
+	c.mu.RUnlock()
+
+	if token != nil && token.Valid() {
+		return token, nil
+	}
+
+	// Token истёк или отсутствует — получаем новый
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Double-check после блокировки
+	if c.token != nil && c.token.Valid() {
+		return c.token, nil
+	}
+
+	newToken, err := c.config.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("oauth2 token refresh: %w", err)
+	}
+
+	c.token = newToken
+	c.logger.Info("OAuth2 token refreshed", "expiry", newToken.Expiry)
+	return newToken, nil
 }
 
 // do выполняет HTTP-запрос с Basic Auth.
