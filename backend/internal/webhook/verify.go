@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"gb-telemetry-collector/internal/respond"
 	"io"
 	"log/slog"
 	"net/http"
@@ -149,7 +150,7 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 			// IEC 62443 SR 7.1: Fail Secure — reject при отсутствии secret
 			if secret == "" {
 				options.Logger.Warn("webhook middleware: HMAC secret empty, rejecting (IEC 62443 SR 7.1)")
-				http.Error(w, `{"error":"webhook not configured"}`, http.StatusInternalServerError)
+				respond.Error(w, http.StatusInternalServerError, "webhook not configured")
 				return
 			}
 
@@ -163,14 +164,14 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 				options.Logger.Warn("webhook: missing signature header",
 					"header", headerName,
 				)
-				http.Error(w, `{"error":"missing signature"}`, http.StatusUnauthorized)
+				respond.Error(w, http.StatusUnauthorized, "missing signature")
 				return
 			}
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				options.Logger.Error("webhook: read body", "error", err)
-				http.Error(w, `{"error":"read error"}`, http.StatusBadRequest)
+				respond.Error(w, http.StatusBadRequest, "read error")
 				return
 			}
 			r.Body.Close()
@@ -179,7 +180,7 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 				options.Logger.Warn("webhook: invalid signature",
 					"header", headerName,
 				)
-				http.Error(w, `{"error":"invalid signature"}`, http.StatusUnauthorized)
+				respond.Error(w, http.StatusUnauthorized, "invalid signature")
 				return
 			}
 
@@ -216,7 +217,7 @@ func ServeHTTPWithVerify(secret string, next func(w http.ResponseWriter, r *http
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
 		if err != nil {
 			options.Logger.Error("webhook: read body", "error", err)
-			http.Error(w, `{"error":"read error"}`, http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "read error")
 			return
 		}
 
@@ -229,7 +230,7 @@ func ServeHTTPWithVerify(secret string, next func(w http.ResponseWriter, r *http
 			options.Logger.Warn("webhook: invalid signature",
 				"header", headerName,
 			)
-			http.Error(w, `{"error":"invalid signature"}`, http.StatusUnauthorized)
+			respond.Error(w, http.StatusUnauthorized, "invalid signature")
 			return
 		}
 

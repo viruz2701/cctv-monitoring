@@ -1,8 +1,9 @@
 // Package events — Event Store для CCTV Health Monitor.
 //
 // Реализует two-tier event storage:
-//   Hot Tier (NATS JetStream) — быстрый доступ, retention до 1 года
-//   Cold Tier (S3/MinIO) — долговременное хранение до 5 лет
+//
+//	Hot Tier (NATS JetStream) — быстрый доступ, retention до 1 года
+//	Cold Tier (S3/MinIO) — долговременное хранение до 5 лет
 //
 // Compliance:
 //   - ISO 27001:2022 A.12.4 (Logging and Monitoring — event retention)
@@ -21,11 +22,11 @@ package events
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gb-telemetry-collector/internal/trace"
 	"log/slog"
 	"sort"
 	"sync"
@@ -62,18 +63,18 @@ type EventSchemaVersion string
 //   - trace_id: распределённая трассировка (ISO 27001 A.12.4.3)
 //   - signed_at: ISO 27001 A.12.4.2 (время подписи)
 type EventRecord struct {
-	ID            string              `json:"id"`             // UUID v7 (time-sortable)
-	Source        EventSource         `json:"source"`         // alarms, cmms, predictions, telemetry
-	EventType     string              `json:"event_type"`     // alarm.created, cmms.wo.completed, etc.
-	SchemaVersion EventSchemaVersion  `json:"schema_version"` // "1.0.0"
-	Timestamp     time.Time           `json:"timestamp"`      // время события
-	AggregateID   string              `json:"aggregate_id"`   // device_id, work_order_id, etc.
-	ActorID       string              `json:"actor_id,omitempty"` // кто вызвал событие (user_id, system)
-	TraceID       string              `json:"trace_id,omitempty"` // распределённый trace ID (W3C Trace Context)
-	PrevHash      string              `json:"prev_hash,omitempty"` // СТБ bash-256 хеш предыдущего события
-	Data          json.RawMessage     `json:"data"`           // тело события (разные схемы для каждого event_type)
-	Metadata      map[string]string   `json:"metadata,omitempty"` // дополнительные метаданные
-	SignedAt      *time.Time          `json:"signed_at,omitempty"` // время подписи (audit trail)
+	ID            string             `json:"id"`                  // UUID v7 (time-sortable)
+	Source        EventSource        `json:"source"`              // alarms, cmms, predictions, telemetry
+	EventType     string             `json:"event_type"`          // alarm.created, cmms.wo.completed, etc.
+	SchemaVersion EventSchemaVersion `json:"schema_version"`      // "1.0.0"
+	Timestamp     time.Time          `json:"timestamp"`           // время события
+	AggregateID   string             `json:"aggregate_id"`        // device_id, work_order_id, etc.
+	ActorID       string             `json:"actor_id,omitempty"`  // кто вызвал событие (user_id, system)
+	TraceID       string             `json:"trace_id,omitempty"`  // распределённый trace ID (W3C Trace Context)
+	PrevHash      string             `json:"prev_hash,omitempty"` // СТБ bash-256 хеш предыдущего события
+	Data          json.RawMessage    `json:"data"`                // тело события (разные схемы для каждого event_type)
+	Metadata      map[string]string  `json:"metadata,omitempty"`  // дополнительные метаданные
+	SignedAt      *time.Time         `json:"signed_at,omitempty"` // время подписи (audit trail)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -97,34 +98,34 @@ type RetrieveOptions struct {
 // EventStoreConfig — конфигурация Event Store.
 type EventStoreConfig struct {
 	// Hot Tier (NATS JetStream)
-	NATSURL       string // NATS server URL
-	NATSCreds     string // путь к NGS/JWT credentials
-	NATSUseTLS    bool   // использовать TLS для NATS
+	NATSURL    string // NATS server URL
+	NATSCreds  string // путь к NGS/JWT credentials
+	NATSUseTLS bool   // использовать TLS для NATS
 
 	// Cold Tier (S3/MinIO)
-	S3Endpoint    string // endpoint MinIO/S3
-	S3Region      string // регион (по умолчанию us-east-1)
-	S3Bucket      string // bucket для событий
-	S3AccessKey   string // access key
-	S3SecretKey   string // secret key
-	S3UseTLS      bool   // использовать HTTPS
+	S3Endpoint  string // endpoint MinIO/S3
+	S3Region    string // регион (по умолчанию us-east-1)
+	S3Bucket    string // bucket для событий
+	S3AccessKey string // access key
+	S3SecretKey string // secret key
+	S3UseTLS    bool   // использовать HTTPS
 
 	// Retention
 	HotRetention  time.Duration // срок хранения в hot tier (default: 365 days)
 	ColdRetention time.Duration // срок хранения в cold tier (default: 1825 days = 5 years)
 
 	// Performance
-	BatchSize     int    // размер батча при архивации (default: 100)
+	BatchSize     int           // размер батча при архивации (default: 100)
 	FlushInterval time.Duration // интервал сброса буфера (default: 5s)
 
-	Logger        *slog.Logger
+	Logger *slog.Logger
 }
 
 // DefaultEventStoreConfig возвращает конфигурацию по умолчанию.
 func DefaultEventStoreConfig() EventStoreConfig {
 	return EventStoreConfig{
-		HotRetention:  365 * 24 * time.Hour,       // 1 год
-		ColdRetention: 1825 * 24 * time.Hour,      // 5 лет
+		HotRetention:  365 * 24 * time.Hour,  // 1 год
+		ColdRetention: 1825 * 24 * time.Hour, // 5 лет
 		BatchSize:     100,
 		FlushInterval: 5 * time.Second,
 		S3Region:      "us-east-1",
@@ -167,15 +168,15 @@ type EventStore struct {
 	schemas *SchemaRegistry
 
 	// Buffered writes
-	buffer   []*EventRecord
-	bufMu    sync.Mutex
-	flushCh  chan struct{}
-	closeCh  chan struct{}
-	wg       sync.WaitGroup
+	buffer  []*EventRecord
+	bufMu   sync.Mutex
+	flushCh chan struct{}
+	closeCh chan struct{}
+	wg      sync.WaitGroup
 
 	// Event counter для prev_hash chain
-	mu        sync.RWMutex
-	lastHash  string // последний хеш для цепочки (по aggregate_id)
+	mu       sync.RWMutex
+	lastHash string // последний хеш для цепочки (по aggregate_id)
 }
 
 // NewEventStore создаёт новый Event Store.
@@ -726,7 +727,7 @@ func newUUID() string {
 	b[4] = byte(now >> 24)
 	b[5] = byte(now >> 16)
 	// time_hi_and_version (2 bytes) + version 7
-	b[6] = byte(now>>8) & 0x0f | 0x70
+	b[6] = byte(now>>8)&0x0f | 0x70
 	b[7] = byte(now)
 	// clock_seq_hi_and_reserved (variant 10xx)
 	b[8] = 0x80 | byte(now>>56)&0x3f
@@ -749,15 +750,7 @@ func newShortID() string {
 	return fmt.Sprintf("%08x", time.Now().UnixNano())
 }
 
-// newTraceID генерирует W3C Trace Context trace ID (16 байт crypto/rand).
+// newTraceID генерирует W3C Trace Context trace ID.
 func newTraceID() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback: используем timestamp при ошибке (крайне маловероятно)
-		now := time.Now().UnixNano()
-		for i := 0; i < 8; i++ {
-			b[i] = byte(now >> (56 - i*8))
-		}
-	}
-	return fmt.Sprintf("%032x", b)
+	return trace.NewID()
 }

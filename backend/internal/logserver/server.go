@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gb-telemetry-collector/internal/models"
+	"gb-telemetry-collector/internal/respond"
+	"gb-telemetry-collector/internal/state"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -12,13 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"log/slog"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-
-	"gb-telemetry-collector/internal/models"
-	"gb-telemetry-collector/internal/state"
 )
 
 // Config – конфигурация лог-сервера
@@ -243,7 +242,7 @@ func (s *LogServer) handleHTTPLog(w http.ResponseWriter, r *http.Request) {
 		Log      string `json:"log"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Bad request", http.StatusBadRequest)
+		respond.Error(w, http.StatusBadRequest, "Bad request")
 		return
 	}
 
@@ -266,7 +265,7 @@ func (s *LogServer) handleHTTPLog(w http.ResponseWriter, r *http.Request) {
 		Raw:       req.Log,
 	}
 	if err := s.dbSaver(parsedLog); err != nil {
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		respond.Error(w, http.StatusInternalServerError, "Internal error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)

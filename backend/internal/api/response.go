@@ -3,45 +3,28 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
+
+	"gb-telemetry-collector/internal/trace"
 )
 
-// ── TraceID Middleware ──────────────────────────────────────────────────
-
-type ctxKeyTraceID struct{}
-
-// TraceIDMiddleware генерирует X-Request-ID для каждого запроса (ISO 27001 A.12.4).
-// Принимает входящий X-Request-ID или создаёт новый.
-func TraceIDMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		traceID := r.Header.Get("X-Request-ID")
-		if traceID == "" {
-			traceID = generateTraceID()
-		}
-		w.Header().Set("X-Request-ID", traceID)
-		ctx := context.WithValue(r.Context(), ctxKeyTraceID{}, traceID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
+// ── TraceID Middleware (bridge to internal/trace) ───────────────────────
+//
+// Deprecated: новые пакеты должны использовать trace.Middleware.
+var TraceIDMiddleware = trace.Middleware
 
 // TraceIDFromContext извлекает traceID из контекста.
+// Deprecated: новые пакеты должны использовать trace.FromContext.
 func TraceIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(ctxKeyTraceID{}).(string); ok {
-		return v
+	id := trace.FromContext(ctx)
+	if id == "" {
+		return "unknown"
 	}
-	return "unknown"
-}
-
-func generateTraceID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+	return id
 }
 
 // ── API Error ──────────────────────────────────────────────────────────
@@ -129,7 +112,7 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		}
 	}
 
-	traceID := TraceIDFromContext(r.Context())
+	traceID := trace.FromContext(r.Context())
 	resp := map[string]interface{}{
 		"error": map[string]interface{}{
 			"code":    apiErr.Code,

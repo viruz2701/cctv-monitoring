@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════════════════════
+# golangci-lint configuration
+# CCTV Health Monitor — КИИ РБ, класс KII-2
+# ═══════════════════════════════════════════════════════════════════════
+
+linters:
+  enable:
+    - gocritic
+    - stylecheck
+    - nolintlint
+    - forbidigo
+
+linters-settings:
+  forbidigo:
+    forbid:
+      # Запрет http.Error — использовать respond.Error вместо него
+      - p: ^http\.Error$
+        msg: "замени на respond.Error (OWASP ASVS V7.1.1)"
+
+  gocritic:
+    enabled-checks:
+      - httpNoBody
+      - commentFormatting
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

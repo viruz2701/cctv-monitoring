@@ -21,3 +21,10 @@ export {
   useSavedViewsStore,
   type SavedView as DashboardSavedView,
 } from './savedViewsStore';
+export {
+  useReportsStore,
+  startReportExpirationSweep,
+  stopReportExpirationSweep,
+} from './reportsStore';
+export type { ReportHistoryItem } from './reportsStore';
+export { useSettingsStore } from './settingsStore';

@@ -5,7 +5,6 @@ import { Layout, PageSuspense } from './components/layout';
 
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './hooks/useAuth';
-import { SettingsProvider } from './context/SettingsContext';
 import { ToastProvider } from './components/ui';
 
 // ── Lazy-loaded pages ─────────────────────────────────────────────────────
@@ -87,7 +86,6 @@ function App() {
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
-          <SettingsProvider>
             <BrowserRouter>
               <Routes>
                 {/* Public Route */}
@@ -177,7 +175,6 @@ function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
-          </SettingsProvider>
         </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

@@ -1,13 +1,25 @@
-import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback } from 'react';
-import type { AppSettings, DashboardLayoutConfig, ServicesSettings } from '../types';
-import { useAuth } from '../hooks/useAuth';
+// ═══════════════════════════════════════════════════════════════════════
+// SettingsContext — Bridge (backward compat)
+// ARCH-02: Новый код ДОЛЖЕН импортировать напрямую:
+//   - useSettingsStore из '../store/settingsStore' (client-side)
+//   - useServicesSettings, useServicesStatus из '../hooks/useApiQuery'
+//
+// Миграция:
+//   Было:  import { useSettings } from '../context/SettingsContext'
+//   Стало: import { useSettingsStore } from '../store/settingsStore'
+//          import { useServicesSettings } from '../hooks/useApiQuery'
+//
+// После полной миграции: удалить этот файл.
+// ═══════════════════════════════════════════════════════════════════════
+
+import { useState, useEffect } from 'react';
+import { useSettingsStore } from '../store/settingsStore';
 import {
   useServicesSettings,
   useServicesStatus,
   useUpdateServicesSettings,
 } from '../hooks/useApiQuery';
-
-// ── Types ────────────────────────────────────────────────────────────
+import type { ServicesSettings } from '../types';
 
 export interface ServiceStatusEntry {
   status: 'running' | 'stopped' | 'disabled' | 'error';
@@ -17,58 +29,17 @@ export interface ServiceStatusEntry {
 
 export type ServicesStatusMap = Record<string, ServiceStatusEntry>;
 
-interface SettingsContextType {
-  settings: AppSettings;
-  dashboardConfig: DashboardLayoutConfig;
-  servicesSettings: ServicesSettings | null;
-  servicesLoading: boolean;
-  servicesStatus: ServicesStatusMap;
-  servicesStatusLoading: boolean;
-  updateSettings: (updates: Partial<AppSettings>) => void;
-  updateDashboardConfig: (updates: Partial<DashboardLayoutConfig>) => void;
-  updateServicesSettings: (updates: Partial<ServicesSettings>) => void;
-  saveServicesSettings: () => Promise<void>;
-  refreshServicesSettings: () => Promise<void>;
-  refreshServicesStatus: () => Promise<void>;
-}
+// ── Hook: useSettings — backward compat ─────────────────────────────
+// Предоставляет тот же API, что и старый SettingsContext,
+// но использует Zustand для локальных настроек + React Query для server state.
+// Edit buffer для services settings управляется локально через useState.
 
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+export function useSettings() {
+  const settings = useSettingsStore((s) => s.settings);
+  const dashboardConfig = useSettingsStore((s) => s.dashboardConfig);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const updateDashboardConfig = useSettingsStore((s) => s.updateDashboardConfig);
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
-
-  const [settings, setSettings] = useState<AppSettings>({
-    organizationName: 'ACME Corporation',
-    systemEmail: 'admin@acme.com',
-    timezone: 'EST',
-    dateFormat: 'MM/DD/YYYY',
-    notifications: {
-      deviceOffline: true,
-      securityAlerts: true,
-      storageWarnings: true,
-      dailyReports: false,
-      mobilePush: false,
-      smsEnabled: false,
-      smsForCriticalOnly: false,
-      emailForManagers: false,
-      rocketsms: { login: '', sender: '', apiUrl: '' },
-      smtp: { host: '', port: 587, user: '', from: '' },
-    },
-    system: {
-      healthCheckInterval: 5,
-      sessionTimeout: 30,
-      maxRecordingGap: 15,
-      alertThreshold: 85,
-    },
-    security: {
-      requires2FA: false,
-      passwordPolicy: 'basic',
-    }
-  });
-
-  const [servicesSettingsState, setServicesSettingsState] = useState<ServicesSettings | null>(null);
-
-  // ── React Query hooks ──────────────────────────────────────────────
   const {
     data: servicesSettingsData,
     isLoading: servicesLoading,
@@ -81,86 +52,42 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     refetch: refreshServicesStatus,
   } = useServicesStatus();
 
-  // Sync React Query data to local state for mutation support
-  // (React Query provides read data, local state holds pending edits)
-  React.useEffect(() => {
-    if (servicesSettingsData) {
-      setServicesSettingsState(servicesSettingsData);
-    }
-  }, [servicesSettingsData]);
-
   const updateServicesSettingsMutation = useUpdateServicesSettings();
 
-  const [dashboardConfig, setDashboardConfig] = useState<DashboardLayoutConfig>(() => {
-    const saved = localStorage.getItem('dashboardConfig');
-    return saved ? JSON.parse(saved) : {
-      showStatsRow: true,
-      showTicketStats: true,
-      showRecentAlerts: true,
-      showLatestTickets: true,
-      showQuickActions: true
-    };
-  });
+  // ── Edit buffer for services settings ─────────────────────────────
+  // Сохраняем копию для редактирования перед сохранением
+  const [editBuffer, setEditBuffer] = useState<ServicesSettings | null>(null);
 
-  // ── Enable query fetching when token is available ──────────────────
-  // useServicesSettings and useServicesStatus are enabled by default
-  // They will only fetch when the user is authenticated via the token check
-  // in the API layer (request function handles 401).
+  useEffect(() => {
+    if (servicesSettingsData && !editBuffer) {
+      setEditBuffer(servicesSettingsData);
+    }
+  }, [servicesSettingsData, editBuffer]);
 
-  // ── Methods ────────────────────────────────────────────────────────
-
-  const updateSettings = useCallback((updates: Partial<AppSettings>) => {
-    setSettings(prev => ({
-      ...prev,
-      ...updates,
-      notifications: {
-        ...prev.notifications,
-        ...(updates.notifications || {})
-      },
-      system: {
-        ...prev.system,
-        ...(updates.system || {})
-      },
-      security: {
-        ...prev.security,
-        ...(updates.security || {})
-      }
-    }));
-  }, []);
-
-  const updateDashboardConfig = useCallback((updates: Partial<DashboardLayoutConfig>) => {
-    setDashboardConfig(prev => {
-      const next = { ...prev, ...updates };
-      localStorage.setItem('dashboardConfig', JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const updateServicesSettings = useCallback((updates: Partial<ServicesSettings>) => {
-    setServicesSettingsState(prev => {
+  const updateServicesSettings = (updates: Partial<ServicesSettings>) => {
+    setEditBuffer((prev) => {
       if (!prev) return prev;
       return { ...prev, ...updates };
     });
-  }, []);
-
-  const saveServicesSettings = async () => {
-    if (!servicesSettingsState) return;
-    await updateServicesSettingsMutation.mutateAsync(servicesSettingsState);
   };
 
-  // Wrap refetch to match () => Promise<void> signature
-  const handleRefreshServicesSettings = useCallback(async () => {
+  const saveServicesSettings = async () => {
+    if (!editBuffer) return;
+    await updateServicesSettingsMutation.mutateAsync(editBuffer);
+  };
+
+  const handleRefreshServicesSettings = async () => {
     await refreshServicesSettings();
-  }, [refreshServicesSettings]);
+  };
 
-  const handleRefreshServicesStatus = useCallback(async () => {
+  const handleRefreshServicesStatus = async () => {
     await refreshServicesStatus();
-  }, [refreshServicesStatus]);
+  };
 
-  const value = useMemo<SettingsContextType>(() => ({
+  return {
     settings,
     dashboardConfig,
-    servicesSettings: servicesSettingsState,
+    servicesSettings: editBuffer,
     servicesLoading,
     servicesStatus: (servicesStatusData?.services || {}) as ServicesStatusMap,
     servicesStatusLoading,
@@ -170,19 +97,5 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     saveServicesSettings,
     refreshServicesSettings: handleRefreshServicesSettings,
     refreshServicesStatus: handleRefreshServicesStatus,
-  }), [settings, dashboardConfig, servicesSettingsState, servicesLoading, servicesStatusData, servicesStatusLoading, updateSettings, updateDashboardConfig, updateServicesSettings, saveServicesSettings, handleRefreshServicesSettings, handleRefreshServicesStatus]);
-
-  return (
-    <SettingsContext.Provider value={value}>
-      {children}
-    </SettingsContext.Provider>
-  );
-}
-
-export function useSettings() {
-  const context = useContext(SettingsContext);
-  if (context === undefined) {
-    throw new Error('useSettings must be used within a SettingsProvider');
-  }
-  return context;
+  };
 }

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/respond"
 )
 
 // SyncEngine — центральный компонент bi-directional синхронизации.
@@ -147,13 +148,13 @@ func (e *SyncEngine) ServiceNowWebhookHandler() http.Handler {
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
 			e.logger.Error("sync: sn webhook read body", "error", err)
-			http.Error(w, "read error", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "read error")
 			return
 		}
 
 		if !e.verifyHMAC(e.snSecret, r.Header.Get("X-SN-Signature"), body) {
 			e.logger.Warn("sync: sn webhook invalid signature")
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
+			respond.Error(w, http.StatusUnauthorized, "invalid signature")
 			return
 		}
 
@@ -165,7 +166,7 @@ func (e *SyncEngine) ServiceNowWebhookHandler() http.Handler {
 		}
 		if err := json.Unmarshal(body, &event); err != nil {
 			e.logger.Error("sync: sn webhook unmarshal", "error", err)
-			http.Error(w, "invalid json", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "invalid json")
 			return
 		}
 
@@ -178,7 +179,7 @@ func (e *SyncEngine) ServiceNowWebhookHandler() http.Handler {
 		if event.Table == "u_cctv_work_order" || event.Table == "x_gb_cctv_work_order" {
 			if err := e.handleExternalWorkOrderUpdate(r.Context(), "servicenow", event.RecordID, event.Changes); err != nil {
 				e.logger.Error("sync: sn handle work order update", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				respond.Error(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
@@ -194,13 +195,13 @@ func (e *SyncEngine) JiraWebhookHandler() http.Handler {
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
 			e.logger.Error("sync: jira webhook read body", "error", err)
-			http.Error(w, "read error", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "read error")
 			return
 		}
 
 		if !e.verifyHMAC(e.jiraSecret, r.Header.Get("X-Hub-Signature-256"), body) {
 			e.logger.Warn("sync: jira webhook invalid signature")
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
+			respond.Error(w, http.StatusUnauthorized, "invalid signature")
 			return
 		}
 
@@ -225,7 +226,7 @@ func (e *SyncEngine) JiraWebhookHandler() http.Handler {
 		}
 		if err := json.Unmarshal(body, &event); err != nil {
 			e.logger.Error("sync: jira webhook unmarshal", "error", err)
-			http.Error(w, "invalid json", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "invalid json")
 			return
 		}
 
@@ -243,7 +244,7 @@ func (e *SyncEngine) JiraWebhookHandler() http.Handler {
 
 		if err := e.handleExternalWorkOrderUpdate(r.Context(), "jira", event.Issue.Key, changes); err != nil {
 			e.logger.Error("sync: jira handle work order update", "error", err)
-			http.Error(w, "handler error", http.StatusInternalServerError)
+			respond.Error(w, http.StatusInternalServerError, "handler error")
 			return
 		}
 
@@ -258,13 +259,13 @@ func (e *SyncEngine) TOIRWebhookHandler() http.Handler {
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 		if err != nil {
 			e.logger.Error("sync: toir webhook read body", "error", err)
-			http.Error(w, "read error", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "read error")
 			return
 		}
 
 		if !e.verifyHMAC(e.toirSecret, r.Header.Get("X-TOIR-Signature"), body) {
 			e.logger.Warn("sync: toir webhook invalid signature")
-			http.Error(w, "invalid signature", http.StatusUnauthorized)
+			respond.Error(w, http.StatusUnauthorized, "invalid signature")
 			return
 		}
 
@@ -276,7 +277,7 @@ func (e *SyncEngine) TOIRWebhookHandler() http.Handler {
 		}
 		if err := json.Unmarshal(body, &event); err != nil {
 			e.logger.Error("sync: toir webhook unmarshal", "error", err)
-			http.Error(w, "invalid json", http.StatusBadRequest)
+			respond.Error(w, http.StatusBadRequest, "invalid json")
 			return
 		}
 
@@ -289,7 +290,7 @@ func (e *SyncEngine) TOIRWebhookHandler() http.Handler {
 		if event.Entity == "work_order" {
 			if err := e.handleExternalWorkOrderUpdate(r.Context(), "toir", event.RecordID, event.Changes); err != nil {
 				e.logger.Error("sync: toir handle work order update", "error", err)
-				http.Error(w, "handler error", http.StatusInternalServerError)
+				respond.Error(w, http.StatusInternalServerError, "handler error")
 				return
 			}
 		}
