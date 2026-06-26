@@ -156,7 +156,11 @@ func TestMigrationDownHasDrop(t *testing.T) {
 		}
 
 		content := string(data)
-		if !strings.Contains(content, "DROP TABLE") && !strings.Contains(content, "DROP INDEX") {
+		if !strings.Contains(content, "DROP TABLE") &&
+			!strings.Contains(content, "DROP INDEX") &&
+			!strings.Contains(content, "DROP VIEW") &&
+			!strings.Contains(content, "DROP FUNCTION") &&
+			!strings.Contains(content, "DROP POLICY") {
 			t.Errorf("no DROP statements found in down-migration %s", entry.Name())
 		}
 	}

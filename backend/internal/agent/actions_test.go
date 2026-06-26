@@ -52,6 +52,8 @@ func TestBuildSSHAuthMethodsEmptyWithoutKey(t *testing.T) {
 // TestNewHostKeyCallback проверяет host key verification.
 func TestNewHostKeyCallback(t *testing.T) {
 	t.Setenv("SSH_KNOWN_HOSTS_PATH", "")
+	// Set HOME to nonexistent to prevent fallback to ~/.ssh/known_hosts
+	t.Setenv("HOME", "/nonexistent-home-dir-for-test")
 
 	callback, err := newHostKeyCallback()
 	if err == nil {
