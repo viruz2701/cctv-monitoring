@@ -1,7 +1,50 @@
+// notifications — Push-уведомления для критических событий.
+//
+// P1-3.3: Push Notifications for SLA Breach
+//   - Интеграция с expo-notifications
+//   - Deep linking в WorkOrderDetail
+//   - User preferences для типов уведомлений
+
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-export async function setupPushNotifications(): Promise<string | null> {
+// ──────────────────────────────────────────────────
+// Types
+// ──────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'sla_breach'
+  | 'alarm'
+  | 'work_order'
+  | 'maintenance';
+
+export interface NotificationPreferences {
+  sla_breach: boolean;
+  alarm_critical: boolean;
+  alarm_high: boolean;
+  work_order_assigned: boolean;
+  maintenance_due: boolean;
+}
+
+// ──────────────────────────────────────────────────
+// Handler configuration
+// ──────────────────────────────────────────────────
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+// ──────────────────────────────────────────────────
+// Registration
+// ──────────────────────────────────────────────────
+
+export async function registerForPushNotifications(): Promise<string | null> {
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -11,33 +54,27 @@ export async function setupPushNotifications(): Promise<string | null> {
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Push notification permission not granted');
     return null;
   }
 
-  const token = await Notifications.getExpoPushTokenAsync({
-    projectId: 'cctv-technician',
-  });
+  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const token = tokenData.data;
 
   if (Platform.OS === 'android') {
-    Notifications.setNotificationChannelAsync('work-orders', {
-      name: 'Наряды-заказы',
-      importance: Notifications.AndroidImportance.HIGH,
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2563eb',
+      lightColor: '#FF231F7C',
     });
   }
 
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
-
-  return token.data;
+  return token;
 }
+
+// ──────────────────────────────────────────────────
+// Local notifications
+// ──────────────────────────────────────────────────
 
 export async function sendLocalNotification(
   title: string,
@@ -48,9 +85,17 @@ export async function sendLocalNotification(
     content: {
       title,
       body,
-      data: data ?? undefined,
+      data: data || {},
       sound: true,
     },
-    trigger: null,
+    trigger: null, // immediate
   });
+}
+
+// ──────────────────────────────────────────────────
+// Deep linking
+// ──────────────────────────────────────────────────
+
+export function createDeepLink(workOrderId: string): string {
+  return `cctv-monitor://work-order/${workOrderId}`;
 }
