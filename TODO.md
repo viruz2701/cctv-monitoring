@@ -75,18 +75,19 @@ P0-1.4: SMS Provider Implementation
 Effort: 3d
 Status: [x] 2026-06-26
 P0-1.5: SLABreachNotifier Fallback
-Файлы: backend/internal/notifications/sla_breach_notifier.go
+Файлы: backend/internal/sla/notifier.go, backend/internal/sla/notifier_test.go
 Проблема: Зависит от UserContactProvider — нет fallback при недоступности БД
 Решение:
-Добавить cached contacts (Redis/memory)
-Fallback на default admin email
-Retry logic с exponential backoff
+✅ Contact cache (in-memory sync.Map, TTL 5min) — stale-while-revalidate
+✅ Fallback на default admin email при БД downtime
+✅ Retry logic с exponential backoff (3 попытки, 100ms/200ms/400ms)
+✅ 10 unit тестов: cache hit/expiry/stale-while-revalidate/clear, fallback, retry
 Критерий приёмки:
-Notifier работает при БД downtime
-Cached contacts обновляются каждые 5min
-Alert отправляется даже без fresh data
+✅ Notifier работает при БД downtime (stale cache + fallback email)
+✅ Cached contacts обновляются каждые 5min (TTL)
+✅ Alert отправляется даже без fresh data (fallback admin email)
 Effort: 2d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-2: Critical UX Blockers
 P0-2.1: AddDeviceModal Validation
 Файлы: frontend/src/components/devices/AddDeviceModal.tsx
