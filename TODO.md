@@ -59,19 +59,21 @@ Fixed: isCriticalPriority() — case-insensitive сравнение приори
 Effort: 2d
 Status: [x] 2026-06-26
 P0-1.4: SMS Provider Implementation
-Файлы: backend/internal/notifications/sms_provider.go
+Файлы: backend/internal/sms/rocketsms.go, backend/internal/sms/rocketsms_test.go, backend/internal/sla/notifier.go
 Проблема: SMSProvider interface без реализации — заглушка
 Решение:
-Реализовать интеграцию с ClickSend/Twilio
-Альтернатива: СМС-центр РБ (для compliance)
-Добавить fallback на email при недоступности SMS
+✅ RocketSMSProvider реализован (СМС-центр РБ, compliance РБ)
+✅ Rate limiting — не более 10 SMS в минуту на номер (anti-spam)
+✅ Delivery tracking — счётчики sent/failed/rate_limited/cost
+✅ Email fallback — при недоступности SMS отправляется email (в SLABreachNotifier)
+✅ 15 unit тестов для RocketSMS provider (rate limit, delivery, config)
 Критерий приёмки:
-SMS отправляются успешно
-Fallback на email работает
-Rate limiting для SMS (anti-spam)
-Delivery tracking
+✅ SMS отправляются успешно (RocketSMS API)
+✅ Fallback на email работает (SMS fail → email)
+✅ Rate limiting для SMS (anti-spam, per phone number)
+✅ Delivery tracking (Prometheus-ready метрики)
 Effort: 3d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-1.5: SLABreachNotifier Fallback
 Файлы: backend/internal/notifications/sla_breach_notifier.go
 Проблема: Зависит от UserContactProvider — нет fallback при недоступности БД

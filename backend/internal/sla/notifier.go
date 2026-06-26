@@ -405,6 +405,46 @@ func (n *SLABreachNotifier) sendSMSBreach(ctx context.Context, wo BreachedWorkOr
 			"phone", maskPhone(manager.PhoneNumber),
 			"error", err,
 		)
+
+		// P0-1.4: Email fallback при недоступности SMS
+		// Если SMS не отправилось — пробуем email
+		// Compliance: ISO 27001 A.12.4.1 (Event logging — fallback логируется)
+		if manager.Email != "" {
+			subject := fmt.Sprintf("[SLA BREACH - SMS Fallback] %s - %s", wo.Priority, wo.Title)
+			body := fmt.Sprintf(
+				"Уважаемый менеджер,\n\n"+
+					"SMS-уведомление не было доставлено. Информация о нарушении SLA:\n\n"+
+					"Наряд: %s\n"+
+					"ID: %s\n"+
+					"Приоритет: %s\n"+
+					"Устройство: %s\n"+
+					"Дедлайн: %s\n"+
+					"Просрочено: %s\n\n"+
+					"Техник: %s\n\n"+
+					"(Это автоматическое уведомление — fallback при недоступности SMS)\n\n"+
+					"С уважением,\n"+
+					"CCTV Health Monitor",
+				wo.Title,
+				wo.ID,
+				wo.Priority,
+				wo.DeviceName,
+				wo.SLADeadline.Format("2006-01-02 15:04 MST"),
+				formatDuration(overdue),
+				wo.AssigneeName,
+			)
+
+			if err2 := n.email.SendEmail(ctx, manager.Email, subject, body); err2 != nil {
+				n.logger.Error("failed to send email fallback after SMS failure",
+					"work_order", wo.ID,
+					"error", err2,
+				)
+			} else {
+				n.logger.Info("email fallback sent after SMS failure",
+					"work_order", wo.ID,
+					"email", maskEmail(manager.Email),
+				)
+			}
+		}
 	}
 }
 
