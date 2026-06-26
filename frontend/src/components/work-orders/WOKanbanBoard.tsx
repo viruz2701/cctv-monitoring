@@ -165,9 +165,9 @@ export function WOKanbanBoard({
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`flex-1 p-3 space-y-3 overflow-y-auto min-h-[200px] transition-colors ${
+                    className={`flex-1 p-3 space-y-3 overflow-y-auto min-h-[200px] transition-all duration-200 ${
                       snapshot.isDraggingOver
-                        ? 'bg-blue-50/50 dark:bg-blue-900/10'
+                        ? 'bg-blue-50/50 dark:bg-blue-900/10 scale-[1.01]'
                         : ''
                     }`}
                   >
@@ -189,10 +189,10 @@ export function WOKanbanBoard({
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
                               onClick={() => onCardClick?.(wo)}
-                              className={`bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2 cursor-pointer transition-all ${
+                              className={`bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2 cursor-pointer transition-all duration-200 ease-out ${
                                 snapshot.isDragging
                                   ? 'shadow-xl ring-2 ring-blue-400 rotate-[2deg] scale-105'
-                                  : 'hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600'
+                                  : 'hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 active:scale-[0.98]'
                               } ${isDragging ? 'opacity-90' : ''}`}
                               style={{
                                 ...provided.draggableProps.style,

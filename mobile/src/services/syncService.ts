@@ -49,6 +49,7 @@ class SyncService {
   private _unsubscribeNetInfo: (() => void) | null = null;
   private _pendingCount: number = 0;
   private _pendingCountInterval: ReturnType<typeof setInterval> | null = null;
+  private _initialized = false;
 
   // ── Getters ────────────────────────────────────
 
@@ -71,6 +72,9 @@ class SyncService {
   // ── Init ───────────────────────────────────────
 
   async initialize(): Promise<void> {
+    if (this._initialized) return;
+    this._initialized = true;
+
     await initDatabase();
 
     // Подписка на изменения сети

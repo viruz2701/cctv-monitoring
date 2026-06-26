@@ -51,6 +51,7 @@ const TotalCostDashboard = lazy(() => import('./pages/TotalCostDashboard').then(
 const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard').then((m) => ({ default: m.ManagerDashboard })));
 const AssetOverview = lazy(() => import('./pages/AssetOverview').then((m) => ({ default: m.AssetOverview })));
 const AdvancedAnalytics = lazy(() => import('./pages/AdvancedAnalytics').then((m) => ({ default: m.AdvancedAnalytics })));
+const Glossary = lazy(() => import('./pages/Glossary').then((m) => ({ default: m.Glossary })));
 
 import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
@@ -168,6 +169,7 @@ function App() {
 
                   {/* Tutorials — all roles */}
                   <Route path="/tutorials" element={<PageSuspense><Tutorials /></PageSuspense>} />
+                  <Route path="/glossary" element={<PageSuspense><Glossary /></PageSuspense>} />
                 </Route>
 
                 {/* Default Redirect */}

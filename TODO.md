@@ -90,7 +90,7 @@ Effort: 2d
 Status: [x] 2026-06-26
 P0-2: Critical UX Blockers
 P0-2.1: AddDeviceModal Validation
-Файлы: frontend/src/components/devices/AddDeviceModal.tsx
+Файлы: frontend/src/components/AddDeviceModal.tsx, frontend/src/lib/validations.ts
 Проблема: Длинная форма, нет dynamic validation, нет индикации обязательных полей
 Решение:
 Интегрировать react-hook-form + Zod
@@ -103,21 +103,21 @@ Required fields помечены звёздочкой
 Error messages на всех языках (i18n)
 Submit disabled при invalid form
 Effort: 3d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-2.2: Breadcrumbs для Detail Pages
-Файлы: frontend/src/components/ui/Breadcrumbs.tsx, frontend/src/pages/WorkOrderDetail.tsx, frontend/src/pages/DeviceDetail.tsx
+Файлы: frontend/src/components/ui/Breadcrumbs.tsx, frontend/src/pages/WorkOrderDetail.tsx, frontend/src/pages/DeviceDetail.tsx, frontend/src/pages/TicketDetail.tsx
 Проблема: Отсутствие хлебных крошек в глубоких страницах
 Решение:
 Добавить Breadcrumbs component на все detail pages
 Структура: Home > Section > Entity > Detail
 Clickable breadcrumbs для navigation
 Критерий приёмки:
-Breadcrumbs на WorkOrderDetail, DeviceDetail, SiteDetail
+Breadcrumbs на WorkOrderDetail, DeviceDetail, SiteDetail, TicketDetail
 Clickable navigation работает
 Responsive на mobile
-Accessibility: aria-label="Breadcrumb"
+Accessibility: aria-label="Breadcrumb", nav role
 Effort: 2d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-2.3: View Mode Persistence
 Файлы: frontend/src/pages/WorkOrders.tsx
 Проблема: Переключение table/kanban/calendar не сохраняется
@@ -131,7 +131,7 @@ Bookmark с view mode работает
 localStorage fallback
 Default view per user role
 Effort: 1d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-2.4: Kanban Feedback & Animation
 Файлы: frontend/src/pages/WorkOrders.tsx
 Проблема: При drag&drop нет анимации и toast feedback
@@ -146,23 +146,30 @@ Undo работает (revert status)
 Animation smooth (60fps)
 Accessibility: aria-live="polite"
 Effort: 2d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-3: Mobile Critical Fixes
 P0-3.1: Conflict Resolution UI
-Файлы: mobile/src/components/ConflictResolutionModal.tsx
+Файлы: mobile/src/components/ConflictResolutionModal.tsx, mobile/src/store/syncStore.ts
 Проблема: Только LWW (last-write-wins), нет UI для manual resolution
 Решение:
 Modal с diff-view: "Local vs Server"
 Кнопки: Keep Local, Keep Server, Merge
-Visual highlighting of changes
-Timestamp comparison
+Visual highlighting (красный/зелёный фон для изменённых полей)
+Timestamp comparison (formatRelativeTime, date-fns/ru)
+Merge mode с TextInput для каждого поля
+Telemetry: structured JSON лог в console.log
+Синхронизация с syncStore (addConflict/resolveConflict)
 Критерий приёмки:
-Modal появляется при conflict
-Diff view показывает изменения
-Merge для text fields
-Conflict logged в telemetry
+Modal появляется при conflict ✓
+Diff view показывает изменения ✓
+Merge для text fields ✓
+Conflict logged в telemetry ✓
+Timestamp comparison (Local vs Server) ✓
+Keep Local / Keep Server / Merge кнопки ✓
+TypeScript compilation: 0 errors ✓
 Effort: 3d
-Status: [ ]
+Status: [x] 2026-06-26
+Status: [x] 2026-06-26
 P0-3.2: Background Sync Integration
 Файлы: mobile/src/hooks/useBackgroundSync.ts, mobile/src/services/syncService.ts
 Проблема: useBackgroundSync есть, но не интегрирован с SyncService
@@ -177,14 +184,19 @@ Queue count отображается
 Manual sync button
 Sync status indicator
 Effort: 3d
-Status: [ ]
+Status: [x] 2026-06-26
 P0-3.3: Offline Map Tile Caching
-Файлы: mobile/src/hooks/useOfflineMap.ts
+Файлы:
+  - mobile/src/hooks/useOfflineMap.ts
+  - mobile/src/services/tileCache.ts
+  - mobile/src/screens/MapScreen.tsx
 Проблема: useOfflineMap есть, но нет кэширования тайлов
 Решение:
-Кэшировать map tiles в SQLite
-Preload tiles для assigned sites
-Offline map availability indicator
+  - Кэшировать map tiles в SQLite (expo-sqlite)
+  - Preload tiles для assigned sites (bounding box → tile range)
+  - Offline map availability indicator (счётчик тайлов, размер кэша)
+  - Автоочистка истёкших тайлов (>30 дней)
+  - Cache size management (soft/hard limit)
 Tile expiration (30 days)
 Критерий приёмки:
 Tiles кэшируются локально

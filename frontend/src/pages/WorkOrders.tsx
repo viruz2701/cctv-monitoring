@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { workOrderSchema } from '../lib/validations';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { getArrayData } from '../utils/helpers';
@@ -138,6 +138,7 @@ export const WorkOrders: React.FC = () => {
   const { data: workOrders = [], isLoading: loading } = useWorkOrders();
   const { data: rawUsers = [] } = useUsers();
   const updateWorkOrderMut = useUpdateWorkOrder();
+  const toast = useToast();
 
   const users = useMemo(() => rawUsers.map(u => ({ ...u, name: (u as any).name || u.username })), [rawUsers]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -146,7 +147,43 @@ export const WorkOrders: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+
+  // ═══════════════════════════════════════════════════════════════════
+  // View Mode Persistence (P0-2.3)
+  // Priority: URL query param → localStorage → role-based default
+  // ═══════════════════════════════════════════════════════════════════
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    const urlView = searchParams.get('view');
+    if (urlView === 'table' || urlView === 'kanban' || urlView === 'calendar') {
+      return urlView;
+    }
+    const stored = localStorage.getItem('workOrders_viewMode');
+    if (stored === 'table' || stored === 'kanban' || stored === 'calendar') {
+      return stored;
+    }
+    return user?.role === 'technician' ? 'kanban' : 'table';
+  });
+
+  // Sync browser back/forward navigation
+  const viewParam = searchParams.get('view');
+  useEffect(() => {
+    if (viewParam === 'table' || viewParam === 'kanban' || viewParam === 'calendar') {
+      setViewModeState(viewParam);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewParam]);
+
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('view', mode);
+      return next;
+    }, { replace: true });
+    localStorage.setItem('workOrders_viewMode', mode);
+  }, [setSearchParams]);
 
   // Quick filter synced with URL
   const [quickFilter, setQuickFilter] = useQuickFilter();
@@ -267,10 +304,38 @@ export const WorkOrders: React.FC = () => {
     },
   ];
 
-  // ── Kanban status change handler ─────────────────────────────────
+  // ── Kanban status change handler with toast + undo ───────────────
   const handleKanbanStatusChange = useCallback(async (id: string, newStatus: string) => {
-    await updateWorkOrderMut.mutateAsync({ id, data: { status: newStatus as WorkOrder['status'] } });
-  }, [updateWorkOrderMut]);
+    const wo = workOrders.find(w => w.id === id);
+    const oldStatus = wo?.status;
+    const woName = wo?.device_name || `WO #${id.slice(0, 8)}`;
+
+    const STATUS_LABELS: Record<string, string> = {
+      open: 'Open',
+      in_progress: 'In Progress',
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+    };
+
+    try {
+      await updateWorkOrderMut.mutateAsync({ id, data: { status: newStatus as WorkOrder['status'] } });
+
+      toast.success({
+        title: `${woName} moved to ${STATUS_LABELS[newStatus] || newStatus}`,
+        duration: 5000,
+        undo: {
+          label: 'Undo',
+          onClick: () => {
+            updateWorkOrderMut.mutateAsync({ id, data: { status: oldStatus as WorkOrder['status'] } })
+              .then(() => toast.success('Status reverted'))
+              .catch(() => toast.error('Failed to revert status'));
+          },
+        },
+      });
+    } catch {
+      toast.error(`Failed to move ${woName}`);
+    }
+  }, [updateWorkOrderMut, workOrders, toast]);
 
   // ── Calendar date change handler (drag-and-drop) ─────────────────
   const handleCalendarDateChange = useCallback(async (id: string, newDate: string) => {

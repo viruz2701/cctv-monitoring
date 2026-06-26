@@ -11,6 +11,84 @@ export const deviceSchema = z.object({
 
 export type DeviceFormData = z.infer<typeof deviceSchema>;
 
+// ─── AddDeviceModal ────────────────────────────────────────────────────────
+export const addDeviceSchema = z
+  .object({
+    name: z.string().min(2, 'validation.name_required'),
+    siteId: z.string().min(1, 'validation.site_required'),
+    connectionType: z.enum(['ip', 'p2p', 'snmp', 'syslog', 'alarm', 'gb28181', 'onvif'], {
+      message: 'validation.invalid_connection_type',
+    }),
+    model: z.string().optional(),
+
+    // IP connection
+    ipAddress: z.string().optional(),
+
+    // P2P connection
+    p2pBrand: z.string().optional(),
+    p2pSerial: z.string().optional(),
+    p2pSecurityCode: z.string().optional(),
+    p2pCloudUser: z.string().optional(),
+    p2pCloudPass: z.string().optional(),
+
+    // SNMP connection
+    snmpCommunity: z.string().optional(),
+    snmpVersion: z.enum(['v1', 'v2c', 'v3']).optional(),
+
+    // Syslog connection
+    syslogPort: z.coerce.number().optional(),
+
+    // Alarm connection
+    alarmProtocol: z.enum(['http', 'sip', 'xml']).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // IP address required when connection type is 'ip'
+    if (data.connectionType === 'ip') {
+      if (!data.ipAddress || data.ipAddress.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ipAddress'],
+          message: 'validation.ip_required',
+        });
+      } else if (
+        !/^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/.test(
+          data.ipAddress
+        )
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ipAddress'],
+          message: 'validation.invalid_ip',
+        });
+      }
+    }
+
+    // P2P serial required when connection type is 'p2p'
+    if (data.connectionType === 'p2p') {
+      if (!data.p2pSerial || data.p2pSerial.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['p2pSerial'],
+          message: 'validation.serial_required',
+        });
+      }
+    }
+
+    // Syslog port validation
+    if (data.connectionType === 'syslog' && data.syslogPort !== undefined) {
+      const port = data.syslogPort;
+      if (port < 1 || port > 65535 || !Number.isInteger(port)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['syslogPort'],
+          message: 'validation.invalid_port',
+        });
+      }
+    }
+  });
+
+export type AddDeviceFormData = z.infer<typeof addDeviceSchema>;
+
 // ─── Site ─────────────────────────────────────────────────────────────────
 export const siteSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(200, 'Name must be at most 200 characters'),

@@ -1,9 +1,10 @@
 import { generateUUID } from '../utils/uuid';
 import { getArrayData } from '../utils/helpers';
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
 import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
+import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
     ArrowLeft,
     Camera,
@@ -25,8 +26,10 @@ import {
     Wrench,
     RotateCcw,
     Download,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
+    Loader2,
     Tag,
     QrCode,
     Shield,
@@ -48,6 +51,9 @@ import {
 import type { RecordingDay, HealthTimelineEvent as TimelineEvent, DeviceStats, DeviceCamera } from '../types';
 import { DeviceAuditLog } from '../components/devices/DeviceAuditLog';
 import { useTranslation } from 'react-i18next';
+
+// P1-1.3: Lazy-loaded RCA Graph
+const RCAGraph = lazy(() => import('../components/rca/RCAGraph'));
 
 // ─── Helpers with locale support ─────────────────────────────────────
 function formatDate(dateStr: string, locale: string): string {
@@ -228,6 +234,8 @@ export function DeviceDetail() {
     const [selectedRecording, setSelectedRecording] = useState<RecordingDay | null>(null);
     const [ticketCreated, setTicketCreated] = useState(false);
     const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
+    // P1-1.3: RCA expandable state
+    const [rcaExpanded, setRcaExpanded] = useState(false);
     const [newTicket, setNewTicket] = useState({
         title: '',
         description: '',
@@ -363,16 +371,17 @@ export function DeviceDetail() {
 
     const lastSeenFormatted = formatDateTime(device.lastSeen, i18n.language);
 
+    // ── Breadcrumb items ────────────────────────────────────────────────
+    const breadcrumbItems = device
+        ? [
+            { label: 'devices', href: '/devices' },
+            { label: device.name, href: undefined },
+        ]
+        : [{ label: 'devices', href: '/devices' }];
+
     return (
         <div className="space-y-6">
-            {/* Back Button */}
-            <button
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-sm font-medium">{t('back')}</span>
-            </button>
+            <Breadcrumbs items={breadcrumbItems} className="mb-2" />
 
             {/* Device Header */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -467,6 +476,43 @@ export function DeviceDetail() {
                     </div>
                 )}
             </CardBody></Card>
+
+            {/* ═══ P1-1.3: RCA Widget — Expandable Root Cause Analysis ═══ */}
+            <Card>
+                <CardHeader
+                    action={
+                        <button
+                            onClick={() => setRcaExpanded(!rcaExpanded)}
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium transition-colors"
+                            aria-expanded={rcaExpanded}
+                            aria-label={rcaExpanded ? t('collapse_rca') || 'Collapse RCA' : t('expand_rca') || 'Show Root Cause Analysis'}
+                        >
+                            {rcaExpanded ? (
+                                <><ChevronDown className="w-4 h-4" /> {t('collapse') || 'Collapse'}</>
+                            ) : (
+                                <><ChevronRight className="w-4 h-4" /> {t('show_rca') || 'Show RCA'}</>
+                            )}
+                        </button>
+                    }
+                >
+                    <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        {t('root_cause_analysis') || 'Root Cause Analysis'}
+                    </div>
+                </CardHeader>
+                {rcaExpanded && (
+                    <CardBody>
+                        <Suspense fallback={
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                                <span className="ml-2 text-sm text-slate-500">{t('loading_rca') || 'Loading RCA...'}</span>
+                            </div>
+                        }>
+                            <RCAGraph deviceId={deviceId || ''} onClose={() => setRcaExpanded(false)} />
+                        </Suspense>
+                    </CardBody>
+                )}
+            </Card>
 
             {/* Recording Availability Calendar */}
             <Card><CardHeader>{t('recording_availability')}</CardHeader><CardBody>

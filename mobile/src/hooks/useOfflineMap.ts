@@ -1,11 +1,66 @@
+/**
+ * useOfflineMap — хук для загрузки, кеширования и фильтрации устройств на карте.
+ *
+ * Offline-first стратегия (UX-02):
+ * 1. При загрузке — показываем кешированные данные из AsyncStorage
+ * 2. Если есть интернет — параллельно загружаем свежие данные с сервера
+ * 3. Обновляем кеш при получении свежих данных
+ * 4. При офлайн — работаем только с кешем
+ *
+ * Offline Tile Caching (P0-3.3):
+ * - Тайлы кэшируются в SQLite (expo-sqlite) для работы карты офлайн
+ * - Preload при назначении на site
+ * - Автоматическая очистка истёкших тайлов (>30 дней)
+ * - Offline indicator с количеством кэшированных тайлов
+ *
+ * Compliance:
+ * - СТБ 34.101.27 (защита данных в покое)
+ * - IEC 62443 SR 3.1 (зоны безопасности)
+ *
+ * @module useOfflineMap
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { devicesApi, DeviceMapData } from '../api/devices';
 import { useDeviceMapStore } from '../store/deviceMapStore';
 import { useLocation } from './useLocation';
+import {
+  initTileCache,
+  getTileCount,
+  getCacheSize,
+  getExpiredCount,
+  clearExpiredTiles,
+  clearAllTiles,
+  preloadTilesForBounds,
+  TILE_SERVER_URL,
+  PRELOAD_ZOOM_LEVELS,
+  type BoundingBox,
+  type PreloadProgress,
+  type TileCacheStats,
+} from '../services/tileCache';
+
+// ──────────────────────────────────────────────────
+// Типы
+// ──────────────────────────────────────────────────
 
 type DeviceStatusFilter = 'all' | 'ONLINE' | 'OFFLINE' | 'WARNING';
 type DeviceTypeFilter = 'all' | 'camera' | 'nvr' | 'dvr' | 'switch';
+
+export interface TileCacheStatus {
+  /** Количество кэшированных тайлов */
+  tileCount: number;
+  /** Размер кэша в байтах */
+  cacheSizeBytes: number;
+  /** Количество истёкших тайлов */
+  expiredCount: number;
+  /** Идёт ли предзагрузка */
+  isPreloading: boolean;
+  /** Прогресс предзагрузки */
+  preloadProgress: PreloadProgress | null;
+  /** Дата последней очистки */
+  lastCleanedAt: number | null;
+}
 
 interface UseOfflineMapReturn {
   /** Устройства с координатами (из кеша или онлайн) */
@@ -38,16 +93,36 @@ interface UseOfflineMapReturn {
   };
   /** Есть ли интернет */
   isOnline: boolean;
+
+  // ── Tile Cache API ──────────────────────────────
+
+  /** Статус кэша тайлов */
+  tileCacheStatus: TileCacheStatus;
+  /** Предзагрузить тайлы для bounding box site */
+  preloadTilesForSite: (
+    bbox: BoundingBox,
+    zoomLevels?: number[],
+  ) => Promise<PreloadProgress>;
+  /** Очистить кэш тайлов */
+  clearTileCache: () => Promise<void>;
+  /** Принудительно очистить истёкшие тайлы */
+  cleanExpiredTiles: () => Promise<number>;
+  /** Обновить статистику кэша */
+  refreshTileCacheStats: () => Promise<void>;
 }
 
+// ──────────────────────────────────────────────────
+// Хук
+// ──────────────────────────────────────────────────
+
 /**
- * useOfflineMap — хук для загрузки, кеширования и фильтрации устройств на карте.
+ * useOfflineMap — основной хук для работы с картой в офлайн-режиме.
  *
- * Offline-first стратегия (UX-02):
- * 1. При загрузке — показываем кешированные данные из AsyncStorage
- * 2. Если есть интернет — параллельно загружаем свежие данные с сервера
- * 3. Обновляем кеш при получении свежих данных
- * 4. При офлайн — работаем только с кешем
+ * Возвращает:
+ * - Данные устройств (кэш/онлайн)
+ * - Фильтрацию по статусу и типу
+ * - Статус кэша тайлов
+ * - Методы предзагрузки и очистки кэша
  */
 export function useOfflineMap(): UseOfflineMapReturn {
   const {
@@ -66,7 +141,34 @@ export function useOfflineMap(): UseOfflineMapReturn {
   const [statusFilter, setStatusFilter] = useState<DeviceStatusFilter>('all');
   const [deviceTypeFilter, setDeviceTypeFilter] = useState<DeviceTypeFilter>('all');
 
-  // Мониторинг сетевого статуса
+  // ── Tile cache state ────────────────────────────
+
+  const [tileCount, setTileCount] = useState(0);
+  const [cacheSizeBytes, setCacheSizeBytes] = useState(0);
+  const [expiredCount, setExpiredCount] = useState(0);
+  const [isPreloading, setIsPreloading] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState<PreloadProgress | null>(null);
+  const [lastCleanedAt, setLastCleanedAt] = useState<number | null>(null);
+
+  // ── Обновление статистики кэша ──────────────────
+
+  const refreshTileCacheStats = useCallback(async () => {
+    try {
+      const [count, size, expired] = await Promise.all([
+        getTileCount(),
+        getCacheSize(),
+        getExpiredCount(),
+      ]);
+      setTileCount(count);
+      setCacheSizeBytes(size);
+      setExpiredCount(expired);
+    } catch (err) {
+      console.error('[TileCache] Failed to refresh stats:', err);
+    }
+  }, []);
+
+  // ── Мониторинг сетевого статуса ────────────────
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOnline(state.isConnected ?? true);
@@ -74,22 +176,47 @@ export function useOfflineMap(): UseOfflineMapReturn {
     return () => unsubscribe();
   }, []);
 
-  // Загрузка кеша при монтировании
+  // ── Инициализация при монтировании ──────────────
+
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
-      await loadCachedDevices();
+
+      try {
+        // 1. Инициализируем tile cache таблицу
+        await initTileCache();
+
+        // 2. Очищаем истёкшие тайлы при старте
+        const cleaned = await clearExpiredTiles();
+        if (cleaned > 0) {
+          setLastCleanedAt(Date.now());
+        }
+
+        // 3. Загружаем статистику кэша
+        await refreshTileCacheStats();
+
+        // 4. Загружаем кэш устройств
+        await loadCachedDevices();
+      } catch (err) {
+        console.error('[useOfflineMap] Init error:', err);
+      }
+
       setIsLoading(false);
     };
     init();
-  }, [loadCachedDevices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Автоматическая синхронизация при появлении интернета
+  // ── Автоматическая синхронизация при появлении интернета ──
+
   useEffect(() => {
     if (isOnline) {
       refreshDevices();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
+
+  // ── Обновление устройств ────────────────────────
 
   const refreshDevices = useCallback(async () => {
     if (!isOnline) return;
@@ -105,7 +232,75 @@ export function useOfflineMap(): UseOfflineMapReturn {
     }
   }, [isOnline, setCachedDevices]);
 
-  // Фильтрация устройств
+  // ── Preload тайлов для site ─────────────────────
+
+  /**
+   * Предзагрузить тайлы для bounding box объекта (site).
+   * Загружает тайлы на zoom-уровнях 10, 12, 14, 16.
+   *
+   * @param bbox — bounding box site (minLat, minLng, maxLat, maxLng)
+   * @param zoomLevels — уровни детализации (по умолчанию PRELOAD_ZOOM_LEVELS)
+   */
+  const preloadTilesForSite = useCallback(
+    async (
+      bbox: BoundingBox,
+      zoomLevels: number[] = PRELOAD_ZOOM_LEVELS,
+    ): Promise<PreloadProgress> => {
+      if (isPreloading) {
+        console.warn('[TileCache] Preload already in progress');
+        return { total: 0, completed: 0, failed: 0 };
+      }
+
+      setIsPreloading(true);
+      setPreloadProgress({ total: 0, completed: 0, failed: 0 });
+
+      try {
+        const result = await preloadTilesForBounds(
+          bbox,
+          zoomLevels,
+          TILE_SERVER_URL,
+          (progress) => {
+            setPreloadProgress({ ...progress });
+          },
+        );
+
+        await refreshTileCacheStats();
+        return result;
+      } finally {
+        setIsPreloading(false);
+      }
+    },
+    [isPreloading, refreshTileCacheStats],
+  );
+
+  // ── Очистка кэша ────────────────────────────────
+
+  const clearTileCache = useCallback(async () => {
+    try {
+      await clearAllTiles();
+      await refreshTileCacheStats();
+      setLastCleanedAt(Date.now());
+    } catch (err) {
+      console.error('[TileCache] Failed to clear cache:', err);
+    }
+  }, [refreshTileCacheStats]);
+
+  const cleanExpiredTiles = useCallback(async (): Promise<number> => {
+    try {
+      const count = await clearExpiredTiles();
+      if (count > 0) {
+        setLastCleanedAt(Date.now());
+        await refreshTileCacheStats();
+      }
+      return count;
+    } catch (err) {
+      console.error('[TileCache] Failed to clean expired tiles:', err);
+      return 0;
+    }
+  }, [refreshTileCacheStats]);
+
+  // ── Фильтрация устройств ────────────────────────
+
   const filteredDevices = cachedDevices.filter((device) => {
     if (statusFilter !== 'all' && device.status !== statusFilter) return false;
     if (deviceTypeFilter !== 'all' && device.device_type !== deviceTypeFilter) return false;
@@ -117,6 +312,16 @@ export function useOfflineMap(): UseOfflineMapReturn {
     ONLINE: cachedDevices.filter((d) => d.status === 'ONLINE').length,
     OFFLINE: cachedDevices.filter((d) => d.status === 'OFFLINE').length,
     WARNING: cachedDevices.filter((d) => d.status === 'WARNING').length,
+  };
+
+  // Собираем статус кэша
+  const tileCacheStatus: TileCacheStatus = {
+    tileCount,
+    cacheSizeBytes,
+    expiredCount,
+    isPreloading,
+    preloadProgress,
+    lastCleanedAt,
   };
 
   return {
@@ -133,5 +338,12 @@ export function useOfflineMap(): UseOfflineMapReturn {
     refreshDevices,
     statusCounts,
     isOnline,
+
+    // Tile Cache API
+    tileCacheStatus,
+    preloadTilesForSite,
+    clearTileCache,
+    cleanExpiredTiles,
+    refreshTileCacheStats,
   };
 }

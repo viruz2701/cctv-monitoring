@@ -1,11 +1,13 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Download, Columns,
   Search, CheckSquare, Square, FileDown, GripVertical,
   ChevronLeft, ChevronRight, Maximize2, Minus, Type,
-  Settings2, RotateCcw, Filter, X,
+  Settings2, RotateCcw, Filter, X, Bookmark, Save,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { useFilterStore } from '../../store/filterStore';
 
 // ═══════════════════════════════════════════════════════════════════════
 // UX-14.3.3: Advanced DataGrid
@@ -122,6 +124,12 @@ interface DataGridProps<T> {
   onPivotChange?: (columns: string[]) => void;
   /** P1-3.3: Prefetch on row hover */
   onRowHover?: (item: T) => void;
+  /** P1-1.5: Enable saved filter presets */
+  filterPresets?: boolean;
+  /** P1-1.5: Current filter state for save/share */
+  filterState?: { filters: Record<string, string>; sort: { column: string; direction: 'asc' | 'desc' } };
+  /** P1-1.5: Apply a saved filter preset */
+  onApplyFilterPreset?: (filterState: { filters: Record<string, string>; sort: { column: string; direction: 'asc' | 'desc' } }) => void;
 }
 
 function getValue<T>(item: T, key: keyof T | string): unknown {
@@ -381,6 +389,9 @@ export function DataGrid<T>({
   pivotColumns = [],
   onPivotChange,
   onRowHover,
+  filterPresets = false,
+  filterState,
+  onApplyFilterPreset,
 }: DataGridProps<T>) {
   const [search, setSearch] = useState('');
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
@@ -393,6 +404,32 @@ export function DataGrid<T>({
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // P1-1.5: Saved filter presets
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { saveView, savedViews, getViewsForPage, deleteView } = useFilterStore();
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [filterSaveName, setFilterSaveName] = useState('');
+
+  // P1-1.5: URL sync for search/filter state
+  useEffect(() => {
+    const urlSearch = searchParams.get('search');
+    if (urlSearch && urlSearch !== search) {
+      setSearch(urlSearch);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncSearchToUrl = useCallback((value: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) {
+        next.set('search', value);
+      } else {
+        next.delete('search');
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const alignClasses = {
     left: 'text-left',
@@ -863,7 +900,7 @@ export function DataGrid<T>({
       )}
 
       {/* ── Toolbar ────────────────────────────────────────────────── */}
-      {(exportable || selectable || toolbar || persistId) && (
+      {(exportable || selectable || toolbar || persistId || filterPresets) && (
         <div
           className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 gap-2 flex-wrap"
           role="toolbar"
@@ -886,12 +923,116 @@ export function DataGrid<T>({
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
+                  syncSearchToUrl(e.target.value);
                   setCurrentPage(0);
                 }}
                 className="pl-8 pr-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Search data grid"
               />
             </div>
+
+            {/* P1-1.5: Saved Filter Presets */}
+            {filterPresets && filterState && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowFilterMenu(!showFilterMenu);
+                    setShowColumnMenu(false);
+                    setShowDensityMenu(false);
+                    setShowSettingsMenu(false);
+                  }}
+                  className="p-1.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                  title="Saved filters"
+                  aria-label="Saved filter presets"
+                  aria-expanded={showFilterMenu}
+                  aria-haspopup="true"
+                >
+                  <Bookmark size={16} aria-hidden="true" />
+                </button>
+                {showFilterMenu && (
+                  <div
+                    className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 z-50 min-w-[220px]"
+                    role="menu"
+                    aria-label="Filter presets menu"
+                  >
+                    <div className="px-2 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                      Saved Filters
+                    </div>
+                    {getViewsForPage(persistId || 'default').length === 0 && (
+                      <div className="px-2 py-3 text-center text-xs text-slate-400">
+                        No saved filters yet
+                      </div>
+                    )}
+                    {getViewsForPage(persistId || 'default').map((view) => (
+                      <button
+                        key={view.id}
+                        onClick={() => {
+                          if (onApplyFilterPreset) {
+                            onApplyFilterPreset({ filters: view.filters, sort: view.sort });
+                          }
+                          setShowFilterMenu(false);
+                        }}
+                        className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded"
+                      >
+                        <Bookmark size={12} className="text-blue-500 shrink-0" />
+                        <span className="flex-1 truncate">{view.name}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteView(view.id);
+                          }}
+                          className="text-slate-400 hover:text-red-500"
+                        >
+                          <X size={12} />
+                        </button>
+                      </button>
+                    ))}
+                    <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={filterSaveName}
+                          onChange={(e) => setFilterSaveName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && filterSaveName.trim()) {
+                              saveView(
+                                filterSaveName.trim(),
+                                persistId || 'default',
+                                { search },
+                                { column: sortColumn || '', direction: sortDirection || 'asc' }
+                              );
+                              setFilterSaveName('');
+                              setShowFilterMenu(false);
+                            }
+                          }}
+                          placeholder="Save current filter..."
+                          className="flex-1 text-xs px-2 py-1 border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-blue-500"
+                          maxLength={32}
+                        />
+                        <button
+                          onClick={() => {
+                            if (filterSaveName.trim()) {
+                              saveView(
+                                filterSaveName.trim(),
+                                persistId || 'default',
+                                { search },
+                                { column: sortColumn || '', direction: sortDirection || 'asc' }
+                              );
+                              setFilterSaveName('');
+                              setShowFilterMenu(false);
+                            }
+                          }}
+                          disabled={!filterSaveName.trim()}
+                          className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          <Save size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Column visibility */}
             <div className="relative">

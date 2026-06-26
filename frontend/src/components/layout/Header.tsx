@@ -8,7 +8,6 @@ import {
     LogOut,
     Settings,
     Menu,
-    X,
     Sun,
     Moon,
     Monitor
@@ -21,6 +20,7 @@ import { getArrayData } from '../../utils/helpers';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore, type Theme } from '../../store/themeStore';
+import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 
 interface HeaderProps {
     onMobileMenuToggle?: () => void;
@@ -38,6 +38,8 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const { data: rawSites } = useSites();
     const safeDevices = getArrayData<Record<string, any>>(rawDevices);
     const safeSites = getArrayData<Record<string, any>>(rawSites);
+
+    const commandPalette = useCommandPaletteStore();
 
     const notifications = useMemo(() => apiNotifications.map(n => ({
         id: n.id,
@@ -90,10 +92,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showSearchResults, setShowSearchResults] = useState(false);
-
-    // Динамический заголовок страницы (пока не переводим, можно оставить английские ключи или добавить)
+    // Динамический заголовок страницы
     const pageTitleMap: Record<string, string> = {
         '/dashboard': t('dashboard'),
         '/sites': t('sites'),
@@ -111,15 +110,6 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const currentTitle = Object.entries(pageTitleMap).find(([path]) =>
         location.pathname.startsWith(path)
     )?.[1] || t('dashboard');
-
-    const searchResults = React.useMemo((): { devices: Array<Record<string, any>>; sites: Array<Record<string, any>> } => {
-        if (!searchQuery.trim()) return { devices: [], sites: [] };
-        const query = searchQuery.toLowerCase();
-        return {
-            sites: sites.filter(s => s.name.toLowerCase().includes(query) || s.address.toLowerCase().includes(query)).slice(0, 3),
-            devices: devices.filter((d: any) => d.name.toLowerCase().includes(query) || d.type.toLowerCase().includes(query)).slice(0, 3)
-        };
-    }, [searchQuery, sites, devices]);
 
     const themeCycle: Theme[] = ['light', 'dark', 'system'];
     const themeIcons: Record<Theme, React.ReactNode> = {
@@ -139,10 +129,8 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
         setTheme(nextTheme);
     }, [theme, setTheme]);
 
-    const handleSearchSelect = (path: string) => {
-        setSearchQuery('');
-        setShowSearchResults(false);
-        navigate(path);
+    const handleSearchClick = () => {
+        commandPalette.open();
     };
 
     return (
@@ -169,51 +157,20 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Search */}
-                    <div className="hidden md:flex items-center relative z-50">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input
-                                type="text"
-                                placeholder={t('search_placeholder') || "Search devices, sites..."}
-                                value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); setShowSearchResults(true); }}
-                                onFocus={() => setShowSearchResults(true)}
-                                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
-                                className="w-64 pl-10 pr-10 py-2 text-sm bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                    <X className="w-3 h-3" />
-                                </button>
-                            )}
-                            {showSearchResults && searchQuery && (searchResults.sites.length > 0 || searchResults.devices.length > 0) && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                                    {searchResults.sites.length > 0 && (
-                                        <div className="py-2">
-                                            <h4 className="px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('sites')}</h4>
-                                            {searchResults.sites.map(site => (
-                                                <button key={site.id} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSearchSelect(`/sites?search=${encodeURIComponent(site.name)}`)} className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
-                                                    <div className="p-1 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400"><Search className="w-3 h-3" /></div>
-                                                    <div><p className="text-sm font-medium text-slate-900 dark:text-white">{site.name}</p><p className="text-xs text-slate-500 dark:text-slate-400 truncate">{site.address}</p></div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {searchResults.devices.length > 0 && (
-                                        <div className="py-2 border-t border-slate-100 dark:border-slate-800">
-                                            <h4 className="px-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t('devices')}</h4>
-                                            {searchResults.devices.map(device => (
-                                                <button key={device.id} onMouseDown={(e) => e.preventDefault()} onClick={() => handleSearchSelect(`/devices/${device.id}`)} className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
-                                                    <div className="p-1 bg-emerald-100 dark:bg-emerald-900/30 rounded text-emerald-600 dark:text-emerald-400"><Search className="w-3 h-3" /></div>
-                                                    <div><p className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</p><p className="text-xs text-slate-500 dark:text-slate-400 capitalize">{device.type} • {device.status}</p></div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                    {/* P1-1.4: Unified Search — Opens Command Palette */}
+                    <div className="hidden md:flex items-center">
+                        <button
+                            onClick={handleSearchClick}
+                            className="flex items-center gap-3 w-64 px-4 py-2 text-sm bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-0 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-left group"
+                            aria-label={t('open_search') || 'Open search (Cmd+K)'}
+                            title={t('search_shortcut') || 'Search — Cmd+K'}
+                        >
+                            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="flex-1 truncate">{t('search_placeholder') || 'Search devices, sites...'}</span>
+                            <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 bg-white dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600">
+                                <span>⌘K</span>
+                            </kbd>
+                        </button>
                     </div>
 
                     {/* Theme Toggle */}

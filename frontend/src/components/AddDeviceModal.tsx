@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Modal, Button, Input, Select, useToast } from './ui';
-import { ConnectionType, P2PRegistrationForm, Device } from '../types';
-import { useSites, useCreateDevice, useUpdateDevice } from '../hooks/useApiQuery';
+import { ConnectionType } from '../types';
+import { useSites, useCreateDevice } from '../hooks/useApiQuery';
 import { generateUUID } from '../utils/uuid';
+import { addDeviceSchema, AddDeviceFormData } from '../lib/validations';
 
 interface Props {
     isOpen: boolean;
@@ -11,12 +14,42 @@ interface Props {
     onSuccess?: () => void;
 }
 
+const P2P_BRANDS = [
+    { value: 'hikvision', label: 'Hikvision' },
+    { value: 'dahua', label: 'Dahua' },
+    { value: 'reolink', label: 'Reolink' },
+    { value: 'xiongmai', label: 'Xiongmai' },
+    { value: 'ezviz', label: 'EZVIZ' },
+] as const;
+
+const CONNECTION_TYPES = [
+    { value: 'ip', labelKey: 'type_ip_camera' },
+    { value: 'p2p', labelKey: 'type_p2p_camera' },
+    { value: 'snmp', labelKey: 'type_snmp_device' },
+    { value: 'syslog', labelKey: 'type_syslog_device' },
+    { value: 'alarm', labelKey: 'type_alarm_receiver' },
+] as const;
+
+const SNMP_VERSIONS = [
+    { value: 'v1', label: 'SNMP v1' },
+    { value: 'v2c', label: 'SNMP v2c' },
+    { value: 'v3', label: 'SNMP v3' },
+] as const;
+
+const ALARM_PROTOCOLS = [
+    { value: 'http', label: 'HTTP XML' },
+    { value: 'sip', label: 'SIP' },
+    { value: 'xml', label: 'XML' },
+] as const;
+
+/** Бренды, требующие cloud-credentials */
+const NEEDS_CLOUD_CREDS = new Set(['dahua', 'reolink', 'ezviz']);
+
 export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) => {
     const { t } = useTranslation();
     const toast = useToast();
     const { data: rawSites = [] } = useSites();
     const createDevice = useCreateDevice();
-    const updateDeviceMut = useUpdateDevice();
 
     const sites = useMemo(() => rawSites.map((s: Record<string, any>) => ({
         id: s.id,
@@ -28,134 +61,114 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
         longitude: s.longitude || 0,
         status: s.status || 'active',
         lastSync: s.last_sync || new Date().toISOString(),
-    })), [rawSites]);
-    const [loading, setLoading] = useState(false);
-    const [connectionType, setConnectionType] = useState<ConnectionType>('ip');
-    
-    // Общие поля
-    const [name, setName] = useState('');
-    const [siteId, setSiteId] = useState('');
-    const [ipAddress, setIpAddress] = useState('');
-    const [model, setModel] = useState('');
-
-    // P2P поля
-    const [p2pBrand, setP2pBrand] = useState('hikvision');
-    const [p2pSerial, setP2pSerial] = useState('');
-    const [p2pSecurityCode, setP2pSecurityCode] = useState('');
-    const [p2pCloudUser, setP2pCloudUser] = useState('');
-    const [p2pCloudPass, setP2pCloudPass] = useState('');
-
-    // SNMP поля
-    const [snmpCommunity, setSnmpCommunity] = useState('public');
-    const [snmpVersion, setSnmpVersion] = useState<'v1'|'v2c'|'v3'>('v2c');
-
-    // Syslog поля
-    const [syslogPort, setSyslogPort] = useState(514);
-
-    // Alarm поля
-    const [alarmProtocol, setAlarmProtocol] = useState<'http'|'sip'|'xml'>('http');
-
-    // Сброс формы при открытии/закрытии
-    useEffect(() => {
-        if (!isOpen) {
-            // Сброс при закрытии
-            setName('');
-            setSiteId('');
-            setIpAddress('');
-            setModel('');
-            setP2pBrand('hikvision');
-            setP2pSerial('');
-            setP2pSecurityCode('');
-            setP2pCloudUser('');
-            setP2pCloudPass('');
-            setSnmpCommunity('public');
-            setSnmpVersion('v2c');
-            setSyslogPort(514);
-            setAlarmProtocol('http');
-            setConnectionType('ip');
-            setLoading(false);
-        } else {
-            // При открытии, если есть хоть один сайт, выбираем первый по умолчанию
-            if (sites.length > 0 && !siteId) {
-                setSiteId(sites[0].id);
-            }
-        }
-    }, [isOpen, sites]);
+    })), [rawSites, t]);
 
     const siteOptions = sites.map(site => ({ value: site.id, label: site.name }));
     const noSites = sites.length === 0;
 
-    const isRequiredFilled = (): boolean => {
-        if (!name || !siteId) return false;
-        if (connectionType === 'ip' && !ipAddress) return false;
-        if (connectionType === 'p2p' && !p2pSerial) return false;
-        return true;
+    const {
+        register,
+        handleSubmit,
+        watch,
+        reset,
+        formState: { errors, isValid, isSubmitting },
+    } = useForm<AddDeviceFormData>({
+        resolver: zodResolver(addDeviceSchema),
+        mode: 'onChange',
+        defaultValues: {
+            name: '',
+            siteId: '',
+            connectionType: 'ip',
+            model: '',
+            ipAddress: '',
+            p2pBrand: 'hikvision',
+            p2pSerial: '',
+            p2pSecurityCode: '',
+            p2pCloudUser: '',
+            p2pCloudPass: '',
+            snmpCommunity: 'public',
+            snmpVersion: 'v2c',
+            syslogPort: 514,
+            alarmProtocol: 'http',
+        },
+    });
+
+    const connectionType = watch('connectionType');
+    const p2pBrand = watch('p2pBrand');
+    const needsCredentials = p2pBrand ? NEEDS_CLOUD_CREDS.has(p2pBrand) : false;
+
+    // Reset form on modal close
+    useEffect(() => {
+        if (!isOpen) {
+            reset();
+        } else if (sites.length > 0) {
+            // Auto-select first site when modal opens
+            const currentSiteId = watch('siteId');
+            if (!currentSiteId) {
+                reset({ siteId: sites[0].id });
+            }
+        }
+    }, [isOpen, sites, reset, watch]);
+
+    /** Translate Zod error message keys */
+    const translateError = (key: string | undefined): string | undefined => {
+        if (!key) return undefined;
+        // If it's an i18n key, translate it; otherwise return as-is
+        return key.startsWith('validation.') ? t(key) : key;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const onSubmit = async (data: AddDeviceFormData) => {
         if (noSites) {
             toast.error(t('no_sites_available'));
             return;
         }
-        if (!isRequiredFilled()) {
-            toast.error(t('please_fill_required_fields'));
-            return;
-        }
-        setLoading(true);
+
         try {
-            const selectedSite = sites.find(s => s.id === siteId);
+            const selectedSite = sites.find(s => s.id === data.siteId);
             const siteName = selectedSite?.name || t('unknown_device');
 
             // Формируем payload для API (snake_case поля как ожидает бэкенд)
             const payload: Record<string, any> = {
                 device_id: generateUUID(),
-                name: name,
-                device_type: connectionType === 'ip' ? 'camera' : 'switch',
+                name: data.name,
+                device_type: data.connectionType === 'ip' ? 'camera' : 'switch',
                 status: 'ONLINE',
-                connection_type: connectionType,
+                connection_type: data.connectionType,
                 asset_class: 'internal',
+                site_id: data.siteId,
             };
 
-            // Привязка к сайту
-            if (siteId) payload.site_id = siteId;
-
             // IP-адрес
-            if (connectionType === 'ip' && ipAddress) {
-                payload.ip_address = ipAddress;
+            if (data.connectionType === 'ip' && data.ipAddress) {
+                payload.ip_address = data.ipAddress;
             }
 
             // Специфичные поля
-            if (connectionType === 'p2p') {
-                payload.p2p_brand = p2pBrand;
-                payload.p2p_serial = p2pSerial;
-                payload.p2p_security_code = p2pSecurityCode;
-                if (p2pCloudUser) payload.p2p_cloud_user = p2pCloudUser;
-                if (p2pCloudPass) payload.p2p_cloud_pass = p2pCloudPass;
-            } else if (connectionType === 'snmp') {
-                payload.snmp_community = snmpCommunity;
-                payload.snmp_version = snmpVersion;
-            } else if (connectionType === 'syslog') {
-                payload.syslog_port = syslogPort;
-            } else if (connectionType === 'alarm') {
-                payload.alarm_protocol = alarmProtocol;
+            if (data.connectionType === 'p2p') {
+                payload.p2p_brand = data.p2pBrand;
+                payload.p2p_serial = data.p2pSerial;
+                payload.p2p_security_code = data.p2pSecurityCode;
+                if (data.p2pCloudUser) payload.p2p_cloud_user = data.p2pCloudUser;
+                if (data.p2pCloudPass) payload.p2p_cloud_pass = data.p2pCloudPass;
+            } else if (data.connectionType === 'snmp') {
+                payload.snmp_community = data.snmpCommunity;
+                payload.snmp_version = data.snmpVersion;
+            } else if (data.connectionType === 'syslog') {
+                payload.syslog_port = data.syslogPort;
+            } else if (data.connectionType === 'alarm') {
+                payload.alarm_protocol = data.alarmProtocol;
             }
 
-            // Добавляем устройство через API
             await createDevice.mutateAsync(payload as any);
 
-            toast.success(t('device_added_success') || 'Device added successfully');
+            toast.success(t('device_added_success'));
             onSuccess?.();
-            onClose(); // закрываем модальное окно
+            onClose();
         } catch (err: any) {
             console.error(err);
             toast.error(err.message || t('add_device_failed'));
-        } finally {
-            setLoading(false);
         }
     };
-
-    const needsCredentials = ['dahua', 'reolink', 'ezviz'].includes(p2pBrand);
 
     // Если сайтов нет, показываем сообщение и блокируем форму
     if (noSites) {
@@ -171,151 +184,137 @@ export const AddDeviceModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }) 
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={t('add_device')} size="lg">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+                {/* Connection Type */}
                 <Select
-                    label={t('connection_type')}
-                    options={[
-                        { value: 'ip', label: t('type_ip_camera') },
-                        { value: 'p2p', label: t('type_p2p_camera') },
-                        { value: 'snmp', label: t('type_snmp_device') },
-                        { value: 'syslog', label: t('type_syslog_device') },
-                        { value: 'alarm', label: t('type_alarm_receiver') },
-                    ]}
-                    value={connectionType}
-                    onChange={(e) => {
-                        setConnectionType(e.target.value as ConnectionType);
-                        if (e.target.value !== 'ip') setIpAddress('');
-                    }}
+                    label={`${t('connection_type')} *`}
+                    options={CONNECTION_TYPES.map(ct => ({
+                        value: ct.value,
+                        label: t(ct.labelKey),
+                    }))}
+                    error={translateError(errors.connectionType?.message)}
+                    {...register('connectionType', {
+                        onChange: (e) => {
+                            // Reset IP when switching away from IP
+                            if (e.target.value !== 'ip') {
+                                // reset will happen on next render via watched value
+                            }
+                        },
+                    })}
                 />
 
+                {/* Device Name */}
                 <Input
-                    label={t('device_name')}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
+                    label={`${t('device_name')} *`}
+                    placeholder={t('device_name')}
+                    error={translateError(errors.name?.message)}
+                    {...register('name')}
                 />
 
+                {/* Site */}
                 <Select
-                    label={t('site')}
+                    label={`${t('site')} *`}
                     options={siteOptions}
-                    value={siteId}
-                    onChange={(e) => setSiteId(e.target.value)}
-                    required
+                    error={translateError(errors.siteId?.message)}
+                    {...register('siteId')}
                 />
 
+                {/* IP Address (conditional) */}
                 {connectionType === 'ip' && (
                     <Input
-                        label={t('ip_address')}
-                        value={ipAddress}
-                        onChange={(e) => setIpAddress(e.target.value)}
-                        required
+                        label={`${t('ip_address')} *`}
                         placeholder={t('ip_placeholder')}
+                        error={translateError(errors.ipAddress?.message)}
+                        {...register('ipAddress')}
                     />
                 )}
 
+                {/* Model */}
                 <Input
                     label={t('model')}
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
                     placeholder={t('model_placeholder')}
+                    {...register('model')}
                 />
 
+                {/* P2P Fields (conditional) */}
                 {connectionType === 'p2p' && (
                     <>
                         <Select
                             label={t('brand')}
-                            options={[
-                                { value: 'hikvision', label: 'Hikvision' },
-                                { value: 'dahua', label: 'Dahua' },
-                                { value: 'reolink', label: 'Reolink' },
-                                { value: 'xiongmai', label: 'Xiongmai' },
-                                { value: 'ezviz', label: 'EZVIZ' },
-                            ]}
-                            value={p2pBrand}
-                            onChange={(e) => setP2pBrand(e.target.value)}
+                            options={P2P_BRANDS.map(b => ({ value: b.value, label: b.label }))}
+                            {...register('p2pBrand')}
                         />
                         <Input
-                            label={t('serial_number')}
+                            label={`${t('serial_number')} *`}
                             placeholder={t('serial_placeholder')}
-                            value={p2pSerial}
-                            onChange={(e) => setP2pSerial(e.target.value)}
-                            required
+                            error={translateError(errors.p2pSerial?.message)}
+                            {...register('p2pSerial')}
                         />
                         <Input
                             label={t('security_code')}
                             type="password"
                             placeholder={t('security_code_placeholder')}
-                            value={p2pSecurityCode}
-                            onChange={(e) => setP2pSecurityCode(e.target.value)}
+                            {...register('p2pSecurityCode')}
                         />
                         {needsCredentials && (
                             <>
                                 <Input
                                     label={t('cloud_username')}
-                                    value={p2pCloudUser}
-                                    onChange={(e) => setP2pCloudUser(e.target.value)}
+                                    {...register('p2pCloudUser')}
                                 />
                                 <Input
                                     label={t('cloud_password')}
                                     type="password"
-                                    value={p2pCloudPass}
-                                    onChange={(e) => setP2pCloudPass(e.target.value)}
+                                    {...register('p2pCloudPass')}
                                 />
                             </>
                         )}
                     </>
                 )}
 
+                {/* SNMP Fields (conditional) */}
                 {connectionType === 'snmp' && (
                     <>
                         <Input
                             label={t('snmp_community')}
-                            value={snmpCommunity}
-                            onChange={(e) => setSnmpCommunity(e.target.value)}
+                            {...register('snmpCommunity')}
                         />
                         <Select
                             label={t('snmp_version')}
-                            options={[
-                                { value: 'v1', label: 'SNMP v1' },
-                                { value: 'v2c', label: 'SNMP v2c' },
-                                { value: 'v3', label: 'SNMP v3' },
-                            ]}
-                            value={snmpVersion}
-                            onChange={(e) => setSnmpVersion(e.target.value as any)}
+                            options={SNMP_VERSIONS.map(v => ({ value: v.value, label: v.label }))}
+                            {...register('snmpVersion')}
                         />
                     </>
                 )}
 
+                {/* Syslog Fields (conditional) */}
                 {connectionType === 'syslog' && (
                     <Input
                         label={t('syslog_port')}
                         type="number"
-                        value={syslogPort}
-                        onChange={(e) => setSyslogPort(Number(e.target.value))}
+                        error={translateError(errors.syslogPort?.message)}
+                        {...register('syslogPort', { valueAsNumber: true })}
                     />
                 )}
 
+                {/* Alarm Fields (conditional) */}
                 {connectionType === 'alarm' && (
                     <Select
                         label={t('alarm_protocol')}
-                        options={[
-                            { value: 'http', label: 'HTTP XML' },
-                            { value: 'sip', label: 'SIP' },
-                            { value: 'xml', label: 'XML' },
-                        ]}
-                        value={alarmProtocol}
-                        onChange={(e) => setAlarmProtocol(e.target.value as any)}
+                        options={ALARM_PROTOCOLS.map(p => ({ value: p.value, label: p.label }))}
+                        {...register('alarmProtocol')}
                     />
                 )}
 
+                {/* Actions */}
                 <div className="flex justify-end gap-3 pt-4">
                     <Button type="button" variant="outline" onClick={onClose}>
                         {t('cancel')}
                     </Button>
                     <Button
                         type="submit"
-                        loading={loading}
-                        disabled={!isRequiredFilled()}
+                        loading={isSubmitting}
+                        disabled={!isValid || isSubmitting}
                     >
                         {t('add_device')}
                     </Button>

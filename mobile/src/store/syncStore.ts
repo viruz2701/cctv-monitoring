@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { storage } from '../utils/storage';
 import { workOrdersApi } from '../api/workOrders';
 import { CompleteWorkOrderPayload } from '../types';
+import { ConflictData, ConflictResolutionAction } from '../components/ConflictResolutionModal';
 
 interface SyncAction {
   id: string;
@@ -15,16 +16,21 @@ interface SyncAction {
 interface SyncState {
   queue: SyncAction[];
   isOnline: boolean;
+  conflicts: ConflictData[];
 
   addToQueue: (action: Omit<SyncAction, 'id' | 'timestamp' | 'retryCount'>) => Promise<void>;
   processQueue: () => Promise<void>;
   setOnline: (online: boolean) => void;
   loadQueue: () => Promise<void>;
+  addConflict: (conflict: ConflictData) => void;
+  resolveConflict: (action: ConflictResolutionAction) => void;
+  getConflicts: () => ConflictData[];
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
   queue: [],
   isOnline: true,
+  conflicts: [],
 
   addToQueue: async (action: Omit<SyncAction, 'id' | 'timestamp' | 'retryCount'>) => {
     const newAction: SyncAction = {
@@ -77,6 +83,36 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       set({ queue: updatedQueue });
       storage.setSyncQueue(JSON.stringify(updatedQueue));
     }
+  },
+
+  // ── Conflict Management ────────────────────────
+
+  addConflict: (conflict: ConflictData) => {
+    set((state) => {
+      // Не добавляем дубликат, если conflict с таким id уже есть
+      const exists = state.conflicts.some((c) => c.id === conflict.id);
+      if (exists) {
+        // Обновляем существующий
+        const updated = state.conflicts.map((c) =>
+          c.id === conflict.id ? conflict : c,
+        );
+        return { conflicts: updated };
+      }
+      return { conflicts: [...state.conflicts, conflict] };
+    });
+  },
+
+  resolveConflict: (action: ConflictResolutionAction) => {
+    set((state) => {
+      const remaining = state.conflicts.filter(
+        (c) => c.id !== action.conflictId,
+      );
+      return { conflicts: remaining };
+    });
+  },
+
+  getConflicts: () => {
+    return get().conflicts;
   },
 
   setOnline: (online: boolean) => {

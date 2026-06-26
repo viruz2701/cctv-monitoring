@@ -2,13 +2,14 @@ import { generateUUID } from '../utils/uuid';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Badge, TicketStatusBadge, PriorityBadge, Textarea, ConfirmModal } from '../components/ui';
-import { ArrowLeft, Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
+import { Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import type { Ticket, TicketStatus, TicketComment } from '../types';
 import { useTickets, useUpdateTicket, useDeleteTicket } from '../hooks/useApiQuery';
 import { useTranslation } from 'react-i18next';
 import { api, Alarm } from '../services/api';
+import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 
 export function TicketDetail() {
     const { t } = useTranslation();
@@ -104,9 +105,13 @@ export function TicketDetail() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <Button variant="ghost" onClick={() => navigate('/tickets')} className="pl-0 gap-2">
-                <ArrowLeft className="w-4 h-4" /> {t('back_to_tickets')}
-            </Button>
+            <Breadcrumbs
+                items={[
+                    { label: 'tickets', href: '/tickets' },
+                    { label: ticket.title, href: undefined },
+                ]}
+                className="mb-2"
+            />
 
             <div className="flex items-start justify-between gap-4">
                 <div>

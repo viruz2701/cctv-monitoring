@@ -49,6 +49,10 @@ export default function MapScreen() {
     refreshDevices,
     statusCounts,
     isOnline,
+    tileCacheStatus,
+    clearTileCache,
+    cleanExpiredTiles,
+    refreshTileCacheStats,
   } = useOfflineMap();
 
   // Начальный регион карты
@@ -214,6 +218,39 @@ export default function MapScreen() {
             <Ionicons name="refresh" size={20} color="#2563eb" />
           </TouchableOpacity>
         </View>
+
+        {/* Статус кэша тайлов */}
+        {(!isOnline || tileCacheStatus.tileCount > 0) && (
+          <View style={styles.tileCacheRow}>
+            <Text style={styles.tileCacheText}>
+              🗺️ Тайлы: {tileCacheStatus.tileCount}
+              {tileCacheStatus.cacheSizeBytes > 0
+                ? ` (${formatBytes(tileCacheStatus.cacheSizeBytes)})`
+                : ''}
+            </Text>
+            {tileCacheStatus.isPreloading && (
+              <Text style={styles.tileCachePreloading}>
+                ⏳ Загрузка...{' '}
+                {tileCacheStatus.preloadProgress
+                  ? `${tileCacheStatus.preloadProgress.completed}/${tileCacheStatus.preloadProgress.total}`
+                  : ''}
+              </Text>
+            )}
+            {tileCacheStatus.expiredCount > 0 && (
+              <TouchableOpacity
+                style={styles.cleanupButton}
+                onPress={async () => {
+                  await cleanExpiredTiles();
+                }}
+              >
+                <Text style={styles.cleanupButtonText}>
+                  Очистить ({tileCacheStatus.expiredCount})
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {mapError && (
           <Text style={styles.errorText}>{mapError}</Text>
         )}
@@ -268,6 +305,19 @@ function TypeChip({
       </Text>
     </TouchableOpacity>
   );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Форматировать байты в человекочитаемый формат.
+ */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────
@@ -415,5 +465,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#dc2626',
     marginTop: 4,
+  },
+
+  // ── Tile cache styles ───────────────────────────
+  tileCacheRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  tileCacheText: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  tileCachePreloading: {
+    fontSize: 11,
+    color: '#d97706',
+    fontWeight: '500',
+  },
+  cleanupButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#fef2f2',
+  },
+  cleanupButtonText: {
+    fontSize: 10,
+    color: '#dc2626',
+    fontWeight: '600',
   },
 });

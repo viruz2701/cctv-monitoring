@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
   Info, Package, Timer, Camera, Clock, Loader2,
   CheckCircle, XCircle, ArrowLeft, Shield,
@@ -795,10 +796,20 @@ export const WorkOrderDetail: React.FC = () => {
     </>
   );
 
+  // ── Breadcrumb items ────────────────────────────────────────────────
+  const breadcrumbItems = useMemo(() => {
+    if (!workOrder) return [{ label: 'nav_work_orders', href: '/work-orders' }];
+    return [
+      { label: 'nav_work_orders', href: '/work-orders' },
+      { label: `WO-${workOrder.id.slice(0, 8)}`, href: undefined },
+    ];
+  }, [workOrder]);
+
   // ── Render ────────────────────────────────────────────────────────
 
   return (
     <PermissionGuard requiredRole={['admin', 'manager', 'technician']}>
+      <Breadcrumbs items={breadcrumbItems} className="mb-4 px-6 pt-4" />
       <ThreeColumnTemplate
         header={
           <>
