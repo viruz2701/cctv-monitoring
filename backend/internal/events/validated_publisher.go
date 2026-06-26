@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -45,6 +46,32 @@ func (s *ValidationStats) Snapshot() map[string]int64 {
 // ValidatedPublisher — Publisher с валидацией.
 // ═══════════════════════════════════════════════════════════════════════
 
+// CircuitBreakerConfig — конфигурация circuit breaker для валидации.
+type CircuitBreakerConfig struct {
+	// FailureThreshold — процент неудачных валидаций для срабатывания (0.0-1.0).
+	// При превышении circuit breaker отключает валидацию.
+	FailureThreshold float64 `json:"failure_threshold"`
+	// MinValidationCount — минимальное количество валидаций для срабатывания.
+	MinValidationCount int64 `json:"min_validation_count"`
+	// AutoResetInterval — интервал автоматического сброса circuit breaker.
+	AutoResetInterval time.Duration `json:"auto_reset_interval"`
+}
+
+// DefaultCircuitBreakerConfig — параметры circuit breaker по умолчанию.
+var DefaultCircuitBreakerConfig = CircuitBreakerConfig{
+	FailureThreshold:   0.10,            // 10% failed → circuit open
+	MinValidationCount: 100,             // минимум 100 валидаций
+	AutoResetInterval:  5 * time.Minute, // автосброс через 5 мин
+}
+
+// CircuitBreakerState — состояние circuit breaker.
+type CircuitBreakerState int
+
+const (
+	CircuitClosed CircuitBreakerState = iota // Валидация активна
+	CircuitOpen                              // Валидация отключена
+)
+
 // ValidatedPublisher оборачивает Publisher и выполняет валидацию
 // всех событий через SchemaRegistry перед публикацией.
 type ValidatedPublisher struct {
@@ -53,6 +80,12 @@ type ValidatedPublisher struct {
 	logger    *slog.Logger
 	stats     *ValidationStats
 	enabled   bool // можно отключить валидацию (например, для тестов)
+
+	// Circuit breaker
+	cbConfig   CircuitBreakerConfig
+	cbState    CircuitBreakerState
+	cbMu       sync.RWMutex
+	cbOpenedAt time.Time
 }
 
 // ValidatedPublisherConfig — конфигурация ValidatedPublisher.
@@ -75,6 +108,8 @@ func NewValidatedPublisher(cfg ValidatedPublisherConfig) *ValidatedPublisher {
 		logger:    cfg.Logger.With("component", "validated_publisher"),
 		stats:     &ValidationStats{},
 		enabled:   true,
+		cbConfig:  DefaultCircuitBreakerConfig,
+		cbState:   CircuitClosed,
 	}
 }
 
@@ -97,29 +132,6 @@ func (vp *ValidatedPublisher) Stats() *ValidationStats {
 func (vp *ValidatedPublisher) SetEnabled(enabled bool) {
 	vp.enabled = enabled
 	vp.logger.Info("validation enabled", "enabled", enabled)
-}
-
-// validateAndPublish выполняет валидацию и публикует событие.
-func (vp *ValidatedPublisher) validateAndPublish(subject string, record *EventRecord) error {
-	if vp.enabled {
-		vp.stats.TotalValidations.Add(1)
-
-		if err := vp.registry.Validate(record); err != nil {
-			vp.stats.InvalidEvents.Add(1)
-			vp.logger.Error("event validation failed",
-				"subject", subject,
-				"source", record.Source,
-				"event_type", record.EventType,
-				"error", err,
-				"trace_id", record.TraceID,
-			)
-			return fmt.Errorf("validated publish: %w", err)
-		}
-
-		vp.stats.ValidEvents.Add(1)
-	}
-
-	return vp.publisher.publishJSON(subject, record)
 }
 
 // PublishEvent публикует EventRecord после валидации.
@@ -192,4 +204,106 @@ func eventToRecord(source EventSource, eventType string, data interface{}) *Even
 // timeNow — обёртка для тестирования (можно переопределить).
 var timeNow = func() time.Time {
 	return time.Now().UTC()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Circuit Breaker
+// ═══════════════════════════════════════════════════════════════════════
+
+// SetCircuitBreakerConfig устанавливает конфигурацию circuit breaker.
+func (vp *ValidatedPublisher) SetCircuitBreakerConfig(cfg CircuitBreakerConfig) {
+	vp.cbMu.Lock()
+	defer vp.cbMu.Unlock()
+	vp.cbConfig = cfg
+	vp.logger.Info("circuit breaker configured",
+		"failure_threshold", cfg.FailureThreshold,
+		"min_count", cfg.MinValidationCount,
+		"reset_interval", cfg.AutoResetInterval,
+	)
+}
+
+// CircuitBreakerState возвращает текущее состояние circuit breaker.
+func (vp *ValidatedPublisher) CircuitBreakerState() CircuitBreakerState {
+	vp.cbMu.RLock()
+	defer vp.cbMu.RUnlock()
+	return vp.cbState
+}
+
+// checkCircuitBreaker проверяет, нужно ли отключить валидацию.
+// Возвращает true если валидация должна быть активна.
+func (vp *ValidatedPublisher) checkCircuitBreaker() bool {
+	vp.cbMu.Lock()
+	defer vp.cbMu.Unlock()
+
+	// Auto-reset: если circuit open и прошло достаточно времени — закрываем
+	if vp.cbState == CircuitOpen {
+		if time.Since(vp.cbOpenedAt) > vp.cbConfig.AutoResetInterval {
+			vp.cbState = CircuitClosed
+			vp.logger.Warn("circuit breaker auto-reset: validation re-enabled",
+				"failure_threshold", vp.cbConfig.FailureThreshold,
+			)
+		} else {
+			return false
+		}
+	}
+
+	// Проверяем, нужно ли открыть circuit
+	total := vp.stats.TotalValidations.Load()
+	if total < vp.cbConfig.MinValidationCount {
+		return true // Слишком мало данных для решения
+	}
+
+	invalid := vp.stats.InvalidEvents.Load()
+	failureRate := float64(invalid) / float64(total)
+
+	if failureRate > vp.cbConfig.FailureThreshold && total >= vp.cbConfig.MinValidationCount {
+		vp.cbState = CircuitOpen
+		vp.cbOpenedAt = time.Now()
+		vp.logger.Error("circuit breaker opened: validation disabled due to high failure rate",
+			"failure_rate", failureRate,
+			"threshold", vp.cbConfig.FailureThreshold,
+			"total_validations", total,
+			"invalid_events", invalid,
+		)
+		return false
+	}
+
+	return true
+}
+
+// updateValidateAndPublish — обновлённый метод с circuit breaker.
+func (vp *ValidatedPublisher) validateAndPublish(subject string, record *EventRecord) error {
+	if !vp.enabled {
+		return vp.publisher.publishJSON(subject, record)
+	}
+
+	// Проверяем circuit breaker
+	if !vp.checkCircuitBreaker() {
+		vp.logger.Warn("event published without validation (circuit breaker open)",
+			"subject", subject,
+			"source", record.Source,
+		)
+		return vp.publisher.publishJSON(subject, record)
+	}
+
+	vp.stats.TotalValidations.Add(1)
+
+	if err := vp.registry.Validate(record); err != nil {
+		vp.stats.InvalidEvents.Add(1)
+		vp.logger.Error("event validation failed",
+			"subject", subject,
+			"source", record.Source,
+			"event_type", record.EventType,
+			"error", err,
+			"trace_id", record.TraceID,
+		)
+
+		// Проверяем circuit breaker после неудачной валидации
+		vp.checkCircuitBreaker()
+
+		return fmt.Errorf("validated publish: %w", err)
+	}
+
+	vp.stats.ValidEvents.Add(1)
+	return vp.publisher.publishJSON(subject, record)
 }
