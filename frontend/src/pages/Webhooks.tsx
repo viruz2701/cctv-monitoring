@@ -1,14 +1,44 @@
-import React, { useState, useEffect } from 'react';
+// ═══════════════════════════════════════════════════════════════════════
+// Webhooks — страница управления вебхуками (P2-3.1)
+//
+// Режимы:
+//   - list: список всех вебхуков
+//   - builder: визуальный конструктор (создание/редактирование)
+//
+// Compliance:
+//   - OWASP ASVS V5 (Input validation через Zod)
+//   - OWASP ASVS V7 (Error handling — toast + traceID)
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, WebhookEndpoint } from '../services/api';
-import { Card, Button, Badge, Input, Modal, useToast, EmptyState } from '../components/ui';
-import { useConfirmAction } from '../hooks/useConfirmAction';
 import {
   Webhook, Plus, Trash2, Play, RefreshCw,
-  CheckCircle, XCircle, Clock, AlertTriangle,
+  CheckCircle, XCircle, Clock, Settings,
 } from 'lucide-react';
+import { Card, Button, Badge, useToast, EmptyState } from '../components/ui';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { WebhookBuilder } from '../components/webhooks/WebhookBuilder';
+import {
+  useWebhooks,
+  useDeleteWebhook,
+  useTestWebhook,
+  webhookKeys,
+} from '../hooks/useWebhooks';
+import { useQueryClient } from '@tanstack/react-query';
+import type { WebhookEndpoint } from '../services/api';
 
-const EVENT_OPTIONS = [
+// ═══════════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════════
+
+type ViewMode = 'list' | 'builder';
+
+// ═══════════════════════════════════════════════════════════════════════
+// EVENTS (shared with builder for consistency)
+// ═══════════════════════════════════════════════════════════════════════
+
+export const EVENT_OPTIONS = [
   { value: 'work_order.created', label: 'WO Created' },
   { value: 'work_order.updated', label: 'WO Updated' },
   { value: 'work_order.completed', label: 'WO Completed' },
@@ -22,93 +52,78 @@ const EVENT_OPTIONS = [
   { value: 'sla.at_risk', label: 'SLA At Risk' },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════
+// Component
+// ═══════════════════════════════════════════════════════════════════════
+
 export function Webhooks() {
   const { t } = useTranslation();
   const toast = useToast();
   const { confirm, ConfirmDialog } = useConfirmAction();
-  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // ─── State ─────────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [editingId, setEditingId] = useState<string | undefined>(undefined);
   const [testing, setTesting] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState<WebhookEndpoint | null>(null);
-  const [form, setForm] = useState({ name: '', url: '', events: [] as string[], secret: '', active: true });
 
-  useEffect(() => { load(); }, []);
+  // ─── Data ──────────────────────────────────────────────────────────
+  const { data: webhooks, isLoading, error } = useWebhooks();
+  const deleteMutation = useDeleteWebhook();
+  const testMutation = useTestWebhook();
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getWebhooks();
-      setWebhooks(data || []);
-    } catch { setWebhooks([]); }
-    finally { setLoading(false); }
-  };
+  // ─── Handlers ──────────────────────────────────────────────────────
 
   const openCreate = () => {
-    setEditing(null);
-    setForm({ name: '', url: '', events: [], secret: '', active: true });
-    setShowModal(true);
+    setEditingId(undefined);
+    setViewMode('builder');
   };
 
   const openEdit = (wh: WebhookEndpoint) => {
-    setEditing(wh);
-    setForm({ name: wh.name, url: wh.url, events: wh.events || [], secret: '', active: wh.active });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      if (editing) {
-        const updates: any = { name: form.name, url: form.url, events: form.events, active: form.active };
-        if (form.secret) updates.secret = form.secret;
-        await api.updateWebhook(editing.id, updates);
-        toast.success(t('webhook_updated'));
-      } else {
-        await api.createWebhook(form);
-        toast.success(t('webhook_created'));
-      }
-      setShowModal(false);
-      load();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+    setEditingId(wh.id);
+    setViewMode('builder');
   };
 
   const handleDelete = async (id: string) => {
     const confirmed = await confirm({
       title: t('delete_webhook') || 'Delete Webhook',
-      message: t('webhook_delete_confirm'),
+      message: t('webhook_delete_confirm') || 'Are you sure you want to delete this webhook?',
       confirmText: t('delete') || 'Delete',
       variant: 'danger',
     });
     if (!confirmed) return;
     try {
-      await api.deleteWebhook(id);
-      toast.success(t('webhook_deleted'));
-      load();
+      await deleteMutation.mutateAsync(id);
+      toast.success(t('webhook_deleted') || 'Webhook deleted');
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || t('delete_failed') || 'Failed to delete');
     }
   };
 
   const handleTest = async (id: string) => {
     setTesting(id);
     try {
-      const result = await api.testWebhook(id);
-      toast.success(`${t('webhook_test_result')}: ${result.status}`);
+      const result = await testMutation.mutateAsync(id);
+      toast.success(`${t('webhook_test_result') || 'Test result'}: ${result.status}`);
     } catch (err: any) {
-      toast.error(`${t('webhook_test_failed')}: ${err.message}`);
-    } finally { setTesting(null); }
+      toast.error(`${t('webhook_test_failed') || 'Test failed'}: ${err.message}`);
+    } finally {
+      setTesting(null);
+    }
   };
 
-  const toggleEvent = (ev: string) => {
-    setForm(prev => ({
-      ...prev,
-      events: prev.events.includes(ev)
-        ? prev.events.filter(e => e !== ev)
-        : [...prev.events, ev],
-    }));
+  const handleSaved = () => {
+    setViewMode('list');
+    setEditingId(undefined);
+    queryClient.invalidateQueries({ queryKey: webhookKeys.all });
   };
+
+  const handleCancel = () => {
+    setViewMode('list');
+    setEditingId(undefined);
+  };
+
+  // ─── Status Icon Helper ────────────────────────────────────────────
 
   const lastStatusIcon = (status?: string) => {
     if (status === 'success') return <CheckCircle className="w-4 h-4 text-emerald-500" />;
@@ -116,15 +131,36 @@ export function Webhooks() {
     return <Clock className="w-4 h-4 text-slate-400" />;
   };
 
+  // ══════════════════════════════════════════════════════════════════
+  // Render: Builder Mode
+  // ══════════════════════════════════════════════════════════════════
+
+  if (viewMode === 'builder') {
+    return (
+      <div className="p-4 md:p-6">
+        <WebhookBuilder
+          webhookId={editingId}
+          onSaved={handleSaved}
+          onCancel={handleCancel}
+        />
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // Render: List Mode
+  // ══════════════════════════════════════════════════════════════════
+
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
+      {/* ─── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Webhook className="w-6 h-6" />
             {t('webhooks') || 'Webhook Endpoints'}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {t('webhooks_desc') || 'Управление исходящими вебхуками для интеграций'}
           </p>
         </div>
@@ -133,12 +169,20 @@ export function Webhooks() {
         </Button>
       </div>
 
-      {loading ? (
+      {/* ─── Loading ────────────────────────────────────────────────── */}
+      {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
         </div>
-      ) : webhooks.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+      ) : error ? (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 flex flex-col items-center justify-center text-slate-400">
+          <p className="text-sm font-medium text-red-500">
+            {t('load_error') || 'Failed to load webhooks'}
+          </p>
+        </div>
+      ) : !webhooks || webhooks.length === 0 ? (
+        /* ─── Empty State ──────────────────────────────────────────── */
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <EmptyState
             icon={<Webhook className="w-12 h-12" />}
             title={t('no_webhooks') || 'No webhooks'}
@@ -149,102 +193,105 @@ export function Webhooks() {
           />
         </div>
       ) : (
+        /* ─── Webhook List ──────────────────────────────────────────── */
         <div className="space-y-3">
-          {webhooks.map(wh => (
+          {webhooks.map((wh) => (
             <Card key={wh.id}>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${wh.active ? 'bg-blue-50' : 'bg-slate-100'}`}>
-                      <Webhook className={`w-5 h-5 ${wh.active ? 'text-blue-600' : 'text-slate-400'}`} />
+                    <div
+                      className={`p-2 rounded-lg ${
+                        wh.active ? 'bg-blue-50 dark:bg-blue-900/30' : 'bg-slate-100 dark:bg-slate-800'
+                      }`}
+                    >
+                      <Webhook
+                        className={`w-5 h-5 ${
+                          wh.active
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                      />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900">{wh.name}</span>
-                        {wh.active ? <Badge variant="success">Active</Badge> : <Badge variant="info">Inactive</Badge>}
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                          {wh.name}
+                        </span>
+                        {wh.active ? (
+                          <Badge variant="success">Active</Badge>
+                        ) : (
+                          <Badge variant="info">Inactive</Badge>
+                        )}
                       </div>
-                      <code className="text-xs font-mono text-slate-500">{wh.url}</code>
+                      <code className="text-xs font-mono text-slate-500 dark:text-slate-400 break-all">
+                        {wh.url}
+                      </code>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {lastStatusIcon(wh.last_status)}
-                    <Button size="sm" variant="outline" icon={<Play className="w-3 h-3" />}
-                      onClick={() => handleTest(wh.id)} loading={testing === wh.id}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<Play className="w-3 h-3" />}
+                      onClick={() => handleTest(wh.id)}
+                      loading={testing === wh.id}
+                    >
                       {t('test') || 'Test'}
                     </Button>
-                    <Button size="sm" variant="outline" icon={<RefreshCw className="w-3 h-3" />}
-                      onClick={() => openEdit(wh)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<Settings className="w-3 h-3" />}
+                      onClick={() => openEdit(wh)}
+                    >
                       {t('edit') || 'Edit'}
                     </Button>
-                    <Button size="sm" variant="ghost" icon={<Trash2 className="w-3 h-3 text-red-500" />}
-                      onClick={() => handleDelete(wh.id)} />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={<Trash2 className="w-3 h-3 text-red-500" />}
+                      onClick={() => handleDelete(wh.id)}
+                      loading={deleteMutation.isPending && deleteMutation.variables === wh.id}
+                    />
                   </div>
                 </div>
 
+                {/* Events */}
                 <div className="flex flex-wrap gap-1.5">
-                  {wh.events?.map(ev => (
-                    <span key={ev} className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                      {ev}
-                    </span>
-                  ))}
+                  {wh.events?.map((ev) => {
+                    const opt = EVENT_OPTIONS.find((o) => o.value === ev);
+                    return (
+                      <span
+                        key={ev}
+                        className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                      >
+                        {opt?.label || ev}
+                      </span>
+                    );
+                  })}
                 </div>
 
-                <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-400">
-                  <span>Retry: {wh.retry_count}x</span>
-                  <span>Timeout: {wh.timeout_seconds}s</span>
-                  {wh.last_sent_at && <span>Last: {new Date(wh.last_sent_at).toLocaleString()}</span>}
+                {/* Meta */}
+                <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+                  <span>
+                    {t('retry') || 'Retry'}: {wh.retry_count}x
+                  </span>
+                  <span>
+                    {t('timeout') || 'Timeout'}: {wh.timeout_seconds}s
+                  </span>
+                  {wh.last_sent_at && (
+                    <span>
+                      {t('last_sent') || 'Last'}: {new Date(wh.last_sent_at).toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
             </Card>
           ))}
         </div>
       )}
-
-      {/* Create/Edit Modal */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)}
-        title={editing ? (t('edit_webhook') || 'Edit Webhook') : (t('create_webhook') || 'Create Webhook')} size="lg">
-        <div className="space-y-4">
-          <Input label={t('name') || 'Name'} value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })} placeholder="My Integration" />
-          <Input label="URL" value={form.url}
-            onChange={e => setForm({ ...form, url: e.target.value })}
-            placeholder="https://example.com/webhook" />
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              {t('events') || 'Events'}
-            </label>
-            <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
-              {EVENT_OPTIONS.map(opt => (
-                <label key={opt.value} className="flex items-center gap-2 p-1.5 rounded hover:bg-slate-50 cursor-pointer">
-                  <input type="checkbox" checked={form.events.includes(opt.value)}
-                    onChange={() => toggleEvent(opt.value)}
-                    className="rounded border-slate-300 text-blue-600" />
-                  <span className="text-xs text-slate-700">{opt.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <Input label={t('secret') || 'Secret (optional)'} type="password" value={form.secret}
-            onChange={e => setForm({ ...form, secret: e.target.value })}
-            placeholder={t('webhook_secret_hint') || 'HMAC secret for verification'} />
-
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={form.active}
-              onChange={e => setForm({ ...form, active: e.target.checked })}
-              className="rounded border-slate-300 text-blue-600" />
-            <span className="text-sm text-slate-700">{t('active') || 'Active'}</span>
-          </label>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="ghost" onClick={() => setShowModal(false)}>{t('cancel') || 'Cancel'}</Button>
-            <Button onClick={handleSave} disabled={!form.name || !form.url}>
-              {editing ? (t('save') || 'Save') : (t('create') || 'Create')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {ConfirmDialog}
     </div>

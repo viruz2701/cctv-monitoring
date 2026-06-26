@@ -1,151 +1,100 @@
-# P2-1.1: Real ML Model Integration — Progress
+# CCTV Health Monitor — Status
 
-## Статус выполнения
+## ✅ Все задачи выполнены
 
-- [x] P2-1.1: Real ML Model Integration — XGBoost модель для предсказания отказов устройств
+### Phase 2 (P2)
+| Задача | Статус | Ключевые файлы |
+|--------|--------|----------------|
+| P2-1.1: Real ML Model Integration | ✅ Done | `internal/ml/prediction_service.go` |
+| P2-1.2: AI Assistant Chat | ✅ Done | `internal/api/ai_routes.go` |
+| P2-2.1: Workflow Builder UI | ✅ Done | `frontend/src/components/workflow/` |
+| P2-2.3: Resource Planning Calendar | ✅ Done | `frontend/src/components/planning/` |
+| P2-3.1: Webhook Builder UI | ✅ Done | `frontend/src/components/webhooks/` |
+| P2-3.2: OAuth2 для External Adapters | ✅ Done | `internal/oauth2/` |
+| P2-3.3: Webhook Retry & Delivery Logs | ✅ Done | `internal/webhook/delivery.go`, `pg_store.go` |
 
-### Выполненные задачи
+### Foundation & Fixes
+| Задача | Статус | Ключевые файлы |
+|--------|--------|----------------|
+| SEC-02: Panic → Error | ✅ Done | `internal/auth/jwt_secret.go` |
+| Map iframe: window.open → modal | ✅ Done | `frontend/src/components/ui/MapModal.tsx` |
+| UX-01: Mobile Work Order Completion Wizard | ✅ Done | `mobile/src/components/CompleteWorkOrderWizard.tsx` |
 
-- [x] **DB Migration**: `031_ml_predictions` — таблица `predictions` (hypertable) с полями: confidence_score, model_variant (A/B), features_snapshot, top_features, calibration_bin
-- [x] **train.py**: Полный рерайт — загрузка реальных данных из TimescaleDB, XGBoost с hyperparameter tuning, StratifiedKFold CV, feature engineering (failure_score, interactions, age bins), >75% accuracy target
-- [x] **predict.py**: Полный рерайт — JSONL output для Go subprocess, confidence score, A/B variant, `--test`/`--device`/`--variant`/`--trace` флаги, anomaly detection
-- [x] **Go service** (`internal/ml/`): `PredictionService` — subprocess вызов Python, парсинг JSONL, публикация в NATS `ml.prediction.{device_id}`, A/B testing (hash-based assignment), JetStream durable storage
-- [x] **Go tests**: 11 тестов (JSONL парсинг, invalid/skip строки, A/B assignment, hash determinism, config defaults) — все PASS
-- [x] **Go build**: `go build ./...` — успешно
-
-### Файлы
-
-| Файл | Описание |
-|------|----------|
-| [`backend/internal/db/migrations/031_ml_predictions.up.sql`](backend/internal/db/migrations/031_ml_predictions.up.sql) | Migration: predictions hypertable |
-| [`backend/internal/db/migrations/031_ml_predictions.down.sql`](backend/internal/db/migrations/031_ml_predictions.down.sql) | Rollback migration |
-| [`backend/analytics/train.py`](backend/analytics/train.py) | XGBoost training с реальными данными |
-| [`backend/analytics/predict.py`](backend/analytics/predict.py) | Prediction с JSONL output |
-| [`backend/analytics/config.yaml`](backend/analytics/config.yaml) | ML + NATS конфигурация |
-| [`backend/analytics/requirements.txt`](backend/analytics/requirements.txt) | Python зависимости |
-| [`backend/internal/ml/config.go`](backend/internal/ml/config.go) | Go ML config struct |
-| [`backend/internal/ml/prediction_service.go`](backend/internal/ml/prediction_service.go) | Go prediction service |
-| [`backend/internal/ml/prediction_service_test.go`](backend/internal/ml/prediction_service_test.go) | 11 тестов |
-
-### Проверка
-
-```bash
-cd backend && go build ./...                    # ✓ OK
-cd backend && python3 analytics/predict.py --test  # requires: pip install -r requirements.txt
-cd backend && go test ./internal/ml/... -v      # ✓ 11/11 PASS
-```
+### Phase 3
+| Задача | Статус | Ключевые файлы |
+|--------|--------|----------------|
+| P3-2: Audit Trail Compliance | ✅ Done | `internal/audit/chain.go` |
+| P3-1: Multi-Region Geo-Redundancy | ✅ Code-level | `internal/multiregion/region.go` |
 
 ---
 
-# P2-1.2: AI Assistant Chat — Progress
+## P3-2: Audit Trail Compliance (ISO 27001 A.12.4)
 
-## Статус выполнения
+### DB Migration `034_audit_chain`
+- `prev_hash` — HMAC предыдущей записи (tamper detection chain)
+- `trace_id` — сквозной идентификатор
+- `audit_log_archive` + `archive_audit_logs(N)` — 7-year retention
+- `verify_audit_chain()` — проверка целостности цепочки
 
-- [x] P2-1.2: AI Assistant Chat с DeepSeek интеграцией
+### Backend
+- [`backend/internal/audit/chain.go`](backend/internal/audit/chain.go) — `ChainStore`: `InsertWithChain()`, `VerifyEntry()`, `GetComplianceReport()`
+- [`backend/internal/api/audit_handlers.go`](backend/internal/api/audit_handlers.go) — 4 эндпоинта
 
-### Выполненные задачи
-
-- [x] **Backend proxy**: `/api/v1/ai/chat` (SSE streaming), `/api/v1/ai/feedback` — DeepSeek API key хранится только на сервере
-- [x] **Config**: `deepseek_api_key` / `GB_DEEPSEEK_API_KEY` env var
-- [x] **API Client** (`lib/deepseek.ts`): SSE парсинг, контекст из URL, feedback
-- [x] **Hook** (`hooks/useAIAssistant.ts`): управление состоянием чата, история в sessionStorage, abort controller
-- [x] **Chat Panel** (`components/ai/AIAssistantPanel.tsx`): боковая панель, Markdown рендеринг, like/dislike, quick prompts, контекстный заголовок
-- [x] **Dependencies**: `react-markdown`, `remark-gfm`
-- [x] **TypeScript**: `npx tsc --noEmit` — ✓ OK
-- [x] **Go build**: `go build ./...` — требуется проверка
-
-### Файлы
-
-| Файл | Описание |
-|------|----------|
-| [`backend/internal/api/ai_routes.go`](backend/internal/api/ai_routes.go) | Backend proxy: SSE streaming, feedback |
-| [`backend/internal/config/config.go`](backend/internal/config/config.go) | `DeepSeekAPIKey` field + env binding |
-| [`backend/internal/api/server.go`](backend/internal/api/server.go) | Route mounting |
-| [`frontend/src/lib/deepseek.ts`](frontend/src/lib/deepseek.ts) | API клиент с SSE парсингом |
-| [`frontend/src/hooks/useAIAssistant.ts`](frontend/src/hooks/useAIAssistant.ts) | React hook для чата |
-| [`frontend/src/components/ai/AIAssistantPanel.tsx`](frontend/src/components/ai/AIAssistantPanel.tsx) | Chat panel компонент |
-
-### Проверка
-
-```bash
-cd frontend && npx tsc --noEmit --pretty      # ✓ OK
-cd backend && go build ./...                   # requires: go mod tidy
-```
-
-### Требования к настройке
-
-1. Установить `GB_DEEPSEEK_API_KEY` в `.env` или переменные окружения
-2. Пересобрать backend: `cd backend && go build ./...`
-3. Перезапустить сервер
+### API Endpoints
+| Endpoint | Описание |
+|----------|----------|
+| `GET /api/v1/audit/log` | Журнал с пагинацией/фильтрацией |
+| `GET /api/v1/audit/verify` | Проверка HMAC + chain integrity |
+| `GET /api/v1/audit/compliance` | Compliance-отчёт |
+| `POST /api/v1/audit/archive` | Архивация записей (>7 лет) |
 
 ---
 
-# P2-2.1: Workflow Builder UI — Progress
+## P3-1: Multi-Region Geo-Redundancy
 
-## Статус выполнения
+### ADR-018
+[`docs/adr/ADR-018-multi-region-architecture.md`](docs/adr/ADR-018-multi-region-architecture.md)
+- Active-Passive per tenant, NATS mirror, async WAL, S3 CRR
+- 4 региона: EU-Central, CIS-East, MENA-Gulf, SEA-Hub
 
-- [x] P2-2.1: Workflow Builder UI с React Flow
+### DB Migration `035_tenant_regions`
+- `tenant_regions` — привязка тенантов к регионам
+- `users.region` — multi-region routing
 
-### Выполненные задачи
+### Multi-Region Package
+[`backend/internal/multiregion/region.go`](backend/internal/multiregion/region.go)
 
-- [x] **Install @xyflow/react**: Добавлена зависимость React Flow v12
-- [x] **Types** (`types/workflow.ts`): Типы для нод (trigger/condition/action/delay), палитры, workflow definition, version control, test run
-- [x] **Store** (`store/workflowStore.ts`): Zustand store с persist — CRUD workflow, graph editing, version control (save/load), export/import JSON, test mode state
-- [x] **Custom Node** (`components/workflow/WorkflowNode.tsx`): Единый кастомный nodeType с цветовой дифференциацией (purple/amber/blue/teal), статус индикатором (idle/running/success/error), condition node с true/false handles
-- [x] **Toolbar** (`components/workflow/WorkflowToolbar.tsx`): Боковая панель с палитрой компонентов для drag&drop, workflow selector, save/save version, export/import JSON, version history
-- [x] **CEL Editor** (`components/workflow/WorkflowCELInput.tsx`): Редактор CEL выражений с подсветкой синтаксиса, валидацией скобок/кавычек, сниппетами, документацией доступных переменных
-- [x] **Test Panel** (`components/workflow/WorkflowTestPanel.tsx`): Панель тестирования с mock event editor (4 шаблона), топологической сортировкой нод, симуляцией выполнения, результатами по каждому узлу
-- [x] **WorkflowBuilder** (`components/workflow/WorkflowBuilder.tsx`): Главный компонент с React Flow canvas, Background/Controls/MiniMap, drag&drop из палитры, правой панелью инспектора (конфигурация каждого типа нод), переключением в test mode
-- [x] **TypeScript Check**: `npx tsc --noEmit` — ✓ OK
+| Компонент | Описание |
+|-----------|----------|
+| `PGTenantRegionStore` | PostgreSQL CRUD для tenant_regions |
+| `FailoverService` | Semi-auto failover (NATS → DB → routing) |
+| `NATSMirrorSetup` | Программатор NATS JetStream mirror streams |
 
-### Файлы
+### Admin API Endpoints
+| Endpoint | Описание |
+|----------|----------|
+| `GET /api/v1/admin/regions` | Все tenant-region mapping |
+| `GET /api/v1/admin/regions/{id}` | Region конкретного тенанта |
+| `PUT /api/v1/admin/regions/{id}` | Привязка тенанта к региону |
+| `POST /api/v1/admin/failover/{id}` | Execute failover |
+| `POST /api/v1/admin/failover/{id}/rollback` | Rollback failover |
+| `GET /api/v1/admin/dr/status` | Общий DR статус |
 
-| Файл | Описание |
-|------|----------|
-| [`frontend/src/types/workflow.ts`](frontend/src/types/workflow.ts) | Типы workflow (node data, definition, version, palette) |
-| [`frontend/src/store/workflowStore.ts`](frontend/src/store/workflowStore.ts) | Zustand store для workflow |
-| [`frontend/src/components/workflow/WorkflowNode.tsx`](frontend/src/components/workflow/WorkflowNode.tsx) | Custom React Flow node |
-| [`frontend/src/components/workflow/WorkflowToolbar.tsx`](frontend/src/components/workflow/WorkflowToolbar.tsx) | Sidebar с палитрой и кнопками |
-| [`frontend/src/components/workflow/WorkflowCELInput.tsx`](frontend/src/components/workflow/WorkflowCELInput.tsx) | CEL expression editor |
-| [`frontend/src/components/workflow/WorkflowTestPanel.tsx`](frontend/src/components/workflow/WorkflowTestPanel.tsx) | Test mode panel |
-| [`frontend/src/components/workflow/WorkflowBuilder.tsx`](frontend/src/components/workflow/WorkflowBuilder.tsx) | Главный компонент построителя |
+### Region-aware Health
+- `healthResponse.Region` в `/health/live` и `/health/ready`
+- `config.DeploymentRegion` — env `deployment_region`
 
-### Проверка
-
-```bash
-cd frontend && npx tsc --noEmit --pretty      # ✓ OK
-```
+### Осталось (требует infra-доступа)
+- NATS cross-region mirror (Terraform/Helm)
+- PostgreSQL WAL streaming
+- S3 CRR configuration
+- DR drills
+- Compliance audit
 
 ---
 
-# P2-2.3: Resource Planning Calendar — Progress
-
-## Статус выполнения
-
-- [x] P2-2.3: Resource Planning Calendar с FullCalendar resourceTimelineWeek
-
-### Выполненные задачи
-
-- [x] **Install packages**: `@fullcalendar/resource`, `@fullcalendar/resource-timeline`, `@fullcalendar/timeline`
-- [x] **Hook** (`hooks/useTechnicianSchedule.ts`): Загрузка техников (role=technician) и WO, вычисление ScheduleSlot[] с inferred duration, конфликт-детекция (overlap), DayLoad с availability (green/yellow/red), Drag&Drop handler
-- [x] **Component** (`components/planning/TechnicianCalendar.tsx`): FullCalendar resourceTimelineWeek — техники как resources, WO как events, кастомные resource labels с availability dots, conflict badge, tooltip, filter by tech, conflict summary panel
-- [x] **Page** (`pages/TechnicianWeek.tsx`): Страница с React Query-хуками, error/loading state, навигация на WO detail
-- [x] **Route**: `/technician-week` добавлен в App.tsx (admin/manager/technician roles)
-- [x] **CSS**: Print-friendly @media print (скрытие UI, exact colors), resource tooltip, event conflict animation
-- [x] **TypeScript Check**: `npx tsc --noEmit` — ✓ OK
-
-### Файлы
-
-| Файл | Описание |
-|------|----------|
-| [`frontend/src/hooks/useTechnicianSchedule.ts`](frontend/src/hooks/useTechnicianSchedule.ts) | Hook: schedule data, conflicts, availability, DnD |
-| [`frontend/src/components/planning/TechnicianCalendar.tsx`](frontend/src/components/planning/TechnicianCalendar.tsx) | FullCalendar resourceTimelineWeek component |
-| [`frontend/src/pages/TechnicianWeek.tsx`](frontend/src/pages/TechnicianWeek.tsx) | Resource Planning page |
-| [`frontend/src/App.tsx`](frontend/src/App.tsx) | Route: `/technician-week` |
-| [`frontend/src/index.css`](frontend/src/index.css) | Tooltip + print CSS |
-
-### Проверка
-
+## Verification
 ```bash
-cd frontend && npx tsc --noEmit --pretty      # ✓ OK
+cd backend && go build ./...                  # ✓ OK
+cd backend && go test ./internal/... -count=1  # ✓ PASS
 ```

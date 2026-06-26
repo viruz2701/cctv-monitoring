@@ -115,13 +115,11 @@ type SyncRecord struct {
 
 // SyncStateMachine — state machine для bi-directional sync.
 type SyncStateMachine struct {
-	mu       sync.RWMutex
-	logger   *slog.Logger
-	adapter  *Adapter
-	client   *Client
-	username string
-	password string
-	config   SyncConfig
+	mu      sync.RWMutex
+	logger  *slog.Logger
+	adapter *Adapter
+	client  *Client
+	config  SyncConfig
 
 	// In-memory sync records (в production — БД)
 	records map[string]*SyncRecord
@@ -347,16 +345,16 @@ func (sm *SyncStateMachine) pushToRemote(ctx context.Context, record *SyncRecord
 
 		if record.RemoteID != "" {
 			// UPDATE существующей записи
-			return sm.client.patch(ctx,
+			return sm.client.Patch(ctx,
 				"/api/now/table/"+TableWorkOrder+"/"+record.RemoteID,
-				body, nil, sm.username, sm.password)
+				body, nil)
 		}
 
 		// CREATE новой записи
 		var result map[string]interface{}
-		if err := sm.client.post(ctx,
+		if err := sm.client.Post(ctx,
 			"/api/now/table/"+TableWorkOrder,
-			body, &result, sm.username, sm.password); err != nil {
+			body, &result); err != nil {
 			return err
 		}
 		// Сохраняем remote_id из ответа ServiceNow
@@ -376,11 +374,11 @@ func (sm *SyncStateMachine) pushToRemote(ctx context.Context, record *SyncRecord
 			"u_device_id": record.EntityID,
 		}
 		if record.RemoteID != "" {
-			return sm.client.patch(ctx,
+			return sm.client.Patch(ctx,
 				"/api/now/table/cmdb_ci/"+record.RemoteID,
-				body, nil, sm.username, sm.password)
+				body, nil)
 		}
-		return sm.client.post(ctx, "/api/now/table/cmdb_ci", body, nil, sm.username, sm.password)
+		return sm.client.Post(ctx, "/api/now/table/cmdb_ci", body, nil)
 
 	default:
 		return fmt.Errorf("unsupported entity type for push: %s", record.EntityType)
@@ -405,9 +403,9 @@ func (sm *SyncStateMachine) pullFromRemote(ctx context.Context, record *SyncReco
 
 		// Обновляем локальную запись
 		if err := sm.adapter.UpdateWorkOrder(ctx, record.EntityID, map[string]interface{}{
-			"status":    wo.Status,
-			"u_notes":   wo.Notes,
-			"u_type":    wo.Type,
+			"status":  wo.Status,
+			"u_notes": wo.Notes,
+			"u_type":  wo.Type,
 		}); err != nil {
 			return fmt.Errorf("update local work order: %w", err)
 		}
@@ -553,5 +551,3 @@ func (sm *SyncStateMachine) captureConflictData(entityType SyncEntityType, entit
 	})
 	return data
 }
-
-

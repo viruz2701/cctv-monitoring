@@ -73,6 +73,9 @@ type Config struct {
 	// Для production (КИИ РБ) ДОЛЖНО быть true.
 	NATSRequired bool `mapstructure:"nats_required"`
 
+	// P3-1: Multi-Region deployment
+	DeploymentRegion string `mapstructure:"deployment_region"`
+
 	// Webhook secrets for bi-directional ITSM sync
 	ServiceNowWebhookSecret string `mapstructure:"servicenow_webhook_secret"`
 	JiraWebhookSecret       string `mapstructure:"jira_webhook_secret"`

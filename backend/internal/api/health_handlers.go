@@ -19,6 +19,7 @@ type healthResponse struct {
 	Timestamp    time.Time               `json:"timestamp"`
 	Dependencies map[string]healthDetail `json:"dependencies,omitempty"`
 	PoolStats    *poolStats              `json:"pool_stats,omitempty"`
+	Region       string                  `json:"region,omitempty"`
 }
 
 type healthDetail struct {
@@ -45,9 +46,14 @@ func (s *Server) mountHealthRoutes(r chi.Router) {
 // handleLiveness — всегда 200, проверка что сервер жив.
 // Соответствует: ISO 27001 A.12.1.1 (Documented operating procedures)
 func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
+	region := ""
+	if s.config != nil {
+		region = s.config.DeploymentRegion
+	}
 	jsonResponse(w, http.StatusOK, healthResponse{
 		Status:    "ok",
 		Timestamp: time.Now().UTC(),
+		Region:    region,
 	})
 }
 

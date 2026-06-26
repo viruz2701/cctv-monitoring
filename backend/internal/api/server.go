@@ -24,6 +24,7 @@ import (
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/featureflag"
+	"gb-telemetry-collector/internal/multiregion"
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/service"
@@ -31,6 +32,7 @@ import (
 	"gb-telemetry-collector/internal/state"
 	syncengine "gb-telemetry-collector/internal/sync"
 	"gb-telemetry-collector/internal/telegram"
+	"gb-telemetry-collector/internal/webhook"
 	"gb-telemetry-collector/internal/ws"
 )
 
@@ -65,6 +67,8 @@ type Server struct {
 
 	// Audit log HMAC signer (ISO 27001 A.12.4)
 	auditSigner *audit.Signer
+	// P3-2: Audit Chain Store (HMAC chain + compliance)
+	auditChainStore *audit.ChainStore
 
 	// P2P gateway integration
 	p2pGatewayURL string
@@ -98,6 +102,14 @@ type Server struct {
 
 	// Dispatch rules engine (P1-6)
 	ruleEngine *cmms.RuleEngine
+
+	// P2-3.3: Webhook delivery worker and store
+	webhookStore   webhook.DeliveryStore
+	deliveryWorker *webhook.DeliveryWorker
+
+	// P3-1: Multi-Region Geo-Redundancy
+	regionStore     multiregion.RegionStore
+	failoverService *multiregion.FailoverService
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -232,6 +244,31 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// ── Dispatch Rules Engine (P1-6) ──────────────────────────────────
 	s.ruleEngine = cmms.NewRuleEngine(logger)
 
+	// ── P2-3.3: Webhook Delivery Worker ─────────────────────────────
+	if database != nil && database.Pool != nil {
+		s.webhookStore = webhook.NewPGDeliveryStore(database.Pool)
+		s.deliveryWorker = webhook.NewDeliveryWorker(
+			s.webhookStore, logger,
+			webhook.DeliveryWorkerConfig{
+				PollInterval:  5 * time.Second,
+				MaxConcurrent: 5,
+			},
+		)
+		go s.deliveryWorker.Start(context.Background())
+	}
+
+	// ── P3-1: Multi-Region Geo-Redundancy ──────────────────────────
+	if database != nil && database.Pool != nil {
+		s.regionStore = multiregion.NewPGTenantRegionStore(database.Pool)
+		s.failoverService = multiregion.NewFailoverService(
+			s.regionStore, s.natsConn,
+			multiregion.FailoverConfig{
+				NATSMirrorDomain: cfg.DeploymentRegion + "-dr.example.com",
+			},
+			logger,
+		)
+	}
+
 	go s.wsHub.Run()
 
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
@@ -273,6 +310,12 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		// Device domain (devices, images, analytics, logs, audit)
 		s.mountDeviceRoutes(r)
 
+		// Audit domain (P3-2: compliance, chain verification, reporting)
+		r.Get("/api/v1/audit/log", s.handleListAuditLog)
+		r.Get("/api/v1/audit/verify", s.handleAuditVerify)
+		r.Get("/api/v1/audit/compliance", s.handleAuditCompliance)
+		r.Post("/api/v1/audit/archive", s.handleAuditArchive)
+
 		// Agent domain (P2P, GB28181, WebSocket, external alarms)
 		s.mountAgentRoutes(r)
 		r.Post("/api/v1/external/alarm", s.handleExternalAlarm)
@@ -285,6 +328,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// Feature Flag domain (F-0.2.4)
 		s.mountFeatureFlagRoutes(r)
+
+		// P3-1: Admin routes (multi-region DR)
+		s.mountAdminRoutes(r)
 
 		// Camera Specs Database (P0-9)
 		s.mountCameraModelRoutes(r)

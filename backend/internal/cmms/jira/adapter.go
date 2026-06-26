@@ -8,6 +8,7 @@ import (
 
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/models"
+	"gb-telemetry-collector/internal/oauth2"
 )
 
 // Adapter — реализация cmms.CMMSAdapter для Jira Cloud REST API v3.
@@ -21,24 +22,32 @@ type Adapter struct {
 
 // AdapterConfig — параметры для Jira адаптера.
 type AdapterConfig struct {
-	BaseURL     string
-	Email       string
-	APIToken    string
-	FallbackDir string
-	Logger      *slog.Logger
+	BaseURL      string
+	Email        string
+	APIToken     string
+	ClientID     string
+	ClientSecret string
+	TokenURL     string
+	FallbackDir  string
+	Logger       *slog.Logger
+	TokenStore   oauth2.TokenStore
+	Metrics      *oauth2.Metrics
 }
 
-// NewAdapter создаёт Jira адаптер.
+// NewAdapter creates a new JiraAdapter
 func NewAdapter(cfg AdapterConfig) (*Adapter, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
 
 	client, err := NewClient(ClientConfig{
-		BaseURL:  cfg.BaseURL,
-		Email:    cfg.Email,
-		APIToken: cfg.APIToken,
-	})
+		BaseURL:      cfg.BaseURL,
+		Email:        cfg.Email,
+		APIToken:     cfg.APIToken,
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		TokenURL:     cfg.TokenURL,
+	}, cfg.TokenStore, cfg.Metrics, cfg.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("jira adapter: create client: %w", err)
 	}
@@ -57,7 +66,7 @@ func NewAdapter(cfg AdapterConfig) (*Adapter, error) {
 
 // HealthCheck проверяет доступность Jira API.
 func (a *Adapter) HealthCheck(ctx context.Context) error {
-	resp, err := a.client.getRaw(ctx, pathHealth)
+	resp, err := a.client.GetRaw(ctx, pathHealth)
 	if err != nil {
 		return fmt.Errorf("jira health check: %w", err)
 	}
@@ -77,7 +86,7 @@ func (a *Adapter) SyncAsset(ctx context.Context, deviceID string, assetData map[
 		fieldDeviceID: deviceID,
 	}
 	body := map[string]interface{}{"fields": fields}
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: sync asset failed, enqueuing", "device_id", deviceID, "error", err)
 		_ = a.fallbackQueue.Enqueue("sync_asset", map[string]interface{}{
@@ -93,7 +102,7 @@ func (a *Adapter) SyncAsset(ctx context.Context, deviceID string, assetData map[
 
 func (a *Adapter) CreateWorkOrder(ctx context.Context, wo *models.WorkOrder) error {
 	body := toWorkOrderJiraBody(wo)
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: create work order failed, enqueuing", "id", wo.ID, "error", err)
 		_ = a.fallbackQueue.Enqueue("create_wo", wo)
@@ -109,7 +118,7 @@ func (a *Adapter) GetWorkOrders(ctx context.Context, filters map[string]interfac
 		Fields:     []string{"*all"},
 	}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get work orders: %w", err)
 	}
 	var result []models.WorkOrder
@@ -121,7 +130,7 @@ func (a *Adapter) GetWorkOrders(ctx context.Context, filters map[string]interfac
 
 func (a *Adapter) GetWorkOrder(ctx context.Context, id string) (*models.WorkOrder, error) {
 	var issue jiraIssue
-	if err := a.client.get(ctx, pathIssue+"/"+id, &issue); err != nil {
+	if err := a.client.Get(ctx, pathIssue+"/"+id, &issue); err != nil {
 		return nil, fmt.Errorf("jira: get work order %s: %w", id, err)
 	}
 	wo := toWorkOrder(issue)
@@ -130,7 +139,7 @@ func (a *Adapter) GetWorkOrder(ctx context.Context, id string) (*models.WorkOrde
 
 func (a *Adapter) UpdateWorkOrder(ctx context.Context, id string, updates map[string]interface{}) error {
 	body := map[string]interface{}{"fields": updates}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update work order failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_wo", map[string]interface{}{"id": id, "updates": updates})
@@ -145,7 +154,7 @@ func (a *Adapter) AssignWorkOrder(ctx context.Context, id, userID string) error 
 			"assignee": map[string]string{"id": userID},
 		},
 	}
-	err := a.client.put(ctx, pathIssue+"/"+id+"/assignee", body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id+"/assignee", body, nil)
 	if err != nil {
 		a.logger.Warn("jira: assign work order failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("assign_wo", map[string]string{"id": id, "user_id": userID})
@@ -162,7 +171,7 @@ func (a *Adapter) StartWorkOrder(ctx context.Context, id string) error {
 	body := jiraTransition{Transition: struct {
 		ID string `json:"id"`
 	}{ID: transitionID}}
-	err := a.client.post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
+	err := a.client.Post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
 	if err != nil {
 		a.logger.Warn("jira: start work order failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("start_wo", map[string]string{"id": id})
@@ -179,7 +188,7 @@ func (a *Adapter) CompleteWorkOrder(ctx context.Context, id, notes string, photo
 	body := jiraTransition{Transition: struct {
 		ID string `json:"id"`
 	}{ID: transitionID}}
-	err := a.client.post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
+	err := a.client.Post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
 	if err != nil {
 		a.logger.Warn("jira: complete work order failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("complete_wo", map[string]interface{}{
@@ -203,7 +212,7 @@ func (a *Adapter) CompleteWorkOrder(ctx context.Context, id, notes string, photo
 			},
 		},
 	}
-	_ = a.client.post(ctx, pathIssue+"/"+id+"/comment", commentBody, nil)
+	_ = a.client.Post(ctx, pathIssue+"/"+id+"/comment", commentBody, nil)
 	return nil
 }
 
@@ -215,7 +224,7 @@ func (a *Adapter) CancelWorkOrder(ctx context.Context, id, reason string) error 
 	body := jiraTransition{Transition: struct {
 		ID string `json:"id"`
 	}{ID: transitionID}}
-	err := a.client.post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
+	err := a.client.Post(ctx, pathIssue+"/"+id+"/transitions", body, nil)
 	if err != nil {
 		a.logger.Warn("jira: cancel work order failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("cancel_wo", map[string]string{"id": id, "reason": reason})
@@ -239,7 +248,7 @@ func (a *Adapter) UsePartInWorkOrder(ctx context.Context, workOrderID, partID st
 			},
 		},
 	}
-	err := a.client.post(ctx, pathIssue+"/"+workOrderID+"/comment", commentBody, nil)
+	err := a.client.Post(ctx, pathIssue+"/"+workOrderID+"/comment", commentBody, nil)
 	if err != nil {
 		a.logger.Warn("jira: use part in work order failed, enqueuing", "wo_id", workOrderID, "error", err)
 		_ = a.fallbackQueue.Enqueue("use_part", map[string]interface{}{
@@ -254,7 +263,7 @@ func (a *Adapter) UsePartInWorkOrder(ctx context.Context, workOrderID, partID st
 
 func (a *Adapter) CreateSparePart(ctx context.Context, part *models.SparePart) error {
 	body := toSparePartJiraBody(part)
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: create spare part failed, enqueuing", "id", part.ID, "error", err)
 		_ = a.fallbackQueue.Enqueue("create_part", part)
@@ -267,7 +276,7 @@ func (a *Adapter) GetSpareParts(ctx context.Context, filters map[string]interfac
 	jql := "project = CCTV AND issuetype = Task AND labels = spare-part"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get spare parts: %w", err)
 	}
 	var result []models.SparePart
@@ -279,7 +288,7 @@ func (a *Adapter) GetSpareParts(ctx context.Context, filters map[string]interfac
 
 func (a *Adapter) GetSparePart(ctx context.Context, id string) (*models.SparePart, error) {
 	var issue jiraIssue
-	if err := a.client.get(ctx, pathIssue+"/"+id, &issue); err != nil {
+	if err := a.client.Get(ctx, pathIssue+"/"+id, &issue); err != nil {
 		return nil, fmt.Errorf("jira: get spare part %s: %w", id, err)
 	}
 	sp := toSparePart(issue)
@@ -288,7 +297,7 @@ func (a *Adapter) GetSparePart(ctx context.Context, id string) (*models.SparePar
 
 func (a *Adapter) UpdateSparePart(ctx context.Context, id string, updates map[string]interface{}) error {
 	body := map[string]interface{}{"fields": updates}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update spare part failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_part", map[string]interface{}{"id": id, "updates": updates})
@@ -298,7 +307,7 @@ func (a *Adapter) UpdateSparePart(ctx context.Context, id string, updates map[st
 }
 
 func (a *Adapter) DeleteSparePart(ctx context.Context, id string) error {
-	err := a.client.delete(ctx, pathIssue+"/"+id)
+	err := a.client.Delete(ctx, pathIssue+"/"+id)
 	if err != nil {
 		a.logger.Warn("jira: delete spare part failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("delete_part", map[string]string{"id": id})
@@ -311,7 +320,7 @@ func (a *Adapter) GetLowStockParts(ctx context.Context) ([]models.SparePart, err
 	jql := "project = CCTV AND issuetype = Task AND labels = spare-part AND \"Stock\" <= \"Min Stock\""
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get low stock parts: %w", err)
 	}
 	var result []models.SparePart
@@ -323,7 +332,7 @@ func (a *Adapter) GetLowStockParts(ctx context.Context) ([]models.SparePart, err
 
 func (a *Adapter) UpdateSparePartStock(ctx context.Context, id string, quantity int) error {
 	body := map[string]interface{}{"fields": map[string]interface{}{fieldStock: quantity}}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update spare part stock failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_stock", map[string]interface{}{"id": id, "quantity": quantity})
@@ -336,7 +345,7 @@ func (a *Adapter) UpdateSparePartStock(ctx context.Context, id string, quantity 
 
 func (a *Adapter) CreateMaintenanceSchedule(ctx context.Context, schedule *models.MaintenanceSchedule) error {
 	body := toMaintenanceScheduleJiraBody(schedule)
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: create schedule failed, enqueuing", "id", schedule.ID, "error", err)
 		_ = a.fallbackQueue.Enqueue("create_schedule", schedule)
@@ -349,7 +358,7 @@ func (a *Adapter) GetMaintenanceSchedules(ctx context.Context, filters map[strin
 	jql := "project = CCTV AND issuetype = Task AND labels = schedule"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get schedules: %w", err)
 	}
 	var result []models.MaintenanceSchedule
@@ -361,7 +370,7 @@ func (a *Adapter) GetMaintenanceSchedules(ctx context.Context, filters map[strin
 
 func (a *Adapter) GetMaintenanceSchedule(ctx context.Context, id string) (*models.MaintenanceSchedule, error) {
 	var issue jiraIssue
-	if err := a.client.get(ctx, pathIssue+"/"+id, &issue); err != nil {
+	if err := a.client.Get(ctx, pathIssue+"/"+id, &issue); err != nil {
 		return nil, fmt.Errorf("jira: get schedule %s: %w", id, err)
 	}
 	ms := toMaintenanceSchedule(issue)
@@ -370,7 +379,7 @@ func (a *Adapter) GetMaintenanceSchedule(ctx context.Context, id string) (*model
 
 func (a *Adapter) UpdateMaintenanceSchedule(ctx context.Context, id string, updates map[string]interface{}) error {
 	body := map[string]interface{}{"fields": updates}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update schedule failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_schedule", map[string]interface{}{"id": id, "updates": updates})
@@ -380,7 +389,7 @@ func (a *Adapter) UpdateMaintenanceSchedule(ctx context.Context, id string, upda
 }
 
 func (a *Adapter) DeleteMaintenanceSchedule(ctx context.Context, id string) error {
-	err := a.client.delete(ctx, pathIssue+"/"+id)
+	err := a.client.Delete(ctx, pathIssue+"/"+id)
 	if err != nil {
 		a.logger.Warn("jira: delete schedule failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("delete_schedule", map[string]string{"id": id})
@@ -393,7 +402,7 @@ func (a *Adapter) GetDueSchedules(ctx context.Context) ([]models.MaintenanceSche
 	jql := "project = CCTV AND issuetype = Task AND labels = schedule AND duedate <= now()"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get due schedules: %w", err)
 	}
 	var result []models.MaintenanceSchedule
@@ -405,7 +414,7 @@ func (a *Adapter) GetDueSchedules(ctx context.Context) ([]models.MaintenanceSche
 
 func (a *Adapter) CompleteMaintenanceSchedule(ctx context.Context, id string) error {
 	body := map[string]interface{}{"fields": map[string]interface{}{fieldLastCompleted: "now"}}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: complete schedule failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("complete_schedule", map[string]string{"id": id})
@@ -420,7 +429,7 @@ func (a *Adapter) GetSLAConfig(ctx context.Context, priority string) (*models.SL
 	jql := fmt.Sprintf("project = CCTV AND issuetype = Task AND labels = sla AND priority = \"%s\"", priority)
 	req := jiraSearchRequest{JQL: jql, MaxResults: 1, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get sla config %s: %w", priority, err)
 	}
 	if len(resp.Issues) == 0 {
@@ -434,7 +443,7 @@ func (a *Adapter) GetAllSLAConfigs(ctx context.Context) ([]models.SLAConfig, err
 	jql := "project = CCTV AND issuetype = Task AND labels = sla"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get all sla configs: %w", err)
 	}
 	var result []models.SLAConfig
@@ -448,7 +457,7 @@ func (a *Adapter) UpdateSLAConfig(ctx context.Context, priority string, response
 	jql := fmt.Sprintf("project = CCTV AND issuetype = Task AND labels = sla AND priority = \"%s\"", priority)
 	req := jiraSearchRequest{JQL: jql, MaxResults: 1, Fields: []string{"id"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return fmt.Errorf("jira: find sla config for update: %w", err)
 	}
 	if len(resp.Issues) == 0 {
@@ -461,7 +470,7 @@ func (a *Adapter) UpdateSLAConfig(ctx context.Context, priority string, response
 			fieldResolutionTime: resolutionTimeMinutes,
 		},
 	}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update sla config failed, enqueuing", "priority", priority, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_sla", map[string]interface{}{"priority": priority, "config": body})
@@ -474,7 +483,7 @@ func (a *Adapter) UpdateSLAConfig(ctx context.Context, priority string, response
 
 func (a *Adapter) GetTechnicianWorkload(ctx context.Context, userID string) (*models.TechnicianWorkload, error) {
 	var user map[string]interface{}
-	if err := a.client.get(ctx, pathUsers+"?accountId="+userID, &user); err != nil {
+	if err := a.client.Get(ctx, pathUsers+"?accountId="+userID, &user); err != nil {
 		return nil, fmt.Errorf("jira: get technician workload %s: %w", userID, err)
 	}
 	m := newMapper(user)
@@ -493,7 +502,7 @@ func (a *Adapter) GetAllTechnicianWorkloads(ctx context.Context) ([]models.Techn
 	jql := "project = CCTV AND issuetype = Task AND labels = technician"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get all technician workloads: %w", err)
 	}
 	var result []models.TechnicianWorkload
@@ -507,7 +516,7 @@ func (a *Adapter) GetTechnicianMonthlyStats(ctx context.Context, userID string) 
 	jql := fmt.Sprintf("project = CCTV AND assignee = \"%s\" AND resolved >= -30d", userID)
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get technician monthly stats %s: %w", userID, err)
 	}
 	return &models.TechnicianMonthlyStats{
@@ -523,7 +532,7 @@ func (a *Adapter) UpdateTechnicianSkills(ctx context.Context, userID string, ski
 			fieldCertifications: certifications,
 		},
 	}
-	err := a.client.put(ctx, pathIssue+"/"+userID, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+userID, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update technician skills failed, enqueuing", "user_id", userID, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_skills", map[string]interface{}{"user_id": userID, "body": body})
@@ -538,7 +547,7 @@ func (a *Adapter) GetMaintenanceReport(ctx context.Context) ([]models.Maintenanc
 	jql := "project = CCTV AND issuetype = \"CCTV Work Order\" AND status = Done"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get maintenance report: %w", err)
 	}
 	var result []models.MaintenanceReport
@@ -552,7 +561,7 @@ func (a *Adapter) GetSLAComplianceReport(ctx context.Context) ([]models.SLACompl
 	jql := "project = CCTV AND issuetype = Task AND labels = sla"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get sla compliance report: %w", err)
 	}
 	var result []models.SLAComplianceReport
@@ -566,7 +575,7 @@ func (a *Adapter) GetSLAComplianceReport(ctx context.Context) ([]models.SLACompl
 
 func (a *Adapter) CreateTechnicianSiteAssignment(ctx context.Context, assignment *models.TechnicianSiteAssignment) error {
 	body := toTechnicianAssignmentJiraBody(assignment)
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: create assignment failed, enqueuing", "id", assignment.ID, "error", err)
 		_ = a.fallbackQueue.Enqueue("create_assignment", assignment)
@@ -579,7 +588,7 @@ func (a *Adapter) GetTechnicianSiteAssignments(ctx context.Context, filters map[
 	jql := "project = CCTV AND issuetype = Task AND labels = assignment"
 	req := jiraSearchRequest{JQL: jql, MaxResults: 100, Fields: []string{"*all"}}
 	var resp jiraSearchResponse
-	if err := a.client.post(ctx, pathSearch, req, &resp); err != nil {
+	if err := a.client.Post(ctx, pathSearch, req, &resp); err != nil {
 		return nil, fmt.Errorf("jira: get assignments: %w", err)
 	}
 	var result []models.TechnicianSiteAssignment
@@ -591,7 +600,7 @@ func (a *Adapter) GetTechnicianSiteAssignments(ctx context.Context, filters map[
 
 func (a *Adapter) UpdateTechnicianSiteAssignment(ctx context.Context, id string, updates map[string]interface{}) error {
 	body := map[string]interface{}{"fields": updates}
-	err := a.client.put(ctx, pathIssue+"/"+id, body, nil)
+	err := a.client.Put(ctx, pathIssue+"/"+id, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: update assignment failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("update_assignment", map[string]interface{}{"id": id, "updates": updates})
@@ -601,7 +610,7 @@ func (a *Adapter) UpdateTechnicianSiteAssignment(ctx context.Context, id string,
 }
 
 func (a *Adapter) DeleteTechnicianSiteAssignment(ctx context.Context, id string) error {
-	err := a.client.delete(ctx, pathIssue+"/"+id)
+	err := a.client.Delete(ctx, pathIssue+"/"+id)
 	if err != nil {
 		a.logger.Warn("jira: delete assignment failed, enqueuing", "id", id, "error", err)
 		_ = a.fallbackQueue.Enqueue("delete_assignment", map[string]string{"id": id})
@@ -623,7 +632,7 @@ func (a *Adapter) SavePushToken(ctx context.Context, userID, token, platform str
 			fieldPushPlatform: platform,
 		},
 	}
-	err := a.client.post(ctx, pathIssue, body, nil)
+	err := a.client.Post(ctx, pathIssue, body, nil)
 	if err != nil {
 		a.logger.Warn("jira: save push token failed, enqueuing", "user_id", userID, "error", err)
 		_ = a.fallbackQueue.Enqueue("save_push_token", map[string]string{"user_id": userID, "token": token, "platform": platform})
@@ -643,7 +652,7 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 			if err := json.Unmarshal(entry.Payload, &wo); err != nil {
 				return fmt.Errorf("unmarshal: %w", err)
 			}
-			return a.client.post(ctx, pathIssue, toWorkOrderJiraBody(&wo), nil)
+			return a.client.Post(ctx, pathIssue, toWorkOrderJiraBody(&wo), nil)
 		case "update_wo":
 			var payload map[string]interface{}
 			if err := json.Unmarshal(entry.Payload, &payload); err != nil {
@@ -651,7 +660,7 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 			}
 			id, _ := payload["id"].(string)
 			updates, _ := payload["updates"].(map[string]interface{})
-			return a.client.put(ctx, pathIssue+"/"+id, map[string]interface{}{"fields": updates}, nil)
+			return a.client.Put(ctx, pathIssue+"/"+id, map[string]interface{}{"fields": updates}, nil)
 		case "sync_asset":
 			var payload map[string]interface{}
 			if err := json.Unmarshal(entry.Payload, &payload); err != nil {
@@ -663,14 +672,14 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 				"summary":   fmt.Sprintf("[ASSET] %v", assetData["name"]),
 				"issuetype": map[string]string{"name": "Asset"},
 			}
-			return a.client.post(ctx, pathIssue, map[string]interface{}{"fields": fields}, nil)
+			return a.client.Post(ctx, pathIssue, map[string]interface{}{"fields": fields}, nil)
 		case "complete_schedule":
 			var payload map[string]string
 			if err := json.Unmarshal(entry.Payload, &payload); err != nil {
 				return fmt.Errorf("unmarshal: %w", err)
 			}
 			body := map[string]interface{}{"fields": map[string]interface{}{fieldLastCompleted: "now"}}
-			return a.client.put(ctx, pathIssue+"/"+payload["id"], body, nil)
+			return a.client.Put(ctx, pathIssue+"/"+payload["id"], body, nil)
 		case "save_push_token":
 			var payload map[string]string
 			if err := json.Unmarshal(entry.Payload, &payload); err != nil {
@@ -686,7 +695,7 @@ func (a *Adapter) RetryFallback(ctx context.Context) (success, failed int) {
 					fieldPushPlatform: payload["platform"],
 				},
 			}
-			return a.client.post(ctx, pathIssue, body, nil)
+			return a.client.Post(ctx, pathIssue, body, nil)
 		default:
 			return fmt.Errorf("fallback: unsupported retry method: %s", entry.Method)
 		}
