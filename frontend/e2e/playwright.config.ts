@@ -6,7 +6,10 @@ export default defineConfig({
   fullyParallel: false,
   retries: 1,
   workers: 1,
-  reporter: [['html', { outputFolder: '../playwright-report' }]],
+  reporter: [
+    ['html', { outputFolder: '../playwright-report' }],
+    ['list'],
+  ],
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
@@ -22,6 +25,24 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'a11y',
+      testDir: '../tests/a11y',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+      },
+      dependencies: [],
+    },
+    {
+      name: 'visual',
+      testDir: '../tests/visual',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+      },
+      dependencies: [],
     },
   ],
 });

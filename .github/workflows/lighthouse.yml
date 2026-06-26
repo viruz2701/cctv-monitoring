@@ -1,0 +1,114 @@
+# =============================================================================
+# Lighthouse CI — CCTV Health Monitor
+# =============================================================================
+# Compliance: OWASP ASVS L3 V2 (Authentication), V3 (Session Management),
+#             V5 (Validation), V7 (Error Handling), V10 (Logging)
+#             ISO 27001 A.12.6 (Application Security Review)
+#             IEC 62443-3-3 SR 7.8 (Security Function Verification)
+# =============================================================================
+
+name: Lighthouse CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lighthouse:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── Setup Node.js 20 ──────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # ── Install dependencies ──────────────────────────────────
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      # ── Build frontend ────────────────────────────────────────
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      # ── Run Lighthouse CI ─────────────────────────────────────
+      - name: Run Lighthouse CI
+        run: npx lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      # ── Upload Lighthouse reports as artifacts ────────────────
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: lhci-reports/
+          retention-days: 30
+
+      # ── Comment PR with results ───────────────────────────────
+      - name: Comment PR with Lighthouse results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Read the manifest for the latest run
+            const manifestPath = path.join(process.env.GITHUB_WORKSPACE, 'lhci-reports', 'manifest.json');
+            if (!fs.existsSync(manifestPath)) {
+              console.log('No manifest found — skipping PR comment');
+              return;
+            }
+
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+            // Build summary table from manifest
+            let summary = '## 🏠 Lighthouse CI Report\n\n';
+            summary += '| Category | Score |\n';
+            summary += '|----------|-------|\n';
+
+            const categories = manifest.categories || {};
+            for (const [key, cat] of Object.entries(categories)) {
+              const score = Math.round(cat.score * 100);
+              const emoji = score >= 95 ? '🟢' : score >= 80 ? '🟡' : '🔴';
+              summary += `| ${emoji} **${key}** | ${score} |\n`;
+            }
+
+            summary += '\n### 🔗 Detailed Reports\n';
+            summary += 'Artifacts are available in the **Lighthouse reports** artifact above.\n';
+            summary += 'Download and open `index.html` in a browser for the full audit.\n';
+
+            // Find the existing comment or create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(
+              (c) => c.user.type === 'Bot' && c.body?.includes('🏠 Lighthouse CI Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: summary,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: summary,
+              });
+            }
