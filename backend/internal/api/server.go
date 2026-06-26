@@ -289,6 +289,10 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		// Camera Specs Database (P0-9)
 		s.mountCameraModelRoutes(r)
 
+		// Workspace Dashboard Multi-Device Sync (P1-1.4)
+		r.Get("/api/v1/workspace/layout", s.handleGetLayout)
+		r.Post("/api/v1/workspace/layout", s.handleSaveLayout)
+
 		// Compliance & Fines Shield (KF-15.1.1)
 		s.mountComplianceRoutes(r)
 

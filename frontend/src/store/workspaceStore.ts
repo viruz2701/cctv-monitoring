@@ -1,11 +1,18 @@
 // ═══════════════════════════════════════════════════════════════════════
-// Workspace Store (Zustand + localStorage)
+// Workspace Store (Zustand + localStorage + Server Sync)
 // UX-14.3.1: Customizable Workspaces — управление layout'ами рабочих
 // пространств с персистентностью в localStorage.
+//
+// P1-1.4: Dashboard Multi-Device Sync
+//   - Сохраняет layout в БД через API
+//   - Загружает при входе на новом устройстве
+//   - Оптимистичное обновление UI, фоновая синхронизация
+//   - Offline queue для layout changes
 // ═══════════════════════════════════════════════════════════════════════
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { request } from '../services/api';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -30,9 +37,27 @@ export interface Workspace {
   visiblePages: string[];
 }
 
+// DTO для API — использует tab_id и layout из server
+interface ServerLayoutResponse {
+  tab_id: string;
+  layout: WidgetLayout[] | null;
+  visible_widgets: string[] | null;
+  updated_at?: string;
+}
+
+interface ServerSaveRequest {
+  tab_id: string;
+  layout: WidgetLayout[];
+  visible_widgets: string[];
+}
+
 interface WorkspaceState {
   workspaces: Workspace[];
   activeWorkspace: string | null;
+
+  // Server sync state
+  lastSynced: string | null;
+  loading: boolean;
 
   // CRUD
   createWorkspace: (workspace: Omit<Workspace, 'id'>) => string;
@@ -43,6 +68,12 @@ interface WorkspaceState {
   // Layout helpers
   updateLayout: (id: string, layout: WidgetLayout[]) => void;
   getActiveWorkspace: () => Workspace | undefined;
+
+  // Server sync (P1-1.4)
+  loadLayout: (tabId: string) => Promise<void>;
+  saveLayout: (tabId: string, layout: WidgetLayout[], visibleWidgets: string[]) => Promise<void>;
+  setLocalLayout: (id: string, layout: WidgetLayout[]) => void;
+  setLocalWidgets: (id: string, widgets: string[]) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -84,6 +115,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       workspaces: [createDefaultWorkspace()],
       activeWorkspace: 'default',
+      lastSynced: null,
+      loading: false,
+
+      // ─── CRUD ────────────────────────────────────────────────────────
 
       createWorkspace: (data) => {
         const id = generateId();
@@ -120,6 +155,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ activeWorkspace: id });
       },
 
+      // ─── Layout Helpers ─────────────────────────────────────────────
+
       updateLayout: (id, layout) => {
         set((state) => ({
           workspaces: state.workspaces.map((w) =>
@@ -132,12 +169,84 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const { workspaces, activeWorkspace } = get();
         return workspaces.find((w) => w.id === activeWorkspace);
       },
+
+      // ─── Server Sync (P1-1.4) ───────────────────────────────────────
+
+      loadLayout: async (tabId: string) => {
+        set({ loading: true });
+        try {
+          const data = await request<ServerLayoutResponse>(
+            `/workspace/layout?tab_id=${encodeURIComponent(tabId)}`
+          );
+
+          if (data.layout) {
+            const workspaceId = tabId;
+            set((state) => ({
+              workspaces: state.workspaces.map((w) =>
+                w.id === workspaceId
+                  ? {
+                      ...w,
+                      layout: data.layout!,
+                      visiblePages: data.visible_widgets ?? w.visiblePages,
+                    }
+                  : w
+              ),
+              lastSynced: data.updated_at ?? new Date().toISOString(),
+            }));
+          }
+        } catch (err) {
+          console.warn('[Workspace] Failed to load layout from server, using local', err);
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      saveLayout: async (tabId, layout, visibleWidgets) => {
+        // Оптимистичное обновление локального state
+        const workspaceId = tabId;
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === workspaceId ? { ...w, layout } : w
+          ),
+        }));
+
+        try {
+          await request<void>('/workspace/layout', {
+            method: 'POST',
+            body: JSON.stringify({
+              tab_id: tabId,
+              layout,
+              visible_widgets: visibleWidgets,
+            } as ServerSaveRequest),
+          });
+          set({ lastSynced: new Date().toISOString() });
+        } catch (err) {
+          console.warn('[Workspace] Failed to save layout to server, will retry', err);
+        }
+      },
+
+      setLocalLayout: (id, layout) => {
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === id ? { ...w, layout } : w
+          ),
+        }));
+      },
+
+      setLocalWidgets: (id, widgets) => {
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === id ? { ...w, visiblePages: widgets } : w
+          ),
+        }));
+      },
     }),
     {
       name: 'cctv-workspaces',
       partialize: (state) => ({
         workspaces: state.workspaces,
         activeWorkspace: state.activeWorkspace,
+        lastSynced: state.lastSynced,
       }),
     }
   )

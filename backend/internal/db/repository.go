@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -1263,4 +1264,60 @@ func (db *DB) GetNotifications() ([]Notification, error) {
 		notifications = append(notifications, n)
 	}
 	return notifications, rows.Err()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Workspace Layouts (P1-1.4: Dashboard Multi-Device Sync)
+// ═══════════════════════════════════════════════════════════════════════
+
+// WorkspaceLayout представляет сохранённый layout дашборда пользователя.
+type WorkspaceLayout struct {
+	UserID         string          `json:"user_id"`
+	TabID          string          `json:"tab_id"`
+	Layout         json.RawMessage `json:"layout"`
+	VisibleWidgets []string        `json:"visible_widgets"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+}
+
+// SaveWorkspaceLayout сохраняет layout дашборда для пользователя (upsert).
+// P1-1.4: Dashboard Multi-Device Sync — last-write-wins conflict resolution.
+func (db *DB) SaveWorkspaceLayout(ctx context.Context, layout *WorkspaceLayout) error {
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO workspace_layouts (user_id, tab_id, layout, visible_widgets, updated_at)
+		VALUES ($1, $2, $3::jsonb, $4, NOW())
+		ON CONFLICT (user_id, tab_id) DO UPDATE SET
+			layout = EXCLUDED.layout,
+			visible_widgets = EXCLUDED.visible_widgets,
+			updated_at = NOW()
+	`, layout.UserID, layout.TabID, layout.Layout, layout.VisibleWidgets)
+	if err != nil {
+		return fmt.Errorf("save workspace layout: %w", err)
+	}
+	return nil
+}
+
+// GetWorkspaceLayout возвращает layout дашборда для пользователя и вкладки.
+// P1-1.4: Dashboard Multi-Device Sync — загрузка при входе на новом устройстве.
+// Возвращает ErrNoRows если layout не найден.
+func (db *DB) GetWorkspaceLayout(ctx context.Context, userID, tabID string) (*WorkspaceLayout, error) {
+	var layout WorkspaceLayout
+	var visibleWidgets []string
+	var rawLayout []byte
+
+	err := db.Pool.QueryRow(ctx, `
+		SELECT user_id, tab_id, layout, visible_widgets, updated_at
+		FROM workspace_layouts
+		WHERE user_id = $1 AND tab_id = $2
+	`, userID, tabID).Scan(&layout.UserID, &layout.TabID, &rawLayout, &visibleWidgets, &layout.UpdatedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("workspace layout not found for user=%s tab=%s: %w", userID, tabID, err)
+		}
+		return nil, fmt.Errorf("get workspace layout: %w", err)
+	}
+
+	layout.Layout = json.RawMessage(rawLayout)
+	layout.VisibleWidgets = visibleWidgets
+	return &layout, nil
 }
