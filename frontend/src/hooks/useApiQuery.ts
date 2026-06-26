@@ -88,6 +88,26 @@ export const queryKeys = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
+// P1-2.3: React Query Optimization
+//   - Reference data → staleTime: 5min, gcTime: 1h
+//   - Lists → staleTime: 30s, gcTime: 5min
+//   - Real-time → staleTime: 15s, gcTime: 2min
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Helper: константы для стратегий кэширования ──────────────────────
+const CACHE = {
+  /** Reference data: sites, users, categories — rarely changes */
+  REF_STALE: 300_000,     // 5 min
+  REF_GC: 3_600_000,      // 1 hour
+  /** Lists: devices, tickets, work orders — changes infrequently */
+  LIST_STALE: 30_000,     // 30 sec
+  LIST_GC: 300_000,       // 5 min
+  /** Real-time: alarms, notifications, service status — changes frequently */
+  RT_STALE: 15_000,       // 15 sec
+  RT_GC: 120_000,         // 2 min
+} as const;
+
+// ═══════════════════════════════════════════════════════════════════════
 // Devices
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -95,7 +115,8 @@ export function useDevices() {
   return useQuery({
     queryKey: queryKeys.devices.all,
     queryFn: () => api.getDevices(),
-    staleTime: 30_000, // 30s — данные устройств меняются нечасто
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
     refetchInterval: 60_000, // background refresh каждую минуту
   });
 }
@@ -105,7 +126,8 @@ export function useDevice(id: string) {
     queryKey: queryKeys.devices.detail(id),
     queryFn: () => api.getDevice(id),
     enabled: !!id,
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
   });
 }
 
@@ -142,14 +164,15 @@ export function useDeleteDevice() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Sites
+// Sites (Reference Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useSites() {
   return useQuery({
     queryKey: queryKeys.sites.all,
     queryFn: () => api.getSites(),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -158,7 +181,8 @@ export function useSite(id: string) {
     queryKey: queryKeys.sites.detail(id),
     queryFn: () => api.getSite(id),
     enabled: !!id,
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -195,14 +219,15 @@ export function useDeleteSite() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Tickets
+// Tickets (List Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useTickets() {
   return useQuery({
     queryKey: queryKeys.tickets.all,
     queryFn: () => api.getTickets(),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
     refetchInterval: 120_000,
   });
 }
@@ -212,7 +237,8 @@ export function useTicket(id: string) {
     queryKey: queryKeys.tickets.detail(id),
     queryFn: () => api.getTicket(id),
     enabled: !!id,
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
   });
 }
 
@@ -248,14 +274,15 @@ export function useDeleteTicket() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Alarms
+// Alarms (Real-time)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useAlarms(deviceId?: string) {
   return useQuery({
     queryKey: deviceId ? queryKeys.alarms.byDevice(deviceId) : queryKeys.alarms.all,
     queryFn: () => api.getAlarms(deviceId),
-    staleTime: 15_000,
+    staleTime: CACHE.RT_STALE,
+    gcTime: CACHE.RT_GC,
     refetchInterval: 30_000,
   });
 }
@@ -281,7 +308,7 @@ export function useResolveAlarm() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Notifications
+// Notifications (Real-time)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useNotifications() {
@@ -296,7 +323,8 @@ export function useNotifications() {
         }
         throw err;
       }),
-    staleTime: 15_000,
+    staleTime: CACHE.RT_STALE,
+    gcTime: CACHE.RT_GC,
     refetchInterval: 30_000,
     // Не ретраим 404 — если эндпоинта нет, повторные попытки бесполезны
     retry: (failureCount, error) => {
@@ -337,14 +365,15 @@ export function useDeleteNotification() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Users
+// Users (Reference Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users.all,
     queryFn: () => api.getUsers(),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -352,7 +381,8 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: queryKeys.users.me,
     queryFn: () => api.getCurrentUser(),
-    staleTime: 300_000, // 5 min — пользователь редко меняется
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -393,14 +423,15 @@ export function useDeleteUser() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Work Orders
+// Work Orders (List Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useWorkOrders(filters?: Record<string, string>) {
   return useQuery({
     queryKey: [...queryKeys.workOrders.all, filters],
     queryFn: () => workOrdersApi.getWorkOrders(filters),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
     refetchInterval: 120_000,
   });
 }
@@ -438,27 +469,29 @@ export function useDeleteWorkOrder() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Dashboard
+// Dashboard (List Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useDashboardStats() {
   return useQuery({
     queryKey: queryKeys.dashboard.stats,
     queryFn: () => api.getDashboardStats(),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
     refetchInterval: 60_000,
   });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Reports
+// Reports (Reference Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useReports() {
   return useQuery({
     queryKey: queryKeys.reports.all,
     queryFn: () => api.getReports(),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -470,7 +503,8 @@ export function useServicesSettings() {
   return useQuery({
     queryKey: queryKeys.services.settings,
     queryFn: () => api.getServicesSettings(),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
     retry: 1,
   });
 }
@@ -479,7 +513,8 @@ export function useServicesStatus() {
   return useQuery({
     queryKey: queryKeys.services.status,
     queryFn: () => api.getServicesStatus(),
-    staleTime: 15_000,
+    staleTime: CACHE.RT_STALE,
+    gcTime: CACHE.RT_GC,
     refetchInterval: 30_000, // polling every 30s
   });
 }
@@ -497,14 +532,15 @@ export function useUpdateServicesSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Maintenance Schedules
+// Maintenance Schedules (List Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useMaintenanceSchedules(filters?: Record<string, string>) {
   return useQuery({
     queryKey: [...queryKeys.maintenance.all, filters],
     queryFn: () => maintenanceApi.getSchedules(filters),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
   });
 }
 
@@ -551,14 +587,15 @@ export function useCompleteMaintenanceSchedule() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Spare Parts
+// Spare Parts (List Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useSpareParts(filters?: Record<string, string>) {
   return useQuery({
     queryKey: [...queryKeys.spareParts.all, filters],
     queryFn: () => sparePartsApi.getSpareParts(filters),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
   });
 }
 
@@ -566,15 +603,21 @@ export function useLowStockParts() {
   return useQuery({
     queryKey: queryKeys.spareParts.lowStock,
     queryFn: () => sparePartsApi.getLowStockParts(),
-    staleTime: 30_000,
+    staleTime: CACHE.LIST_STALE,
+    gcTime: CACHE.LIST_GC,
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Spare Part Categories (Reference Data)
+// ═══════════════════════════════════════════════════════════════════════
 
 export function useSparePartCategories() {
   return useQuery({
     queryKey: queryKeys.spareParts.categories,
     queryFn: () => sparePartsApi.getCategories(),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -658,7 +701,7 @@ export function useDeleteSparePartCategory() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Audit Log
+// Audit Log (Reference Data)
 // ═══════════════════════════════════════════════════════════════════════
 
 export function useAuditLog(params?: {
@@ -672,7 +715,8 @@ export function useAuditLog(params?: {
   return useQuery({
     queryKey: [...queryKeys.auditLog.all, params],
     queryFn: () => api.getAuditLog(params),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
   });
 }
 
@@ -686,7 +730,8 @@ export function usePredictions(deviceId?: string, limit?: number) {
   return useQuery({
     queryKey: [...queryKeys.predictions.all, deviceId, limit],
     queryFn: () => api.getPredictions(deviceId, limit),
-    staleTime: 60_000,
+    staleTime: CACHE.REF_STALE,
+    gcTime: CACHE.REF_GC,
     refetchInterval: 300_000, // auto-refresh каждые 5 минут
   });
 }

@@ -144,6 +144,87 @@ function getValue<T>(item: T, key: keyof T | string): unknown {
   return item[key as keyof T];
 }
 
+// ── LazyRow — IntersectionObserver для off-screen строк (P1-2.2) ──────────
+interface LazyRowProps {
+  children: React.ReactNode;
+  /** Количество колонок для colSpan placeholder'а */
+  colCount: number;
+  /** Высота строки в пикселях для placeholder'а */
+  rowHeight?: number;
+  /** Дополнительные className */
+  className?: string;
+  /** Обработчик hover */
+  onMouseEnter?: () => void;
+  /** Обработчик клика */
+  onClick?: () => void;
+  /** Атрибут selected */
+  'aria-selected'?: boolean;
+  /** Атрибут rowindex */
+  'aria-rowindex'?: number;
+}
+
+/**
+ * LazyRow — рендерит children (колонки) только когда строка попадает в viewport.
+ * Для off-screen строк показывает placeholder той же высоты.
+ * Использует rootMargin: 400px для pre-loading (загружаем до скролла).
+ * P1-2.2: Image Lazy Loading — IntersectionObserver для off-screen.
+ */
+function LazyRow({
+  children,
+  colCount,
+  rowHeight = 52,
+  className = '',
+  onMouseEnter,
+  onClick,
+  'aria-selected': ariaSelected,
+  'aria-rowindex': ariaRowindex,
+}: LazyRowProps) {
+  const ref = useRef<HTMLTableRowElement>(null);
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '400px', threshold: 0.01 },
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <tr
+      ref={ref}
+      className={className}
+      style={!isInView ? { height: `${rowHeight}px` } : undefined}
+      aria-hidden={!isInView}
+      onMouseEnter={onMouseEnter}
+      onClick={onClick}
+      aria-selected={ariaSelected}
+      aria-rowindex={ariaRowindex}
+    >
+      {isInView ? (
+        children
+      ) : (
+        <td colSpan={colCount} className="px-4">
+          <div
+            className="w-full bg-slate-100 dark:bg-slate-700/30 rounded animate-pulse"
+            style={{ height: `${rowHeight - 8}px` }}
+          />
+        </td>
+      )}
+    </tr>
+  );
+}
+
 // ── RenderTable sub-component (React.memo for row rendering optimization) ──
 interface RenderTableProps<T> {
   columns: Column<T>[];
@@ -1354,9 +1435,12 @@ export function DataGrid<T>({
                         ? vs.evenRow
                         : vs.bodyRow;
 
+                    // P1-2.2: IntersectionObserver для off-screen строк
                     return (
-                      <tr
+                      <LazyRow
                         key={id}
+                        colCount={colCount}
+                        rowHeight={52}
                         className={`group ${rowBgClass} ${
                           onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''
                         } ${customRowClass}`}
@@ -1461,7 +1545,7 @@ export function DataGrid<T>({
                             </td>
                           );
                         })}
-                      </tr>
+                      </LazyRow>
                     );
                   })
                 )}

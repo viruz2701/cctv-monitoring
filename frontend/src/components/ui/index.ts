@@ -57,3 +57,4 @@ export { Tooltip } from './Tooltip';
 export { InfoTooltip } from './InfoTooltip';
 export { Dropdown } from './Dropdown';
 export type { DropdownItem } from './Dropdown';
+export { LazyImage } from './LazyImage';

@@ -95,6 +95,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
+        // P1-2.1: Bundle size reduction — выделение тяжёлых библиотек в отдельные чанки
         manualChunks(id: string) {
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) {
             return 'vendor-react';
@@ -107,6 +108,15 @@ export default defineConfig({
           }
           if (id.includes('node_modules/i18next')) {
             return 'vendor-i18n';
+          }
+          if (id.includes('node_modules/@fullcalendar')) {
+            return 'vendor-calendar';
+          }
+          if (id.includes('node_modules/xlsx') || id.includes('node_modules/sheetjs')) {
+            return 'vendor-xlsx';
+          }
+          if (id.includes('node_modules/@hello-pangea')) {
+            return 'vendor-dnd';
           }
         },
       },
