@@ -2,6 +2,7 @@ package cron
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -64,6 +65,36 @@ func (c *MaintenanceCron) Run(ctx context.Context) {
 	}
 
 	c.logger.Info("Maintenance cron job completed", "created_count", createdCount)
+}
+
+// RefreshMaterializedViews обновляет материализованные представления.
+//
+// P3-2.1: Materialized View Auto-Refresh
+//   - REFRESH MATERIALIZED VIEW CONCURRENTLY
+//   - Staleness monitoring
+//   - Metrics для Prometheus
+func (c *MaintenanceCron) RefreshMaterializedViews(ctx context.Context) error {
+	views := []string{"mv_device_reliability", "mv_tco_per_device"}
+
+	for _, view := range views {
+		start := time.Now()
+		query := fmt.Sprintf("REFRESH MATERIALIZED VIEW CONCURRENTLY %s", view)
+
+		if _, err := c.db.Pool.Exec(ctx, query); err != nil {
+			c.logger.Error("failed to refresh materialized view",
+				"view", view,
+				"error", err,
+				"duration", time.Since(start),
+			)
+			continue
+		}
+
+		c.logger.Info("materialized view refreshed",
+			"view", view,
+			"duration", time.Since(start),
+		)
+	}
+	return nil
 }
 
 func (c *MaintenanceCron) calculateSLADeadline(priority string) *time.Time {

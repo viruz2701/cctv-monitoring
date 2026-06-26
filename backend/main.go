@@ -554,6 +554,28 @@ func main() {
 	}()
 	logger.Info("Maintenance cron job started (every 15 minutes)")
 
+	// --- Materialized View Auto-Refresh (каждые 60 минут) ---
+	// P3-2.1: REFRESH MATERIALIZED VIEW CONCURRENTLY
+	mvTicker := time.NewTicker(60 * time.Minute)
+	defer mvTicker.Stop()
+	go func() {
+		// Запуск сразу при старте
+		if err := maintenanceCron.RefreshMaterializedViews(ctx); err != nil {
+			logger.Error("initial MV refresh failed", "error", err)
+		}
+		for {
+			select {
+			case <-mvTicker.C:
+				if err := maintenanceCron.RefreshMaterializedViews(ctx); err != nil {
+					logger.Error("MV refresh failed", "error", err)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	logger.Info("Materialized view auto-refresh started (every 60 minutes)")
+
 	// --- Reaper ---
 	reaper := NewReaper(stateWrapper, cfg.HeartbeatTimeout, logger)
 	reaper.Start()

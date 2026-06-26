@@ -2,32 +2,41 @@
 // Onboarding Tour
 // UX-14.1.6: react-joyride для новых пользователей
 //
-// Показывает step-by-step тур по основным разделам приложения
-// при первом входе нового пользователя.
-//
-// Steps:
-//   1. Welcome — приветствие
-//   2. Sidebar — навигация по разделам
-//   3. Dashboard — основная панель мониторинга
-//   4. Devices — управление устройствами
-//   5. Alerts — система оповещений
-//   6. Work Orders — CMMS заявки
-//   7. Command Palette — ⌘K быстрый доступ
-//   8. Complete — финал
+// P3-3.1: Onboarding Tour Role Adaptation
+//   - Шаги зависят от роли пользователя (Technician → только relevant, Admin → все)
+//   - Conditional steps (оценка condition() перед показом)
+//   - Skip button для experienced users
+//   - Tour completion tracking (localStorage) через useOnboardingStore
 // ═══════════════════════════════════════════════════════════════════════
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Joyride, ACTIONS, EVENTS, STATUS } from 'react-joyride';
 import type { Step, EventData } from 'react-joyride';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import { useAuth } from '../../hooks/useAuth';
 
 // ═══════════════════════════════════════════════════════════════════════
-// Tour Steps
+// Tour Step — расширенный тип с role-based фильтрацией
 // ═══════════════════════════════════════════════════════════════════════
 
-const TOUR_STEPS: Step[] = [
+interface TourStep extends Step {
+  /** Роли, которым показывается этот шаг */
+  roles: string[];
+  /**
+   * Опциональное условие для динамического скрытия шага.
+   * Вызывается при монтировании. Если вернёт false — шаг пропускается.
+   */
+  condition?: () => boolean;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tour Steps — role-aware
+// ═══════════════════════════════════════════════════════════════════════
+
+const TOUR_STEPS: TourStep[] = [
   {
     target: 'body',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -43,6 +52,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'aside',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -61,6 +71,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'main',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -76,6 +87,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'body',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -95,6 +107,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'body',
+    roles: ['admin', 'manager', 'technician', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -111,6 +124,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'body',
+    roles: ['admin', 'manager', 'technician'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -127,6 +141,40 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'body',
+    roles: ['admin', 'manager'],
+    content: (
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+          Analytics
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          View performance reports, device uptime trends, and SLA insights
+          in the Analytics section. Filter by date range and export reports.
+        </p>
+      </div>
+    ),
+    placement: 'center',
+  },
+  {
+    target: 'body',
+    roles: ['admin'],
+    content: (
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+          Users & Settings
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          As an <strong>Admin</strong>, you have access to <strong>User Management</strong>
+          {' '}and <strong>System Settings</strong>. Manage roles, permissions,
+          and platform configuration.
+        </p>
+      </div>
+    ),
+    placement: 'center',
+  },
+  {
+    target: 'body',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -144,6 +192,7 @@ const TOUR_STEPS: Step[] = [
   },
   {
     target: 'body',
+    roles: ['admin', 'manager', 'technician', 'viewer', 'support', 'owner'],
     content: (
       <div>
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -231,18 +280,35 @@ const DEFAULT_OPTIONS = {
 export function OnboardingTour() {
   const { completed, running, markCompleted, startTour, stopTour } =
     useOnboardingStore();
+  const { user } = useAuth();
   const [hasRun, setHasRun] = useState(false);
 
-  // Auto-start tour for new users after login
+  // Роль пользователя (fallback для анонимного доступа)
+  const role = user?.role ?? 'viewer';
+
+  // Фильтрация шагов по роли и condition()
+  const steps = useMemo<Step[]>(() => {
+    return TOUR_STEPS.filter((step) => {
+      // 1. Проверка роли
+      if (!step.roles.includes(role)) return false;
+
+      // 2. Проверка динамического условия (condition)
+      if (step.condition && !step.condition()) return false;
+
+      return true;
+    });
+  }, [role]);
+
+  // Auto-start tour для новых пользователей
   useEffect(() => {
-    if (!completed && !hasRun) {
+    if (!completed && !hasRun && steps.length > 0) {
       setHasRun(true);
       const timer = setTimeout(() => {
         startTour();
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [completed, hasRun, startTour]);
+  }, [completed, hasRun, startTour, steps.length]);
 
   const handleEvent = useCallback(
     (data: EventData) => {
@@ -263,9 +329,12 @@ export function OnboardingTour() {
     [stopTour, markCompleted]
   );
 
+  // Если шагов нет после фильтрации — не рендерим
+  if (steps.length === 0) return null;
+
   return (
     <Joyride
-      steps={TOUR_STEPS}
+      steps={steps}
       run={running}
       continuous
       locale={JOYRIDE_LOCALE}

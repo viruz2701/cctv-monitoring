@@ -6,3 +6,4 @@ export { WorkspaceSwitcher } from './WorkspaceSwitcher';
 export { ThreeColumnTemplate } from './ThreeColumnTemplate';
 export { OfflineBanner } from './OfflineBanner';
 export { QueueModal } from './QueueModal';
+export { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';

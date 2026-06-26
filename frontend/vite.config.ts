@@ -87,10 +87,32 @@ export default defineConfig({
     },
   }), visualizer({
     filename: 'dist/stats.html',
-    open: true,
+    open: false,
     gzipSize: true,
     brotliSize: true
   })],
+  build: {
+    rollupOptions: {
+      output: {
+        // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
+        manualChunks(id: string) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/recharts')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {
+            return 'vendor-pdf';
+          }
+          if (id.includes('node_modules/i18next')) {
+            return 'vendor-i18n';
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,

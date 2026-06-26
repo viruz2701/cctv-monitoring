@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { VirtualTable } from './VirtualTable';
 
 interface Column<T> {
     key: keyof T | string;
@@ -21,6 +22,8 @@ interface TableProps<T> {
     emptyMessage?: string;
     loading?: boolean;
     expandable?: (item: T) => React.ReactNode;
+    /** P3-2.2: Автоматически использовать VirtualTable при rowCount > 1000 */
+    autoVirtual?: boolean;
 }
 
 export function Table<T>({
@@ -34,6 +37,7 @@ export function Table<T>({
     emptyMessage = 'No data available',
     loading = false,
     expandable,
+    autoVirtual = false,
 }: TableProps<T>) {
     const alignClasses = {
         left: 'text-left',
@@ -84,6 +88,26 @@ export function Table<T>({
                     ))}
                 </div>
             </div>
+        );
+    }
+
+    // P3-2.2: Auto-virtualisation при rowCount > 1000
+    if (autoVirtual && data.length > 1000) {
+        return (
+            <VirtualTable
+                data={data}
+                columns={columns.map((col) => ({
+                    ...col,
+                    width: col.width ?? undefined,
+                }))}
+                keyExtractor={keyExtractor}
+                onRowClick={onRowClick}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSort={onSort}
+                emptyMessage={emptyMessage}
+                loading={loading}
+            />
         );
     }
 

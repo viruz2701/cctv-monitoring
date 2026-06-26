@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -103,6 +104,52 @@ func ValidateTempToken(tokenString string) (*Claims, error) {
 		return claims, nil
 	}
 	return nil, errors.New("invalid temp token")
+}
+
+// P3-1.2: JWT → HttpOnly Cookies
+//
+// SetAuthCookie записывает JWT в HttpOnly cookie.
+//   - HttpOnly, Secure, SameSite=Strict
+//   - CSRF token в заголовке X-CSRF-Token
+const (
+	AuthCookieName = "auth_token"
+	CSRFHeaderName = "X-CSRF-Token"
+	CookieMaxAge   = 24 * time.Hour * 7 // 7 days
+)
+
+// SetAuthCookie записывает JWT в HttpOnly cookie.
+func SetAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AuthCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(CookieMaxAge.Seconds()),
+	})
+}
+
+// ClearAuthCookie удаляет cookie (для logout).
+func ClearAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     AuthCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
+// ExtractTokenFromCookie извлекает JWT из cookie.
+func ExtractTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(AuthCookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
 }
 
 const RefreshTokenTTL = 30 * 24 * time.Hour

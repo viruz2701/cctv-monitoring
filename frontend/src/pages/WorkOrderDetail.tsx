@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, ArrowLeft, Shield,
   User, HardDrive, MapPin, Calendar, FileText,
   AlertTriangle, Wrench, DollarSign, ClipboardList,
-  Play, Square,
+  Play, Square, Users,
 } from 'lucide-react';
 import {
   Button, useToast, Modal,
@@ -87,6 +87,16 @@ export const WorkOrderDetail: React.FC = () => {
   const [selectedPartId, setSelectedPartId] = useState('');
   const [partQuantity, setPartQuantity] = useState(1);
   const [partsCostLoading, setPartsCostLoading] = useState(false);
+
+  // ── P3-3.3: Real-time Collaboration — presence ──────────────────
+  const [activeUsers, setActiveUsers] = useState<{id: string; name: string; action: string}[]>([]);
+
+  useEffect(() => {
+    // Заглушка — в будущем WebSocket подключение
+    // const ws = new WebSocket(`ws://localhost:8080/ws/work-order/${id}`);
+    // ws.onmessage = (e) => setActiveUsers(JSON.parse(e.data));
+    return () => {};
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -791,14 +801,26 @@ export const WorkOrderDetail: React.FC = () => {
     <PermissionGuard requiredRole={['admin', 'manager', 'technician']}>
       <ThreeColumnTemplate
         header={
-          <WODetailHeader
-            workOrder={workOrder}
-            submitting={submitting}
-            onStart={handleStart}
-            onComplete={() => setCompleteModal(true)}
-            onCancel={() => setCancelModal(true)}
-            onBack={() => navigate('/work-orders')}
-          />
+          <>
+            <WODetailHeader
+              workOrder={workOrder}
+              submitting={submitting}
+              onStart={handleStart}
+              onComplete={() => setCompleteModal(true)}
+              onCancel={() => setCancelModal(true)}
+              onBack={() => navigate('/work-orders')}
+            />
+            {activeUsers.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-1.5">
+                <Users className="w-3.5 h-3.5" />
+                {activeUsers.map(u => u.action === 'editing' ? (
+                  <span key={u.id} className="text-amber-600 font-medium">{u.name} editing...</span>
+                ) : (
+                  <span key={u.id}>{u.name}</span>
+                ))}
+              </div>
+            )}
+          </>
         }
         left={leftColumn}
         center={centerColumn}
