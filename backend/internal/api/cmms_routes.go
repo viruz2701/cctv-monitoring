@@ -117,6 +117,7 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Delete("/api/v1/dispatcher/rules/{id}", s.handleDeleteDispatchRule)
 
 	// Export (Excel/PDF)
+	r.Get("/api/v1/work-orders/export", s.handleExportWorkOrders) // P2-3.3 Bulk WO Export
 	r.Get("/api/v1/export/maintenance/xlsx", s.exportMaintenanceXLSX)
 	r.Get("/api/v1/export/maintenance/pdf", s.exportMaintenancePDF)
 	r.Get("/api/v1/export/sla-compliance/xlsx", s.exportSLAComplianceXLSX)
