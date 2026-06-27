@@ -300,10 +300,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// --- NATS JetStream KV State Manager (ARCH-01) ---
-	// Если NATS доступен — используем распределённое состояние для horizontal scaling.
-	// Если UseNATSKV=true и NATSRequired=true — JetStream обязателен, без fallback.
-	// В dev режиме — InMemoryStateManager (dev mode).
+	// --- NATS JetStream KV State Manager (P0-BACKEND.1) ---
+	// JetStream KV — единственный supported state manager для production.
+	// InMemoryStateManager используется только как dev fallback при UseNATSKV=false.
+	// При UseNATSKV=true: JetStream обязателен, startup фейлится при недоступности.
 	var (
 		stateManager     state.DeviceStateManager
 		jetStreamManager *state.JetStreamStateManager // для graceful shutdown
@@ -311,32 +311,36 @@ func main() {
 	if natsConn != nil && cfg.UseNATSKV {
 		js, err := natsConn.JetStream()
 		if err != nil {
-			if cfg.NATSRequired {
-				logger.Error("NATS JetStream required but not available", "error", err)
-				os.Exit(1)
-			}
-			logger.Warn("NATS JetStream not available, falling back to InMemoryStateManager", "error", err)
-			stateManager = state.NewInMemoryStateManager()
-		} else {
-			jsMgr, err := state.NewJetStreamStateManager(js, logger)
-			if err != nil {
-				if cfg.NATSRequired {
-					logger.Error("JetStream KV state manager creation failed", "error", err)
-					os.Exit(1)
-				}
-				logger.Warn("JetStream KV state manager failed, falling back to InMemoryStateManager", "error", err)
-				stateManager = state.NewInMemoryStateManager()
-			} else {
-				stateManager = jsMgr
-				jetStreamManager = jsMgr
-				logger.Info("ARCH-01: Using JetStream KV distributed state manager")
-			}
+			logger.Error("NATS JetStream required but not available (P0-BACKEND.1)",
+				"error", err,
+				"action", "verify NATS is running and JetStream is enabled",
+			)
+			os.Exit(1)
 		}
+
+		jsMgr, err := state.NewJetStreamStateManager(js, logger)
+		if err != nil {
+			logger.Error("JetStream KV state manager creation failed (P0-BACKEND.1)",
+				"error", err,
+				"action", "verify KV bucket configuration",
+			)
+			os.Exit(1)
+		}
+
+		stateManager = jsMgr
+		jetStreamManager = jsMgr
+		logger.Info("P0-BACKEND.1: Using JetStream KV distributed state manager",
+			"bucket", state.KVDeviceBucket,
+		)
+	} else if cfg.UseNATSKV {
+		logger.Error("NATS connection required for JetStream KV state manager (P0-BACKEND.1)",
+			"action", "check nats_url configuration and NATS service status",
+		)
+		os.Exit(1)
 	} else {
+		// Dev mode: UseNATSKV=false — InMemoryStateManager для разработки
 		stateManager = state.NewInMemoryStateManager()
-		if natsConn == nil {
-			logger.Debug("NATS not connected, using InMemoryStateManager")
-		}
+		logger.Warn("P0-BACKEND.1: Using InMemoryStateManager (dev mode only — не для production)")
 	}
 
 	stateWrapper := &stateManagerWrapper{

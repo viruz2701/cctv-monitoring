@@ -44,6 +44,17 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
 
+      - name: Verify Module Path
+        run: |
+          cd backend
+          EXPECTED="gb-telemetry-collector"
+          ACTUAL=$(head -1 go.mod | awk '{print $2}')
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "❌ Module path mismatch: expected '$EXPECTED', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "✅ Module path: $ACTUAL"
+
       - name: Lint
         uses: golangci/golangci-lint-action@v6
         with:

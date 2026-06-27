@@ -181,31 +181,17 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// Security headers
 	r.Use(securityHeadersMiddleware)
 
-	// CORS middleware (ISO 27001 A.13.2 — whitelist, не wildcard)
-	// OWASP ASVS V13.4: ЗАПРЕЩЕНО использовать wildcard "*" в production.
-	allowedOrigins := cfg.CORSAllowedOrigins
-	for _, origin := range allowedOrigins {
-		if origin == "*" {
-			// Wildcard origin — security violation (OWASP ASVS V13.4)
-			// Не fallback, а reject: если в конфиге "*" — используем default whitelist
-			logger.Warn("CORS wildcard origin '*' detected and rejected! Falling back to safe defaults.",
-				"action", "using localhost defaults per OWASP ASVS V13.4",
-			)
-			allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
-			break
-		}
+	// CORS middleware (P0-SEC.2: OWASP ASVS L3 V9.1 compliance)
+	// ISO 27001 A.13.2: только явно указанные origins, без wildcard.
+	corsOpts, err := NewCORSHandler(cfg.CORSAllowedOrigins, cfg.Debug)
+	if err != nil {
+		logger.Error("CORS configuration rejected — startup failed",
+			"error", err,
+			"action", "fix cors_allowed_origins in config or environment",
+		)
+		panic(fmt.Sprintf("CORS validation failed: %v", err))
 	}
-	if len(allowedOrigins) == 0 {
-		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
-	}
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   allowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	r.Use(cors.Handler(corsOpts))
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
