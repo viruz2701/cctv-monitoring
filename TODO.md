@@ -70,7 +70,7 @@ Security audit report готов для ОАЦ
 
 Effort: 4 weeks (20d)
 
-Status: [ ]
+Status: [x] SKIPPED — bp2012/crypto недоступен (private repo), требуется альтернативная реализация
 
 Business Impact: Разблокировать $7M КИИ РБ market
 
@@ -103,7 +103,7 @@ OWASP ZAP scan: 0 CORS findings
 
 Effort: 2 hours
 
-Status: [ ]
+Status: [x] DONE (commit 3818280) — cors_middleware.go создан, 16 unit тестов
 
 P0-SEC.3: CSRF Protection + HttpOnly Cookies
 Файлы: frontend/src/hooks/useAuth.ts, backend/internal/api/auth_handlers.go, backend/internal/api/csrf_middleware.go
@@ -167,7 +167,7 @@ No import cycle errors
 
 Effort: 1 hour
 
-Status: [ ]
+Status: [x] DONE (commit 3818280) — module path validation в CI, go build проходит
 
 P0-MOBILE: Mobile Critical Fixes
 P0-MOBILE.1: Conflict Resolution UI
@@ -675,7 +675,7 @@ Unit тесты для state manager
 
 Effort: 1 day
 
-Status: [ ]
+Status: [x] DONE (commit 3818280) — use_nats_kv=true, nats_required=true, InMemoryStateManager fallback удалён
 
 P0-BACKEND.2: Schema Registry Validation
 Файлы: backend/internal/events/schema_registry.go, backend/internal/events/publisher.go, backend/go.mod
