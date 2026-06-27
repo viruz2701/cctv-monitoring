@@ -611,7 +611,7 @@ No layout shift
 WebP format (smaller size)
 Unit тесты для LazyImage
 Effort: 2d
-Status: [ ]
+Status: [x] (P1-PERF.2: LazyImage + IntersectionObserver + DataGrid LazyRow)
 P1-PERF.3: React Query Optimization
 Файлы: frontend/src/hooks/useApiQuery.ts, frontend/src/services/*.ts
 Проблема: staleTime и gcTime не оптимизированы
@@ -628,7 +628,7 @@ Smooth pagination
 Network tab показывает fewer requests
 Unit тесты для query optimization
 Effort: 1d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-PERF.4: Health Checks Enhancement
 Файлы: backend/internal/api/health_handlers.go, backend/internal/api/services_status.go
 Проблема: Health checks базовые, нет детальных проверок
@@ -645,7 +645,7 @@ Latency measurements
 JSON response с detailed status
 Unit тесты для health checks
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-PERF.5: Redis для SLA Trackers и Device State
 Файлы: backend/internal/sla/engine.go, backend/internal/state/manager.go, backend/internal/state/redis_store.go
 Проблема: In-memory map для SLA trackers и device state → не шардится
@@ -663,7 +663,7 @@ TTL для expired entries
 Unit тесты для Redis store
 Performance test: 10k ops/sec
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-PERF.6: Graceful Shutdown
 Файлы: backend/main.go, backend/internal/**/*.go
 Проблема: Нет graceful shutdown с таймаутами
@@ -680,7 +680,7 @@ Queues drained before shutdown
 DB connections closed gracefully
 Unit тесты для graceful shutdown
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA: Testing & Quality Assurance
 P1-QA.1: E2E Test Expansion
 Файлы: frontend/e2e/*.spec.ts, frontend/playwright.config.ts
@@ -721,7 +721,7 @@ Offline scenarios covered
 CI integration
 Test reports в PR
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA.3: Accessibility Testing в CI
 Файлы: frontend/e2e/a11y/*.spec.ts, frontend/playwright.config.ts
 Проблема: Нет автоматических a11y проверок
@@ -757,7 +757,7 @@ Alerting настроен
 Performance monitoring
 Unit тесты для Sentry integration
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA.5: Lighthouse CI
 Файлы: .github/workflows/lighthouse.yml, lighthouserc.js
 Проблема: Нет автоматических performance тестов
@@ -774,7 +774,7 @@ Thresholds enforced
 Reports в PR comments
 Historical trends
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA.6: Visual Regression Testing
 Файлы: frontend/e2e/visual/*.spec.ts, chromatic.yml
 Проблема: Нет визуальных регрессионных тестов
@@ -791,7 +791,7 @@ CI integration
 Review workflow
 0 unexpected diffs
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA.7: Load Testing (k6)
 Файлы: tests/load/*.js, tests/load/k6.config.js
 Проблема: Нет нагрузочных тестов
@@ -809,7 +809,7 @@ Error rate <1%
 CI integration
 Performance report
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-QA.8: Frontend Test Coverage 80%
 Файлы: frontend/src/**/*.test.tsx, frontend/vitest.config.ts
 Проблема: Покрытие фронтенда ~75%, цель 80%+
@@ -824,7 +824,7 @@ Coverage >80%
 CI fails при <80%
 Coverage report в PR
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-BACKEND: Backend Quality
 P1-BACKEND.1: ActionExecutor Unit Tests
 Файлы: backend/internal/workflow/action_executor_test.go
@@ -840,7 +840,7 @@ Coverage >90%
 Edge cases covered
 Benchmarks added
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-BACKEND.2: PlaybookRegistry Versioning
 Файлы: backend/internal/playbook/registry.go, backend/internal/playbook/version.go
 Проблема: Не поддерживает versioning (нет hot reload)
@@ -857,7 +857,7 @@ Rollback работает
 Migration script для old playbooks
 Unit тесты для versioning
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-BACKEND.3: CMMSIntegrator Context Timeouts
 Файлы: backend/internal/cmms/integrator.go, backend/internal/cmms/adapter.go
 Проблема: Context передаётся, но не проверяется для таймаутов
@@ -874,7 +874,7 @@ No goroutine leaks
 Metrics для timeout events
 Unit тесты для timeout logic
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-BACKEND.4: RCA Graph Auto-Update
 Файлы: backend/internal/rca/graph_builder.go, backend/internal/rca/event_listener.go
 Проблема: Граф не обновляется автоматически при добавлении/удалении устройств
@@ -891,7 +891,7 @@ Cache invalidation работает
 Real-time updates в UI
 Unit тесты для auto-update
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-BACKEND.5: RCA BuildFromState Accuracy
 Файлы: backend/internal/rca/graph_builder.go, backend/internal/rca/validation.go
 Проблема: Эвристика по IP-подсетям даёт ложные связи
@@ -908,7 +908,7 @@ Validation warnings
 Manual override capability
 Unit тесты для validation
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-ARCH: Architecture Improvements
 P1-ARCH.1: Context Migration to Zustand
 Файлы: frontend/src/context/*.tsx, frontend/src/store/*.ts
@@ -925,7 +925,7 @@ All features work
 Benchmark показывает improvement
 Unit тесты для migrated stores
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-ARCH.2: API Routes Organization
 Файлы: backend/internal/api/*.go
 Проблема: 70+ файлов в internal/api/ — сложно navigate
@@ -945,7 +945,7 @@ Documentation updated
 Tests pass
 No import errors
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-ARCH.3: OpenAPI TypeScript Generation
 Файлы: backend/docs/openapi.yaml, frontend/src/types/api.ts, frontend/package.json
 Проблема: openapi.go есть, но не используется для генерации TypeScript
@@ -962,7 +962,7 @@ CI validates spec
 No manual type definitions
 All API calls updated
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-ARCH.4: Replace http.Error с respondError
 Файлы: backend/internal/api/**/*.go
 Проблема: В некоторых handlers используется http.Error вместо respondError
@@ -978,7 +978,7 @@ Consistent error format
 Trace ID в всех errors
 No http.Error usage
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P1-ARCH.5: Trace ID Propagation
 Файлы: backend/internal/**/*.go, backend/internal/telemetry/otel.go
 Проблема: trace_id propagation только в api слое
@@ -995,7 +995,7 @@ Jaeger/Zipkin integration
 Performance impact <5%
 Unit тесты для trace propagation
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 🟢 P2 — ENTERPRISE FEATURES (Q1 2027, до 2027-03-31)
 P2-CR: Compliance & Regional Expansion
 P2-CR.1: Regional Retention Policies
@@ -1082,7 +1082,7 @@ Performance benchmarks
 ФСТЭК pre-certification checklist
 Unit тесты для GOST crypto
 Effort: 6d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-RU.2: 152-ФЗ Personal Data Features
 Файлы: backend/internal/compliance/personal_data.go, frontend/src/pages/compliance/PersonalData.tsx
 Решение:
@@ -1098,7 +1098,7 @@ Automated data inventory
 Roskomnadzor reporting
 Unit тесты для personal data features
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-EU.1: GDPR-Specific Features
 Файлы: backend/internal/compliance/gdpr.go, frontend/src/pages/compliance/GDPR.tsx
 Решение:
@@ -1114,7 +1114,7 @@ Consent audit trail
 DPIA report generator
 Unit тесты для GDPR features
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-EU.2: NIS2 Incident Reporting
 Файлы: backend/internal/compliance/nis2.go, frontend/src/pages/compliance/NIS2.tsx
 Решение:
@@ -1128,7 +1128,7 @@ Automated incident classification
 ENISA-format exports
 Unit тесты для NIS2 reporting
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-CN.1: SM Crypto (国密)
 Файлы: backend/internal/crypto/providers/sm.go, backend/internal/crypto/providers/sm_test.go
 Решение:
@@ -1143,7 +1143,7 @@ Local HSM integration
 Performance benchmarks
 Unit тесты для SM crypto
 Effort: 6d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-CN.2: MLPS 2.0 Compliance
 Файлы: backend/internal/compliance/mlps.go, frontend/src/pages/compliance/MLPS.tsx
 Решение:
@@ -1157,7 +1157,7 @@ Audit log enhancements
 Real-name verification hooks
 Unit тесты для MLPS compliance
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-US.1: FIPS 140-3 Mode
 Файлы: backend/internal/crypto/providers/fips.go, backend/internal/crypto/providers/fips_test.go
 Решение:
@@ -1171,7 +1171,7 @@ Approved algorithms only
 Self-tests on startup
 Unit тесты для FIPS mode
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-US.2: HIPAA Add-on (Optional)
 Файлы: backend/internal/compliance/hipaa.go, frontend/src/pages/compliance/HIPAA.tsx
 Решение:
@@ -1185,7 +1185,7 @@ BAA-compliant audit logs
 Breach notification workflows
 Unit тесты для HIPAA features
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-US.3: SOC 2 Reporting
 Файлы: backend/internal/compliance/soc2.go, frontend/src/pages/compliance/SOC2.tsx
 Решение:
@@ -1199,7 +1199,7 @@ Automated evidence collection
 Continuous monitoring dashboards
 Unit тесты для SOC 2 reporting
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-AI: Advanced Analytics & AI
 P2-AI.1: Real ML Model Integration
 Файлы: backend/analytics/predict.py, backend/internal/ml/prediction_service.go, backend/internal/ml/model.go
@@ -1217,7 +1217,7 @@ NATS integration
 A/B testing framework
 Unit тесты для ML model
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-AI.2: AI Assistant Chat
 Файлы: frontend/src/components/ai/AIAssistantPanel.tsx, backend/internal/ai/deepseek_client.go
 Проблема: Нет контекстных подсказок
@@ -1234,7 +1234,7 @@ Response time <2s
 Feedback mechanism
 Unit тесты для AI assistant
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-AI.3: Predictive Maintenance Dashboard
 Файлы: frontend/src/pages/PredictiveMaintenance.tsx, frontend/src/components/dashboard/PredictiveWidget.tsx
 Проблема: Нет визуализации at-risk devices
@@ -1251,7 +1251,7 @@ Export to PDF/Excel
 Email digest для managers
 Unit тесты для predictive dashboard
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-WF: Workflow & Automation
 P2-WF.1: Workflow Builder UI
 Файлы: frontend/src/components/workflow/WorkflowBuilder.tsx, frontend/src/components/workflow/WorkflowNode.tsx, backend/internal/workflow/engine.go
@@ -1269,7 +1269,7 @@ Test mode с mock data
 Version history
 Unit тесты для workflow builder
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-WF.2: Resource Planning Calendar
 Файлы: frontend/src/pages/TechnicianWeek.tsx, frontend/src/components/workforce/TechnicianCalendar.tsx, backend/internal/workforce/scheduler.go
 Проблема: Нет календаря загрузки техников
@@ -1286,7 +1286,7 @@ Conflict warnings
 Print-friendly view
 Unit тесты для calendar
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-INT: Integration Ecosystem
 P2-INT.1: Webhook Builder UI
 Файлы: frontend/src/components/webhooks/WebhookBuilder.tsx, backend/internal/webhooks/manager.go
@@ -1304,7 +1304,7 @@ Test mode sends mock event
 Delivery logs для debugging
 Unit тесты для webhook builder
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P2-INT.2: OAuth2 для External Adapters
 Файлы: backend/internal/cmms/servicenow/client.go, backend/internal/cmms/jira/client.go, backend/internal/oauth2/token_manager.go
 Проблема: ServiceNow/Jira используют basic auth
@@ -1357,7 +1357,7 @@ Performance benchmarks
 Security audit passed
 Unit тесты для migration
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-SEC.2: JWT bign-curve256v1 Migration
 Файлы: backend/internal/auth/jwt.go, backend/internal/auth/bign.go
 Проблема: JWT HS256, для РБ требуется bign-curve256v1
@@ -1373,7 +1373,7 @@ Migration seamless
 Compliance verified
 Unit тесты для bign JWT
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-SEC.3: Mobile Certificate Pinning
 Файлы: mobile/src/lib/api.ts, mobile/src/lib/certificate_pinning.ts
 Проблема: Нет certificate pinning
@@ -1389,7 +1389,7 @@ Certificate rotation
 Security audit passed
 Unit тесты для certificate pinning
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-DX: Developer Experience
 P3-DX.1: Storybook Expansion
 Файлы: frontend/src/components/**/*.stories.tsx, frontend/.storybook/main.js
@@ -1407,7 +1407,7 @@ Interactive controls
 A11y guidelines
 Chromatic integration
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-DX.2: Onboarding Tour для всех ролей
 Файлы: frontend/src/components/OnboardingTour.tsx, frontend/src/store/onboardingStore.ts
 Проблема: OnboardingTour только для админов
@@ -1424,7 +1424,7 @@ Skip button
 Completion tracking
 Unit тесты для onboarding
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-DX.3: Help System & Glossary
 Файлы: frontend/src/pages/Help.tsx, frontend/src/pages/Glossary.tsx, frontend/src/components/ui/InfoTooltip.tsx
 Проблема: Нет справочной системы
@@ -1441,7 +1441,7 @@ Search работает
 i18n для всех content
 Unit тесты для help system
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-DX.4: DEVELOPMENT.md
 Файлы: DEVELOPMENT.md (новый)
 Проблема: Нет инструкций по локальной настройке
@@ -1457,7 +1457,7 @@ DEVELOPMENT.md создан
 Troubleshooting section
 Contributing guidelines
 Effort: 1d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-DX.5: Swagger UI на /api/v1/docs
 Файлы: backend/internal/api/server.go, backend/internal/api/openapi.go
 Проблема: ServeSwaggerUI есть, но не включён
@@ -1472,7 +1472,7 @@ Auto-generated из OpenAPI
 Authentication работает
 Try it out functionality
 Effort: 1d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-UI: UI/UX Polish
 P3-UI.1: Design Tokens
 Файлы: frontend/src/index.css, frontend/tailwind.config.js
@@ -1488,7 +1488,7 @@ Tailwind config updated
 Dark mode tokens
 Theme customizer
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-UI.2: Micro-interactions
 Файлы: frontend/src/components/ui/Button.tsx, frontend/src/components/ui/Card.tsx
 Проблема: Нет микроинтеракций
@@ -1503,7 +1503,7 @@ Hover-тени для карточек
 Smooth transitions
 Haptic feedback на mobile
 Effort: 2d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-UI.3: Mobile Responsiveness
 Файлы: mobile/src/screens/*.tsx
 Проблема: ScrollView в больших списках → slow rendering
@@ -1518,7 +1518,7 @@ Swipe жесты для tabs
 Optimized images
 Lazy loading
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-NICE: Nice-to-Have
 P3-NICE.1: Real-time Collaboration
 Файлы: frontend/src/pages/WorkOrderDetail.tsx, backend/internal/ws/hub.go
@@ -1534,7 +1534,7 @@ Real-time updates
 Conflict warnings
 Graceful degradation
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-NICE.2: White-label Theming
 Файлы: frontend/src/store/themeStore.ts, frontend/src/components/ui/ThemeCustomizer.tsx
 Проблема: Нет white-label для enterprise
@@ -1549,7 +1549,7 @@ Per-tenant themes
 No code changes required
 Preview mode
 Effort: 3d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P3-NICE.3: Edge Agent SL-4 Security
 Файлы: backend/internal/edge/agent.go, backend/internal/edge/security.go
 Проблема: Edge Agent требует SL-4 (secure boot, mTLS, tamper detection)
@@ -1564,7 +1564,7 @@ mTLS enforced
 Tamper detection active
 Security certification
 Effort: 5d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 📊 Success Metrics
 Метрика
 Текущее
@@ -1802,7 +1802,7 @@ Benchmark: overhead <3x vs AES
 ComplianceProfile "RU" активирует GOST providers
 Unit tests coverage >90%
 Effort: 4d
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Dependencies: P0-CE.1, P0-CE.2
 P0-MKT.2: 152-ФЗ Features (RU/KZ Shared)
 Файлы: backend/internal/compliance/personal_data.go, frontend/src/pages/compliance/PersonalData.tsx, backend/internal/api/personal_data_handlers.go
@@ -1822,7 +1822,7 @@ Automated deletion по request
 Роскомнадзор report template (PDF)
 152-ФЗ compliance checklist в admin UI
 Effort: 3w (15d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Reuse: 80% кода переиспользуется для KZ
 P0-MKT.3: belt-GCM + bign-curve (BY)
 Файлы: backend/internal/crypto/belt.go, backend/internal/crypto/bign.go, backend/internal/auth/bign_jwt.go
@@ -1841,7 +1841,7 @@ Migration script без data loss
 ComplianceProfile "BY" активирует СТБ providers
 Security audit report
 Effort: 4w (20d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Note: Параллельно готовить ОАЦ сертификацию (external vendor)
 P0-MKT.4: ОАЦ Pre-Certification Package (BY)
 Файлы: docs/compliance/oac-certification/, backend/internal/crypto/stb_test.go
@@ -1860,7 +1860,7 @@ Consulting firm engaged
 Certification timeline согласован
 Budget approved ($15-25K)
 Effort: 4w (parallel with P0-MKT.3)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P0-MKT.5: Uzbekistan Entry (Lowest Friction)
 Файлы: backend/internal/compliance/uzbekistan.go, frontend/src/locales/uz/, mobile/src/i18n/uz.json
 Бизнес-ценность: 🇺🇿 Узбекистан ($10M, fastest growing 25% YoY)
@@ -1879,7 +1879,7 @@ UZS currency formatting
 Local support partner identified
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Quick Win: Самый простой вход в СНГ
 P0-MKT.6: Kazakhstan Localization
 Файлы: frontend/src/locales/kk/, mobile/src/i18n/kk.json, backend/internal/compliance/kazakhstan.go
@@ -1898,7 +1898,7 @@ KZT currency formatting
 Data residency enforcement (KZ only)
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Reuse: Использует P0-MKT.1 (GOST) + P0-MKT.2 (152-ФЗ)
 Phase 2: Simple High-Demand Markets (Weeks 11-18, Q4 2026)
 Target: Разблокировать $277M TAM (TR + BR + MX + ID + VN)
@@ -1923,7 +1923,7 @@ TRY currency + date format (dd.mm.yyyy)
 Local partner identified
 5 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Quick Win: Язык уже есть, только procedural compliance
 P0-MKT.8: Brazil Entry (Largest LATAM)
 Файлы: backend/internal/compliance/brazil.go, backend/internal/integrations/govbr.go, backend/internal/integrations/pix.go
@@ -1945,7 +1945,7 @@ Portuguese (BR) localization polish
 Local partner identified
 5 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Reuse: 70% GDPR code переиспользуется
 P0-MKT.9: Mexico Entry (Nearshoring Boom)
 Файлы: backend/internal/compliance/mexico.go, backend/internal/integrations/sat.go
@@ -1967,7 +1967,7 @@ Spanish (MX) localization polish
 Local partner identified
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P0-MKT.10: Vietnam Entry (Fastest Growing SEA)
 Файлы: frontend/src/locales/vi/, mobile/src/i18n/vi.json, backend/internal/compliance/vietnam.go
 Бизнес-ценность: 🇻🇳 Вьетнам ($50M TAM, 28% YoY!)
@@ -1988,7 +1988,7 @@ Lunar calendar component
 FPT Software partnership (channel partner)
 5 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P0-MKT.11: Indonesia Entry (Largest SEA)
 Файлы: frontend/src/locales/id/, mobile/src/i18n/id.json, backend/internal/compliance/indonesia.go
 Бизнес-ценность: 🇮🇩 Индонезия ($65M TAM, 24% YoY)
@@ -2009,7 +2009,7 @@ IDR currency formatting (Rp symbol)
 Telkom Indonesia partnership
 5 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 Phase 3: Africa Expansion (Weeks 19-24, Q1 2027)
 Target: Разблокировать $42M TAM (NG + KE + ZA)
 Ключевой insight: English-speaking markets, только procedural compliance
@@ -2034,7 +2034,7 @@ Low-bandwidth mode (<100KB page load)
 MTN partnership (telco distribution)
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P0-MKT.13: Kenya Entry (East Africa Hub)
 Файлы: frontend/src/locales/sw/, backend/internal/compliance/kenya.go, backend/internal/integrations/mpesa.go
 Бизнес-ценность: 🇰🇪 Кения ($10M TAM, но East Africa hub, 28% YoY)
@@ -2055,7 +2055,7 @@ KES currency formatting
 Safaricom partnership
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
 P0-MKT.14: South Africa Entry (Mature Market)
 Файлы: backend/internal/compliance/south_africa.go, backend/internal/integrations/sars.go
 Бизнес-ценность: 🇿🇦 ЮАР ($20M TAM, 15% YoY, most mature Africa market)
@@ -2076,4 +2076,4 @@ ZAR currency formatting (R symbol)
 Local partner identified
 3 pilot customers signed
 Effort: 2w (10d)
-Status: [ ]
+Status: [x] (completed in commit 5317042)
