@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { format, subDays, subMonths, isAfter, isBefore, parseISO } from 'date-fns';
 import { Device, Site, Ticket, RecordingDay, DeviceStats } from '../types';
 export interface ReportFilterParams {
@@ -91,7 +90,7 @@ const filterDevices = (devices: Device[], filters: ReportFilterParams, userSites
     });
 };
 
-export const generateExcelReport = (params: GenerateReportParams) => {
+export const generateExcelReport = async (params: GenerateReportParams) => {
     const { type, duration, startDate, endDate, filters, data, userSites } = params;
     const { start, end } = getDateRange(duration, startDate, endDate);
     const { devices, tickets } = data;
@@ -291,10 +290,13 @@ export const generateExcelReport = (params: GenerateReportParams) => {
         throw new Error('No data available for the selected criteria and date range.');
     }
 
+    // P1-PERF.1: Dynamic import XLSX — не грузим в основном bundle (~500KB)
+    const xlsx = await import('xlsx');
+
     // Create workbook and worksheet
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const worksheet = xlsx.utils.json_to_sheet(exportData);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, sheetName);
 
     // Auto-size columns slightly
     const colWidths = Object.keys(exportData[0] || {}).map(key => ({
@@ -310,7 +312,7 @@ export const generateExcelReport = (params: GenerateReportParams) => {
     const fileName = `${type.toUpperCase()}_${dateStr}_generated${generatedStamp}.xlsx`;
 
     // Create the buffered array directly for history and download
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const excelBuffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'array' });
 
     return { excelBuffer, fileName };
 };

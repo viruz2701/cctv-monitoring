@@ -270,3 +270,77 @@ export function SkeletonDetailPage() {
     </div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// SkeletonTechnicianWeek — скелет для календаря TechnicianWeek
+// ═══════════════════════════════════════════════════════════════════════
+
+export function SkeletonTechnicianWeek() {
+  return (
+    <div className="technician-week-page p-4 md:p-6 space-y-4" aria-label="Loading resource planning calendar" aria-busy="true">
+      <ShimmerStyles />
+      {/* Page Header */}
+      <div className="space-y-2">
+        <div className="h-7 w-48 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="h-4 w-64 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+      </div>
+
+      {/* Filter / Date Navigation */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded-lg" />
+          <div className="h-5 w-36 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+          <div className="h-8 w-8 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded-lg" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-24 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded-lg" />
+          <div className="h-8 w-24 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded-lg" />
+        </div>
+      </div>
+
+      {/* Calendar / Resource Grid Header */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        {/* Column headers */}
+        <div className="grid grid-cols-8 gap-px bg-slate-200 dark:bg-slate-700">
+          <div className="bg-slate-50 dark:bg-slate-800 p-3">
+            <div className="h-4 w-16 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+          </div>
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="bg-slate-50 dark:bg-slate-800 p-3">
+              <div className="h-4 w-12 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded mx-auto" />
+              <div className="h-3 w-6 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded mx-auto mt-1" />
+            </div>
+          ))}
+        </div>
+
+        {/* Technician rows */}
+        {[1, 2, 3, 4].map((row) => (
+          <div key={row} className="grid grid-cols-8 gap-px bg-slate-200 dark:bg-slate-700">
+            <div className="bg-white dark:bg-slate-800 p-3 flex items-center gap-2">
+              <div className="w-8 h-8 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded-full" />
+              <div className="h-4 w-20 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+            </div>
+            {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+              <div key={day} className="bg-white dark:bg-slate-800 p-2 min-h-[60px]">
+                <div className="h-6 w-full skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+                <div className="h-3 w-3/4 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded mt-2" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-16 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+          <div className="h-3 w-16 skeleton-shimmer bg-slate-200 dark:bg-slate-700 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}

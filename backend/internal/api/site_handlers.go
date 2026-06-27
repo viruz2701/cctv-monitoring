@@ -30,7 +30,7 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 	sites, err := s.cmmsRouter.GetSites(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get sites", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -43,13 +43,13 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewBadRequestError("id is required"))
+		RespondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	site, err := s.cmmsRouter.GetSite(r.Context(), id)
 	if err != nil {
-		respondError(w, r, NewNotFoundError("Site not found"))
+		RespondError(w, r, NewNotFoundError("Site not found"))
 		return
 	}
 	jsonResponse(w, http.StatusOK, site)
@@ -58,12 +58,12 @@ func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 	var site models.Site
 	if err := json.NewDecoder(r.Body).Decode(&site); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if site.Name == "" {
-		respondError(w, r, NewBadRequestError("name is required"))
+		RespondError(w, r, NewBadRequestError("name is required"))
 		return
 	}
 	if site.Status == "" {
@@ -72,7 +72,7 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.CreateSite(r.Context(), &site); err != nil {
 		s.logger.Error("Failed to create site", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -84,19 +84,19 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewBadRequestError("id is required"))
+		RespondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateSite(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update site", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -108,13 +108,13 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewBadRequestError("id is required"))
+		RespondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.DeleteSite(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete site", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -138,7 +138,7 @@ func (s *Server) listSparePartCategories(w http.ResponseWriter, r *http.Request)
 	categories, err := s.cmmsRouter.GetCategories(r.Context())
 	if err != nil {
 		s.logger.Error("Failed to get spare part categories", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -151,18 +151,18 @@ func (s *Server) listSparePartCategories(w http.ResponseWriter, r *http.Request)
 func (s *Server) createSparePartCategory(w http.ResponseWriter, r *http.Request) {
 	var cat models.SparePartCategory
 	if err := json.NewDecoder(r.Body).Decode(&cat); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if cat.Name == "" {
-		respondError(w, r, NewBadRequestError("name is required"))
+		RespondError(w, r, NewBadRequestError("name is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.CreateCategory(r.Context(), &cat); err != nil {
 		s.logger.Error("Failed to create spare part category", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -174,19 +174,19 @@ func (s *Server) createSparePartCategory(w http.ResponseWriter, r *http.Request)
 func (s *Server) updateSparePartCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewBadRequestError("id is required"))
+		RespondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	var updates map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	if err := s.cmmsRouter.UpdateCategory(r.Context(), id, updates); err != nil {
 		s.logger.Error("Failed to update spare part category", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -198,13 +198,13 @@ func (s *Server) updateSparePartCategory(w http.ResponseWriter, r *http.Request)
 func (s *Server) deleteSparePartCategory(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewBadRequestError("id is required"))
+		RespondError(w, r, NewBadRequestError("id is required"))
 		return
 	}
 
 	if err := s.cmmsRouter.DeleteCategory(r.Context(), id); err != nil {
 		s.logger.Error("Failed to delete spare part category", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 

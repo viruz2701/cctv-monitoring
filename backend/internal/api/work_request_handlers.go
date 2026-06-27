@@ -68,14 +68,14 @@ const (
 func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 	var req models.WorkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
 	// ── Валидация reCAPTCHA ─────────────────────────────────────
 	if err := s.recaptchaValidator.Verify(r.Context(), req.CaptchaToken); err != nil {
 		s.logger.Warn("recaptcha verification failed", "error", err)
-		respondError(w, r, NewBadRequestError("CAPTCHA verification failed"))
+		RespondError(w, r, NewBadRequestError("CAPTCHA verification failed"))
 		return
 	}
 
@@ -84,7 +84,7 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 	// Title
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
-		respondError(w, r, NewBadRequestError("title is required"))
+		RespondError(w, r, NewBadRequestError("title is required"))
 		return
 	}
 	if len(req.Title) > MaxWorkRequestTitle {
@@ -100,7 +100,7 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 	// Requester name
 	req.RequesterName = strings.TrimSpace(req.RequesterName)
 	if req.RequesterName == "" {
-		respondError(w, r, NewBadRequestError("requester_name is required"))
+		RespondError(w, r, NewBadRequestError("requester_name is required"))
 		return
 	}
 	if len(req.RequesterName) > MaxWorkRequestName {
@@ -110,14 +110,14 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 	// Requester email
 	req.RequesterEmail = strings.TrimSpace(req.RequesterEmail)
 	if req.RequesterEmail == "" {
-		respondError(w, r, NewBadRequestError("requester_email is required"))
+		RespondError(w, r, NewBadRequestError("requester_email is required"))
 		return
 	}
 	if len(req.RequesterEmail) > MaxWorkRequestEmail {
 		req.RequesterEmail = req.RequesterEmail[:MaxWorkRequestEmail]
 	}
 	if !isValidEmail(req.RequesterEmail) {
-		respondError(w, r, NewBadRequestError("invalid requester_email format"))
+		RespondError(w, r, NewBadRequestError("invalid requester_email format"))
 		return
 	}
 
@@ -132,7 +132,7 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 		req.Priority = "medium"
 	}
 	if !models.ValidWorkRequestPriority(req.Priority) {
-		respondError(w, r, NewBadRequestError(
+		RespondError(w, r, NewBadRequestError(
 			fmt.Sprintf("invalid priority: %s (must be: critical, high, medium, low)", req.Priority),
 		))
 		return
@@ -143,7 +143,7 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 		req.Type = "corrective"
 	}
 	if !models.ValidWorkRequestType(req.Type) {
-		respondError(w, r, NewBadRequestError(
+		RespondError(w, r, NewBadRequestError(
 			fmt.Sprintf("invalid type: %s (must be: corrective, preventive, emergency, routine, inspection)", req.Type),
 		))
 		return
@@ -160,7 +160,7 @@ func (s *Server) submitWorkRequest(w http.ResponseWriter, r *http.Request) {
 	// ── Сохранение ──────────────────────────────────────────────
 	if err := s.cmmsRouter.CreateWorkRequest(r.Context(), &req); err != nil {
 		s.logger.Error("Failed to create work request", "error", err)
-		respondError(w, r, NewInternalError("Failed to submit request", err))
+		RespondError(w, r, NewInternalError("Failed to submit request", err))
 		return
 	}
 
@@ -186,7 +186,7 @@ func (s *Server) listWorkRequests(w http.ResponseWriter, r *http.Request) {
 
 	if status := r.URL.Query().Get("status"); status != "" {
 		if !models.ValidWorkRequestStatus(status) {
-			respondError(w, r, NewBadRequestError("invalid status"))
+			RespondError(w, r, NewBadRequestError("invalid status"))
 			return
 		}
 		filters["status"] = status
@@ -211,7 +211,7 @@ func (s *Server) listWorkRequests(w http.ResponseWriter, r *http.Request) {
 	requests, err := s.cmmsRouter.GetWorkRequests(r.Context(), filters)
 	if err != nil {
 		s.logger.Error("Failed to get work requests", "error", err)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -227,7 +227,7 @@ func (s *Server) getWorkRequest(w http.ResponseWriter, r *http.Request) {
 
 	req, err := s.cmmsRouter.GetWorkRequest(r.Context(), id)
 	if err != nil {
-		respondError(w, r, NewNotFoundError("Work request not found"))
+		RespondError(w, r, NewNotFoundError("Work request not found"))
 		return
 	}
 	jsonResponse(w, http.StatusOK, req)
@@ -240,7 +240,7 @@ func (s *Server) approveWorkRequest(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.cmmsRouter.ApproveWorkRequest(r.Context(), id, userID); err != nil {
 		s.logger.Error("Failed to approve work request", "error", err)
-		respondError(w, r, NewBadRequestError(err.Error()))
+		RespondError(w, r, NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -262,7 +262,7 @@ func (s *Server) rejectWorkRequest(w http.ResponseWriter, r *http.Request) {
 	userID := getUserIDFromContext(r.Context())
 	if err := s.cmmsRouter.RejectWorkRequest(r.Context(), id, userID, body.Reason); err != nil {
 		s.logger.Error("Failed to reject work request", "error", err)
-		respondError(w, r, NewBadRequestError(err.Error()))
+		RespondError(w, r, NewBadRequestError(err.Error()))
 		return
 	}
 
@@ -277,12 +277,12 @@ func (s *Server) convertWorkRequestToWO(w http.ResponseWriter, r *http.Request) 
 	// Получаем заявку
 	req, err := s.cmmsRouter.GetWorkRequest(r.Context(), id)
 	if err != nil || req == nil {
-		respondError(w, r, NewNotFoundError("Work request not found"))
+		RespondError(w, r, NewNotFoundError("Work request not found"))
 		return
 	}
 
 	if req.Status != models.WorkRequestApproved {
-		respondError(w, r, NewBadRequestError("Work request must be approved before conversion"))
+		RespondError(w, r, NewBadRequestError("Work request must be approved before conversion"))
 		return
 	}
 
@@ -300,14 +300,14 @@ func (s *Server) convertWorkRequestToWO(w http.ResponseWriter, r *http.Request) 
 
 	if err := s.cmmsRouter.CreateWorkOrder(r.Context(), wo); err != nil {
 		s.logger.Error("Failed to create work order from request", "error", err)
-		respondError(w, r, NewInternalError("Failed to create work order", err))
+		RespondError(w, r, NewInternalError("Failed to create work order", err))
 		return
 	}
 
 	// Обновляем заявку — связываем с WorkOrder
 	if err := s.cmmsRouter.ConvertWorkRequestToWO(r.Context(), id, wo.ID); err != nil {
 		s.logger.Error("Failed to convert work request", "error", err)
-		respondError(w, r, NewInternalError("Failed to convert request", err))
+		RespondError(w, r, NewInternalError("Failed to convert request", err))
 		return
 	}
 

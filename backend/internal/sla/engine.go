@@ -114,29 +114,77 @@ const (
 // Используется интерфейсом EscalationRuleResolver для передачи данных
 // из БД в SLA engine без циклических зависимостей.
 type EscalationRule struct {
-	ID                   string `json:"id"`
-	Priority             string `json:"priority"`
-	EscalationLevel      int    `json:"escalation_level"`
-	BreachMinutes        int    `json:"breach_minutes"`
-	NotifyRole           string `json:"notify_role"`
-	NotifyChannel        string `json:"notify_channel"`
-	RepeatIntervalMinutes int   `json:"repeat_interval_minutes"`
+	ID                    string `json:"id"`
+	Priority              string `json:"priority"`
+	EscalationLevel       int    `json:"escalation_level"`
+	BreachMinutes         int    `json:"breach_minutes"`
+	NotifyRole            string `json:"notify_role"`
+	NotifyChannel         string `json:"notify_channel"`
+	RepeatIntervalMinutes int    `json:"repeat_interval_minutes"`
 }
 
 // EscalationLogEntry — запись в журнале эскалации.
 type EscalationLogEntry struct {
-	ID               string     `json:"id"`
-	WorkOrderID      string     `json:"work_order_id"`
-	EscalationLevel  int        `json:"escalation_level"`
-	RuleID           string     `json:"rule_id"`
-	NotifiedAt       time.Time  `json:"notified_at"`
-	AcknowledgedAt   *time.Time `json:"acknowledged_at,omitempty"`
-	AcknowledgedBy   *string    `json:"acknowledged_by,omitempty"`
-	ResolutionNotes  string     `json:"resolution_notes,omitempty"`
+	ID              string     `json:"id"`
+	WorkOrderID     string     `json:"work_order_id"`
+	EscalationLevel int        `json:"escalation_level"`
+	RuleID          string     `json:"rule_id"`
+	NotifiedAt      time.Time  `json:"notified_at"`
+	AcknowledgedAt  *time.Time `json:"acknowledged_at,omitempty"`
+	AcknowledgedBy  *string    `json:"acknowledged_by,omitempty"`
+	ResolutionNotes string     `json:"resolution_notes,omitempty"`
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// SLATracker — отслеживает SLA для одного Work Order.
+// SLATracker — интерфейс для хранения/получения SLA метрик (Redis/DB).
+// ═══════════════════════════════════════════════════════════════════════
+
+// SLATracker — интерфейс для хранения/получения SLA метрик.
+//
+// Реализуется RedisSLATracker для Redis-based хранения или DB-реализацией.
+//
+// Compliance:
+//   - IEC 62443 SR 2.8 (Audit events — breach tracking)
+//   - ISO 27001 A.12.4.1 (Event logging — SLA breach events)
+//   - ISO 27019 PCC.A.12.4 (ICS audit trail)
+type SLATracker interface {
+	// RecordBreach записывает факт нарушения SLA.
+	RecordBreach(ctx context.Context, breach *SLABreach) error
+
+	// GetBreaches возвращает нарушения за период.
+	GetBreaches(ctx context.Context, deviceID string, from, to time.Time) ([]SLABreach, error)
+
+	// GetComplianceRate возвращает процент соблюдения SLA.
+	GetComplianceRate(ctx context.Context, deviceID string, from, to time.Time) (float64, error)
+
+	// GetTrackerStatus возвращает статус трекера.
+	GetTrackerStatus(ctx context.Context) (*TrackerStatus, error)
+}
+
+// SLABreach — информация о нарушении SLA.
+//
+// Compliance:
+//   - ISO 27001 A.12.4.1 (Event logging — structured breach data)
+//   - IEC 62443 SR 2.8 (Audit events — breach tracking)
+type SLABreach struct {
+	ID            string    `json:"id"`
+	DeviceID      string    `json:"device_id"`
+	ViolationType string    `json:"violation_type"` // "response_time", "uptime", "resolution_time"
+	Threshold     float64   `json:"threshold"`
+	ActualValue   float64   `json:"actual_value"`
+	OccurredAt    time.Time `json:"occurred_at"`
+	Region        string    `json:"region,omitempty"`
+}
+
+// TrackerStatus — статус SLA трекера (health check).
+type TrackerStatus struct {
+	Connected bool   `json:"connected"`
+	KeysCount int64  `json:"keys_count"`
+	Uptime    string `json:"uptime"`
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SLATrackerState — отслеживает SLA для одного Work Order.
 // ═══════════════════════════════════════════════════════════════════════
 
 // SLATrackerState — полное состояние SLA трекера для Work Order.
@@ -197,7 +245,7 @@ type SLACalculationEngine struct {
 	// Завершённые/отменённые трекеры удаляются через evictionTTL после завершения.
 	// Сиротские трекеры удаляются при периодической cleanupLoop.
 	evictionTTL time.Duration // время жизни трекера после завершения
-	cleanupStop chan struct{}  // сигнал остановки cleanup goroutine
+	cleanupStop chan struct{} // сигнал остановки cleanup goroutine
 }
 
 // NewEngine создаёт SLA Calculation Engine.
@@ -217,14 +265,14 @@ func NewEngine(logger *slog.Logger) *SLACalculationEngine {
 		logger = slog.Default()
 	}
 	e := &SLACalculationEngine{
-		logger:       logger.With("component", "sla-engine"),
-		trackers:     make(map[string]*SLATrackerState),
-		policies:     make(map[string]*SLAPolicy),
-		calendars:    make(map[string]*BusinessCalendar),
-		matrix:       make(map[string][]*SLAMatrixEntry),
-		pauseRules:   make(map[string][]*SLAPauseRule),
-		evictionTTL:  DefaultEvictionTTL,
-		cleanupStop:  make(chan struct{}),
+		logger:      logger.With("component", "sla-engine"),
+		trackers:    make(map[string]*SLATrackerState),
+		policies:    make(map[string]*SLAPolicy),
+		calendars:   make(map[string]*BusinessCalendar),
+		matrix:      make(map[string][]*SLAMatrixEntry),
+		pauseRules:  make(map[string][]*SLAPauseRule),
+		evictionTTL: DefaultEvictionTTL,
+		cleanupStop: make(chan struct{}),
 	}
 	// Запускаем периодическую cleanupLoop для предотвращения утечки памяти
 	go e.cleanupLoop()

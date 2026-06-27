@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useNavigation } from '../../hooks/useNavigation';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ interface SidebarProps {
  * P0-2.1: 5 групп (Dashboard, Assets, Operations, Insights, Administration)
  * P0-2.2: Role-based filtering через useNavigation()
  * P0-2.3: Quick access bar (3-4 pinned items сверху)
+ * P1-UX.4: aria-current="page" на активных ссылках + keyboard navigation
  */
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
     const { t } = useTranslation();
@@ -40,6 +41,81 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         toggleGroup(groupId);
         setActiveGroup(prev => prev === groupId ? null : groupId);
     }, [toggleGroup]);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // P1-UX.4: Keyboard Navigation (ArrowUp/Down/Home/End)
+    // ═══════════════════════════════════════════════════════════════════
+
+    const quickAccessRef = useRef<HTMLUListElement>(null);
+    const navListRef = useRef<HTMLUListElement>(null);
+    const [focusedLinkIndex, setFocusedLinkIndex] = useState(-1);
+
+    /** Собирает все sidebar-ссылки в плоский массив для навигации */
+    const getSidebarLinks = useCallback((): HTMLElement[] => {
+        const links: HTMLElement[] = [];
+        if (quickAccessRef.current) {
+            links.push(
+                ...Array.from(quickAccessRef.current.querySelectorAll<HTMLElement>('[data-sidebar-link]'))
+            );
+        }
+        if (navListRef.current) {
+            links.push(
+                ...Array.from(navListRef.current.querySelectorAll<HTMLElement>('[data-sidebar-link]'))
+            );
+        }
+        return links;
+    }, []);
+
+    /** Сбрасывает focusIndex при изменении collapsed/expanded групп */
+    useEffect(() => {
+        setFocusedLinkIndex(-1);
+    }, [collapsed]);
+
+    const handleNavKeyDown = useCallback((e: React.KeyboardEvent) => {
+        // Пропускаем если навигация идёт внутри группы (например, Tab внутри кнопки группы)
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+            return;
+        }
+
+        const links = getSidebarLinks();
+        if (links.length === 0) return;
+
+        let currentIdx = focusedLinkIndex;
+
+        // Если фокус ещё не установлен, находим текущий сфокусированный элемент
+        if (currentIdx === -1) {
+            const activeEl = document.activeElement;
+            currentIdx = links.indexOf(activeEl as HTMLElement);
+            if (currentIdx === -1) currentIdx = 0;
+        }
+
+        e.preventDefault();
+
+        switch (e.key) {
+            case 'ArrowDown': {
+                const next = currentIdx < links.length - 1 ? currentIdx + 1 : 0;
+                setFocusedLinkIndex(next);
+                links[next]?.focus();
+                break;
+            }
+            case 'ArrowUp': {
+                const prev = currentIdx > 0 ? currentIdx - 1 : links.length - 1;
+                setFocusedLinkIndex(prev);
+                links[prev]?.focus();
+                break;
+            }
+            case 'Home': {
+                setFocusedLinkIndex(0);
+                links[0]?.focus();
+                break;
+            }
+            case 'End': {
+                setFocusedLinkIndex(links.length - 1);
+                links[links.length - 1]?.focus();
+                break;
+            }
+        }
+    }, [focusedLinkIndex, getSidebarLinks]);
 
     return (
         <aside
@@ -85,13 +161,18 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                             {t('quick_access') || 'Quick Access'}
                         </span>
                     </div>
-                    <ul className="space-y-0.5">
+                    <ul
+                        ref={quickAccessRef}
+                        className="space-y-0.5"
+                        onKeyDown={handleNavKeyDown}
+                    >
                         {quickAccess.map((item) => {
                             const Icon = item.icon;
                             return (
                                 <li key={item.path}>
                                     <NavLink
                                         to={item.path}
+                                        data-sidebar-link
                                         className={({ isActive }) =>
                                             `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
                                                 isActive
@@ -100,6 +181,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                                             }`
                                         }
                                         aria-label={item.label}
+                                        aria-current="page"
                                     >
                                         <Icon className="w-4 h-4 flex-shrink-0" />
                                         <span className="text-sm font-medium truncate">{item.label}</span>
@@ -113,7 +195,11 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
             {/* P0-2.1 + P0-2.2: Grouped Navigation */}
             <nav className="flex-1 px-3 py-3 overflow-y-auto">
-                <ul className="space-y-2">
+                <ul
+                    ref={navListRef}
+                    className="space-y-2"
+                    onKeyDown={handleNavKeyDown}
+                >
                     {groups.map((group) => {
                         const GroupIcon = group.icon;
                         const expanded = isGroupExpanded(group.id);
@@ -156,6 +242,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                                                         <li key={item.path}>
                                                             <NavLink
                                                                 to={item.path}
+                                                                data-sidebar-link
                                                                 className={({ isActive }) =>
                                                                     `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                                                                         isActive
@@ -164,6 +251,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                                                                     }`
                                                                 }
                                                                 aria-label={item.label}
+                                                                aria-current="page"
                                                             >
                                                                 <Icon className="w-4 h-4 flex-shrink-0" />
                                                                 <span className="text-sm font-medium truncate">

@@ -1,0 +1,160 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# CCTV Health Monitor — E2E + Accessibility CI
+# P1-QA.1: E2E Test Expansion (parallel, mock API isolation)
+# P1-QA.3: Accessibility Testing with @axe-core/playwright
+# ═════════════════════════════════════════════════════════════════════════════
+
+name: E2E + Accessibility Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/e2e-a11y.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/e2e-a11y.yml'
+  schedule:
+    # Еженедельный прогон a11y тестов (каждый понедельник в 06:00 UTC)
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  NODE_VERSION: '22'
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 1: E2E Tests (Chromium)
+  # ═══════════════════════════════════════════════════════════════════════════
+  e2e:
+    name: E2E Tests (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests (Chromium)
+        working-directory: ./frontend
+        run: npm run test:e2e:ci
+
+      - name: Upload Playwright report (E2E)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-e2e
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Upload E2E test results (PR comment)
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Test Results
+          path: frontend/test-results/**/*.xml
+          reporter: java-junit
+          fail-on-error: true
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 2: Accessibility Tests (a11y)
+  # P1-QA.3: 0 critical violations threshold
+  # ═══════════════════════════════════════════════════════════════════════════
+  a11y:
+    name: Accessibility Tests (axe-core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run a11y tests
+        working-directory: ./frontend
+        run: npm run test:a11y:ci
+
+      - name: Upload Playwright report (a11y)
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-a11y
+          path: frontend/playwright-report/
+          retention-days: 30
+
+      - name: Comment PR with a11y results
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Читаем результаты a11y тестов из HTML отчёта
+            const reportPath = path.join(process.env.GITHUB_WORKSPACE, 'frontend', 'playwright-report', 'index.html');
+            let commentBody = '## ♿ Accessibility Check Results\n\n';
+
+            if (process.env.A11Y_STATUS === 'success') {
+              commentBody += '✅ **All pages passed — 0 critical violations**\n\n';
+            } else {
+              commentBody += '❌ **Critical violations detected — see workflow logs for details**\n\n';
+            }
+
+            commentBody += '| Page | Status |\n';
+            commentBody += '|------|--------|\n';
+
+            // Парсим результаты
+            const resultsPath = path.join(process.env.GITHUB_WORKSPACE, 'frontend', 'test-results', 'a11y-results.json');
+            if (fs.existsSync(resultsPath)) {
+              const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+              for (const [page, status] of Object.entries(results)) {
+                commentBody += `| ${page} | ${status === 'pass' ? '✅ Pass' : '❌ Fail'} |\n`;
+              }
+            }
+
+            commentBody += '\n---\n';
+            commentBody += '_Threshold: 0 critical violations per page (OWASP ASVS L3, Приказ ОАЦ №66 п.7.18)_\n';
+            commentBody += '_Tool: @axe-core/playwright v4_\n';
+
+            const { data: comment } = await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody,
+            });

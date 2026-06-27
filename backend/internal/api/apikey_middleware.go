@@ -43,7 +43,7 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		}
 
 		if apiKey == "" {
-			respondError(w, r, NewUnauthorizedError("API key required"))
+			RespondError(w, r, NewUnauthorizedError("API key required"))
 			return
 		}
 
@@ -56,7 +56,7 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		// Look up keys by prefix
 		keys, err := s.db.GetAPIKeysByPrefix(prefix)
 		if err != nil || len(keys) == 0 {
-			respondError(w, r, NewUnauthorizedError("Invalid API key"))
+			RespondError(w, r, NewUnauthorizedError("Invalid API key"))
 			return
 		}
 
@@ -70,20 +70,20 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 		}
 
 		if matchedKey == nil {
-			respondError(w, r, NewUnauthorizedError("Invalid API key"))
+			RespondError(w, r, NewUnauthorizedError("Invalid API key"))
 			return
 		}
 
 		// Check if key is expired
 		if matchedKey.ExpiresAt != nil && matchedKey.ExpiresAt.Before(time.Now()) {
-			respondError(w, r, NewUnauthorizedError("API key expired"))
+			RespondError(w, r, NewUnauthorizedError("API key expired"))
 			return
 		}
 
 		// INT-13.2.3: Rate limiting per API key
 		limiter := getAPIKeyRateLimiter(matchedKey.ID)
 		if !limiter.allow(matchedKey.ID) {
-			respondError(w, r, NewRateLimitError("API key rate limit exceeded (100 req/min)"))
+			RespondError(w, r, NewRateLimitError("API key rate limit exceeded (100 req/min)"))
 			return
 		}
 

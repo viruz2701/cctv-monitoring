@@ -61,13 +61,13 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	dev, ok := s.stateManager.Get(id)
 	if !ok {
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 	claims := auth.GetClaims(r)
 	if claims.Role == "owner" {
 		if dev.OwnerID == nil || *dev.OwnerID != claims.UserID {
-			respondError(w, r, NewForbiddenError("forbidden"))
+			RespondError(w, r, NewForbiddenError("forbidden"))
 			return
 		}
 	}
@@ -91,13 +91,13 @@ func (s *Server) getDeviceStatus(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	dev, ok := s.stateManager.Get(id)
 	if !ok {
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 	claims := auth.GetClaims(r)
 	if claims.Role == "owner" {
 		if dev.OwnerID == nil || *dev.OwnerID != claims.UserID {
-			respondError(w, r, NewForbiddenError("forbidden"))
+			RespondError(w, r, NewForbiddenError("forbidden"))
 			return
 		}
 	}
@@ -114,7 +114,7 @@ func (s *Server) requestCatalog(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, "id")
 
 	if err := s.sipHandler.RequestCatalog(deviceID); err != nil {
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 
@@ -133,7 +133,7 @@ func (s *Server) sendPTZCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request"))
+		RespondError(w, r, NewBadRequestError("invalid request"))
 		return
 	}
 
@@ -147,7 +147,7 @@ func (s *Server) sendPTZCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.sipHandler.SendPTZCommand(deviceID, cmd); err != nil {
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 

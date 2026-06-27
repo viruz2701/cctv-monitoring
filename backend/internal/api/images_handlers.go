@@ -15,7 +15,7 @@ import (
 func (s *Server) getImage(w http.ResponseWriter, r *http.Request) {
 	filename := chi.URLParam(r, "filename")
 	if strings.Contains(filename, "..") || strings.ContainsAny(filename, "/\\") {
-		respondError(w, r, NewBadRequestError("invalid filename"))
+		RespondError(w, r, NewBadRequestError("invalid filename"))
 		return
 	}
 	filePath := filepath.Join(s.imagesDir, filename)
@@ -28,14 +28,14 @@ func (s *Server) listDeviceImages(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "owner" {
 		dev, ok := s.stateManager.Get(deviceId)
 		if !ok || dev.OwnerID == nil || *dev.OwnerID != claims.UserID {
-			respondError(w, r, NewForbiddenError("forbidden"))
+			RespondError(w, r, NewForbiddenError("forbidden"))
 			return
 		}
 	}
 	pattern := filepath.Join(s.imagesDir, safeDeviceID(deviceId)+"_*")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 	baseNames := make([]string, len(files))

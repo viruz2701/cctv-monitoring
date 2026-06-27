@@ -15,6 +15,12 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
+    // P1-SEC.1: Вызываем backend для очистки HttpOnly cookies
+    try {
+      await apiClient.post('/auth/logout');
+    } catch {
+      // Ignore errors — clear local storage anyway
+    }
     await storage.removeToken();
     await storage.removeRefreshToken();
     await storage.removeUser();

@@ -18,6 +18,9 @@ type Claims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
 	TenantID string `json:"tenant_id"`
+	// Region — регион для применения региональных политик сессий (P2-CR.4).
+	// Может быть пустым для обратной совместимости (тогда используется BY).
+	Region string `json:"region,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -25,9 +28,19 @@ type Claims struct {
 const AccessTokenTTL = 15 * time.Minute
 
 func GenerateJWT(userID, username, role, tenantID string) (string, error) {
+	return GenerateJWTWithRegion(userID, username, role, tenantID, "")
+}
+
+// GenerateJWTWithRegion создаёт JWT с указанием региона для региональных политик (P2-CR.4).
+// Если region пустой, используется BY (наиболее строгие требования КИИ).
+func GenerateJWTWithRegion(userID, username, role, tenantID, region string) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
 		return "", err
+	}
+
+	if region == "" {
+		region = string(RegionBY)
 	}
 
 	claims := Claims{
@@ -35,6 +48,7 @@ func GenerateJWT(userID, username, role, tenantID string) (string, error) {
 		Username: username,
 		Role:     role,
 		TenantID: tenantID,
+		Region:   region,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -64,9 +78,18 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 
 // GenerateTempToken generates a short-lived token for 2FA verification step (5 minutes).
 func GenerateTempToken(userID, username, role, tenantID string) (string, error) {
+	return GenerateTempTokenWithRegion(userID, username, role, tenantID, "")
+}
+
+// GenerateTempTokenWithRegion creates a 2FA temp token with region for session policies (P2-CR.4).
+func GenerateTempTokenWithRegion(userID, username, role, tenantID, region string) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
 		return "", err
+	}
+
+	if region == "" {
+		region = string(RegionBY)
 	}
 
 	claims := Claims{
@@ -74,6 +97,7 @@ func GenerateTempToken(userID, username, role, tenantID string) (string, error) 
 		Username: username,
 		Role:     role,
 		TenantID: tenantID,
+		Region:   region,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

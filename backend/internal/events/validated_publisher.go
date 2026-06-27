@@ -46,32 +46,6 @@ func (s *ValidationStats) Snapshot() map[string]int64 {
 // ValidatedPublisher — Publisher с валидацией.
 // ═══════════════════════════════════════════════════════════════════════
 
-// CircuitBreakerConfig — конфигурация circuit breaker для валидации.
-type CircuitBreakerConfig struct {
-	// FailureThreshold — процент неудачных валидаций для срабатывания (0.0-1.0).
-	// При превышении circuit breaker отключает валидацию.
-	FailureThreshold float64 `json:"failure_threshold"`
-	// MinValidationCount — минимальное количество валидаций для срабатывания.
-	MinValidationCount int64 `json:"min_validation_count"`
-	// AutoResetInterval — интервал автоматического сброса circuit breaker.
-	AutoResetInterval time.Duration `json:"auto_reset_interval"`
-}
-
-// DefaultCircuitBreakerConfig — параметры circuit breaker по умолчанию.
-var DefaultCircuitBreakerConfig = CircuitBreakerConfig{
-	FailureThreshold:   0.10,            // 10% failed → circuit open
-	MinValidationCount: 100,             // минимум 100 валидаций
-	AutoResetInterval:  5 * time.Minute, // автосброс через 5 мин
-}
-
-// CircuitBreakerState — состояние circuit breaker.
-type CircuitBreakerState int
-
-const (
-	CircuitClosed CircuitBreakerState = iota // Валидация активна
-	CircuitOpen                              // Валидация отключена
-)
-
 // ValidatedPublisher оборачивает Publisher и выполняет валидацию
 // всех событий через SchemaRegistry перед публикацией.
 type ValidatedPublisher struct {
@@ -109,7 +83,7 @@ func NewValidatedPublisher(cfg ValidatedPublisherConfig) *ValidatedPublisher {
 		stats:     &ValidationStats{},
 		enabled:   true,
 		cbConfig:  DefaultCircuitBreakerConfig,
-		cbState:   CircuitClosed,
+		cbState:   CBClosed,
 	}
 }
 
@@ -219,6 +193,7 @@ func (vp *ValidatedPublisher) SetCircuitBreakerConfig(cfg CircuitBreakerConfig) 
 		"failure_threshold", cfg.FailureThreshold,
 		"min_count", cfg.MinValidationCount,
 		"reset_interval", cfg.AutoResetInterval,
+		"enabled", cfg.Enabled,
 	)
 }
 
@@ -236,9 +211,9 @@ func (vp *ValidatedPublisher) checkCircuitBreaker() bool {
 	defer vp.cbMu.Unlock()
 
 	// Auto-reset: если circuit open и прошло достаточно времени — закрываем
-	if vp.cbState == CircuitOpen {
+	if vp.cbState == CBOpen {
 		if time.Since(vp.cbOpenedAt) > vp.cbConfig.AutoResetInterval {
-			vp.cbState = CircuitClosed
+			vp.cbState = CBClosed
 			vp.logger.Warn("circuit breaker auto-reset: validation re-enabled",
 				"failure_threshold", vp.cbConfig.FailureThreshold,
 			)
@@ -257,7 +232,7 @@ func (vp *ValidatedPublisher) checkCircuitBreaker() bool {
 	failureRate := float64(invalid) / float64(total)
 
 	if failureRate > vp.cbConfig.FailureThreshold && total >= vp.cbConfig.MinValidationCount {
-		vp.cbState = CircuitOpen
+		vp.cbState = CBOpen
 		vp.cbOpenedAt = time.Now()
 		vp.logger.Error("circuit breaker opened: validation disabled due to high failure rate",
 			"failure_rate", failureRate,

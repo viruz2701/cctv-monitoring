@@ -353,8 +353,9 @@ func ServeOpenAPIJSON(w http.ResponseWriter, r *http.Request, routes []RouteMeta
 }
 
 // ServeSwaggerUI serves the Swagger UI HTML page.
-func ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
-	html := `<!DOCTYPE html>
+// nonce — CSP nonce для inline-скрипта (OWASP ASVS V5.3.3).
+func ServeSwaggerUI(w http.ResponseWriter, r *http.Request, nonce string) {
+	html := fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -365,7 +366,7 @@ func ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
 <body>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script>
+  <script nonce="%s">
     SwaggerUIBundle({
       url: '/api/v1/openapi.json',
       dom_id: '#swagger-ui',
@@ -375,7 +376,7 @@ func ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
     });
   </script>
 </body>
-</html>`
+</html>`, nonce)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(html))
 }

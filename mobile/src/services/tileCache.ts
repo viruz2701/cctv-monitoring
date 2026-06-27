@@ -27,8 +27,8 @@ import * as FileSystem from 'expo-file-system';
 const DB_NAME = 'cctv-offline.db';
 const TILE_EXPIRY_DAYS = 30;
 const TILE_EXPIRY_MS = TILE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-const CACHE_SIZE_SOFT_LIMIT = 100 * 1024 * 1024; // 100 MB soft limit
-const CACHE_SIZE_HARD_LIMIT = 200 * 1024 * 1024; // 200 MB hard limit
+const CACHE_SIZE_SOFT_LIMIT = 250 * 1024 * 1024; // 250 MB soft limit
+const CACHE_SIZE_HARD_LIMIT = 500 * 1024 * 1024; // 500 MB hard limit (P0-MOBILE.3)
 
 /**
  * Базовый URL для OpenStreetMap tiles.
@@ -62,6 +62,27 @@ export interface TileCacheStats {
   expiredCount: number;
   /** Дата последней очистки */
   lastCleanedAt: number | null;
+}
+
+export interface CacheMetadata {
+  /** ID сайта из CMMS */
+  siteId: string;
+  /** Название области (например, site.name) */
+  areaName: string;
+  /** Zoom-уровни, которые были предзагружены */
+  zoomLevels: number[];
+  /** Bounding box предзагруженной области */
+  bbox: BoundingBox;
+  /** Количество кэшированных тайлов */
+  tileCount: number;
+  /** Размер кэша в байтах */
+  sizeBytes: number;
+  /** Когда был предзагружен (UNIX ms) */
+  preloadedAt: number;
+  /** Когда истекает (UNIX ms) */
+  expiresAt: number;
+  /** Статус предзагрузки */
+  status: 'preloading' | 'complete' | 'failed';
 }
 
 export interface BoundingBox {
@@ -105,6 +126,24 @@ export async function initTileCache(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS idx_tiles_expires
       ON map_tiles(expires_at);
+
+    -- Метаданные кэша: отслеживание предзагруженных зон/site
+    CREATE TABLE IF NOT EXISTS cache_metadata (
+      site_id    TEXT NOT NULL,
+      area_name  TEXT NOT NULL,
+      zoom_levels TEXT NOT NULL,       -- JSON array [10,12,14,16]
+      bbox       TEXT NOT NULL,        -- JSON {minLat,minLng,maxLat,maxLng}
+      tile_count INTEGER NOT NULL DEFAULT 0,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      preloaded_at INTEGER NOT NULL,   -- UNIX ms
+      expires_at  INTEGER NOT NULL,    -- preloaded_at + 30d
+      status     TEXT NOT NULL DEFAULT 'complete'
+                CHECK(status IN ('preloading','complete','failed')),
+      PRIMARY KEY (site_id, area_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cache_meta_expires
+      ON cache_metadata(expires_at);
 
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
@@ -283,8 +322,11 @@ export async function getTileCacheStats(): Promise<TileCacheStats> {
  */
 export async function clearAllTiles(): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM map_tiles');
-  console.log('[TileCache] All tiles cleared');
+  await db.execAsync(`
+    DELETE FROM map_tiles;
+    DELETE FROM cache_metadata;
+  `);
+  console.log('[TileCache] All tiles and metadata cleared');
 }
 
 /**
@@ -318,6 +360,188 @@ async function ensureCacheSpace(requiredBytes: number): Promise<void> {
 
     console.warn('[TileCache] Hard limit reached — evicted oldest 20% of tiles');
   }
+}
+
+// ──────────────────────────────────────────────────
+// Cache Metadata CRUD
+// ──────────────────────────────────────────────────
+
+/**
+ * Сохранить/обновить метаданные кэша для сайта.
+ * Вызывается после завершения/во время предзагрузки тайлов.
+ */
+export async function saveCacheMetadata(meta: CacheMetadata): Promise<void> {
+  const db = await getDb();
+
+  await db.runAsync(
+    `INSERT OR REPLACE INTO cache_metadata
+     (site_id, area_name, zoom_levels, bbox, tile_count, size_bytes,
+      preloaded_at, expires_at, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      meta.siteId,
+      meta.areaName,
+      JSON.stringify(meta.zoomLevels),
+      JSON.stringify(meta.bbox),
+      meta.tileCount,
+      meta.sizeBytes,
+      meta.preloadedAt,
+      meta.expiresAt,
+      meta.status,
+    ],
+  );
+}
+
+/**
+ * Получить метаданные кэша для конкретного сайта.
+ * Возвращает null, если сайт не предзагружен или метаданные истекли.
+ */
+export async function getCacheMetadata(
+  siteId: string,
+): Promise<CacheMetadata | null> {
+  const db = await getDb();
+  const now = Date.now();
+
+  const row = await db.getFirstAsync<any>(
+    `SELECT site_id, area_name, zoom_levels, bbox, tile_count,
+            size_bytes, preloaded_at, expires_at, status
+     FROM cache_metadata
+     WHERE site_id = ? AND expires_at > ?`,
+    [siteId, now],
+  );
+
+  if (!row) return null;
+
+  return {
+    siteId: row.site_id,
+    areaName: row.area_name,
+    zoomLevels: JSON.parse(row.zoom_levels),
+    bbox: JSON.parse(row.bbox),
+    tileCount: row.tile_count,
+    sizeBytes: row.size_bytes,
+    preloadedAt: row.preloaded_at,
+    expiresAt: row.expires_at,
+    status: row.status,
+  };
+}
+
+/**
+ * Получить список всех предзагруженных сайтов (с валидными метаданными).
+ */
+export async function getPreloadedSites(): Promise<CacheMetadata[]> {
+  const db = await getDb();
+  const now = Date.now();
+
+  const rows = await db.getAllAsync<any>(
+    `SELECT site_id, area_name, zoom_levels, bbox, tile_count,
+            size_bytes, preloaded_at, expires_at, status
+     FROM cache_metadata
+     WHERE expires_at > ?
+     ORDER BY preloaded_at DESC`,
+    [now],
+  );
+
+  return rows.map(mapCacheMetadataRow);
+}
+
+/**
+ * Получить общую статистику по предзагруженным сайтам.
+ */
+export async function getPreloadedSitesStats(): Promise<{
+  siteCount: number;
+  totalTiles: number;
+  totalSizeBytes: number;
+}> {
+  const db = await getDb();
+  const now = Date.now();
+
+  const row = await db.getFirstAsync<{
+    siteCount: number;
+    totalTiles: number;
+    totalSizeBytes: number;
+  }>(
+    `SELECT
+       COUNT(*) as siteCount,
+       COALESCE(SUM(tile_count), 0) as totalTiles,
+       COALESCE(SUM(size_bytes), 0) as totalSizeBytes
+     FROM cache_metadata
+     WHERE expires_at > ?`,
+    [now],
+  );
+
+  return {
+    siteCount: row?.siteCount ?? 0,
+    totalTiles: row?.totalTiles ?? 0,
+    totalSizeBytes: row?.totalSizeBytes ?? 0,
+  };
+}
+
+/**
+ * Обновить метаданные после предзагрузки (статус + кол-во тайлов).
+ */
+export async function updatePreloadStatus(
+  siteId: string,
+  status: CacheMetadata['status'],
+  tileCount?: number,
+  sizeBytes?: number,
+): Promise<void> {
+  const db = await getDb();
+
+  const sets: string[] = ['status = ?'];
+  const params: any[] = [status];
+
+  if (tileCount !== undefined) {
+    sets.push('tile_count = ?');
+    params.push(tileCount);
+  }
+  if (sizeBytes !== undefined) {
+    sets.push('size_bytes = ?');
+    params.push(sizeBytes);
+  }
+
+  params.push(siteId);
+  await db.runAsync(
+    `UPDATE cache_metadata SET ${sets.join(', ')} WHERE site_id = ?`,
+    params,
+  );
+}
+
+/**
+ * Удалить метаданные кэша для сайта.
+ * Вызывается при очистке кэша для конкретного сайта.
+ */
+export async function removeCacheMetadata(siteId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM cache_metadata WHERE site_id = ?', [siteId]);
+}
+
+/**
+ * Удалить все истёкшие метаданные кэша (при maintenance).
+ */
+export async function clearExpiredMetadata(): Promise<number> {
+  const db = await getDb();
+  const now = Date.now();
+
+  const result = await db.runAsync(
+    'DELETE FROM cache_metadata WHERE expires_at < ?',
+    [now],
+  );
+
+  return result.changes ?? 0;
+}
+
+function mapCacheMetadataRow(row: any): CacheMetadata {
+  return {
+    siteId: row.site_id,
+    areaName: row.area_name,
+    zoomLevels: JSON.parse(row.zoom_levels),
+    bbox: JSON.parse(row.bbox),
+    tileCount: row.tile_count,
+    sizeBytes: row.size_bytes,
+    preloadedAt: row.preloaded_at,
+    expiresAt: row.expires_at,
+    status: row.status,
+  };
 }
 
 // ──────────────────────────────────────────────────

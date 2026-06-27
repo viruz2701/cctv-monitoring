@@ -29,7 +29,7 @@ func (s *Server) FeatureFlagMiddleware(key string) func(http.Handler) http.Handl
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !s.featureFlags.IsEnabled(key) {
 				w.Header().Set("Retry-After", "3600")
-				respondError(w, r, &APIError{
+				RespondError(w, r, &APIError{
 					Status:  http.StatusServiceUnavailable,
 					Code:    "FEATURE_DISABLED",
 					Message: "Feature '" + key + "' is disabled",

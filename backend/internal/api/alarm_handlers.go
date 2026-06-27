@@ -101,7 +101,7 @@ func (s *Server) handleExternalAlarm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("Invalid external alarm JSON", "error", err)
-		respondError(w, r, NewBadRequestError("Bad request"))
+		RespondError(w, r, NewBadRequestError("Bad request"))
 		return
 	}
 	alarmTime := time.Now()
@@ -126,7 +126,7 @@ func (s *Server) handleExternalAlarmXML(w http.ResponseWriter, r *http.Request) 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		s.logger.Error("Failed to read XML body", "error", err)
-		respondError(w, r, NewBadRequestError("Failed to read body"))
+		RespondError(w, r, NewBadRequestError("Failed to read body"))
 		return
 	}
 	defer r.Body.Close()
@@ -134,7 +134,7 @@ func (s *Server) handleExternalAlarmXML(w http.ResponseWriter, r *http.Request) 
 	var event HikvisionEvent
 	if err := xml.Unmarshal(body, &event); err != nil {
 		s.logger.Error("XML parse error", "error", err)
-		respondError(w, r, NewBadRequestError("Invalid XML"))
+		RespondError(w, r, NewBadRequestError("Invalid XML"))
 		return
 	}
 
@@ -185,7 +185,7 @@ func (s *Server) handleExternalAlarmVigi(w http.ResponseWriter, r *http.Request)
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("Invalid Vigi JSON", "error", err)
-		respondError(w, r, NewBadRequestError("Bad request"))
+		RespondError(w, r, NewBadRequestError("Bad request"))
 		return
 	}
 
@@ -216,7 +216,7 @@ func (s *Server) handleP2PAlarm(w http.ResponseWriter, r *http.Request) {
 		apiKey = r.URL.Query().Get("api_key")
 	}
 	if apiKey != s.p2pAPIKey {
-		respondError(w, r, NewUnauthorizedError("Unauthorized"))
+		RespondError(w, r, NewUnauthorizedError("Unauthorized"))
 		return
 	}
 
@@ -231,7 +231,7 @@ func (s *Server) handleP2PAlarm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("Invalid P2P alarm JSON", "error", err)
-		respondError(w, r, NewBadRequestError("Bad request"))
+		RespondError(w, r, NewBadRequestError("Bad request"))
 		return
 	}
 

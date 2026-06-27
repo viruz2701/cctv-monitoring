@@ -23,6 +23,30 @@ export interface CustomTheme {
   radius: RadiusSize;
 }
 
+// ═══ White-label types (P3-NICE.2) ═════════════════════════════════════
+
+export interface WhiteLabelConfig {
+  tenantName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  fontFamily: string;
+  customCSS: string;
+  isActive: boolean;
+}
+
+export const DEFAULT_WHITE_LABEL: WhiteLabelConfig = {
+  tenantName: 'CCTV Health Monitor',
+  logoUrl: '',
+  faviconUrl: '',
+  primaryColor: '#2563eb',
+  accentColor: '#6366f1',
+  fontFamily: 'Inter, system-ui, sans-serif',
+  customCSS: '',
+  isActive: false,
+};
+
 interface ThemeState {
   theme: Theme;
   isDark: boolean;
@@ -38,6 +62,11 @@ interface ThemeState {
   resetToDefaults: () => void;
   getCustomTheme: () => CustomTheme;
   applyCustomTheme: (custom: CustomTheme) => void;
+  // White-label (P3-NICE.2)
+  whiteLabel: WhiteLabelConfig;
+  setWhiteLabel: (config: WhiteLabelConfig) => void;
+  toggleWhiteLabel: () => void;
+  resetWhiteLabel: () => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -157,6 +186,87 @@ const applyTheme = (
   return shouldBeDark;
 };
 
+// ═══ White-label helpers (P3-NICE.2) ═══════════════════════════════════
+
+const WL_STORAGE_KEY = 'white-label-config';
+
+const getInitialWhiteLabel = (): WhiteLabelConfig => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(WL_STORAGE_KEY);
+      if (saved) return JSON.parse(saved) as WhiteLabelConfig;
+    } catch { /* ignore */ }
+  }
+  return DEFAULT_WHITE_LABEL;
+};
+
+const applyWhiteLabel = (config: WhiteLabelConfig): void => {
+  if (typeof window === 'undefined' || !config.isActive) return;
+
+  const root = window.document.documentElement;
+
+  // Logo as CSS variable for use in components
+  if (config.logoUrl) {
+    root.style.setProperty('--wl-logo-url', `url(${config.logoUrl})`);
+  }
+
+  // Brand colors override theme colors
+  if (config.primaryColor) {
+    root.style.setProperty('--color-primary', config.primaryColor);
+  }
+  if (config.accentColor) {
+    root.style.setProperty('--color-accent', config.accentColor);
+  }
+
+  // Font
+  if (config.fontFamily) {
+    root.style.setProperty('--wl-font-family', config.fontFamily);
+    root.style.fontFamily = config.fontFamily;
+  }
+
+  // Favicon
+  if (config.faviconUrl) {
+    const link = document.querySelector<HTMLLinkElement>('link[rel*="icon"]');
+    if (link) {
+      link.href = config.faviconUrl;
+    }
+  }
+
+  // Document title
+  document.title = config.tenantName || 'CCTV Health Monitor';
+
+  // Custom CSS injection
+  if (config.customCSS) {
+    let styleEl = document.getElementById('wl-custom-css');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'wl-custom-css';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = config.customCSS;
+  } else {
+    const styleEl = document.getElementById('wl-custom-css');
+    if (styleEl) styleEl.remove();
+  }
+
+  // Persist
+  localStorage.setItem(WL_STORAGE_KEY, JSON.stringify(config));
+};
+
+const removeWhiteLabel = (): void => {
+  if (typeof window === 'undefined') return;
+  const root = window.document.documentElement;
+
+  root.style.removeProperty('--wl-logo-url');
+  root.style.removeProperty('--wl-font-family');
+  root.style.fontFamily = '';
+
+  const styleEl = document.getElementById('wl-custom-css');
+  if (styleEl) styleEl.remove();
+
+  localStorage.removeItem(WL_STORAGE_KEY);
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // Store
 // ═══════════════════════════════════════════════════════════════════════
@@ -168,6 +278,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => {
   const initialRadius = getInitialRadius();
   const initialTheme = getInitialTheme();
   const initialIsDark = applyTheme(initialTheme, initialPrimary, initialAccent, initialRadius, initialPreset);
+  const initialWL = getInitialWhiteLabel();
 
   // Следим за системной темой
   if (typeof window !== 'undefined') {
@@ -179,6 +290,11 @@ export const useThemeStore = create<ThemeState>()((set, get) => {
         set({ isDark });
       }
     });
+  }
+
+  // Apply initial white-label if active
+  if (initialWL.isActive) {
+    applyWhiteLabel(initialWL);
   }
 
   return {
@@ -257,6 +373,34 @@ export const useThemeStore = create<ThemeState>()((set, get) => {
         radius: custom.radius,
         isDark,
       });
+    },
+
+    // ── White-label methods (P3-NICE.2) ────────────────────────────
+    whiteLabel: initialWL,
+
+    setWhiteLabel: (config: WhiteLabelConfig) => {
+      applyWhiteLabel(config);
+      set({ whiteLabel: config });
+    },
+
+    toggleWhiteLabel: () => {
+      const state = get();
+      const newConfig = { ...state.whiteLabel, isActive: !state.whiteLabel.isActive };
+      if (newConfig.isActive) {
+        applyWhiteLabel(newConfig);
+      } else {
+        removeWhiteLabel();
+        // Re-apply theme colors
+        applyTheme(state.theme, state.primary, state.accent, state.radius, state.preset);
+      }
+      set({ whiteLabel: newConfig });
+    },
+
+    resetWhiteLabel: () => {
+      removeWhiteLabel();
+      const state = get();
+      applyTheme(state.theme, state.primary, state.accent, state.radius, state.preset);
+      set({ whiteLabel: DEFAULT_WHITE_LABEL });
     },
   };
 });

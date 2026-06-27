@@ -14,3 +14,12 @@ Object.defineProperty(window, 'matchMedia', {
         dispatchEvent: () => false,
     }),
 });
+
+// Mock ResizeObserver for jsdom (needed by AssetTree AnimatedCollapse + components)
+class MockResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+}
+
+window.ResizeObserver = MockResizeObserver as any;

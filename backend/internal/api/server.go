@@ -28,10 +28,13 @@ import (
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/service"
+	"gb-telemetry-collector/internal/setup"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
+	"gb-telemetry-collector/internal/storage"
 	syncengine "gb-telemetry-collector/internal/sync"
 	"gb-telemetry-collector/internal/telegram"
+	"gb-telemetry-collector/internal/tenant"
 	"gb-telemetry-collector/internal/webhook"
 	"gb-telemetry-collector/internal/ws"
 )
@@ -110,6 +113,25 @@ type Server struct {
 	// P3-1: Multi-Region Geo-Redundancy
 	regionStore     multiregion.RegionStore
 	failoverService *multiregion.FailoverService
+
+	// P0-CE.5: Tenant Compliance Profile (SaaS)
+	tenantComplianceStore *tenant.TenantComplianceStore
+	complianceRegistry    *compliance.ProfileRegistry
+
+	// P0-CE.6: Data Residency Enforcement
+	storageEnforcer *storage.ResidencyEnforcer
+
+	// P2-RU.2: 152-ФЗ Personal Data Manager
+	personalDataManager *compliance.PersonalDataManager
+
+	// P2-EU.1: GDPR Manager
+	gdprManager *compliance.GDPRManager
+
+	// Redis client for health checks and caching
+	redisClient RedisClient
+
+	// Server start time for uptime tracking (PERF.4)
+	serverStart time.Time
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -126,10 +148,11 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 
 		// CSP with nonce (OWASP ASVS V5.3.3)
 		// strict-dynamic отключает fallback к 'self' в старых браузерах — это нормально
+		// unpkg.com — CDN для Swagger UI (P3-DX.5: /api/v1/docs)
 		csp := fmt.Sprintf(
 			"default-src 'self'; "+
-				"script-src 'self' 'nonce-%s' 'strict-dynamic'; "+
-				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"script-src 'self' 'nonce-%s' 'strict-dynamic' https://unpkg.com; "+
+				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"img-src 'self' data: https:; "+
 				"connect-src 'self'; "+
@@ -213,12 +236,21 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		p2pAPIKey:          cfg.P2PAPIKey,
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
 		recaptchaValidator: recaptchaValidator,
+		serverStart:        time.Now(),
 	}
 	// ── Device Service ────────────────────────────────────────────────
 	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
 
 	// ── Compliance Engine (KF-15.1.1) ─────────────────────────────────
 	s.complianceEngine = compliance.NewEngine(nil, logger, nil)
+
+	// ── P2-RU.2: 152-ФЗ Personal Data Manager ─────────────────────────
+	pdStore := compliance.NewMemoryPersonalDataStore(logger)
+	s.personalDataManager = compliance.NewPersonalDataManager(pdStore, logger)
+
+	// ── P2-EU.1: GDPR Manager ─────────────────────────────────────────
+	gdprStore := compliance.NewMemoryGDPRStore(logger)
+	s.gdprManager = compliance.NewGDPRManager(gdprStore, logger)
 
 	// ── Black Box Incident Recorder (KF-15.2.4) ───────────────────────
 	bbRepo := blackbox.NewDBRepository(database.Pool, logger)
@@ -275,6 +307,14 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	s.mountHealthRoutes(r)
 	s.mountAuthRoutes(r)
 
+	// ═════════════════════════════════════════════════════════════════
+	// P3-DX.5: OpenAPI 3.1 + Swagger UI (без JWT)
+	//   GET /api/v1/openapi.json — OpenAPI spec (JSON)
+	//   GET /api/v1/docs         — Swagger UI (HTML)
+	// ═════════════════════════════════════════════════════════════════
+	r.Get("/api/v1/openapi.json", s.handleOpenAPIJSON)
+	r.Get("/api/v1/docs", s.handleSwaggerUI)
+
 	// Публичный endpoint для подачи заявок (WO-4.1.1)
 	// Rate limit: 10 req/min/IP
 	r.Group(func(r chi.Router) {
@@ -299,10 +339,56 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		r.Post("/api/v1/external/alarm/vigi", s.handleExternalAlarmVigi)
 	}
 
+	// ── Setup Wizard (P0-CE.4: On-Premise, без JWT) ──────────────────
+	// Публичные endpoint'ы для первоначальной настройки:
+	//   - Статус мастера (GET /api/v1/setup/status)
+	//   - Список регионов (GET /api/v1/setup/regions)
+	//   - Все шаги мастера (POST /api/v1/setup/*)
+	// Доступны только до завершения setup. После — регион locked.
+	{
+		// Создаём compliance registry с BY, RU, EU, INTL профилями
+		registry := compliance.NewProfileRegistry(
+			compliance.WithRequiredRegions(compliance.RegionINTL),
+			compliance.WithProfile(compliance.NewBYProfile()),
+			compliance.WithProfile(compliance.NewRUProfile()),
+			compliance.WithProfile(compliance.NewEUProfile()),
+			compliance.WithProfile(compliance.NewINTLProfile()),
+		)
+		wizard := setup.NewSetupWizard(registry,
+			setup.WithLogger(s.logger.With("component", "setup.wizard")),
+			setup.WithSetupCompleteHandler(func(cfg *setup.SetupConfig) error {
+				s.logger.Info("setup wizard completed",
+					"region", cfg.Region,
+					"admin", cfg.AdminUsername,
+				)
+				return nil
+			}),
+		)
+		setup.RegisterRoutes(r, wizard)
+
+		// P0-CE.5: Tenant Compliance Profile — registry shared with API
+		s.complianceRegistry = registry
+	}
+
+	// P0-CE.5: Tenant Compliance Profile
+	if database != nil && database.Pool != nil && s.complianceRegistry != nil {
+		s.tenantComplianceStore = tenant.NewTenantComplianceStore(database.Pool, s.complianceRegistry)
+	}
+
 	// ── Защищённые маршруты (JWT) ────────────────────────────────────
+	// P1-SEC.1: CookieAuthMiddleware + AuthMiddleware для поддержки
+	// HttpOnly cookies (веб) и Authorization header (API/mobile).
+	// CSRFMiddleware для защиты state-changing методов.
 	r.Group(func(r chi.Router) {
+		r.Use(auth.CookieAuthMiddleware)
 		r.Use(auth.AuthMiddleware)
+		r.Use(auth.CSRFMiddleware)
 		r.Use(auth.TenantMiddleware)
+
+		// P0-CE.5: Tenant Compliance Middleware (injects compliance profile into context)
+		if s.tenantComplianceStore != nil {
+			r.Use(s.tenantComplianceStore.Middleware)
+		}
 
 		// Auth domain (users, sessions, 2FA, Telegram, API keys, settings)
 		s.mountProtectedAuthRoutes(r)
@@ -331,6 +417,14 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// P3-1: Admin routes (multi-region DR)
 		s.mountAdminRoutes(r)
+
+		// P0-CE.5: Tenant Compliance Profile (admin routes)
+		if s.tenantComplianceStore != nil {
+			s.mountTenantComplianceRoutes(r)
+		}
+
+		// P0-CE.6: Data Residency Enforcement
+		s.mountStorageRoutes(r)
 
 		// Camera Specs Database (P0-9)
 		s.mountCameraModelRoutes(r)
@@ -392,6 +486,12 @@ func (s *Server) SetTelegramBot(bot *telegram.Bot) {
 	s.telegramBot = bot
 }
 
+// SetRedisClient устанавливает Redis клиент для health checks.
+// Если установлен, будет проверяться в readiness и dependencies probes.
+func (s *Server) SetRedisClient(client RedisClient) {
+	s.redisClient = client
+}
+
 // SetNATSConn устанавливает NATS соединение для health checks.
 // natsRequired указывает, обязателен ли NATS для readiness probe.
 func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
@@ -413,4 +513,33 @@ func jsonResponse(w http.ResponseWriter, status int, data interface{}) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		slog.Error("failed to encode JSON response", "error", err)
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P3-DX.5: OpenAPI 3.1 + Swagger UI Handlers
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleOpenAPIJSON serves the OpenAPI 3.1 specification as JSON.
+// Endpoint: GET /api/v1/openapi.json
+func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+	baseURL := fmt.Sprintf("%s://%s", schemeFromRequest(r), r.Host)
+	ServeOpenAPIJSON(w, r, DefaultRoutes(), baseURL, "0.0.0-dev")
+}
+
+// handleSwaggerUI serves the Swagger UI HTML page.
+// Endpoint: GET /api/v1/docs
+func (s *Server) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
+	nonce := NonceFromContext(r.Context())
+	ServeSwaggerUI(w, r, nonce)
+}
+
+// schemeFromRequest determines the HTTP scheme from the request.
+func schemeFromRequest(r *http.Request) string {
+	if r.TLS != nil {
+		return "https"
+	}
+	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
+		return fwd
+	}
+	return "http"
 }

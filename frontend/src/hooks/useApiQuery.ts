@@ -449,10 +449,40 @@ export function useCreateWorkOrder() {
 
 export function useUpdateWorkOrder() {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<WorkOrder> }) =>
       workOrdersApi.updateWorkOrder(id, data),
-    onSuccess: () => {
+
+    // P0-UX.4: Optimistic update с rollback
+    // Немедленно обновляем UI, откатываем при ошибке
+    onMutate: async ({ id, data }) => {
+      // Отменяем фоновые refetch, чтобы они не перезаписали optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.workOrders.all });
+
+      // Снапшот текущего состояния для rollback
+      const previousWorkOrders = queryClient.getQueryData<WorkOrder[]>(queryKeys.workOrders.all);
+
+      // Оптимистичное обновление кэша
+      queryClient.setQueryData<WorkOrder[]>(queryKeys.workOrders.all, (old) => {
+        if (!old) return old;
+        return old.map((wo) =>
+          wo.id === id ? { ...wo, ...data } : wo,
+        );
+      });
+
+      return { previousWorkOrders };
+    },
+
+    // P0-UX.4: Rollback при ошибке — восстанавливаем предыдущее состояние
+    onError: (_err, _vars, context) => {
+      if (context?.previousWorkOrders) {
+        queryClient.setQueryData(queryKeys.workOrders.all, context.previousWorkOrders);
+      }
+    },
+
+    // После успеха или ошибки — синхронизируемся с сервером
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
     },
   });

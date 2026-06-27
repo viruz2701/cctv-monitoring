@@ -54,7 +54,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
     { id: 'overview', labelKey: 'overview', icon: LayoutDashboard, component: OverviewTab, roles: ['admin', 'manager', 'technician', 'viewer', 'owner', 'support'], useWidgets: true },
     { id: 'sla', labelKey: 'sla_compliance', icon: Shield, component: SLAComplianceTab, roles: ['admin', 'manager'] },
-    { id: 'performance', labelKey: 'performance', icon: Activity, component: PerformanceTab, roles: ['admin', 'manager', 'technician'] },
+    { id: 'performance', labelKey: 'performance', icon: Activity, component: PerformanceTab, roles: ['admin', 'manager'] },
     { id: 'maintenance', labelKey: 'maintenance_schedule', icon: Wrench, component: MaintenanceTab, roles: ['admin', 'manager', 'technician'] },
 ];
 

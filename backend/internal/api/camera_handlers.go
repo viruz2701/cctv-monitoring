@@ -34,7 +34,7 @@ func (s *Server) handleListCameraBrands(w http.ResponseWriter, r *http.Request) 
 	brands, err := s.db.ListBrands(r.Context())
 	if err != nil {
 		s.logger.Error("failed to list camera brands", "error", err)
-		respondError(w, r, NewInternalError("failed to list camera brands", err))
+		RespondError(w, r, NewInternalError("failed to list camera brands", err))
 		return
 	}
 
@@ -54,14 +54,14 @@ func (s *Server) handleListCameraBrands(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleListCameraModels(w http.ResponseWriter, r *http.Request) {
 	brand := strings.TrimSpace(r.URL.Query().Get("brand"))
 	if brand == "" {
-		respondError(w, r, NewValidationError("brand query parameter is required"))
+		RespondError(w, r, NewValidationError("brand query parameter is required"))
 		return
 	}
 
 	models, err := s.db.ListModels(r.Context(), brand)
 	if err != nil {
 		s.logger.Error("failed to list camera models", "brand", brand, "error", err)
-		respondError(w, r, NewInternalError("failed to list camera models", err))
+		RespondError(w, r, NewInternalError("failed to list camera models", err))
 		return
 	}
 
@@ -82,7 +82,7 @@ func (s *Server) handleListCameraModels(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleSearchCameraModels(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query == "" || len(query) < 2 {
-		respondError(w, r, NewValidationError("search query (q) must be at least 2 characters"))
+		RespondError(w, r, NewValidationError("search query (q) must be at least 2 characters"))
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Server) handleSearchCameraModels(w http.ResponseWriter, r *http.Request
 	models, err := s.db.SearchModels(r.Context(), query, limit)
 	if err != nil {
 		s.logger.Error("failed to search camera models", "query", query, "error", err)
-		respondError(w, r, NewInternalError("failed to search camera models", err))
+		RespondError(w, r, NewInternalError("failed to search camera models", err))
 		return
 	}
 
@@ -114,18 +114,18 @@ func (s *Server) handleGetCameraSpecs(w http.ResponseWriter, r *http.Request) {
 	model := chi.URLParam(r, "model")
 
 	if brand == "" || model == "" {
-		respondError(w, r, NewValidationError("brand and model are required"))
+		RespondError(w, r, NewValidationError("brand and model are required"))
 		return
 	}
 
 	spec, err := s.db.GetCameraSpecs(r.Context(), brand, model)
 	if err != nil {
 		if strings.Contains(err.Error(), "no rows") {
-			respondError(w, r, NewNotFoundError("camera model not found"))
+			RespondError(w, r, NewNotFoundError("camera model not found"))
 			return
 		}
 		s.logger.Error("failed to get camera specs", "brand", brand, "model", model, "error", err)
-		respondError(w, r, NewInternalError("failed to get camera specs", err))
+		RespondError(w, r, NewInternalError("failed to get camera specs", err))
 		return
 	}
 
@@ -141,26 +141,26 @@ func (s *Server) handleGetCameraSpecs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportCameraSpecs(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil || claims.Role != "admin" {
-		respondError(w, r, NewForbiddenError("admin role required"))
+		RespondError(w, r, NewForbiddenError("admin role required"))
 		return
 	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		respondError(w, r, NewBadRequestError("failed to read request body"))
+		RespondError(w, r, NewBadRequestError("failed to read request body"))
 		return
 	}
 	defer r.Body.Close()
 
 	if len(body) == 0 {
-		respondError(w, r, NewValidationError("request body is empty"))
+		RespondError(w, r, NewValidationError("request body is empty"))
 		return
 	}
 
 	result, err := s.db.ImportFromJSON(r.Context(), body)
 	if err != nil {
 		s.logger.Error("failed to import camera specs", "error", err)
-		respondError(w, r, NewInternalError("failed to import camera specs", err))
+		RespondError(w, r, NewInternalError("failed to import camera specs", err))
 		return
 	}
 
@@ -181,13 +181,13 @@ func (s *Server) handleImportCameraSpecs(w http.ResponseWriter, r *http.Request)
 func (s *Server) handleSeedCameraSpecs(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil || claims.Role != "admin" {
-		respondError(w, r, NewForbiddenError("admin role required"))
+		RespondError(w, r, NewForbiddenError("admin role required"))
 		return
 	}
 
 	if err := s.db.SeedCameraSpecs(r.Context()); err != nil {
 		s.logger.Error("failed to seed camera specs", "error", err)
-		respondError(w, r, NewInternalError("failed to seed camera specs", err))
+		RespondError(w, r, NewInternalError("failed to seed camera specs", err))
 		return
 	}
 

@@ -1,18 +1,32 @@
-import { test, expect, type Page } from '@playwright/test';
-import { injectAxe, checkA11y } from '@axe-core/playwright';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Accessibility (a11y) Tests — All Pages
+// P1-QA.3: Automated a11y checks with @axe-core/playwright
 // Compliance: OWASP ASVS L3 (V1-V5), Приказ ОАЦ №66 п.7.18
-// Tool: @axe-core/playwright
-// Threshold: 0 critical violations per page
+// Threshold: 0 critical violations per page (HARD FAIL в CI)
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ───────────────────────────────────────────────────────────────────────────
+// Types
+// ───────────────────────────────────────────────────────────────────────────
+
+interface MockUser {
+  id: string;
+  username: string;
+  role: string;
+  name: string;
+  email: string;
+  avatar: string;
+  sites: string[];
+}
 
 // ───────────────────────────────────────────────────────────────────────────
 // Mock data
 // ───────────────────────────────────────────────────────────────────────────
 
-const MOCK_USER = {
+const MOCK_USER: MockUser = {
   id: 'user-1',
   username: 'admin',
   name: 'Admin User',
@@ -31,6 +45,9 @@ const MOCK_DASHBOARD_STATS = {
   critical_tickets: 2,
   resolution_rate: 94.5,
   avg_response_time_hours: 1.8,
+  active_alerts: 5,
+  open_work_orders: 12,
+  overdue_sla: 2,
 };
 
 const MOCK_DEVICES = [
@@ -74,6 +91,16 @@ const MOCK_RCA_LIST = [
   { id: 'rca-2', title: 'NVR-03 — Disk Failure', device_id: 'dev-2', status: 'resolved', severity: 'high', detected_at: new Date(Date.now() - 604800000).toISOString(), resolved_at: new Date(Date.now() - 432000000).toISOString() },
 ];
 
+const MOCK_USERS = [
+  { id: 'user-1', username: 'admin', role: 'admin', full_name: 'Admin User' },
+  { id: 'user-2', username: 'tech1', role: 'technician', full_name: 'Bob Technician' },
+];
+
+const MOCK_ALERTS = [
+  { id: 'alert-1', severity: 'critical', message: 'NVR-03 disk failure imminent', device_id: 'dev-2', status: 'active', created_at: new Date().toISOString() },
+  { id: 'alert-2', severity: 'warning', message: 'Camera-12 offline > 24h', device_id: 'dev-3', status: 'active', created_at: new Date(Date.now() - 3600000).toISOString() },
+];
+
 // ───────────────────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────────────────
@@ -83,14 +110,14 @@ const MOCK_RCA_LIST = [
  * Все protected pages требуют валидного /auth/me.
  */
 async function setupAuthMock(page: Page) {
-  await page.route('**/api/v1/auth/me', async (route) => {
+  await page.route('**/api/v1/auth/me', async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(MOCK_USER),
     });
   });
-  await page.route('**/api/v1/users/me', async (route) => {
+  await page.route('**/api/v1/users/me', async (route: Route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -101,32 +128,42 @@ async function setupAuthMock(page: Page) {
 }
 
 /**
- * injectAxe + checkA11y с фокусом на critical violations.
- * Используется как graceful degradation — если injectAxe не удался,
- * тест не падает, а логирует предупреждение.
+ * AxeBuilder + analyze с жёсткой проверкой на critical violations.
+ * P1-QA.3: FAIL в CI при любых critical violations (HARD FAIL).
+ * Threshold: 0 critical violations per page.
  */
 async function runAxeCheck(page: Page, pageName: string) {
-  try {
-    await injectAxe(page);
-    await checkA11y(page, null, {
-      includedImpacts: ['critical'],
-    });
-    // Если дошли сюда — нет critical violations
-    console.log(`[a11y PASS] ${pageName} — 0 critical violations`);
-  } catch (err) {
-    // Graceful degradation: компонент может быть недоступен
-    console.warn(`[a11y WARN] ${pageName} — axe check skipped or failed:`, err);
+  const builder = new AxeBuilder({ page });
+  const results = await builder.analyze();
+
+  const criticalViolations = results.violations.filter(
+    (v) => v.impact === 'critical',
+  );
+
+  if (criticalViolations.length > 0) {
+    console.error(`[a11y ❌] ${pageName} — ${criticalViolations.length} critical violation(s) found`);
+    for (const violation of criticalViolations) {
+      console.error(`  - ${violation.id}: ${violation.description}`);
+      for (const node of violation.nodes) {
+        console.error(`    → ${node.target.join(', ')}`);
+      }
+    }
   }
+
+  expect(
+    criticalViolations,
+    `${pageName}: ${criticalViolations.length} critical a11y violation(s) found. Threshold: 0`,
+  ).toHaveLength(0);
+
+  console.log(`[a11y ✅] ${pageName} — 0 critical violations`);
 }
 
 /**
- * Универсальный сеттер mock API для неспецифичных запросов (404 catch-all).
+ * Универсальный catch-all для незамоканных API запросов.
  */
 async function setupCatchAllMock(page: Page) {
-  // Ловим любые незамоканные API запросы
-  await page.route('**/api/v1/**', async (route) => {
+  await page.route('**/api/v1/**', async (route: Route) => {
     const url = route.request().url();
-    // Не перехватываем уже замоканные эндпоинты
     if (
       url.includes('/auth/me') ||
       url.includes('/users/me') ||
@@ -137,7 +174,19 @@ async function setupCatchAllMock(page: Page) {
       url.includes('/reports') ||
       url.includes('/settings') ||
       url.includes('/p2p') ||
-      url.includes('/rca')
+      url.includes('/rca') ||
+      url.includes('/alerts') ||
+      url.includes('/users') ||
+      url.includes('/analytics') ||
+      url.includes('/logs') ||
+      url.includes('/audit') ||
+      url.includes('/profile') ||
+      url.includes('/notifications') ||
+      url.includes('/tickets') ||
+      url.includes('/sla') ||
+      url.includes('/maintenance') ||
+      url.includes('/spare-parts') ||
+      url.includes('/tutorials')
     ) {
       return route.fallback();
     }
@@ -149,167 +198,90 @@ async function setupCatchAllMock(page: Page) {
   });
 }
 
-interface PageConfig {
-  path: string;
-  name: string;
-  /**
-   * Специфичные API моки для этой страницы.
-   * Выполняются ДО navigate.
-   */
-  setupMocks?: (page: Page) => Promise<void>;
+/**
+ * Переход на страницу с ожиданием полной загрузки.
+ */
+async function goToPage(page: Page, path: string) {
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Test Suite: Accessibility — All Pages
+// Page configurations for a11y testing
+// Каждая страница имеет свои необходимые API моки
 // ───────────────────────────────────────────────────────────────────────────
 
-test.describe('Accessibility — All Pages (critical violations only)', () => {
-  // ─── Public: Login ──────────────────────────────────────────────────────
+interface PageTestConfig {
+  path: string;
+  name: string;
+  setupMocks?: (page: Page) => Promise<void>;
+}
 
-  test.describe('/login — Public', () => {
-    test('Login page has no critical a11y violations', async ({ page }) => {
-      // Login — public, не требует моков аутентификации
-      await page.goto('/login');
-      await page.waitForLoadState('networkidle');
+const PUBLIC_PAGES: PageTestConfig[] = [
+  { path: '/login', name: 'Login' },
+  { path: '/forgot-password', name: 'Forgot Password' },
+];
 
-      // Axe check
-      await runAxeCheck(page, '/login');
-    });
-  });
-
-  // ─── Protected: Dashboard ───────────────────────────────────────────────
-
-  test.describe('/dashboard — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/dashboard/stats', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_DASHBOARD_STATS),
-        });
+const PROTECTED_PAGES: PageTestConfig[] = [
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/dashboard/stats', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_DASHBOARD_STATS) });
       });
-      await page.route('**/api/v1/devices*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_DEVICES),
-        });
+      await page.route('**/api/v1/devices*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_DEVICES) });
       });
-      await setupCatchAllMock(page);
-    });
-
-    test('Dashboard page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/dashboard');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/dashboard');
-    });
-  });
-
-  // ─── Protected: Work Orders ─────────────────────────────────────────────
-
-  test.describe('/work-orders — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/work-orders*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_WORK_ORDERS),
-        });
+    },
+  },
+  {
+    path: '/work-orders',
+    name: 'Work Orders',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/work-orders*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_WORK_ORDERS) });
       });
-      await page.route('**/api/v1/sites*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SITES),
-        });
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
       });
-      await setupCatchAllMock(page);
-    });
-
-    test('Work Orders page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/work-orders');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/work-orders');
-    });
-  });
-
-  // ─── Protected: Devices ─────────────────────────────────────────────────
-
-  test.describe('/devices — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/devices*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_DEVICES),
-        });
+    },
+  },
+  {
+    path: '/devices',
+    name: 'Devices',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/devices*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_DEVICES) });
       });
-      await page.route('**/api/v1/sites*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SITES),
-        });
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
       });
-      await setupCatchAllMock(page);
-    });
-
-    test('Devices page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/devices');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/devices');
-    });
-  });
-
-  // ─── Protected: Reports ─────────────────────────────────────────────────
-
-  test.describe('/reports — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/reports*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_REPORTS),
-        });
+    },
+  },
+  {
+    path: '/reports',
+    name: 'Reports',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/reports*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_REPORTS) });
       });
-      await page.route('**/api/v1/sites*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SITES),
-        });
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
       });
-      await setupCatchAllMock(page);
-    });
-
-    test('Reports page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/reports');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/reports');
-    });
-  });
-
-  // ─── Protected: Settings ────────────────────────────────────────────────
-
-  test.describe('/settings — Protected (admin)', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/settings/services', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SETTINGS),
-        });
+    },
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/settings/services', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SETTINGS) });
       });
-      await page.route('**/api/v1/settings/services/status', async (route) => {
+      await page.route('**/api/v1/settings/services/status', async (route: Route) => {
         await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
+          status: 200, contentType: 'application/json', body: JSON.stringify({
             services: {
               syslog: { status: 'running', port: 514 },
               ftp: { status: 'running', port: 21 },
@@ -320,85 +292,193 @@ test.describe('Accessibility — All Pages (critical violations only)', () => {
           }),
         });
       });
-      await setupCatchAllMock(page);
-    });
+    },
+  },
+  {
+    path: '/p2p-devices',
+    name: 'P2P Devices',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/p2p-devices*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_P2P_DEVICES) });
+      });
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
+      });
+    },
+  },
+  {
+    path: '/rca',
+    name: 'RCA Investigations',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/rca*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_RCA_LIST) });
+      });
+      await page.route('**/api/v1/devices*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_DEVICES) });
+      });
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
+      });
+    },
+  },
+  {
+    path: '/alerts',
+    name: 'Alerts',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/alerts*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ALERTS) });
+      });
+    },
+  },
+  {
+    path: '/notifications',
+    name: 'Notifications',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/notifications*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/users/*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) });
+      });
+    },
+  },
+  {
+    path: '/tickets',
+    name: 'Tickets',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/tickets*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/sites',
+    name: 'Sites',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/sites*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SITES) });
+      });
+    },
+  },
+  {
+    path: '/users',
+    name: 'Users Management',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/users*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USERS) });
+      });
+    },
+  },
+  {
+    path: '/analytics',
+    name: 'Analytics',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/analytics*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      });
+    },
+  },
+  {
+    path: '/logs',
+    name: 'Logs',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/logs*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/audit-log',
+    name: 'Audit Log',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/audit*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/compliance-shield',
+    name: 'Compliance Shield',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/compliance*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'compliant' }) });
+      });
+    },
+  },
+  {
+    path: '/tutorials',
+    name: 'Tutorials',
+  },
+  {
+    path: '/maintenance',
+    name: 'Maintenance Schedules',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/maintenance*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/spare-parts',
+    name: 'Spare Parts',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/spare-parts*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      });
+    },
+  },
+  {
+    path: '/sla',
+    name: 'SLA Dashboard',
+    setupMocks: async (page) => {
+      await page.route('**/api/v1/sla*', async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+      });
+    },
+  },
+  {
+    path: '/glossary',
+    name: 'Glossary',
+  },
+];
 
-    test('Settings page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/settings');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/settings');
-    });
+// ───────────────────────────────────────────────────────────────────────────
+// Test Suite: Accessibility — All Pages (critical violations only)
+// Каждая страница тестируется изолированно с собственными моками.
+// P1-QA.3: Threshold = 0 critical violations, HARD FAIL в CI.
+// ───────────────────────────────────────────────────────────────────────────
+
+test.describe('Accessibility — All Pages (critical violations only)', () => {
+  // ─── Public Pages ─────────────────────────────────────────────────────
+
+  test.describe('Public Pages', () => {
+    for (const { path, name } of PUBLIC_PAGES) {
+      test(`${name} (${path}) has no critical a11y violations`, async ({ page }) => {
+        await goToPage(page, path);
+        await runAxeCheck(page, path);
+      });
+    }
   });
 
-  // ─── Protected: P2P Devices ────────────────────────────────────────────
+  // ─── Protected Pages (admin role) ─────────────────────────────────────
 
-  test.describe('/p2p-devices — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/p2p-devices*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_P2P_DEVICES),
-        });
+  test.describe('Protected Pages (admin role)', () => {
+    for (const { path, name, setupMocks } of PROTECTED_PAGES) {
+      test(`${name} (${path}) has no critical a11y violations`, async ({ page }) => {
+        await setupAuthMock(page);
+        if (setupMocks) {
+          await setupMocks(page);
+        }
+        await setupCatchAllMock(page);
+        await goToPage(page, path);
+        await runAxeCheck(page, path);
       });
-      await page.route('**/api/v1/p2p/devices*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_P2P_DEVICES),
-        });
-      });
-      await page.route('**/api/v1/sites*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SITES),
-        });
-      });
-      await setupCatchAllMock(page);
-    });
-
-    test('P2P Devices page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/p2p-devices');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/p2p-devices');
-    });
-  });
-
-  // ─── Protected: RCA ─────────────────────────────────────────────────────
-
-  test.describe('/rca — Protected', () => {
-    test.beforeEach(async ({ page }) => {
-      await setupAuthMock(page);
-      await page.route('**/api/v1/rca*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_RCA_LIST),
-        });
-      });
-      await page.route('**/api/v1/devices*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_DEVICES),
-        });
-      });
-      await page.route('**/api/v1/sites*', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_SITES),
-        });
-      });
-      await setupCatchAllMock(page);
-    });
-
-    test('RCA page has no critical a11y violations', async ({ page }) => {
-      await page.goto('/rca');
-      await page.waitForLoadState('networkidle');
-      await runAxeCheck(page, '/rca');
-    });
+    }
   });
 });

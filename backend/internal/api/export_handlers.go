@@ -16,20 +16,20 @@ import (
 func (s *Server) exportMaintenanceXLSX(w http.ResponseWriter, r *http.Request) {
 	report, err := s.cmmsRouter.GetMaintenanceReport(r.Context())
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get maintenance report", err))
+		RespondError(w, r, NewInternalError("failed to get maintenance report", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	f, err := gen.MaintenanceReportXLSX(report)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate Excel", err))
+		RespondError(w, r, NewInternalError("failed to generate Excel", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := f.Write(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write Excel", err))
+		RespondError(w, r, NewInternalError("failed to write Excel", err))
 		return
 	}
 
@@ -43,20 +43,20 @@ func (s *Server) exportMaintenanceXLSX(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exportMaintenancePDF(w http.ResponseWriter, r *http.Request) {
 	report, err := s.cmmsRouter.GetMaintenanceReport(r.Context())
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get maintenance report", err))
+		RespondError(w, r, NewInternalError("failed to get maintenance report", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	pdf, err := gen.MaintenanceReportPDF(report)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate PDF", err))
+		RespondError(w, r, NewInternalError("failed to generate PDF", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := pdf.Output(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write PDF", err))
+		RespondError(w, r, NewInternalError("failed to write PDF", err))
 		return
 	}
 
@@ -70,20 +70,20 @@ func (s *Server) exportMaintenancePDF(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exportSLAComplianceXLSX(w http.ResponseWriter, r *http.Request) {
 	report, err := s.cmmsRouter.GetSLAComplianceReport(r.Context())
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get SLA compliance report", err))
+		RespondError(w, r, NewInternalError("failed to get SLA compliance report", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	f, err := gen.SLAComplianceReportXLSX(report)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate Excel", err))
+		RespondError(w, r, NewInternalError("failed to generate Excel", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := f.Write(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write Excel", err))
+		RespondError(w, r, NewInternalError("failed to write Excel", err))
 		return
 	}
 
@@ -97,20 +97,20 @@ func (s *Server) exportSLAComplianceXLSX(w http.ResponseWriter, r *http.Request)
 func (s *Server) exportSLACompliancePDF(w http.ResponseWriter, r *http.Request) {
 	report, err := s.cmmsRouter.GetSLAComplianceReport(r.Context())
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get SLA compliance report", err))
+		RespondError(w, r, NewInternalError("failed to get SLA compliance report", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	pdf, err := gen.SLAComplianceReportPDF(report)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate PDF", err))
+		RespondError(w, r, NewInternalError("failed to generate PDF", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := pdf.Output(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write PDF", err))
+		RespondError(w, r, NewInternalError("failed to write PDF", err))
 		return
 	}
 
@@ -129,20 +129,20 @@ func (s *Server) exportWorkOrdersXLSX(w http.ResponseWriter, r *http.Request) {
 
 	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get work orders", err))
+		RespondError(w, r, NewInternalError("failed to get work orders", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	f, err := gen.WorkOrdersXLSX(workOrders)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate Excel", err))
+		RespondError(w, r, NewInternalError("failed to generate Excel", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := f.Write(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write Excel", err))
+		RespondError(w, r, NewInternalError("failed to write Excel", err))
 		return
 	}
 
@@ -161,20 +161,20 @@ func (s *Server) exportWorkOrdersPDF(w http.ResponseWriter, r *http.Request) {
 
 	workOrders, err := s.cmmsRouter.GetWorkOrders(r.Context(), filters)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get work orders", err))
+		RespondError(w, r, NewInternalError("failed to get work orders", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	pdf, err := gen.WorkOrdersPDF(workOrders)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate PDF", err))
+		RespondError(w, r, NewInternalError("failed to generate PDF", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := pdf.Output(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write PDF", err))
+		RespondError(w, r, NewInternalError("failed to write PDF", err))
 		return
 	}
 
@@ -188,20 +188,20 @@ func (s *Server) exportWorkOrdersPDF(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exportSparePartsXLSX(w http.ResponseWriter, r *http.Request) {
 	parts, err := s.cmmsRouter.GetSpareParts(r.Context(), map[string]interface{}{"limit": 10000})
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get spare parts", err))
+		RespondError(w, r, NewInternalError("failed to get spare parts", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	f, err := gen.SparePartsXLSX(parts)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate Excel", err))
+		RespondError(w, r, NewInternalError("failed to generate Excel", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := f.Write(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write Excel", err))
+		RespondError(w, r, NewInternalError("failed to write Excel", err))
 		return
 	}
 
@@ -215,20 +215,20 @@ func (s *Server) exportSparePartsXLSX(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exportSparePartsPDF(w http.ResponseWriter, r *http.Request) {
 	parts, err := s.cmmsRouter.GetSpareParts(r.Context(), map[string]interface{}{"limit": 10000})
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to get spare parts", err))
+		RespondError(w, r, NewInternalError("failed to get spare parts", err))
 		return
 	}
 
 	gen := reports.New("CCTV Monitoring Platform")
 	pdf, err := gen.SparePartsPDF(parts)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate PDF", err))
+		RespondError(w, r, NewInternalError("failed to generate PDF", err))
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if err := pdf.Output(buf); err != nil {
-		respondError(w, r, NewInternalError("failed to write PDF", err))
+		RespondError(w, r, NewInternalError("failed to write PDF", err))
 		return
 	}
 
@@ -272,7 +272,7 @@ func (s *Server) handleExportWorkOrders(w http.ResponseWriter, r *http.Request) 
 	// ── Fetch ────────────────────────────────────────────────────────
 	workOrders, err := s.cmmsRouter.GetWorkOrders(ctx, filters)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to fetch work orders for export", err))
+		RespondError(w, r, NewInternalError("failed to fetch work orders for export", err))
 		return
 	}
 
@@ -298,7 +298,7 @@ func (s *Server) handleExportWorkOrders(w http.ResponseWriter, r *http.Request) 
 	// ── Generate Excel ───────────────────────────────────────────────
 	data, err := reports.ExportWorkOrdersToExcel(exportRows)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to generate excel export", err))
+		RespondError(w, r, NewInternalError("failed to generate excel export", err))
 		return
 	}
 

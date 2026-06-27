@@ -14,13 +14,13 @@ import (
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		respondError(w, r, NewUnauthorizedError("token required"))
+		RespondError(w, r, NewUnauthorizedError("token required"))
 		return
 	}
 
 	claims, err := auth.ValidateJWT(token)
 	if err != nil {
-		respondError(w, r, NewUnauthorizedError("invalid token"))
+		RespondError(w, r, NewUnauthorizedError("invalid token"))
 		return
 	}
 

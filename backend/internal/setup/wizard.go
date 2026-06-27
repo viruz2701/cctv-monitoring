@@ -193,6 +193,21 @@ func AvailableRegions() []RegionConfig {
 				"Standard Contractual Clauses (SCC) may be required for non-EU data access.",
 		},
 		{
+			Region:      compliance.RegionRU,
+			Name:        "Российская Федерация (ГОСТ/152-ФЗ)",
+			Description: "Соответствие ГОСТ Р 34.10-2012, ГОСТ Р 34.11-2012, 152-ФЗ, ФСТЭК",
+			Compliance:  []string{"ГОСТ 28147-89 (Магма)", "ГОСТ Р 34.10-2012 (Подпись)", "ГОСТ Р 34.11-2012 (Стрибог)", "152-ФЗ (ПДн)", "ФСТЭК №17", "IEC 62443 SL-3"},
+			CryptoInfo: CryptoInfo{
+				Encryption: "ГОСТ 28147-89 (Магма)",
+				Hash:       "ГОСТ Р 34.11-2012 (Стрибог 256)",
+				Signature:  "ГОСТ Р 34.10-2012 (256)",
+				KeySize:    256,
+			},
+			LegalNotice: "ВНИМАНИЕ: Выбор региона РФ активирует требования 152-ФЗ и ФСТЭК. " +
+				"Смена региона после первого логина невозможна без полной миграции данных. " +
+				"Требуется цифровая подпись администратора. Данные должны храниться на территории РФ.",
+		},
+		{
 			Region:      compliance.RegionINTL,
 			Name:        "International (ISO 27001)",
 			Description: "Базовое соответствие ISO 27001, ISO 27019, IEC 62443, OWASP ASVS L3",
@@ -409,8 +424,8 @@ func (w *SetupWizard) SetAdmin(username, email, signature string) error {
 		return fmt.Errorf("%w: username and email required", ErrInvalidConfig)
 	}
 
-	// Для КИИ (BY) требуется цифровая подпись
-	if w.config.Region == compliance.RegionBY && signature == "" {
+	// Для КИИ (BY, RU) требуется цифровая подпись
+	if (w.config.Region == compliance.RegionBY || w.config.Region == compliance.RegionRU) && signature == "" {
 		return ErrSignatureRequired
 	}
 
@@ -534,8 +549,8 @@ func (w *SetupWizard) validateConfig() error {
 	if w.config.AdminUsername == "" || w.config.AdminEmail == "" {
 		return fmt.Errorf("%w: admin not configured", ErrInvalidConfig)
 	}
-	if w.config.Region == compliance.RegionBY && w.config.AdminSignature == "" {
-		return fmt.Errorf("%w: digital signature required for КИИ", ErrInvalidConfig)
+	if (w.config.Region == compliance.RegionBY || w.config.Region == compliance.RegionRU) && w.config.AdminSignature == "" {
+		return fmt.Errorf("%w: digital signature required for КИИ region", ErrInvalidConfig)
 	}
 	return nil
 }

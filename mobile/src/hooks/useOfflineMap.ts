@@ -16,6 +16,7 @@
  * Compliance:
  * - СТБ 34.101.27 (защита данных в покое)
  * - IEC 62443 SR 3.1 (зоны безопасности)
+ * - ISO 27001 A.12.4 (аудит кэша)
  *
  * @module useOfflineMap
  */
@@ -33,16 +34,22 @@ import {
   clearExpiredTiles,
   clearAllTiles,
   preloadTilesForBounds,
+  saveCacheMetadata,
+  getPreloadedSites,
+  getPreloadedSitesStats,
   TILE_SERVER_URL,
   PRELOAD_ZOOM_LEVELS,
   type BoundingBox,
   type PreloadProgress,
   type TileCacheStats,
+  type CacheMetadata,
 } from '../services/tileCache';
 
 // ──────────────────────────────────────────────────
 // Типы
 // ──────────────────────────────────────────────────
+
+import type { PreloadSiteStatus } from '../store/deviceMapStore';
 
 type DeviceStatusFilter = 'all' | 'ONLINE' | 'OFFLINE' | 'WARNING';
 type DeviceTypeFilter = 'all' | 'camera' | 'nvr' | 'dvr' | 'switch';
@@ -94,6 +101,11 @@ interface UseOfflineMapReturn {
   /** Есть ли интернет */
   isOnline: boolean;
 
+  /** Список предзагруженных сайтов (из SQLite cache_metadata) */
+  preloadedSites: CacheMetadata[];
+  /** Статусы предзагрузки по сайтам (из стора) */
+  preloadStatuses: Record<string, PreloadSiteStatus>;
+
   // ── Tile Cache API ──────────────────────────────
 
   /** Статус кэша тайлов */
@@ -102,6 +114,8 @@ interface UseOfflineMapReturn {
   preloadTilesForSite: (
     bbox: BoundingBox,
     zoomLevels?: number[],
+    siteId?: string,
+    areaName?: string,
   ) => Promise<PreloadProgress>;
   /** Очистить кэш тайлов */
   clearTileCache: () => Promise<void>;
@@ -132,6 +146,11 @@ export function useOfflineMap(): UseOfflineMapReturn {
     error: storeError,
     setCachedDevices,
     loadCachedDevices,
+    preloadedSites,
+    setPreloadedSites,
+    updatePreloadStatus,
+    removePreloadedSite,
+    setTileCacheStats,
   } = useDeviceMapStore();
 
   const { latitude, longitude, loading: locationLoading } = useLocation();
@@ -154,18 +173,22 @@ export function useOfflineMap(): UseOfflineMapReturn {
 
   const refreshTileCacheStats = useCallback(async () => {
     try {
-      const [count, size, expired] = await Promise.all([
+      const [count, size, expired, preloaded, stats] = await Promise.all([
         getTileCount(),
         getCacheSize(),
         getExpiredCount(),
+        getPreloadedSites(),
+        getPreloadedSitesStats(),
       ]);
       setTileCount(count);
       setCacheSizeBytes(size);
       setExpiredCount(expired);
+      setPreloadedSites(preloaded);
+      setTileCacheStats(stats.totalTiles, stats.totalSizeBytes);
     } catch (err) {
       console.error('[TileCache] Failed to refresh stats:', err);
     }
-  }, []);
+  }, [setPreloadedSites, setTileCacheStats]);
 
   // ── Мониторинг сетевого статуса ────────────────
 
@@ -192,7 +215,7 @@ export function useOfflineMap(): UseOfflineMapReturn {
           setLastCleanedAt(Date.now());
         }
 
-        // 3. Загружаем статистику кэша
+        // 3. Загружаем статистику кэша + предзагруженные сайты
         await refreshTileCacheStats();
 
         // 4. Загружаем кэш устройств
@@ -237,14 +260,19 @@ export function useOfflineMap(): UseOfflineMapReturn {
   /**
    * Предзагрузить тайлы для bounding box объекта (site).
    * Загружает тайлы на zoom-уровнях 10, 12, 14, 16.
+   * Сохраняет метаданные кэша в SQLite после завершения.
    *
    * @param bbox — bounding box site (minLat, minLng, maxLat, maxLng)
+   * @param areaName — название сайта для метаданных кэша
+   * @param siteId — ID сайта для метаданных кэша
    * @param zoomLevels — уровни детализации (по умолчанию PRELOAD_ZOOM_LEVELS)
    */
   const preloadTilesForSite = useCallback(
     async (
       bbox: BoundingBox,
       zoomLevels: number[] = PRELOAD_ZOOM_LEVELS,
+      siteId?: string,
+      areaName?: string,
     ): Promise<PreloadProgress> => {
       if (isPreloading) {
         console.warn('[TileCache] Preload already in progress');
@@ -254,6 +282,17 @@ export function useOfflineMap(): UseOfflineMapReturn {
       setIsPreloading(true);
       setPreloadProgress({ total: 0, completed: 0, failed: 0 });
 
+      // Устанавливаем статус preloading в сторе
+      if (siteId) {
+        updatePreloadStatus(siteId, {
+          siteId,
+          status: 'preloading',
+          progress: 0,
+          tileCount: 0,
+          sizeBytes: 0,
+        });
+      }
+
       try {
         const result = await preloadTilesForBounds(
           bbox,
@@ -261,8 +300,44 @@ export function useOfflineMap(): UseOfflineMapReturn {
           TILE_SERVER_URL,
           (progress) => {
             setPreloadProgress({ ...progress });
+            // Обновляем прогресс в сторе
+            if (siteId) {
+              updatePreloadStatus(siteId, {
+                progress: progress.total > 0
+                  ? progress.completed / progress.total
+                  : 0,
+                tileCount: progress.completed,
+              });
+            }
           },
         );
+
+        // Сохраняем метаданные кэша в SQLite
+        if (siteId && areaName) {
+          const now = Date.now();
+          const expiryDays = 30;
+          const expiryMs = expiryDays * 24 * 60 * 60 * 1000;
+          const metadata: CacheMetadata = {
+            siteId,
+            areaName,
+            zoomLevels,
+            bbox,
+            tileCount: result.completed,
+            sizeBytes: 0, // будет обновлено при следующем refresh stats
+            preloadedAt: now,
+            expiresAt: now + expiryMs,
+            status: result.failed > 0 ? 'failed' : 'complete',
+          };
+
+          await saveCacheMetadata(metadata);
+
+          // Обновляем статус в сторе
+          updatePreloadStatus(siteId, {
+            status: result.failed > 0 ? 'failed' : 'complete',
+            progress: 1,
+            tileCount: result.completed,
+          });
+        }
 
         await refreshTileCacheStats();
         return result;
@@ -270,7 +345,7 @@ export function useOfflineMap(): UseOfflineMapReturn {
         setIsPreloading(false);
       }
     },
-    [isPreloading, refreshTileCacheStats],
+    [isPreloading, refreshTileCacheStats, updatePreloadStatus],
   );
 
   // ── Очистка кэша ────────────────────────────────
@@ -278,12 +353,13 @@ export function useOfflineMap(): UseOfflineMapReturn {
   const clearTileCache = useCallback(async () => {
     try {
       await clearAllTiles();
+      setPreloadedSites([]);
       await refreshTileCacheStats();
       setLastCleanedAt(Date.now());
     } catch (err) {
       console.error('[TileCache] Failed to clear cache:', err);
     }
-  }, [refreshTileCacheStats]);
+  }, [refreshTileCacheStats, setPreloadedSites]);
 
   const cleanExpiredTiles = useCallback(async (): Promise<number> => {
     try {
@@ -338,6 +414,8 @@ export function useOfflineMap(): UseOfflineMapReturn {
     refreshDevices,
     statusCounts,
     isOnline,
+    preloadedSites,
+    preloadStatuses: useDeviceMapStore.getState().preloadStatuses,
 
     // Tile Cache API
     tileCacheStatus,

@@ -1,73 +1,175 @@
-import React from 'react';
+// ═══════════════════════════════════════════════════════════════════════
+// Card — универсальный компонент карточки (P3-UI.2)
+//
+// Особенности:
+//   - Hover-тень (поднимается на 2px при наведении)
+//   - Ripple-эффект (опционально, для clickable карточек)
+//   - Haptic feedback (опционально, для clickable карточек)
+//   - CSS custom properties для border-radius
+//   - Анимация появления (scaleIn)
+//
+// Варианты:
+//   - elevated:  тень + белый фон (по умолчанию)
+//   - outlined:  border вместо тени
+//   - flat:      без тени и border
+//   - interactive: кликабельная с hover-эффектом
+//
+// Соответствие:
+//   - WCAG 2.1 SC 2.3.3 (prefers-reduced-motion)
+//   - OWASP ASVS V7 (graceful degradation)
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { useCallback } from 'react';
+import { useRipple } from '../../hooks/useRipple';
+import { useHapticFeedback } from '../../hooks/useHapticFeedback';
+
+type CardVariant = 'elevated' | 'outlined' | 'flat' | 'interactive';
 
 interface CardProps {
-    children: React.ReactNode;
-    className?: string;
-    variant?: 'default' | 'elevated' | 'bordered';
-    padding?: 'none' | 'sm' | 'md' | 'lg';
+  children: React.ReactNode;
+  variant?: CardVariant;
+  className?: string;
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  /** Анимация появления */
+  animate?: boolean;
+  /** Ripple эффект (только для interactive) */
+  noRipple?: boolean;
+  /** Haptic feedback (только для interactive) */
+  noHaptic?: boolean;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  role?: string;
+  'aria-label'?: string;
 }
 
-interface CardHeaderProps {
-    children: React.ReactNode;
-    className?: string;
-    action?: React.ReactNode;
-}
+const variantClasses: Record<CardVariant, string> = {
+  elevated:
+    'bg-white dark:bg-slate-800 shadow-card border border-slate-200 dark:border-slate-700',
+  outlined:
+    'bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700',
+  flat: 'bg-slate-50 dark:bg-slate-800/50',
+  interactive:
+    'bg-white dark:bg-slate-800 shadow-card border border-slate-200 dark:border-slate-700 card-hover cursor-pointer',
+};
 
-interface CardBodyProps {
-    children: React.ReactNode;
-    className?: string;
-}
-
-interface CardFooterProps {
-    children: React.ReactNode;
-    className?: string;
-}
+const paddingClasses: Record<string, string> = {
+  none: '',
+  sm: 'p-3',
+  md: 'p-4',
+  lg: 'p-6',
+};
 
 export function Card({
-    children,
-    className = '',
-    variant = 'default',
-    padding = 'md',
+  children,
+  variant = 'elevated',
+  className = '',
+  padding = 'md',
+  animate = false,
+  noRipple = false,
+  noHaptic = false,
+  onClick,
+  role,
+  'aria-label': ariaLabel,
 }: CardProps) {
-    const variantClasses = {
-        default: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700',
-        elevated: 'bg-white dark:bg-slate-800 shadow-lg border border-slate-100 dark:border-slate-700',
-        bordered: 'bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700',
-    };
+  const { createRipple, ripples } = useRipple();
+  const haptics = useHapticFeedback();
+  const isInteractive = variant === 'interactive' || !!onClick;
 
-    const paddingClasses = {
-        none: '',
-        sm: 'p-3',
-        md: 'p-5',
-        lg: 'p-6',
-    };
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isInteractive) return;
+      if (!noRipple) createRipple(e);
+      if (!noHaptic) haptics.light();
+      onClick?.(e);
+    },
+    [isInteractive, noRipple, noHaptic, createRipple, haptics, onClick],
+  );
 
-    return (
-        <div
-            className={`rounded-xl shadow-sm ${variantClasses[variant]} ${paddingClasses[padding]} ${className}`}
-        >
-            {children}
-        </div>
-    );
+  return (
+    <div
+      className={`
+        rounded-xl
+        transition-normal
+        ${variantClasses[variant]}
+        ${paddingClasses[padding]}
+        ${animate ? 'animate-scaleIn' : ''}
+        ${isInteractive ? 'ripple-container' : ''}
+        ${className}
+      `}
+      onClick={handleClick}
+      role={isInteractive ? role || 'button' : role}
+      aria-label={isInteractive ? ariaLabel : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={
+        isInteractive
+          ? (e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+              }
+            }
+          : undefined
+      }
+    >
+      {children}
+      {ripples}
+    </div>
+  );
 }
 
-export function CardHeader({ children, className = '', action }: CardHeaderProps) {
-    return (
-        <div className={`flex items-center justify-between mb-4 ${className}`}>
-            <div className="text-lg font-semibold text-slate-900 dark:text-white">{children}</div>
-            {action && <div>{action}</div>}
-        </div>
-    );
+// ═══════════════════════════════════════════════════════════════════════
+// Card sub-components
+// ═══════════════════════════════════════════════════════════════════════
+
+export function CardHeader({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center justify-between mb-4 ${className}`}>
+      {children}
+    </div>
+  );
 }
 
-export function CardBody({ children, className = '' }: CardBodyProps) {
-    return <div className={className}>{children}</div>;
+export function CardTitle({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <h3 className={`text-lg font-semibold text-slate-900 dark:text-white ${className}`}>
+      {children}
+    </h3>
+  );
 }
 
-export function CardFooter({ children, className = '' }: CardFooterProps) {
-    return (
-        <div className={`mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 ${className}`}>
-            {children}
-        </div>
-    );
+export function CardContent({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={`text-slate-600 dark:text-slate-300 ${className}`}>{children}</div>;
+}
+
+export function CardFooter({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center gap-3 ${className}`}
+    >
+      {children}
+    </div>
+  );
 }

@@ -16,6 +16,7 @@
 package rca
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -113,6 +114,9 @@ type GraphBuilder struct {
 
 	// Счётчик версий графа (для отслеживания изменений)
 	graphVersion int64
+
+	// Auto-refresh (BACKEND.4)
+	autoRefreshCancel context.CancelFunc
 }
 
 // NewGraphBuilder создаёт GraphBuilder.
@@ -220,6 +224,124 @@ func (b *GraphBuilder) BuildFromState(devices []DeviceState) (int, *ValidationEr
 	})
 
 	return added, nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DeviceStateProvider — функция получения состояния устройств
+// ═══════════════════════════════════════════════════════════════════════
+
+// DeviceStateProvider — функция для получения текущего состояния устройств.
+// Используется в StartAutoRefresh для периодического обновления графа.
+type DeviceStateProvider func(ctx context.Context) ([]DeviceState, error)
+
+// ═══════════════════════════════════════════════════════════════════════
+// P1-4.6: Auto-Refresh (BACKEND.4)
+// ═══════════════════════════════════════════════════════════════════════
+
+// StartAutoRefresh запускает автоматическое обновление графа.
+//
+// provider вызывается с интервалом interval для получения текущего состояния
+// устройств. Каждый вызов provider → BuildFromState для полной перестройки графа.
+//
+// Параметры:
+//   - ctx: контекст для graceful shutdown (ctx.Done → остановка)
+//   - interval: интервал между вызовами provider
+//   - provider: функция получения DeviceState
+//
+// Возвращает канал ошибок (буферизованный, размер 10).
+// Ошибки от provider и BuildFromState отправляются в errCh.
+// Канал закрывается при остановке.
+//
+// Compliance:
+//   - IEC 62443 SR 7.1 (Resource availability — мониторинг топологии)
+//   - ISO 27001 A.12.6.1 (Capacity management)
+//   - ISO 27019 PCC.A.12.6 (ICS topology management)
+func (b *GraphBuilder) StartAutoRefresh(ctx context.Context, interval time.Duration, provider DeviceStateProvider) <-chan error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// Если уже запущен — останавливаем предыдущий
+	if b.autoRefreshCancel != nil {
+		b.autoRefreshCancel()
+	}
+
+	// Создаём дочерний контекст для управления жизненным циклом
+	refreshCtx, cancel := context.WithCancel(ctx)
+	b.autoRefreshCancel = cancel
+
+	errCh := make(chan error, 10)
+	go b.autoRefreshLoop(refreshCtx, interval, provider, errCh)
+
+	b.logger.Info("auto-refresh started",
+		"interval", interval,
+	)
+	return errCh
+}
+
+// StopAutoRefresh останавливает автоматическое обновление графа.
+// Безопасен для многократного вызова (идемпотентен).
+func (b *GraphBuilder) StopAutoRefresh() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.autoRefreshCancel != nil {
+		b.autoRefreshCancel()
+		b.autoRefreshCancel = nil
+		b.logger.Info("auto-refresh stopped")
+	}
+}
+
+// autoRefreshLoop — основной цикл автообновления.
+// Запускается в отдельной горутине через StartAutoRefresh.
+func (b *GraphBuilder) autoRefreshLoop(ctx context.Context, interval time.Duration, provider DeviceStateProvider, errCh chan<- error) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Немедленный первый рефреш
+	b.refreshFromProvider(ctx, provider, errCh)
+	if ctx.Err() != nil {
+		close(errCh)
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(errCh)
+			return
+		case <-ticker.C:
+			b.refreshFromProvider(ctx, provider, errCh)
+			if ctx.Err() != nil {
+				close(errCh)
+				return
+			}
+		}
+	}
+}
+
+// refreshFromProvider вызывает provider и строит граф через BuildFromState.
+func (b *GraphBuilder) refreshFromProvider(ctx context.Context, provider DeviceStateProvider, errCh chan<- error) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	devices, err := provider(ctx)
+	if err != nil {
+		select {
+		case errCh <- fmt.Errorf("auto-refresh provider: %w", err):
+		default:
+			b.logger.Warn("auto-refresh error channel full, dropping provider error")
+		}
+		return
+	}
+
+	if _, err := b.BuildFromState(devices); err != nil {
+		select {
+		case errCh <- fmt.Errorf("auto-refresh build: %w", err):
+		default:
+			b.logger.Warn("auto-refresh error channel full, dropping build error")
+		}
+	}
 }
 
 // BuildFromTopology строит граф из TopologyConfig.

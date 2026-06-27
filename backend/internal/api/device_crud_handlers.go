@@ -46,20 +46,20 @@ func (s *Server) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication (JWT claims) ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control ──
 	if !isWriteRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions to create devices"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions to create devices"))
 		return
 	}
 
 	// ── V5: Input Validation (decode + whitelist) ──
 	var req models.CreateDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid JSON body"))
+		RespondError(w, r, NewBadRequestError("invalid JSON body"))
 		return
 	}
 
@@ -86,7 +86,13 @@ func (s *Server) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		ParentDeviceID:  req.ParentDeviceID,
 	}
 	if err := validateCreateDeviceRequest(fields); err != nil {
-		respondError(w, r, NewValidationError(err.Error()))
+		// P1-SEC.3: Используем respondValidationError для field-level ошибок
+		var ve *ValidationErrors
+		if errors.As(err, &ve) {
+			respondValidationError(w, r, ve)
+		} else {
+			RespondError(w, r, NewValidationError(err.Error()))
+		}
 		return
 	}
 
@@ -94,11 +100,11 @@ func (s *Server) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 	dev, err := s.deviceService.CreateDevice(r.Context(), claims.UserID, claims.Role, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrAccessDenied) {
-			respondError(w, r, NewForbiddenError(err.Error()))
+			RespondError(w, r, NewForbiddenError(err.Error()))
 			return
 		}
 		// V7: Error handling — no information leakage
-		respondError(w, r, NewInternalError("failed to create device", err))
+		RespondError(w, r, NewInternalError("failed to create device", err))
 		return
 	}
 
@@ -123,7 +129,7 @@ func (s *Server) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
@@ -150,7 +156,7 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !valid {
-			respondError(w, r, NewValidationError("invalid status: must be ONLINE, OFFLINE, or WARNING"))
+			RespondError(w, r, NewValidationError("invalid status: must be ONLINE, OFFLINE, or WARNING"))
 			return
 		}
 	}
@@ -165,14 +171,14 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !valid {
-			respondError(w, r, NewValidationError("invalid device_type: must be camera, nvr, dvr, or switch"))
+			RespondError(w, r, NewValidationError("invalid device_type: must be camera, nvr, dvr, or switch"))
 			return
 		}
 	}
 
 	result, err := s.deviceService.ListDevices(r.Context(), claims.UserID, claims.Role, filter)
 	if err != nil {
-		respondError(w, r, NewInternalError("failed to list devices", err))
+		RespondError(w, r, NewInternalError("failed to list devices", err))
 		return
 	}
 
@@ -185,23 +191,23 @@ func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("device_id is required"))
+		RespondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 
 	dev, err := s.deviceService.GetDevice(r.Context(), claims.UserID, claims.Role, deviceID)
 	if err != nil {
 		if errors.Is(err, service.ErrAccessDenied) {
-			respondError(w, r, NewForbiddenError(err.Error()))
+			RespondError(w, r, NewForbiddenError(err.Error()))
 			return
 		}
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 
@@ -218,24 +224,24 @@ func (s *Server) handleGetDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if !isWriteRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions to update devices"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions to update devices"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("device_id is required"))
+		RespondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 
 	var req models.UpdateDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid JSON body"))
+		RespondError(w, r, NewBadRequestError("invalid JSON body"))
 		return
 	}
 
@@ -262,17 +268,17 @@ func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		ParentDeviceID:  req.ParentDeviceID,
 	}
 	if err := validateUpdateDeviceRequest(uf); err != nil {
-		respondError(w, r, NewValidationError(err.Error()))
+		RespondError(w, r, NewValidationError(err.Error()))
 		return
 	}
 
 	dev, err := s.deviceService.UpdateDevice(r.Context(), claims.UserID, claims.Role, deviceID, &req)
 	if err != nil {
 		if errors.Is(err, service.ErrAccessDenied) {
-			respondError(w, r, NewForbiddenError(err.Error()))
+			RespondError(w, r, NewForbiddenError(err.Error()))
 			return
 		}
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 
@@ -289,18 +295,18 @@ func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if !isWriteRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions to delete devices"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions to delete devices"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("device_id is required"))
+		RespondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 
@@ -308,10 +314,10 @@ func (s *Server) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.deviceService.DeleteDevice(r.Context(), claims.UserID, claims.Role, deviceID, hardDelete); err != nil {
 		if errors.Is(err, service.ErrAccessDenied) {
-			respondError(w, r, NewForbiddenError(err.Error()))
+			RespondError(w, r, NewForbiddenError(err.Error()))
 			return
 		}
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 
@@ -332,27 +338,27 @@ func (s *Server) handleDeleteDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRestoreDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if !isWriteRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions to restore devices"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions to restore devices"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("device_id is required"))
+		RespondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 
 	if err := s.deviceService.RestoreDevice(r.Context(), claims.UserID, claims.Role, deviceID); err != nil {
 		if errors.Is(err, service.ErrAccessDenied) {
-			respondError(w, r, NewForbiddenError(err.Error()))
+			RespondError(w, r, NewForbiddenError(err.Error()))
 			return
 		}
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 

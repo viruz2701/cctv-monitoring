@@ -90,13 +90,13 @@ func (s *Server) handleComplianceSummary(w http.ResponseWriter, r *http.Request)
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control (admin, manager, owner) ──
 	if !isComplianceRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions: admin, manager, or owner role required"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin, manager, or owner role required"))
 		return
 	}
 
@@ -107,7 +107,7 @@ func (s *Server) handleComplianceSummary(w http.ResponseWriter, r *http.Request)
 	summary, err := s.db.GetComplianceSummary(r.Context(), siteID)
 	if err != nil {
 		s.logger.Error("failed to get compliance summary", "error", err)
-		respondError(w, r, NewInternalError("failed to get compliance summary", err))
+		RespondError(w, r, NewInternalError("failed to get compliance summary", err))
 		return
 	}
 
@@ -115,7 +115,7 @@ func (s *Server) handleComplianceSummary(w http.ResponseWriter, r *http.Request)
 	risks, err := s.db.GetComplianceRisks(r.Context(), "", siteID)
 	if err != nil {
 		s.logger.Error("failed to get compliance risks", "error", err)
-		respondError(w, r, NewInternalError("failed to get compliance risks", err))
+		RespondError(w, r, NewInternalError("failed to get compliance risks", err))
 		return
 	}
 
@@ -172,13 +172,13 @@ func (s *Server) handleComplianceRisks(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control ──
 	if !isComplianceRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions: admin, manager, or owner role required"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin, manager, or owner role required"))
 		return
 	}
 
@@ -189,7 +189,7 @@ func (s *Server) handleComplianceRisks(w http.ResponseWriter, r *http.Request) {
 	risks, err := s.db.GetComplianceRisks(r.Context(), deviceID, siteID)
 	if err != nil {
 		s.logger.Error("failed to get compliance risks", "error", err)
-		respondError(w, r, NewInternalError("failed to get compliance risks", err))
+		RespondError(w, r, NewInternalError("failed to get compliance risks", err))
 		return
 	}
 
@@ -221,12 +221,12 @@ func (s *Server) handleComplianceRisks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleComplianceFines(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if !isComplianceRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
 		return
 	}
 
@@ -259,12 +259,12 @@ func (s *Server) handleComplianceFines(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleComplianceRefresh(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if claims.Role != "admin" {
-		respondError(w, r, NewForbiddenError("admin role required"))
+		RespondError(w, r, NewForbiddenError("admin role required"))
 		return
 	}
 
@@ -272,7 +272,7 @@ func (s *Server) handleComplianceRefresh(w http.ResponseWriter, r *http.Request)
 	_, err := s.db.Pool.Exec(r.Context(), "SELECT refresh_compliance_risks()")
 	if err != nil {
 		s.logger.Error("failed to refresh compliance risks", "error", err)
-		respondError(w, r, NewInternalError("failed to refresh compliance risks", err))
+		RespondError(w, r, NewInternalError("failed to refresh compliance risks", err))
 		return
 	}
 
@@ -308,27 +308,27 @@ type calculateResponse struct {
 func (s *Server) handleComplianceCalculate(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	if !isComplianceRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
 		return
 	}
 
 	var req calculateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body"))
+		RespondError(w, r, NewBadRequestError("invalid request body"))
 		return
 	}
 
 	if req.DowntimeMinutes < 0 {
-		respondError(w, r, NewBadRequestError("downtime_minutes must be >= 0"))
+		RespondError(w, r, NewBadRequestError("downtime_minutes must be >= 0"))
 		return
 	}
 	if req.DeviceType == "" {
-		respondError(w, r, NewBadRequestError("device_type is required"))
+		RespondError(w, r, NewBadRequestError("device_type is required"))
 		return
 	}
 

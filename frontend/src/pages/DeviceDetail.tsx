@@ -1,8 +1,9 @@
 import { generateUUID } from '../utils/uuid';
 import { getArrayData } from '../utils/helpers';
-import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
+import { SkeletonDetailPage } from '../components/layout';
 import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
 import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
@@ -26,7 +27,6 @@ import {
     Wrench,
     RotateCcw,
     Download,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Loader2,
@@ -47,13 +47,14 @@ import {
     Input,
     Select,
     Tabs,
+    InfoTooltip,
 } from '../components/ui';
 import type { RecordingDay, HealthTimelineEvent as TimelineEvent, DeviceStats, DeviceCamera } from '../types';
 import { DeviceAuditLog } from '../components/devices/DeviceAuditLog';
 import { useTranslation } from 'react-i18next';
 
-// P1-1.3: Lazy-loaded RCA Graph
-const RCAGraph = lazy(() => import('../components/rca/RCAGraph'));
+// P1-UX.7: RCA Widget — summary card with full graph in modal
+import { RCAWidget } from '../components/rca/RCAWidget';
 
 // ─── Helpers with locale support ─────────────────────────────────────
 function formatDate(dateStr: string, locale: string): string {
@@ -222,8 +223,8 @@ export function DeviceDetail() {
     const { t, i18n } = useTranslation();
     const { deviceId } = useParams();
     const navigate = useNavigate();
-    const { data: apiTickets } = useTickets();
-    const { data: apiDevices } = useDevices();
+    const { data: apiTickets, isLoading: ticketsLoading } = useTickets();
+    const { data: apiDevices, isLoading: devicesLoading } = useDevices();
     const apiTicketsData = getArrayData<APITicket>(apiTickets);
     const apiDevicesData = getArrayData<APIDevice>(apiDevices);
     const createTicketMut = useCreateTicket();
@@ -234,8 +235,6 @@ export function DeviceDetail() {
     const [selectedRecording, setSelectedRecording] = useState<RecordingDay | null>(null);
     const [ticketCreated, setTicketCreated] = useState(false);
     const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
-    // P1-1.3: RCA expandable state
-    const [rcaExpanded, setRcaExpanded] = useState(false);
     const [newTicket, setNewTicket] = useState({
         title: '',
         description: '',
@@ -319,6 +318,13 @@ export function DeviceDetail() {
     };
 
     const monthLabel = selectedMonth.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' });
+
+    // ── Loading state ──────────────────────────────────────────────
+    const isLoading = devicesLoading || ticketsLoading;
+
+    if (isLoading) {
+      return <SkeletonDetailPage />;
+    }
 
     if (!device) {
         return (
@@ -415,7 +421,7 @@ export function DeviceDetail() {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card><CardBody><div className="flex items-center gap-3"><div className={`p-2.5 rounded-xl ${device.status === 'online' ? 'bg-emerald-50 dark:bg-emerald-900/30' : device.status === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>{device.status === 'online' ? <Wifi className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : device.status === 'warning' ? <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" /> : <WifiOff className="w-5 h-5 text-red-600 dark:text-red-400" />}</div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('status')}</p><p className="text-lg font-bold text-slate-900 dark:text-white capitalize">{device.status}</p></div></div></CardBody></Card>
-                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('uptime')}</p><p className={`text-lg font-bold ${uptimeColor}`}>{stats?.uptimePercent.toFixed(1)}%</p></div></div></CardBody></Card>
+                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('uptime')} <InfoTooltip text="Mean Time Between Failures (MTBF) — среднее время наработки на отказ. Показатель надёжности оборудования." glossaryTerm="MTBF" /></p><p className={`text-lg font-bold ${uptimeColor}`}>{stats?.uptimePercent.toFixed(1)}%</p></div></div></CardBody></Card>
                 <Card><CardBody><div className="space-y-2"><div className="flex items-center gap-3"><div className="p-2.5 bg-purple-50 dark:bg-purple-900/30 rounded-xl"><HardDrive className="w-5 h-5 text-purple-600 dark:text-purple-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('hdd_free')}</p><p className="text-lg font-bold text-slate-900 dark:text-white">{stats?.hddFreePercent}%</p></div></div><div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div className={`${hddColor} h-1.5 rounded-full transition-all`} style={{ width: `${stats?.hddFreePercent ?? 0}%` }} /></div></div></CardBody></Card>
                 <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-orange-50 dark:bg-orange-900/30 rounded-xl"><Thermometer className="w-5 h-5 text-orange-600 dark:text-orange-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('temperature')}</p><p className={`text-lg font-bold ${(stats?.temperature ?? 0) > 50 ? 'text-red-600 dark:text-red-400' : (stats?.temperature ?? 0) > 40 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>{stats?.temperature}°C</p></div></div></CardBody></Card>
             </div>
@@ -424,17 +430,25 @@ export function DeviceDetail() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card><CardHeader>{t('device_information')}</CardHeader><CardBody><div className="space-y-3">
                     {[
-                        [t('device_id'), device.id, true],
-                        [t('type'), device.type.toUpperCase(), false],
-                        [t('model'), device.model, false],
-                        [t('firmware'), device.firmware, false],
-                        [t('ip_address'), device.ipAddress, true],
-                        [t('site'), device.siteName, false],
-                        [t('recording_status'), device.recordingStatus.replace('_', ' '), false],
-                        [t('assigned_technicians') || 'Assigned Technicians', t('view_in_site_settings') || 'Manage in site settings', false],
-                    ].map(([label, value, mono], idx, arr) => (
+                        [t('device_id'), device.id, true, false],
+                        [t('type'), device.type.toUpperCase(), false, false],
+                        [t('model'), device.model, false, false],
+                        [t('firmware'), device.firmware, false, false],
+                        [t('ip_address'), device.ipAddress, true, false],
+                        [t('site'), device.siteName, false, false],
+                        ['recording_status', device.recordingStatus.replace('_', ' '), false, true],
+                        [t('assigned_technicians') || 'Assigned Technicians', t('view_in_site_settings') || 'Manage in site settings', false, false],
+                    ].map(([label, value, mono, isRecording], idx, arr) => (
                         <div key={label as string} className={`flex justify-between py-2 ${idx < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/50' : ''}`}>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                                {isRecording ? t('recording_status') : label}
+                                {isRecording && (
+                                    <InfoTooltip
+                                        text="Recording status — текущее состояние записи видео с устройства. Возможные значения: recording, stopped, error."
+                                        glossaryTerm="NVR"
+                                    />
+                                )}
+                            </span>
                             <span className={`text-sm font-medium text-slate-900 dark:text-white ${mono ? 'font-mono' : ''} capitalize`}>{value as string}</span>
                         </div>
                     ))}
@@ -456,7 +470,7 @@ export function DeviceDetail() {
             </div>
 
             {/* Health Timeline */}
-            <Card><CardHeader>{t('health_timeline')}</CardHeader><CardBody>
+            <Card><CardHeader>{t('health_timeline')} <InfoTooltip text="Health Score — комплексная оценка состояния устройства на основе uptime, температуры, свободного места на диске, частоты ошибок и статуса записи." glossaryTerm="health-score" /></CardHeader><CardBody>
                 {timeline.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">{t('no_events_recorded')}</p> : (
                     <div className="relative"><div className="absolute left-[17px] top-3 bottom-3 w-px bg-slate-200 dark:bg-slate-700" />
                         <div className="space-y-4">
@@ -477,42 +491,8 @@ export function DeviceDetail() {
                 )}
             </CardBody></Card>
 
-            {/* ═══ P1-1.3: RCA Widget — Expandable Root Cause Analysis ═══ */}
-            <Card>
-                <CardHeader
-                    action={
-                        <button
-                            onClick={() => setRcaExpanded(!rcaExpanded)}
-                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium transition-colors"
-                            aria-expanded={rcaExpanded}
-                            aria-label={rcaExpanded ? t('collapse_rca') || 'Collapse RCA' : t('expand_rca') || 'Show Root Cause Analysis'}
-                        >
-                            {rcaExpanded ? (
-                                <><ChevronDown className="w-4 h-4" /> {t('collapse') || 'Collapse'}</>
-                            ) : (
-                                <><ChevronRight className="w-4 h-4" /> {t('show_rca') || 'Show RCA'}</>
-                            )}
-                        </button>
-                    }
-                >
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        {t('root_cause_analysis') || 'Root Cause Analysis'}
-                    </div>
-                </CardHeader>
-                {rcaExpanded && (
-                    <CardBody>
-                        <Suspense fallback={
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                                <span className="ml-2 text-sm text-slate-500">{t('loading_rca') || 'Loading RCA...'}</span>
-                            </div>
-                        }>
-                            <RCAGraph deviceId={deviceId || ''} onClose={() => setRcaExpanded(false)} />
-                        </Suspense>
-                    </CardBody>
-                )}
-            </Card>
+            {/* ═══ P1-UX.7: RCA Widget — Summary card with full graph modal ═══ */}
+            <RCAWidget deviceId={deviceId || ''} />
 
             {/* Recording Availability Calendar */}
             <Card><CardHeader>{t('recording_availability')}</CardHeader><CardBody>

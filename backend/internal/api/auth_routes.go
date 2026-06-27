@@ -2,6 +2,8 @@
 package api
 
 import (
+	"gb-telemetry-collector/internal/auth"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -21,6 +23,10 @@ func (s *Server) mountAuthRoutes(r chi.Router) {
 	// Password reset
 	r.Post("/api/v1/auth/forgot-password", s.handleForgotPassword)
 	r.Post("/api/v1/auth/reset-password", s.handleResetPasswordWithToken)
+
+	// P1-SEC.1: Logout — доступен с cookie или Authorization header
+	// Используется CookieAuthMiddleware для чтения JWT из cookie
+	r.With(auth.CookieAuthMiddleware, auth.AuthMiddleware).Post("/api/v1/auth/logout", s.handleLogout)
 }
 
 // mountProtectedAuthRoutes регистрирует auth-маршруты требующие JWT.

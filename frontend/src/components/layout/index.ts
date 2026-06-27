@@ -15,4 +15,5 @@ export {
   SkeletonListPage,
   SkeletonComplianceShield,
   SkeletonDetailPage,
+  SkeletonTechnicianWeek,
 } from './SkeletonPage';

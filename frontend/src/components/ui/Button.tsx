@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useRipple } from '../../hooks/useRipple';
+import { useHapticFeedback } from '../../hooks/useHapticFeedback';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -11,6 +13,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     icon?: React.ReactNode;
     iconPosition?: 'left' | 'right';
     fullWidth?: boolean;
+    /** Отключить ripple-эффект */
+    noRipple?: boolean;
+    /** Отключить haptic feedback */
+    noHaptic?: boolean;
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -40,9 +46,24 @@ export function Button({
     fullWidth = false,
     disabled,
     className = '',
+    noRipple = false,
+    noHaptic = false,
+    onClick,
     ...props
 }: ButtonProps) {
     const isDisabled = disabled || loading;
+    const { createRipple, ripples } = useRipple();
+    const haptics = useHapticFeedback();
+
+    const handleClick = useCallback(
+        (e: React.MouseEvent<HTMLButtonElement>) => {
+            if (isDisabled) return;
+            if (!noRipple) createRipple(e);
+            if (!noHaptic) haptics.light();
+            onClick?.(e);
+        },
+        [isDisabled, noRipple, noHaptic, createRipple, haptics, onClick],
+    );
 
     return (
         <button
@@ -51,6 +72,7 @@ export function Button({
         transition-all duration-150 ease-in-out
         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
+        ${noRipple ? '' : 'ripple-container'}
         ${variantClasses[variant]}
         ${sizeClasses[size]}
         ${fullWidth ? 'w-full' : ''}
@@ -58,12 +80,14 @@ export function Button({
       `}
             disabled={isDisabled}
             aria-busy={loading || undefined}
+            onClick={handleClick}
             {...props}
         >
             {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
             {!loading && icon && iconPosition === 'left' && icon}
             {children}
             {!loading && icon && iconPosition === 'right' && icon}
+            {ripples}
         </button>
     );
 }
@@ -82,13 +106,28 @@ export function IconButton({
     size = 'md',
     label,
     className = '',
+    noRipple = false,
+    noHaptic = false,
+    onClick,
     ...props
-}: IconButtonProps) {
-    const sizeClasses = {
+}: IconButtonProps & { noRipple?: boolean; noHaptic?: boolean }) {
+    const { createRipple, ripples } = useRipple();
+    const haptics = useHapticFeedback();
+
+    const sizeClassMap = {
         sm: 'p-1.5',
         md: 'p-2',
         lg: 'p-2.5',
     };
+
+    const handleClick = useCallback(
+        (e: React.MouseEvent<HTMLButtonElement>) => {
+            if (!noRipple) createRipple(e);
+            if (!noHaptic) haptics.light();
+            onClick?.(e);
+        },
+        [noRipple, noHaptic, createRipple, haptics, onClick],
+    );
 
     return (
         <button
@@ -97,14 +136,17 @@ export function IconButton({
         transition-all duration-150 ease-in-out
         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
+        ${noRipple ? '' : 'ripple-container'}
         ${variantClasses[variant]}
-        ${sizeClasses[size]}
+        ${sizeClassMap[size]}
         ${className}
       `}
             aria-label={label}
+            onClick={handleClick}
             {...props}
         >
             {icon}
+            {ripples}
         </button>
     );
 }

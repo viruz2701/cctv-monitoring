@@ -141,12 +141,19 @@ export function WOKanbanBoard({
 
   return (
     <DragDropContext onDragEnd={onDragEnd} onDragStart={(result) => setDraggingId(result.draggableId)}>
-      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}>
+      <div
+        className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}
+        role="list"
+        aria-label="Kanban board — work orders grouped by status"
+        aria-live="polite"
+      >
         {COLUMNS.map((col) => {
           const items = columns[col.key];
           return (
             <div
               key={col.key}
+              role="listitem"
+              aria-label={`${col.title} column, ${items.length} items`}
               className={`bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 border-t-2 ${col.color} flex flex-col min-h-[400px]`}
             >
               {/* Column Header */}
@@ -189,7 +196,9 @@ export function WOKanbanBoard({
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
                               onClick={() => onCardClick?.(wo)}
-                              className={`bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2 cursor-pointer transition-all duration-200 ease-out ${
+                              role="listitem"
+                              aria-roledescription="draggable work order card"
+                              className={`bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2 cursor-pointer transition-all duration-200 ease-out transform-gpu will-change-transform ${
                                 snapshot.isDragging
                                   ? 'shadow-xl ring-2 ring-blue-400 rotate-[2deg] scale-105'
                                   : 'hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 active:scale-[0.98]'

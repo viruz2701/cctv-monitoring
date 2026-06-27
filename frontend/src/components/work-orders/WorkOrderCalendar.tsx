@@ -6,7 +6,8 @@ import type { EventClickArg, DateSelectArg, EventDropArg, EventContentArg, Event
 import type { WorkOrder } from '../../services/workOrdersApi';
 import type { User as ApiUser } from '../../services/api';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, CalendarClock } from 'lucide-react';
+import { CalendarDays, CalendarClock, Info } from 'lucide-react';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
@@ -28,9 +29,9 @@ const STATUS_DOT: Record<string, string> = {
   cancelled:   '#EF4444',
 };
 
-/** Color coding for date modes (P1-1.2) */
+/** Color coding for date modes (P1-UX.6) — deadline (red), creation (blue) */
 const DATE_MODE_COLORS: Record<DateMode, { bg: string; border: string; text: string; label: string }> = {
-  deadline: { bg: '#FEF3C7', border: '#F59E0B', text: '#92400E', label: 'By Deadline' },
+  deadline: { bg: '#FEE2E2', border: '#EF4444', text: '#991B1B', label: 'By Deadline' },
   creation: { bg: '#DBEAFE', border: '#3B82F6', text: '#1E40AF', label: 'By Creation' },
 };
 
@@ -56,6 +57,10 @@ export interface WorkOrderCalendarProps {
   onEventClick: (workOrder: WorkOrder) => void;
   onDateClick: (date: Date) => void;
   className?: string;
+  /** P1-UX.6: Controlled date mode from parent (optional) */
+  dateMode?: DateMode;
+  /** P1-UX.6: Callback when date mode changes */
+  onDateModeChange?: (mode: DateMode) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -70,11 +75,27 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
   onEventClick,
   onDateClick,
   className = '',
+  dateMode: controlledDateMode,
+  onDateModeChange,
 }: WorkOrderCalendarProps) {
   const { t } = useTranslation();
   const [techFilter, setTechFilter] = useState<string>('all');
-  // P1-1.2: Date mode toggle
-  const [dateMode, setDateMode] = useState<DateMode>('deadline');
+  // P1-UX.6: Date mode toggle — controlled or uncontrolled via localStorage
+  const [localDateMode, setLocalDateMode] = useLocalStorage<DateMode>(
+    'woCalendar_dateMode',
+    'deadline',
+  );
+  const dateMode = controlledDateMode ?? localDateMode;
+  const setDateMode = useCallback(
+    (mode: DateMode) => {
+      if (onDateModeChange) {
+        onDateModeChange(mode);
+      } else {
+        setLocalDateMode(mode);
+      }
+    },
+    [onDateModeChange, setLocalDateMode],
+  );
 
   // ── Technician colour map ───────────────────────────────────────────
   const techColorMap = useMemo(() => {
@@ -175,6 +196,9 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
 
     const tip = document.createElement('div');
     tip.className = 'wo-cal-tooltip';
+    // P1-UX.6: Dual date display with labels
+    const deadlineDate = wo.sla_deadline ? new Date(wo.sla_deadline).toLocaleDateString() : '—';
+    const creationDate = wo.created_at ? new Date(wo.created_at).toLocaleDateString() : '—';
     tip.innerHTML = `
       <div class="tip-title">${wo.device_name || wo.device_id || 'Untitled'}</div>
       <div class="tip-body">
@@ -182,8 +206,9 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
         <div><span>Priority</span><strong>${wo.priority}</strong></div>
         ${wo.assignee_name ? `<div><span>Tech</span><strong>${wo.assignee_name}</strong></div>` : ''}
         ${wo.type ? `<div><span>Type</span><strong>${wo.type}</strong></div>` : ''}
-        ${wo.sla_deadline ? `<div><span>Due</span><strong>${new Date(wo.sla_deadline).toLocaleDateString()}</strong></div>` : ''}
-        ${wo.created_at ? `<div><span>Created</span><strong>${new Date(wo.created_at).toLocaleDateString()}</strong></div>` : ''}
+        <div class="tip-divider"></div>
+        <div><span class="tip-label-red">● Due</span><strong>${deadlineDate}</strong></div>
+        <div><span class="tip-label-blue">● Created</span><strong>${creationDate}</strong></div>
       </div>
     `;
 
@@ -206,7 +231,7 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
 
   return (
     <div className={`work-order-calendar ${className}`}>
-      {/* ── Filter bar + Date mode toggle (P1-1.2) ──────────────────── */}
+      {/* ── Filter bar + Date mode toggle (P1-UX.6) ────────────────── */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <label className="text-sm font-medium text-slate-600 dark:text-slate-400">
           {t('technician') || 'Technician'}:
@@ -224,13 +249,13 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
           </select>
         </label>
 
-        {/* P1-1.2: Date Mode Toggle */}
+        {/* P1-UX.6: Date Mode Toggle */}
         <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden" role="radiogroup" aria-label={t('date_mode') || 'Date mode'}>
           <button
             onClick={() => setDateMode('deadline')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
               dateMode === 'deadline'
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
                 : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
             }`}
             role="radio"
@@ -256,31 +281,20 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
           </button>
         </div>
 
-        {/* ── Legend (P1-1.2) ─────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
-          {techFilter === 'all'
-            ? technicians.slice(0, 8).map(t => (
-                <span key={t.id} className="flex items-center gap-1">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: techColorMap[t.id] ?? '#9CA3AF' }}
-                  />
-                  {t.name || t.username}
-                </span>
-              ))
-            : (
-                <span className="flex items-center gap-1">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded"
-                    style={{ backgroundColor: DATE_MODE_COLORS[dateMode].border }}
-                  />
-                  {dateMode === 'deadline'
-                    ? (t('by_deadline') || 'By Deadline')
-                    : (t('by_creation') || 'By Creation Date')
-                  }
-                </span>
-              )}
-        </div>
+        {/* ── Technician legend (when showing all) ───────────────────── */}
+        {techFilter === 'all' && (
+          <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+            {technicians.slice(0, 8).map(t => (
+              <span key={t.id} className="flex items-center gap-1">
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: techColorMap[t.id] ?? '#9CA3AF' }}
+                />
+                {t.name || t.username}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Calendar ───────────────────────────────────────────────── */}
@@ -314,6 +328,22 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
           nowIndicator
           locale="en"
         />
+      </div>
+
+      {/* ── Date Mode Legend (P1-UX.6) ──────────────────────────────── */}
+      <div className="flex items-center justify-center gap-6 mt-3 text-xs text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#EF4444' }} />
+          <span>{t('deadline_legend') || 'Deadline'}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: '#3B82F6' }} />
+          <span>{t('creation_legend') || 'Creation date'}</span>
+        </span>
+        <span className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+          <Info className="w-3 h-3" />
+          <span>{t('date_mode_hint') || 'Hover events for both dates'}</span>
+        </span>
       </div>
     </div>
   );

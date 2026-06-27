@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { Badge, Button, LiveSLATimer } from '../ui';
 import { WorkOrder } from '../../services/workOrdersApi';
+import { CollaborationStatusBar, PresenceAvatars } from './PresenceIndicators';
+import type { PresenceInfo } from '../../services/collaboration';
 
 const priorityVariant: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
   critical: 'danger',
@@ -47,6 +49,14 @@ interface WODetailHeaderProps {
   onComplete: () => void;
   onCancel: () => void;
   onBack: () => void;
+  // Collaboration props (P3-NICE.1)
+  presences?: PresenceInfo[];
+  hasConflict?: boolean;
+  conflictUsers?: string[];
+  isCollabConnected?: boolean;
+  currentUserId?: string;
+  isEditing?: boolean;
+  onEditingToggle?: (editing: boolean) => void;
 }
 
 export const WODetailHeader: React.FC<WODetailHeaderProps> = ({
@@ -56,13 +66,33 @@ export const WODetailHeader: React.FC<WODetailHeaderProps> = ({
   onComplete,
   onCancel,
   onBack,
+  presences,
+  hasConflict,
+  conflictUsers,
+  isCollabConnected,
+  currentUserId,
+  isEditing,
+  onEditingToggle,
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 pb-4 border-b border-slate-200 dark:border-slate-700">
+      {/* Collaboration status bar (P3-NICE.1) */}
+      {presences && currentUserId && (
+        <CollaborationStatusBar
+          presences={presences}
+          hasConflict={hasConflict || false}
+          conflictUsers={conflictUsers || []}
+          isConnected={isCollabConnected || false}
+          currentUserId={currentUserId}
+          onEditingToggle={onEditingToggle}
+          isEditing={isEditing}
+        />
+      )}
+
       {/* Top row: back + title + badges + actions */}
-      <div className="flex items-start gap-4 mb-4">
+      <div className="flex items-start gap-4 mt-2 mb-4">
         <button
           onClick={onBack}
           className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mt-1"

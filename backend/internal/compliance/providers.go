@@ -239,6 +239,114 @@ func (p *EUProfile) Session() SessionPolicy {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// RU Profile — Российская Федерация (ГОСТ, 152-ФЗ, ФСТЭК)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - ГОСТ 28147-89 (Магма) — Симметричное шифрование
+//   - ГОСТ Р 34.10-2012 — Цифровые подписи (256/512)
+//   - ГОСТ Р 34.11-2012 (Стрибог) — Хеширование 256/512
+//   - 152-ФЗ — Персональные данные РФ
+//   - Приказ ФСТЭК № 17 — Защита информации
+//   - IEC 62443-3-3 — IACS Security
+//   - ISO 27001 — Information Security
+
+// RUProfile implements ComplianceProfile для Российской Федерации.
+type RUProfile struct {
+	*BaseProfile
+}
+
+// NewRUProfile создаёт RU Compliance Profile.
+func NewRUProfile() *RUProfile {
+	return &RUProfile{
+		BaseProfile: NewBaseProfile(RegionRU,
+			"ГОСТ (Российская Федерация)",
+			"Профиль соответствия для РФ. ГОСТ Р 34.10-2012, ГОСТ Р 34.11-2012, 152-ФЗ, ФСТЭК.",
+		),
+	}
+}
+
+func (p *RUProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoGOST, // ГОСТ 28147-89 (Магма)
+		KeySize:       256,
+		AADRequired:   true,
+		TLSMinVersion: "1.3", // ГОСТ TLS 1.3
+	}
+}
+
+func (p *RUProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashStribog, // ГОСТ Р 34.11-2012 (Стрибог 256)
+		SaltRequired:   true,
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *RUProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureGOST3410, // ГОСТ Р 34.10-2012
+		Curve:       "GOST-256",
+		HashForSign: HashStribog,
+	}
+}
+
+func (p *RUProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              8, // ФСТЭК: минимум 8 символов
+		RequireMFA:             true,
+		MFATypes:               []MFAType{MFATOTP, MFASMS},
+		MaxAgeDays:             90, // Ротация 90 дней (ФСТЭК)
+		HistoryCount:           5,  // 5 предыдущих паролей
+		RequireComplexity:      true,
+		LockoutThreshold:       3,  // 3 попытки (ФСТЭК)
+		LockoutDurationMinutes: 30, // Блокировка 30 мин
+	}
+}
+
+func (p *RUProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionRU},
+		CrossBorderTransferAllowed: false, // Запрет трансграничной передачи (152-ФЗ)
+		ColdStorageRegion:          RegionRU,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true,
+	}
+}
+
+func (p *RUProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       1095, // 3 года (152-ФЗ)
+		EventDataDays:      365,  // 1 год
+		VideoDataDays:      30,   // 30 дней
+		LegalHoldSupported: true,
+		AutoDeleteEnabled:  false, // Ручное удаление (ФСТЭК)
+	}
+}
+
+func (p *RUProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true,
+		ChainHashPrev:   true,
+		RetentionYears:  3, // 3 года (152-ФЗ)
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *RUProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       30, // 30 мин бездействия (ФСТЭК)
+		MaxSessionHours:          8,  // 8 часов
+		MaxConcurrentSessions:    1,  // 1 сессия
+		FailedLoginLockout:       3,  // 3 попытки
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // INTL Profile — International (ISO 27001, ISO 27019, IEC 62443)
 // ═══════════════════════════════════════════════════════════════════════════
 //
@@ -364,6 +472,7 @@ func RegisterBaselineProfiles(logger *slog.Logger) *ProfileRegistry {
 		WithLogger(logger),
 		WithDefaultProfile(RegionINTL),
 		WithProfile(NewBYProfile()),
+		WithProfile(NewRUProfile()),
 		WithProfile(NewEUProfile()),
 		WithProfile(NewINTLProfile()),
 	)

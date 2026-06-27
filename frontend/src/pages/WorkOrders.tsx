@@ -126,6 +126,7 @@ const InlineEditSelect: React.FC<InlineEditSelectProps> = ({
 // ═══════════════════════════════════════════════════════════════════════
 
 type ViewMode = 'table' | 'kanban' | 'calendar';
+type DateMode = 'deadline' | 'creation';
 
 type BulkActionType = 'status_change' | 'assign' | 'delete' | 'priority_change';
 
@@ -147,6 +148,13 @@ export const WorkOrders: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+
+  // P1-UX.6: Calendar date mode (deadline vs creation date)
+  const [calendarDateMode, setCalendarDateMode] = useState<DateMode>(() => {
+    const stored = localStorage.getItem('woCalendar_dateMode');
+    if (stored === 'deadline' || stored === 'creation') return stored;
+    return 'deadline';
+  });
 
   // ═══════════════════════════════════════════════════════════════════
   // View Mode Persistence (P0-2.3)
@@ -634,6 +642,8 @@ export const WorkOrders: React.FC = () => {
             onDateChange={handleCalendarDateChange}
             onEventClick={(wo) => navigate(`/work-orders/${wo.id}`)}
             onDateClick={handleCalendarDateClick}
+            dateMode={calendarDateMode}
+            onDateModeChange={setCalendarDateMode}
           />
         )}
       </Card>

@@ -74,7 +74,7 @@ func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 
 	endpoints, err := s.webhookStore.ListWebhookEndpoints(r.Context())
 	if err != nil {
-		respondError(w, r, fmt.Errorf("list webhooks: %w", err))
+		RespondError(w, r, fmt.Errorf("list webhooks: %w", err))
 		return
 	}
 
@@ -99,7 +99,7 @@ func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 	var cfg WebhookConfig
 	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-		respondError(w, r, fmt.Errorf("invalid request body: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid request body: %w", err))
 		return
 	}
 
@@ -122,7 +122,7 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.webhookStore.CreateWebhookEndpoint(r.Context(), wh); err != nil {
-			respondError(w, r, fmt.Errorf("create webhook: %w", err))
+			RespondError(w, r, fmt.Errorf("create webhook: %w", err))
 			return
 		}
 
@@ -142,7 +142,7 @@ func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var cfg WebhookConfig
 	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-		respondError(w, r, fmt.Errorf("invalid request body: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid request body: %w", err))
 		return
 	}
 
@@ -157,7 +157,7 @@ func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
 			TimeoutSeconds: cfg.TimeoutSeconds,
 		}
 		if err := s.webhookStore.UpdateWebhookEndpoint(r.Context(), id, wh); err != nil {
-			respondError(w, r, fmt.Errorf("update webhook %s: %w", id, err))
+			RespondError(w, r, fmt.Errorf("update webhook %s: %w", id, err))
 			return
 		}
 	}
@@ -172,7 +172,7 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if s.webhookStore != nil {
 		if err := s.webhookStore.DeleteWebhookEndpoint(r.Context(), id); err != nil {
-			respondError(w, r, fmt.Errorf("delete webhook %s: %w", id, err))
+			RespondError(w, r, fmt.Errorf("delete webhook %s: %w", id, err))
 			return
 		}
 	}
@@ -184,7 +184,7 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, fmt.Errorf("webhook ID is required"))
+		RespondError(w, r, fmt.Errorf("webhook ID is required"))
 		return
 	}
 
@@ -195,11 +195,11 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	if s.webhookStore != nil {
 		wh, err := s.webhookStore.GetWebhookEndpoint(r.Context(), id)
 		if err != nil {
-			respondError(w, r, fmt.Errorf("get webhook %s: %w", id, err))
+			RespondError(w, r, fmt.Errorf("get webhook %s: %w", id, err))
 			return
 		}
 		if wh == nil {
-			respondError(w, r, fmt.Errorf("webhook %s not found", id))
+			RespondError(w, r, fmt.Errorf("webhook %s not found", id))
 			return
 		}
 		targetURL = wh.URL
@@ -233,7 +233,7 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, fmt.Errorf("webhook ID is required"))
+		RespondError(w, r, fmt.Errorf("webhook ID is required"))
 		return
 	}
 
@@ -254,7 +254,7 @@ func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
 
 	logs, err := s.webhookStore.GetDeliveryLogs(r.Context(), id, limit, offset)
 	if err != nil {
-		respondError(w, r, fmt.Errorf("get delivery logs: %w", err))
+		RespondError(w, r, fmt.Errorf("get delivery logs: %w", err))
 		return
 	}
 
@@ -266,26 +266,26 @@ func (s *Server) handleGetWebhookLogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRetryWebhook(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, fmt.Errorf("delivery log ID is required"))
+		RespondError(w, r, fmt.Errorf("delivery log ID is required"))
 		return
 	}
 
 	if s.webhookStore == nil || s.deliveryWorker == nil {
-		respondError(w, r, fmt.Errorf("delivery worker not available"))
+		RespondError(w, r, fmt.Errorf("delivery worker not available"))
 		return
 	}
 
 	// Получаем логи доставки с лимитом 1 (самый последний)
 	logs, err := s.webhookStore.GetDeliveryLogs(r.Context(), id, 1, 0)
 	if err != nil || len(logs) == 0 {
-		respondError(w, r, fmt.Errorf("delivery log not found"))
+		RespondError(w, r, fmt.Errorf("delivery log not found"))
 		return
 	}
 
 	dl := logs[0]
 	endpoint, err := s.webhookStore.GetWebhookEndpoint(r.Context(), dl.WebhookID)
 	if err != nil || endpoint == nil {
-		respondError(w, r, fmt.Errorf("webhook endpoint not found"))
+		RespondError(w, r, fmt.Errorf("webhook endpoint not found"))
 		return
 	}
 
@@ -293,7 +293,7 @@ func (s *Server) handleRetryWebhook(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	if err := s.webhookStore.UpdateDeliveryLog(r.Context(), dl.ID, "pending",
 		dl.ResponseStatus, dl.ResponseBody, "", dl.DurationMs, &now); err != nil {
-		respondError(w, r, fmt.Errorf("reset delivery log: %w", err))
+		RespondError(w, r, fmt.Errorf("reset delivery log: %w", err))
 		return
 	}
 
@@ -311,7 +311,7 @@ func (s *Server) handleListExternalSystems(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleCreateExternalSystem(w http.ResponseWriter, r *http.Request) {
 	var sys ExternalSystem
 	if err := json.NewDecoder(r.Body).Decode(&sys); err != nil {
-		respondError(w, r, fmt.Errorf("invalid request body: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid request body: %w", err))
 		return
 	}
 	sys.ID = fmt.Sprintf("ext_%d", time.Now().UnixNano())
@@ -325,7 +325,7 @@ func (s *Server) handleUpdateExternalSystem(w http.ResponseWriter, r *http.Reque
 	id := chi.URLParam(r, "id")
 	var sys ExternalSystem
 	if err := json.NewDecoder(r.Body).Decode(&sys); err != nil {
-		respondError(w, r, fmt.Errorf("invalid request body: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid request body: %w", err))
 		return
 	}
 	sys.ID = id
@@ -362,13 +362,13 @@ func (s *Server) handleExportData(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportData(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil || len(body) == 0 {
-		respondError(w, r, fmt.Errorf("empty request body"))
+		RespondError(w, r, fmt.Errorf("empty request body"))
 		return
 	}
 
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
-		respondError(w, r, fmt.Errorf("invalid JSON: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid JSON: %w", err))
 		return
 	}
 

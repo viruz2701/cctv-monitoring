@@ -36,19 +36,19 @@ func (p *dbSiteProvider) GetSiteInfo(ctx context.Context, workOrderID string) (*
 func (s *Server) handleVerifyWorkOrder(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("unauthorized"))
+		RespondError(w, r, NewUnauthorizedError("unauthorized"))
 		return
 	}
 
 	workOrderID := chi.URLParam(r, "id")
 	if workOrderID == "" {
-		respondError(w, r, NewBadRequestError("work order id is required"))
+		RespondError(w, r, NewBadRequestError("work order id is required"))
 		return
 	}
 
 	var req gatekeeper.VerificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("Invalid request body"))
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *Server) handleVerifyWorkOrder(w http.ResponseWriter, r *http.Request) {
 	resp, err := verifier.Verify(r.Context(), req, workOrderID, claims.UserID)
 	if err != nil {
 		s.logger.Error("Gatekeeper verification failed", "error", err, "work_order", workOrderID)
-		respondError(w, r, NewInternalError("operation failed", err))
+		RespondError(w, r, NewInternalError("operation failed", err))
 		return
 	}
 

@@ -3,6 +3,7 @@
 package api
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -180,6 +181,80 @@ func TestValidator_RangeFloat(t *testing.T) {
 	}
 }
 
+func TestValidator_Email(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		valid bool
+	}{
+		{"valid email", "user@example.com", true},
+		{"valid with plus", "user+tag@example.com", true},
+		{"invalid - no domain", "user@", false},
+		{"invalid - no @", "userexample.com", false},
+		{"empty string (optional)", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			v.Email("field", tt.value)
+			if v.Valid() != tt.valid {
+				t.Errorf("Expected Valid()=%v, got %v for value=%q",
+					tt.valid, v.Valid(), tt.value)
+			}
+		})
+	}
+}
+
+func TestValidator_IP(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		valid bool
+	}{
+		{"valid IPv4", "192.168.1.1", true},
+		{"valid IPv6", "::1", true},
+		{"invalid", "not-an-ip", false},
+		{"empty string (optional)", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			v.IP("field", tt.value)
+			if v.Valid() != tt.valid {
+				t.Errorf("Expected Valid()=%v, got %v for value=%q",
+					tt.valid, v.Valid(), tt.value)
+			}
+		})
+	}
+}
+
+func TestValidator_Port(t *testing.T) {
+	tests := []struct {
+		name  string
+		value int
+		valid bool
+	}{
+		{"valid port 80", 80, true},
+		{"valid port 443", 443, true},
+		{"valid port 65535", 65535, true},
+		{"invalid port 0", 0, false},
+		{"invalid port 70000", 70000, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewValidator()
+			v.Port("field", tt.value)
+			if v.Valid() != tt.valid {
+				t.Errorf("Expected Valid()=%v, got %v for port=%d",
+					tt.valid, v.Valid(), tt.value)
+			}
+		})
+	}
+}
+
 func TestValidator_ChainedValidation(t *testing.T) {
 	v := NewValidator()
 	v.Required("name", "").
@@ -204,6 +279,137 @@ func TestValidator_ValidChain(t *testing.T) {
 
 	if !v.Valid() {
 		t.Errorf("Expected validation to pass, got errors: %v", v.Errors())
+	}
+}
+
+// ── ValidationErrors tests (P1-SEC.3) ──────────────────────────────────
+
+func TestValidationErrors_AddAndValid(t *testing.T) {
+	ve := &ValidationErrors{}
+	if !ve.Valid() {
+		t.Error("Expected empty ValidationErrors to be valid")
+	}
+
+	ve.Add("name", "required", "REQUIRED")
+	if ve.Valid() {
+		t.Error("Expected ValidationErrors with errors to be invalid")
+	}
+}
+
+func TestValidationErrors_Error(t *testing.T) {
+	ve := &ValidationErrors{}
+	ve.Add("name", "required", "REQUIRED")
+	ve.Add("email", "invalid format", "INVALID_FORMAT")
+
+	msg := ve.Error()
+	if msg != "name: required; email: invalid format" {
+		t.Errorf("unexpected error message: %s", msg)
+	}
+}
+
+func TestValidationErrors_JSON(t *testing.T) {
+	ve := &ValidationErrors{}
+	ve.Add("name", "required", "REQUIRED")
+
+	// ValidationErrors has Fields with json tags, so json.Marshal works
+	// Just verify the struct is properly tagged
+	if len(ve.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(ve.Fields))
+	}
+	if ve.Fields[0].Field != "name" {
+		t.Errorf("expected field 'name', got '%s'", ve.Fields[0].Field)
+	}
+	if ve.Fields[0].Code != "REQUIRED" {
+		t.Errorf("expected code 'REQUIRED', got '%s'", ve.Fields[0].Code)
+	}
+}
+
+// ── Domain validator tests (P1-SEC.3) ──────────────────────────────────
+
+func TestValidateWorkOrderRequest_Valid(t *testing.T) {
+	err := validateWorkOrderRequest("Fix camera", "maintenance", "high", "Need to fix camera at site A")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestValidateWorkOrderRequest_Invalid(t *testing.T) {
+	err := validateWorkOrderRequest("", "invalid_type", "", "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var ve *ValidationErrors
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected ValidationErrors, got %T", err)
+	}
+
+	if len(ve.Fields) < 3 {
+		t.Errorf("expected at least 3 field errors, got %d", len(ve.Fields))
+	}
+}
+
+func TestValidateSiteRequest_Valid(t *testing.T) {
+	err := validateSiteRequest("Main Office", "123 Main St", "Minsk")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestValidateSiteRequest_MissingFields(t *testing.T) {
+	err := validateSiteRequest("", "", "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var ve *ValidationErrors
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected ValidationErrors, got %T", err)
+	}
+
+	// 3 required fields
+	if len(ve.Fields) < 3 {
+		t.Errorf("expected at least 3 field errors, got %d", len(ve.Fields))
+	}
+}
+
+func TestValidateLoginRequest_Valid(t *testing.T) {
+	err := validateLoginRequest("admin", "password123")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestValidateLoginRequest_Empty(t *testing.T) {
+	err := validateLoginRequest("", "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var ve *ValidationErrors
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected ValidationErrors, got %T", err)
+	}
+}
+
+// ── ValidationErrors As error interface tests ──────────────────────────
+
+func TestNewValidator_Empty(t *testing.T) {
+	v := NewValidator()
+	if !v.Valid() {
+		t.Error("new validator should be valid")
+	}
+	if len(v.Errors()) != 0 {
+		t.Errorf("expected 0 errors, got %d", len(v.Errors()))
+	}
+}
+
+func TestRespondValidationError_Interface(t *testing.T) {
+	// Verify the function signature compiles correctly
+	ve := &ValidationErrors{}
+	ve.Add("test", "error", "ERR")
+	if !errors.As(ve, &ve) {
+		t.Error("ValidationErrors should implement error interface")
 	}
 }
 

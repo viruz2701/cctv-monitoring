@@ -21,7 +21,14 @@ import interactionPlugin from '@fullcalendar/interaction';
 import type { EventDropArg, EventContentArg, EventMountArg } from '@fullcalendar/core';
 import type { User } from '../../services/api';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Clock, User as UserIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Clock,
+  Users,
+  AlertCircle,
+  User as UserIcon,
+} from 'lucide-react';
 import type {
   ScheduleSlot,
   ScheduleConflict,
@@ -75,6 +82,13 @@ function formatDateLabel(dateStr: string): string {
 // Types
 // ═══════════════════════════════════════════════════════════════════════
 
+export interface AnalyticsData {
+  totalHours: number;
+  techCount: number;
+  conflictCount: number;
+  utilizationRate: number;
+}
+
 export interface TechnicianCalendarProps {
   technicians: User[];
   slots: ScheduleSlot[];
@@ -85,6 +99,76 @@ export interface TechnicianCalendarProps {
   onEventClick?: (workOrderId: string) => void;
   className?: string;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Analytics helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+function slotDurationHours(start: string, end: string): number {
+  return (new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60);
+}
+
+function computeAnalytics(
+  slots: ScheduleSlot[],
+  technicians: User[],
+  conflicts: ScheduleConflict[],
+  dayLoads: Map<string, DayLoad[]>,
+): AnalyticsData {
+  const totalHours = slots.reduce(
+    (sum, s) => sum + slotDurationHours(s.start, s.end),
+    0,
+  );
+
+  let totalLoad = 0;
+  let totalMax = 0;
+  for (const loads of dayLoads.values()) {
+    for (const dl of loads) {
+      totalLoad += dl.totalHours;
+      totalMax += dl.maxHours;
+    }
+  }
+  const utilizationRate = totalMax > 0
+    ? Math.round((totalLoad / totalMax) * 100)
+    : 0;
+
+  return {
+    totalHours: Math.round(totalHours * 10) / 10,
+    techCount: technicians.length,
+    conflictCount: conflicts.length,
+    utilizationRate,
+  };
+}
+
+interface AnalyticsCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  accent?: 'blue' | 'amber' | 'emerald' | 'red';
+}
+
+const AnalyticsCard = React.memo(function AnalyticsCard({
+  icon,
+  label,
+  value,
+  accent = 'blue',
+}: AnalyticsCardProps) {
+  const accentStyles: Record<string, string> = {
+    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300',
+    amber: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300',
+    red: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+  };
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${accentStyles[accent]}`}>
+      <div className="shrink-0">{icon}</div>
+      <div>
+        <p className="text-xs font-medium opacity-75">{label}</p>
+        <p className="text-lg font-bold">{value}</p>
+      </div>
+    </div>
+  );
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // Component
@@ -114,6 +198,12 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     }
     return map;
   }, [conflicts]);
+
+  // ── Reactive analytics computation ──────────────────────────────
+  const analytics = useMemo<AnalyticsData>(
+    () => computeAnalytics(slots, technicians, conflicts, dayLoads),
+    [slots, technicians, conflicts, dayLoads],
+  );
 
   // ── FullCalendar resources (technician rows) ─────────────────────
   const resources = useMemo(() => {
@@ -179,8 +269,64 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     if (woId && onEventClick) onEventClick(woId);
   }, [onEventClick]);
 
+  /**
+   * Handle event drop — including cross-resource (inter-technician) moves.
+   * FullCalendar resource-timeline attaches newResource when an event is
+   * dragged to a different resource row.
+   */
   const handleEventDrop = useCallback(async (info: EventDropArg) => {
+    const drop = info as EventDropArg & {
+      oldResource?: { id: string };
+      newResource?: { id: string };
+    };
+    const resourceChanged =
+      drop.newResource && drop.oldResource &&
+      drop.newResource.id !== drop.oldResource.id;
+
+    if (resourceChanged) {
+      // Cross-resource move: patch the event's resourceId before the hook processes it.
+      // Using internal API — resource-timeline plugin sets event.resourceIds after drop.
+      const event = info.event as unknown as { resourceIds: string[]; setProp: (name: string, val: unknown) => void };
+      if (event.setProp) {
+        event.setProp('resourceIds', [drop.newResource!.id]);
+      }
+    }
+
     await onEventDrop(info);
+  }, [onEventDrop]);
+
+  /**
+   * Handle event receive — when an external element is dropped onto
+   * a resource row (e.g. from an external source or cross-resource move).
+   * Delegates to the same onEventDrop pipeline.
+   */
+  const handleEventReceive = useCallback(async (info: {
+    event: { id: string; title: string; start: Date | null; end: Date | null; setProp: (name: string, val: unknown) => void };
+    resource?: { id: string };
+    revert: () => void;
+  }) => {
+    const targetResourceId = info.resource?.id;
+    if (!targetResourceId || !info.event.start) {
+      info.revert();
+      return;
+    }
+
+    // Assign to the target resource
+    info.event.setProp('resourceIds', [targetResourceId]);
+
+    // Build a minimal EventDropArg-like object to pass through the pipeline
+    await onEventDrop({
+      event: info.event as unknown as EventDropArg['event'],
+      oldEvent: info.event as unknown as EventDropArg['oldEvent'],
+      revert: info.revert,
+      view: {} as EventDropArg['view'],
+      el: {} as HTMLElement,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delta: { days: 0, milliseconds: 0 } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jsEvent: {} as any,
+      relatedEvents: [],
+    });
   }, [onEventDrop]);
 
   // ── Custom resource label rendering ──────────────────────────────
@@ -324,9 +470,78 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     );
   }, [conflicts, showConflicts, t]);
 
+  // ── Print styles (component-level overrides) ────────────────────
+  const printStyles = useMemo(() => (
+    <style>{`
+@media print {
+  .technician-calendar .analytics-cards {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .technician-calendar .fc-header-toolbar .fc-button {
+    display: none !important;
+  }
+  .technician-calendar .fc-header-toolbar .fc-toolbar-title {
+    font-size: 14pt !important;
+    font-weight: 700 !important;
+  }
+  .technician-calendar .fc .fc-timeline-now-indicator {
+    display: none !important;
+  }
+  .technician-calendar::before {
+    content: "CCTV Health Monitor \\2014 Resource Planning";
+    display: block;
+    font-size: 18pt;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 12px;
+    color: #1e293b;
+  }
+}
+    `}</style>
+  ), []);
+
   // ── Render ───────────────────────────────────────────────────────
   return (
     <div className={`technician-calendar ${className}`}>
+      {printStyles}
+
+      {/* Analytics cards */}
+      <div className="analytics-cards grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 print:gap-2 print:mb-3">
+        <AnalyticsCard
+          icon={<BarChart3 className="w-5 h-5" />}
+          label={t('total_hours') || 'Total Hours'}
+          value={`${analytics.totalHours}h`}
+          accent="blue"
+        />
+        <AnalyticsCard
+          icon={<Users className="w-5 h-5" />}
+          label={t('available_technicians') || 'Technicians'}
+          value={analytics.techCount}
+          accent="emerald"
+        />
+        <AnalyticsCard
+          icon={<Clock className="w-5 h-5" />}
+          label={t('utilization_rate') || 'Utilization'}
+          value={`${analytics.utilizationRate}%`}
+          accent={
+            analytics.utilizationRate > 85
+              ? 'red'
+              : analytics.utilizationRate > 65
+              ? 'amber'
+              : 'emerald'
+          }
+        />
+        <AnalyticsCard
+          icon={<AlertCircle className="w-5 h-5" />}
+          label={t('conflicts') || 'Conflicts'}
+          value={analytics.conflictCount}
+          accent={analytics.conflictCount > 0 ? 'red' : 'emerald'}
+        />
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         {/* Technician filter */}
@@ -386,7 +601,9 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
             eventDidMount={handleEventMount}
             eventClick={handleEventClick}
             editable
+            droppable
             eventDrop={handleEventDrop}
+            eventReceive={handleEventReceive}
             eventResizableFromStart
             eventDurationEditable
             height="auto"

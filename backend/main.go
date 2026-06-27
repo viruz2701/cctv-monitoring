@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -30,8 +31,9 @@ import (
 )
 
 type DBWriter struct {
-	db *db.DB
-	ch chan func()
+	db      *db.DB
+	ch      chan func()
+	stopped atomic.Bool
 }
 
 func NewDBWriter(database *db.DB, bufferSize int) *DBWriter {
@@ -47,11 +49,18 @@ func (w *DBWriter) start() {
 }
 
 func (w *DBWriter) Submit(job func()) {
+	if w.stopped.Load() {
+		return
+	}
 	select {
 	case w.ch <- job:
 	default:
-		// логгер будет доступен позже, но сброс не критичен
 	}
+}
+
+func (w *DBWriter) Stop() {
+	w.stopped.Store(true)
+	close(w.ch)
 }
 
 type stateManagerWrapper struct {
@@ -697,7 +706,7 @@ func main() {
 
 	// 12. DBWriter drain
 	logger.Info("Draining DB writer...")
-	close(dbWriter.ch)
+	dbWriter.Stop()
 	logger.Info("DB writer drained")
 
 	// 13. Database connection close

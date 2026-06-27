@@ -124,11 +124,14 @@ const VirtualTable = React.memo(function VirtualTableInner<T>({
     [onSelectionChange, selectedIds],
   );
 
+  // ── P1-UX.5: Auto-selection virtualization (>1000 items) ──
+  const enableVirtualization = filteredData.length > 1000;
   const rowVirtualizer = useVirtualizer({
     count: filteredData.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => estimateRowHeight,
     overscan,
+    enabled: enableVirtualization,
   });
 
   const exportCSV = useCallback(() => {
@@ -297,7 +300,7 @@ const VirtualTable = React.memo(function VirtualTableInner<T>({
         })}
       </div>
 
-      {/* Virtualized body */}
+      {/* Virtualized body (P1-UX.5: auto-selection + seamless fallback) */}
       <div
         ref={scrollRef}
         style={{ height: Math.min(maxHeight, Math.max(200, filteredData.length * estimateRowHeight)), overflow: 'auto' }}
@@ -307,7 +310,8 @@ const VirtualTable = React.memo(function VirtualTableInner<T>({
           <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400 text-sm">
             {search ? 'No results match your search' : emptyMessage}
           </div>
-        ) : (
+        ) : enableVirtualization ? (
+          /* Virtualized rows for 10k+ items */
           <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const item = filteredData[virtualRow.index];
@@ -352,6 +356,43 @@ const VirtualTable = React.memo(function VirtualTableInner<T>({
               );
             })}
           </div>
+        ) : (
+          /* Seamless fallback: direct rendering for <= 1000 items */
+          filteredData.map((item, rowIdx) => {
+            const id = keyExtractor(item);
+            const isSelected = selectedIds?.has(id);
+            return (
+              <div
+                key={id}
+                className={`grid w-full border-b border-slate-100 dark:border-slate-700/50 ${
+                  onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''
+                } ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : rowIdx % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-800/30' : ''}`}
+                style={{ gridTemplateColumns, minHeight: estimateRowHeight }}
+                onMouseEnter={() => onRowHover?.(item)}
+                onClick={() => onRowClick?.(item)}
+              >
+                {selectable && (
+                  <div className="flex items-center justify-center px-2" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => toggleSelect(id)} className="text-slate-400 hover:text-blue-600">
+                      {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
+                    </button>
+                  </div>
+                )}
+                {visibleColumns.map((column) => {
+                  const align = column.align || 'left';
+                  return (
+                    <div
+                      key={String(column.key)}
+                      className={`flex items-center px-4 py-4 text-sm text-slate-700 dark:text-slate-300 ${ALIGN_CLASSES[align]}`}
+                      style={{ minWidth: column.minWidth }}
+                    >
+                      {column.render ? column.render(item) : String(getValue(item, column.key) ?? '')}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
         )}
       </div>
 

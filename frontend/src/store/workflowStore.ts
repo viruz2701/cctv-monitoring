@@ -21,6 +21,17 @@ import {
 } from '../types/workflow';
 
 // ═══════════════════════════════════════════════════════════════════════
+// History entry snapshot
+// ═══════════════════════════════════════════════════════════════════════
+
+interface HistoryEntry {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
+const MAX_HISTORY = 50;
+
+// ═══════════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -31,6 +42,10 @@ interface WorkflowState {
 
   // ─── Version History ────────────────────────────────────────────────
   versions: Record<string, WorkflowVersion[]>;  // workflowId → versions
+
+  // ─── Undo/Redo History ──────────────────────────────────────────────
+  history: HistoryEntry[];
+  historyIndex: number;
 
   // ─── Test Mode ──────────────────────────────────────────────────────
   testMode: boolean;
@@ -59,6 +74,13 @@ interface WorkflowState {
   removeNode: (nodeId: string) => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
   updateNodeStatus: (nodeId: string, status: WorkflowNodeStatus, errorMessage?: string) => void;
+
+  // ─── Undo / Redo ────────────────────────────────────────────────────
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 
   // ─── Persistence ────────────────────────────────────────────────────
   saveCurrentWorkflow: () => void;
@@ -185,6 +207,11 @@ export const useWorkflowStore = create<WorkflowState>()(
       workflows: [],
       activeWorkflowId: null,
       versions: {},
+      history: [{
+        nodes: createDefaultNodes(),
+        edges: createDefaultEdges(),
+      }],
+      historyIndex: 0,
       testMode: false,
       currentTestRun: null,
       nodes: createDefaultNodes(),
@@ -247,11 +274,23 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       // ─── Graph Editing ──────────────────────────────────────────────
 
-      setNodes: (nodes) => set({ nodes, isDirty: true }),
+      setNodes: (nodes) => {
+        get().pushHistory();
+        set({ nodes, isDirty: true });
+      },
 
-      setEdges: (edges) => set({ edges, isDirty: true }),
+      setEdges: (edges) => {
+        get().pushHistory();
+        set({ edges, isDirty: true });
+      },
 
       onNodesChange: (changes) => {
+        const hasStructuralChange = changes.some(
+          (c: any) => c.type === 'remove' || (c.type === 'position' && !c.dragging)
+        );
+        if (hasStructuralChange) {
+          get().pushHistory();
+        }
         set((state) => {
           const newNodes = state.nodes.map((node) => {
             const change = changes.find((c: any) => c.id === node.id);
@@ -272,6 +311,10 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       onEdgesChange: (changes) => {
+        const hasRemove = changes.some((c: any) => c.type === 'remove');
+        if (hasRemove) {
+          get().pushHistory();
+        }
         set((state) => {
           const newEdges = state.edges
             .map((edge) => {
@@ -289,6 +332,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       onConnect: (connection) => {
+        get().pushHistory();
         const newEdge: WorkflowEdge = {
           id: `e-${connection.source}-${connection.target}`,
           source: connection.source,
@@ -305,6 +349,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
       addNode: (node) => {
+        get().pushHistory();
         set((state) => ({
           nodes: [...state.nodes, node],
           isDirty: true,
@@ -312,6 +357,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       removeNode: (nodeId) => {
+        get().pushHistory();
         set((state) => ({
           nodes: state.nodes.filter((n) => n.id !== nodeId),
           edges: state.edges.filter(
@@ -324,6 +370,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       },
 
       updateNodeConfig: (nodeId, config) => {
+        get().pushHistory();
         set((state) => ({
           nodes: state.nodes.map((n) =>
             n.id === nodeId
@@ -373,22 +420,30 @@ export const useWorkflowStore = create<WorkflowState>()(
       loadWorkflow: (id) => {
         const workflow = get().workflows.find((w) => w.id === id);
         if (workflow) {
+          const nodes = workflow.nodes;
+          const edges = workflow.edges;
           set({
-            nodes: workflow.nodes,
-            edges: workflow.edges,
+            nodes,
+            edges,
             isDirty: false,
             selectedNodeId: null,
+            history: [{ nodes, edges }],
+            historyIndex: 0,
           });
         }
       },
 
       resetEditor: () => {
+        const nodes = createDefaultNodes();
+        const edges = createDefaultEdges();
         set({
-          nodes: createDefaultNodes(),
-          edges: createDefaultEdges(),
+          nodes,
+          edges,
           selectedNodeId: null,
           isDirty: false,
           activeWorkflowId: null,
+          history: [{ nodes, edges }],
+          historyIndex: 0,
         });
       },
 
@@ -482,12 +537,16 @@ export const useWorkflowStore = create<WorkflowState>()(
           updatedAt: now,
           version: 1,
         };
+        const nodes = workflow.nodes;
+        const edges = workflow.edges;
         set((state) => ({
           workflows: [...state.workflows, workflow],
           activeWorkflowId: id,
-          nodes: workflow.nodes,
-          edges: workflow.edges,
+          nodes,
+          edges,
           isDirty: false,
+          history: [{ nodes, edges }],
+          historyIndex: 0,
         }));
         return id;
       },
@@ -546,6 +605,66 @@ export const useWorkflowStore = create<WorkflowState>()(
           })),
         }));
       },
+
+      // ─── Undo / Redo ──────────────────────────────────────────────────
+
+      pushHistory: () => {
+        const { nodes, edges, history, historyIndex } = get();
+        const snapshot: HistoryEntry = {
+          nodes: nodes.map((n) => ({
+            ...n,
+            data: { ...n.data, status: n.data.status ?? 'idle', errorMessage: n.data.errorMessage },
+            selected: n.selected,
+          })),
+          edges: edges.map((e) => ({ ...e })),
+        };
+
+        // Truncate any future history if we're not at the end
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(snapshot);
+
+        // Enforce max 50 entries
+        if (newHistory.length > MAX_HISTORY) {
+          newHistory.shift();
+        }
+
+        set({
+          history: newHistory,
+          historyIndex: newHistory.length - 1,
+        });
+      },
+
+      undo: () => {
+        const { historyIndex, history } = get();
+        if (historyIndex <= 0) return;
+
+        const newIndex = historyIndex - 1;
+        const entry = history[newIndex];
+        set({
+          nodes: entry.nodes,
+          edges: entry.edges,
+          historyIndex: newIndex,
+          isDirty: true,
+        });
+      },
+
+      redo: () => {
+        const { historyIndex, history } = get();
+        if (historyIndex >= history.length - 1) return;
+
+        const newIndex = historyIndex + 1;
+        const entry = history[newIndex];
+        set({
+          nodes: entry.nodes,
+          edges: entry.edges,
+          historyIndex: newIndex,
+          isDirty: true,
+        });
+      },
+
+      canUndo: () => get().historyIndex > 0,
+
+      canRedo: () => get().historyIndex < get().history.length - 1,
     }),
     {
       name: 'cctv-workflows',

@@ -16,13 +16,13 @@ import (
 func (s *Server) listP2PDevices(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	resp, err := s.proxyP2PGateway("GET", "/api/v1/devices", nil)
 	if err != nil {
 		s.logger.Error("p2p list devices failed", "error", err)
-		respondError(w, r, NewExternalServiceError("p2p gateway error"))
+		RespondError(w, r, NewExternalServiceError("p2p gateway error"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -32,7 +32,7 @@ func (s *Server) listP2PDevices(w http.ResponseWriter, r *http.Request) {
 func (s *Server) registerP2PDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	body, _ := io.ReadAll(r.Body)
@@ -40,7 +40,7 @@ func (s *Server) registerP2PDevice(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.proxyP2PGateway("POST", "/api/v1/devices", body)
 	if err != nil {
 		s.logger.Error("p2p register device failed", "error", err)
-		respondError(w, r, NewExternalServiceError("p2p gateway error"))
+		RespondError(w, r, NewExternalServiceError("p2p gateway error"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -50,14 +50,14 @@ func (s *Server) registerP2PDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getP2PDeviceStatus(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	id := chi.URLParam(r, "id")
 	resp, err := s.proxyP2PGateway("GET", "/api/v1/devices/"+id+"/status", nil)
 	if err != nil {
 		s.logger.Error("p2p get status failed", "error", err)
-		respondError(w, r, NewExternalServiceError("p2p gateway error"))
+		RespondError(w, r, NewExternalServiceError("p2p gateway error"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -67,7 +67,7 @@ func (s *Server) getP2PDeviceStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) sendP2PCommand(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	id := chi.URLParam(r, "id")
@@ -76,7 +76,7 @@ func (s *Server) sendP2PCommand(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.proxyP2PGateway("POST", "/api/v1/devices/"+id+"/command", body)
 	if err != nil {
 		s.logger.Error("p2p send command failed", "error", err)
-		respondError(w, r, NewExternalServiceError("p2p gateway error"))
+		RespondError(w, r, NewExternalServiceError("p2p gateway error"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -86,14 +86,14 @@ func (s *Server) sendP2PCommand(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getP2PSnapshot(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	id := chi.URLParam(r, "id")
 	resp, err := s.proxyP2PGateway("GET", "/api/v1/devices/"+id+"/snapshot", nil)
 	if err != nil {
 		s.logger.Error("p2p get snapshot failed", "error", err)
-		respondError(w, r, NewExternalServiceError("p2p gateway error"))
+		RespondError(w, r, NewExternalServiceError("p2p gateway error"))
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")

@@ -16,7 +16,7 @@
 //   - OWASP ASVS V7 (Error handling — no info leakage)
 // ═══════════════════════════════════════════════════════════════════════
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -34,8 +34,9 @@ import {
   XCircle,
   AlertTriangle,
   Trash2,
-  Plus,
   Play,
+  BarChart3,
+  Shield,
 } from 'lucide-react';
 import { Button, Input, Badge, Card, useToast } from '../ui';
 import {
@@ -45,12 +46,19 @@ import {
   useUpdateWebhook,
   useDeleteWebhook,
   useTestWebhookWithPayload,
+  useWebhookStats,
   EVENT_GROUPS,
   EVENT_PAYLOADS,
   type WebhookFormData,
   type TestWebhookResult,
+  type WebhookLogEntry,
 } from '../../hooks/useWebhooks';
 import type { WebhookEndpoint } from '../../services/api';
+import { WebhookRetryPolicy } from './WebhookRetryPolicy';
+import { WebhookStatsCards } from './WebhookStatsCards';
+import { HmacVerificationHelper } from './HmacVerificationHelper';
+import { WebhookLogFilter, filterLogs, DEFAULT_LOG_FILTER } from './WebhookLogFilter';
+import type { LogFilterState } from './WebhookLogFilter';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Zod Schema
@@ -74,6 +82,9 @@ const webhookSchema = z.object({
   active: z.boolean().default(true),
   retry_count: z.number().int().min(0).max(10).default(3),
   timeout_seconds: z.number().int().min(1).max(120).default(30),
+  retry_interval_seconds: z.number().int().min(10).max(3600).default(60),
+  retry_backoff: z.boolean().default(true),
+  max_retry_duration_seconds: z.number().int().min(60).max(86400).default(3600),
 });
 
 type WebhookFormValues = z.infer<typeof webhookSchema>;
@@ -114,6 +125,7 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
   const [testResult, setTestResult] = useState<TestWebhookResult | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'config' | 'logs'>('config');
+  const [logFilter, setLogFilter] = useState<LogFilterState>(DEFAULT_LOG_FILTER);
 
   // ─── Form ───────────────────────────────────────────────────────────
   const {
@@ -132,6 +144,9 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
       active: true,
       retry_count: 3,
       timeout_seconds: 30,
+      retry_interval_seconds: 60,
+      retry_backoff: true,
+      max_retry_duration_seconds: 3600,
     },
     values: existingWebhook
       ? {
@@ -142,11 +157,15 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
           active: existingWebhook.active,
           retry_count: existingWebhook.retry_count,
           timeout_seconds: existingWebhook.timeout_seconds,
+          retry_interval_seconds: existingWebhook.retry_interval_seconds ?? 60,
+          retry_backoff: existingWebhook.retry_backoff ?? true,
+          max_retry_duration_seconds: existingWebhook.max_retry_duration_seconds ?? 3600,
         }
       : undefined,
   });
 
   const selectedEvents = watch('events');
+  const watchRetryBackoff = watch('retry_backoff');
   const webhookUrl = existingWebhook
     ? `${window.location.origin}/api/v1/integrations/extended/webhooks/${existingWebhook.id}/trigger`
     : null;
@@ -366,6 +385,21 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
       )}
 
       {/* ══════════════════════════════════════════════════════════════ */}
+      {/* Stats Dashboard */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {isEditing && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-slate-500" />
+            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {t('webhook_stats') || 'Webhook Statistics'}
+            </h3>
+          </div>
+          <WebhookStatsCards webhookId={webhookId} />
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ */}
       {/* Tab: Configuration */}
       {/* ══════════════════════════════════════════════════════════════ */}
       {activeTab === 'config' && (
@@ -400,39 +434,12 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
                     </p>
                   </div>
 
-                  {/* Retry & Timeout */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">
-                        {t('retry_count') || 'Retry Count'}
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        className="w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        {...register('retry_count', { valueAsNumber: true })}
-                      />
-                      {errors.retry_count && (
-                        <p className="mt-1 text-sm text-red-600">{errors.retry_count.message}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">
-                        {t('timeout_seconds') || 'Timeout (s)'}
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={120}
-                        className="w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        {...register('timeout_seconds', { valueAsNumber: true })}
-                      />
-                      {errors.timeout_seconds && (
-                        <p className="mt-1 text-sm text-red-600">{errors.timeout_seconds.message}</p>
-                      )}
-                    </div>
-                  </div>
+                  {/* Retry Policy (WebhookRetryPolicy) */}
+                  <WebhookRetryPolicy
+                    register={register}
+                    errors={errors}
+                    watchRetryBackoff={watchRetryBackoff}
+                  />
 
                   {/* Active Toggle */}
                   <label className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -504,6 +511,11 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
                   </p>
                 </div>
               </Card>
+
+              {/* ─── HMAC Verification Helper ──────────────────────── */}
+              <HmacVerificationHelper
+                secret={watch('secret') || existingWebhook?.secret || ''}
+              />
             </div>
 
             {/* ─── Right Column: Event Selector + Preview ──────────── */}
@@ -733,10 +745,20 @@ export function WebhookBuilder({ webhookId, onSaved, onCancel }: WebhookBuilderP
       {/* Tab: Delivery Logs */}
       {/* ══════════════════════════════════════════════════════════════ */}
       {activeTab === 'logs' && (
-        <DeliveryLogsTable
-          logs={deliveryLogs}
-          isLoading={false}
-        />
+        <div className="space-y-4">
+          {/* Filter Bar */}
+          <WebhookLogFilter
+            logs={deliveryLogs}
+            filter={logFilter}
+            onFilterChange={setLogFilter}
+          />
+
+          {/* Filtered Logs Table */}
+          <DeliveryLogsTable
+            logs={deliveryLogs ? filterLogs(deliveryLogs, logFilter) : undefined}
+            isLoading={false}
+          />
+        </div>
       )}
 
       {/* ─── Delete Confirmation ────────────────────────────────────── */}

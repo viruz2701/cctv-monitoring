@@ -135,7 +135,7 @@ func (s *Server) newRateLimiterMiddleware(limit int, window time.Duration) func(
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractClientIP(r)
 			if !rl.allow(ip) {
-				respondError(w, r, NewRateLimitError("too many requests"))
+				RespondError(w, r, NewRateLimitError("too many requests"))
 				return
 			}
 			next.ServeHTTP(w, r)

@@ -5,9 +5,11 @@ import {
   Search, CheckSquare, Square, FileDown, GripVertical,
   ChevronLeft, ChevronRight, Maximize2, Minus, Type,
   Settings2, RotateCcw, Filter, X, Bookmark, Save,
+  Upload, Share2, Star,
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
-import { useFilterStore } from '../../store/filterStore';
+import { useFilterStore, ROLE_DEFAULT_FILTERS, encodeFilterState, decodeFilterState } from '../../store/filterStore';
+import { useAuth } from '../../hooks/useAuth';
 
 // ═══════════════════════════════════════════════════════════════════════
 // UX-14.3.3: Advanced DataGrid
@@ -485,20 +487,58 @@ export function DataGrid<T>({
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  // P1-1.5: Saved filter presets
+  // P1-UX.9: Saved filter presets
   const [searchParams, setSearchParams] = useSearchParams();
-  const { saveView, savedViews, getViewsForPage, deleteView } = useFilterStore();
+  const {
+    saveView, savedViews, getViewsForPage, deleteView,
+    exportViews, importViews, encodeFilterStateToUrl,
+    setDefaultForRole, getDefaultViewForRole,
+  } = useFilterStore();
+  const { user } = useAuth();
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [filterSaveName, setFilterSaveName] = useState('');
+  const [showFilterExportMenu, setShowFilterExportMenu] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const userRole = user?.role || 'viewer';
 
-  // P1-1.5: URL sync for search/filter state
+  // P1-UX.9: URL sync for full filter state
   useEffect(() => {
     const urlSearch = searchParams.get('search');
     if (urlSearch && urlSearch !== search) {
       setSearch(urlSearch);
     }
+    // Load filter state from URL (encoded share link)
+    const urlFs = searchParams.get('fs');
+    if (urlFs && filterState) {
+      const decoded = decodeFilterState(urlFs);
+      if (decoded && onApplyFilterPreset) {
+        onApplyFilterPreset(decoded);
+      }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // P1-UX.9: Load default filters for user role on mount
+  useEffect(() => {
+    if (!persistId || !filterState || !onApplyFilterPreset) return;
+    // Don't override if URL already has filter state
+    if (searchParams.get('fs')) return;
+    // Don't override if user already has a saved view loaded
+    if (searchParams.get('sv')) return;
+    // Check if there's a user-defined default view for this role
+    const defaultView = getDefaultViewForRole(persistId, userRole);
+    if (defaultView) {
+      onApplyFilterPreset({ filters: defaultView.filters, sort: defaultView.sort });
+      return;
+    }
+    // Fall back to role-specific default filters
+    const roleDefaults = ROLE_DEFAULT_FILTERS[persistId]?.[userRole];
+    if (roleDefaults && Object.keys(roleDefaults).length > 0) {
+      onApplyFilterPreset({ filters: roleDefaults, sort: { column: '', direction: 'asc' } });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistId, userRole]);
 
   const syncSearchToUrl = useCallback((value: string) => {
     setSearchParams((prev) => {
@@ -511,6 +551,47 @@ export function DataGrid<T>({
       return next;
     }, { replace: true });
   }, [setSearchParams]);
+
+  // P1-UX.9: Share filter state via URL
+  const shareFilterStateToUrl = useCallback(() => {
+    if (!filterState) return;
+    const encoded = encodeFilterStateToUrl(filterState.filters, filterState.sort);
+    const url = new URL(window.location.href);
+    url.searchParams.set('fs', encoded);
+    navigator.clipboard.writeText(url.toString()).catch(() => {});
+    return url.toString();
+  }, [filterState, encodeFilterStateToUrl]);
+
+  // P1-UX.9: Export filters as JSON file
+  const handleExportFilters = useCallback(() => {
+    const json = exportViews(persistId || undefined);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${persistId || 'filters'}-saved-views.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [exportViews, persistId]);
+
+  // P1-UX.9: Import filters from JSON file
+  const handleImportFilters = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) return;
+      const result = importViews(text);
+      if (result.success) {
+        setImportError(null);
+      } else {
+        setImportError(result.errors.join(', '));
+      }
+    };
+    reader.onerror = () => {
+      setImportError('Failed to read file');
+    };
+    reader.readAsText(file);
+  }, [importViews]);
 
   const alignClasses = {
     left: 'text-left',
@@ -1012,7 +1093,7 @@ export function DataGrid<T>({
               />
             </div>
 
-            {/* P1-1.5: Saved Filter Presets */}
+            {/* P1-UX.9: Saved Filter Presets */}
             {filterPresets && filterState && (
               <div className="relative">
                 <button
@@ -1021,6 +1102,7 @@ export function DataGrid<T>({
                     setShowColumnMenu(false);
                     setShowDensityMenu(false);
                     setShowSettingsMenu(false);
+                    setShowFilterExportMenu(false);
                   }}
                   className="p-1.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
                   title="Saved filters"
@@ -1032,13 +1114,74 @@ export function DataGrid<T>({
                 </button>
                 {showFilterMenu && (
                   <div
-                    className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 z-50 min-w-[220px]"
+                    className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 z-50 min-w-[260px]"
                     role="menu"
                     aria-label="Filter presets menu"
                   >
-                    <div className="px-2 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                      Saved Filters
+                    {/* Header with export/import */}
+                    <div className="flex items-center justify-between px-2 py-1 mb-1">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        Saved Filters
+                      </span>
+                      <div className="flex items-center gap-0.5">
+                        {/* Share via URL */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            shareFilterStateToUrl();
+                          }}
+                          className="p-1 text-slate-400 hover:text-blue-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                          title="Share filter state via URL (copied to clipboard)"
+                          aria-label="Share filter state"
+                        >
+                          <Share2 size={12} />
+                        </button>
+                        {/* Export */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExportFilters();
+                          }}
+                          className="p-1 text-slate-400 hover:text-emerald-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                          title="Export saved filters as JSON"
+                          aria-label="Export filters"
+                        >
+                          <Download size={12} />
+                        </button>
+                        {/* Import */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="p-1 text-slate-400 hover:text-blue-500 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                          title="Import saved filters from JSON"
+                          aria-label="Import filters"
+                        >
+                          <Upload size={12} />
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".json"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleImportFilters(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </div>
                     </div>
+
+                    {/* Import error */}
+                    {importError && (
+                      <div className="px-2 py-1 mb-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded">
+                        {importError}
+                      </div>
+                    )}
+
+                    {/* Saved views list */}
                     {getViewsForPage(persistId || 'default').length === 0 && (
                       <div className="px-2 py-3 text-center text-xs text-slate-400">
                         No saved filters yet
@@ -1053,21 +1196,44 @@ export function DataGrid<T>({
                           }
                           setShowFilterMenu(false);
                         }}
-                        className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded"
+                        className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded group"
                       >
                         <Bookmark size={12} className="text-blue-500 shrink-0" />
                         <span className="flex-1 truncate">{view.name}</span>
+                        {/* P1-UX.9: Default for role badge */}
+                        {view.defaultForRole && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0">
+                            <Star size={10} className="inline fill-amber-500" />
+                          </span>
+                        )}
+                        {/* P1-UX.9: Set as default for role */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDefaultForRole(
+                              view.id,
+                              persistId || 'default',
+                              view.defaultForRole === userRole ? '' : userRole,
+                            );
+                          }}
+                          className="p-0.5 text-slate-400 hover:text-amber-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          title={view.defaultForRole === userRole ? 'Remove as default' : `Set as default for ${userRole}`}
+                        >
+                          <Star size={10} className={view.defaultForRole === userRole ? 'fill-amber-500 text-amber-500' : ''} />
+                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteView(view.id);
                           }}
-                          className="text-slate-400 hover:text-red-500"
+                          className="p-0.5 text-slate-400 hover:text-red-500 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X size={12} />
                         </button>
                       </button>
                     ))}
+
+                    {/* Save new filter */}
                     <div className="border-t border-slate-100 dark:border-slate-700 mt-1 pt-1">
                       <div className="flex items-center gap-1">
                         <input
@@ -1079,8 +1245,8 @@ export function DataGrid<T>({
                               saveView(
                                 filterSaveName.trim(),
                                 persistId || 'default',
-                                { search },
-                                { column: sortColumn || '', direction: sortDirection || 'asc' }
+                                filterState.filters,
+                                filterState.sort,
                               );
                               setFilterSaveName('');
                               setShowFilterMenu(false);
@@ -1096,8 +1262,8 @@ export function DataGrid<T>({
                               saveView(
                                 filterSaveName.trim(),
                                 persistId || 'default',
-                                { search },
-                                { column: sortColumn || '', direction: sortDirection || 'asc' }
+                                filterState.filters,
+                                filterState.sort,
                               );
                               setFilterSaveName('');
                               setShowFilterMenu(false);
@@ -1435,7 +1601,6 @@ export function DataGrid<T>({
                         ? vs.evenRow
                         : vs.bodyRow;
 
-                    // P1-2.2: IntersectionObserver для off-screen строк
                     return (
                       <LazyRow
                         key={id}

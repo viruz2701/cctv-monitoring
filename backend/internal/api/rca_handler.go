@@ -90,13 +90,13 @@ type RCAGraphEdge struct {
 func (s *Server) handleRCAGraph(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "id")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("device_id is required"))
+		RespondError(w, r, NewBadRequestError("device_id is required"))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (s *Server) handleRCAGraph(w http.ResponseWriter, r *http.Request) {
 		// Получаем устройство из БД для инициации RCA
 		device, err := s.deviceService.GetDevice(r.Context(), claims.UserID, claims.Role, deviceID)
 		if err != nil {
-			respondError(w, r, NewNotFoundError("device not found"))
+			RespondError(w, r, NewNotFoundError("device not found"))
 			return
 		}
 
@@ -138,7 +138,7 @@ func (s *Server) handleRCAGraph(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result == nil {
-		respondError(w, r, NewInternalError("rca analysis failed", nil))
+		RespondError(w, r, NewInternalError("rca analysis failed", nil))
 		return
 	}
 

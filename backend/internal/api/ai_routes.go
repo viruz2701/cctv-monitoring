@@ -137,18 +137,18 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	// 1. Parse request
 	var req AIChatHistoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body: "+err.Error()))
+		RespondError(w, r, NewBadRequestError("invalid request body: "+err.Error()))
 		return
 	}
 
 	// 2. Validate input (OWASP ASVS V5.1 — whitelist validation)
 	req.Message = strings.TrimSpace(req.Message)
 	if req.Message == "" {
-		respondError(w, r, NewValidationError("message cannot be empty"))
+		RespondError(w, r, NewValidationError("message cannot be empty"))
 		return
 	}
 	if len(req.Message) > maxMessageLength {
-		respondError(w, r, NewValidationError(fmt.Sprintf("message too long (max %d characters)", maxMessageLength)))
+		RespondError(w, r, NewValidationError(fmt.Sprintf("message too long (max %d characters)", maxMessageLength)))
 		return
 	}
 	if len(req.History) > maxHistoryMessages {
@@ -158,7 +158,7 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	// 3. Get API key from config
 	apiKey := s.config.DeepSeekAPIKey
 	if apiKey == "" {
-		respondError(w, r, NewExternalServiceError("AI service not configured"))
+		RespondError(w, r, NewExternalServiceError("AI service not configured"))
 		return
 	}
 
@@ -324,13 +324,13 @@ func (s *Server) streamDeepSeekResponse(ctx context.Context, w http.ResponseWrit
 func (s *Server) handleAIFeedback(w http.ResponseWriter, r *http.Request) {
 	var req AIFeedbackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body: "+err.Error()))
+		RespondError(w, r, NewBadRequestError("invalid request body: "+err.Error()))
 		return
 	}
 
 	// Validate score
 	if req.Score != "like" && req.Score != "dislike" {
-		respondError(w, r, NewValidationError("invalid score value, must be 'like' or 'dislike'"))
+		RespondError(w, r, NewValidationError("invalid score value, must be 'like' or 'dislike'"))
 		return
 	}
 

@@ -18,6 +18,7 @@ import { useTechnicianSchedule } from '../hooks/useTechnicianSchedule';
 import { TechnicianCalendar } from '../components/planning/TechnicianCalendar';
 import { useUsers } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
+import { SkeletonTechnicianWeek } from '../components/layout';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Component
@@ -50,6 +51,10 @@ export function TechnicianWeek() {
   }, [navigate]);
 
   // ── Render ──────────────────────────────────────────────────────
+  if (isLoading) {
+    return <SkeletonTechnicianWeek />;
+  }
+
   return (
     <div className="technician-week-page p-4 md:p-6 space-y-4">
       {/* Page Header */}

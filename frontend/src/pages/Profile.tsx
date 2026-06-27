@@ -3,7 +3,7 @@ import { useFormValidation } from '../hooks/useFormValidation';
 import { profileSchema } from '../lib/validations';
 import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, X, Edit2, MapPin, Briefcase, Trash2, Clock, Calendar, CheckCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar } from '../components/ui';
+import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar, LazyImage } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useThemeStore } from '../store';
 import { useTranslation } from 'react-i18next';
@@ -356,7 +356,7 @@ export function Profile() {
                                 onClick={() => isEditing && fileInputRef.current?.click()}
                             >
                                 {formData.avatar && formData.avatar.length > 4 ? (
-                                    <img src={formData.avatar} alt={formData.name} className="w-full h-full object-cover" />
+                                    <LazyImage src={formData.avatar} alt={formData.name} className="w-full h-full object-cover" placeholderSize="md" showSkeleton={false} />
                                 ) : (
                                     <span className="text-2xl md:text-3xl font-bold text-indigo-600 dark:text-indigo-300">{initials}</span>
                                 )}

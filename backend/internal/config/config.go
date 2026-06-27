@@ -160,6 +160,7 @@ type EventStoreConfig struct {
 	S3UseTLS           bool   `mapstructure:"s3_use_tls"`
 	HotRetentionHours  int    `mapstructure:"hot_retention_hours"`
 	ColdRetentionHours int    `mapstructure:"cold_retention_hours"`
+	ValidationEnabled  bool   `mapstructure:"validation_enabled"` // JSON Schema validation (default: true)
 }
 
 // TelegramConfig — настройки Telegram бота
@@ -668,6 +669,7 @@ func Load() *Config {
 			S3UseTLS:           viper.GetBool("event_store.s3_use_tls"),
 			HotRetentionHours:  viper.GetInt("event_store.hot_retention_hours"),
 			ColdRetentionHours: viper.GetInt("event_store.cold_retention_hours"),
+			ValidationEnabled:  viper.GetBool("event_store.validation_enabled"),
 		},
 		Telegram: TelegramConfig{
 			Enabled: viper.GetBool("telegram.enabled"),

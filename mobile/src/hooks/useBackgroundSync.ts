@@ -1,38 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import * as BackgroundFetch from 'expo-background-fetch';
-import * as TaskManager from 'expo-task-manager';
 import { syncService, SyncStatus } from '../services/syncService';
-
-// ──────────────────────────────────────────────────
-// Constants
-// ──────────────────────────────────────────────────
-
-const BACKGROUND_SYNC_TASK = 'cctv-background-sync';
-const SYNC_INTERVAL_MINUTES = 15;
-
-// ──────────────────────────────────────────────────
-// Background Task Definition
-// ──────────────────────────────────────────────────
-
-TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
-  try {
-    const { status } = syncService;
-
-    // Если offline — ничего не делаем
-    if (status === 'offline') {
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
-
-    // Запускаем синхронизацию
-    await syncService.syncWhenOnline();
-
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (error) {
-    console.error('[BackgroundSync] Task failed:', error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
 
 // ──────────────────────────────────────────────────
 // State (what the hook exposes)
@@ -53,9 +21,11 @@ export interface BackgroundSyncState {
 
 export interface BackgroundSyncActions {
   /** Запустить синхронизацию вручную */
-  manualSync: () => Promise<void>;
+  manualSync: () => Promise<{ success: boolean; error?: string }>;
   /** Обновить pending count из БД */
   refreshPendingCount: () => Promise<void>;
+  /** Включить/выключить background sync */
+  toggleBackgroundSync: () => Promise<void>;
 }
 
 // ──────────────────────────────────────────────────
@@ -74,8 +44,8 @@ export function useBackgroundSync(): BackgroundSyncState & BackgroundSyncActions
 
   // ── Manual sync ──────────────────────────────
 
-  const manualSync = useCallback(async () => {
-    await syncService.syncWhenOnline();
+  const manualSync = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    return syncService.syncNow();
   }, []);
 
   // ── Refresh pending count ────────────────────
@@ -84,6 +54,18 @@ export function useBackgroundSync(): BackgroundSyncState & BackgroundSyncActions
     const count = await syncService.getPendingCount();
     setPendingCount(count);
   }, []);
+
+  // ── Toggle background sync ──────────────────
+
+  const toggleBackgroundSync = useCallback(async () => {
+    if (isRegistered) {
+      await syncService.stopBackgroundSync();
+      setIsRegistered(false);
+    } else {
+      const registered = await syncService.startBackgroundSync();
+      setIsRegistered(registered);
+    }
+  }, [isRegistered]);
 
   // ── Init effect ──────────────────────────────
 
@@ -95,29 +77,9 @@ export function useBackgroundSync(): BackgroundSyncState & BackgroundSyncActions
         // Инициализируем SyncService (безопасно — guard на двойной вызов)
         await syncService.initialize();
 
-        // Проверяем статус background fetch
-        const bfStatus = await BackgroundFetch.getStatusAsync();
-
-        if (bfStatus === BackgroundFetch.BackgroundFetchStatus.Denied) {
-          console.warn('[BackgroundSync] Background fetch denied');
-          if (isMounted) setIsRegistered(false);
-          return;
-        }
-
-        // Регистрируем задачу, если ещё не зарегистрирована
-        const registered = await TaskManager.isTaskRegisteredAsync(
-          BACKGROUND_SYNC_TASK,
-        );
-
-        if (!registered) {
-          await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
-            minimumInterval: SYNC_INTERVAL_MINUTES * 60, // 15 минут
-            stopOnTerminate: false,
-            startOnBoot: true,
-          });
-        }
-
-        if (isMounted) setIsRegistered(true);
+        // Регистрируем background fetch через syncService
+        const registered = await syncService.startBackgroundSync();
+        if (isMounted) setIsRegistered(registered);
       } catch (error) {
         console.error('[BackgroundSync] Init failed:', error);
         if (isMounted) setIsRegistered(false);
@@ -139,6 +101,7 @@ export function useBackgroundSync(): BackgroundSyncState & BackgroundSyncActions
       setPendingCount(state.pendingCount);
       setLastSyncAt(state.lastSyncAt);
       setLastError(state.lastError);
+      setIsRegistered(state.isBackgroundRegistered);
     });
 
     return () => {
@@ -190,5 +153,6 @@ export function useBackgroundSync(): BackgroundSyncState & BackgroundSyncActions
     isRegistered,
     manualSync,
     refreshPendingCount,
+    toggleBackgroundSync,
   };
 }

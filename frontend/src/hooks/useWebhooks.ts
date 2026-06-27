@@ -42,6 +42,9 @@ export interface WebhookFormData {
   active: boolean;
   retry_count: number;
   timeout_seconds: number;
+  retry_interval_seconds: number;
+  retry_backoff: boolean;
+  max_retry_duration_seconds: number;
 }
 
 export interface TestWebhookResult {
@@ -50,6 +53,15 @@ export interface TestWebhookResult {
   duration_ms: number;
   response_body: string;
   error?: string;
+}
+
+export interface WebhookStats {
+  total_deliveries_24h: number;
+  total_deliveries_7d: number;
+  total_deliveries_30d: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  active: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -227,6 +239,7 @@ export const webhookKeys = {
   all: ['webhooks'] as const,
   detail: (id: string) => ['webhooks', id] as const,
   logs: (id: string) => ['webhooks', id, 'logs'] as const,
+  stats: (id: string) => ['webhooks', id, 'stats'] as const,
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -238,6 +251,11 @@ const WEBHOOK_BASE = '/integrations/extended/webhooks';
 async function getWebhookLogs(id: string): Promise<WebhookLogEntry[]> {
   const { request } = await import('../services/api');
   return request<WebhookLogEntry[]>(`${WEBHOOK_BASE}/${id}/logs`);
+}
+
+async function getWebhookStats(id: string): Promise<WebhookStats> {
+  const { request } = await import('../services/api');
+  return request<WebhookStats>(`${WEBHOOK_BASE}/${id}/stats`);
 }
 
 async function testWebhookWithPayload(
@@ -289,6 +307,20 @@ export function useWebhookLogsQuery(id: string | undefined) {
     queryFn: () => getWebhookLogs(id!),
     enabled: !!id,
     staleTime: 15_000,
+    gcTime: 60_000,
+    refetchInterval: 30_000,
+  });
+}
+
+/**
+ * Получить статистику вебхука (с автообновлением каждые 30с)
+ */
+export function useWebhookStats(id: string | undefined) {
+  return useQuery({
+    queryKey: webhookKeys.stats(id!),
+    queryFn: () => getWebhookStats(id!),
+    enabled: !!id,
+    staleTime: 10_000,
     gcTime: 60_000,
     refetchInterval: 30_000,
   });

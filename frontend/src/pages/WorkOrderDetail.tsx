@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
-  Info, Package, Timer, Camera, Clock, Loader2,
+  Info, Package, Timer, Camera, Clock,
   CheckCircle, XCircle, ArrowLeft, Shield,
   User, HardDrive, MapPin, Calendar, FileText,
   AlertTriangle, Wrench, DollarSign, ClipboardList,
@@ -19,7 +19,7 @@ import { queryKeys } from '../hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { ThreeColumnTemplate } from '../components/layout';
+import { ThreeColumnTemplate, SkeletonDetailPage } from '../components/layout';
 import { SLATimer } from '../components/work-orders/SLATimer';
 import { WODetailHeader } from '../components/work-orders/WODetailHeader';
 import { WODetailInfo } from '../components/work-orders/WODetailInfo';
@@ -368,11 +368,7 @@ export const WorkOrderDetail: React.FC = () => {
   // ── Loading state ──────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    );
+    return <SkeletonDetailPage />;
   }
 
   if (!workOrder) {

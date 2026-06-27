@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -32,8 +33,11 @@ func NewCMMSIntegrator(adapter cmms.CMMSAdapter, logger *slog.Logger) *CMMSInteg
 	}
 }
 
-// AutoCreateTicket создаёт тикет при тревоге.
+// AutoCreateTicket создаёт тикет при тревоге с таймаутом 30 секунд.
 func (ci *CMMSIntegrator) AutoCreateTicket(ctx context.Context, deviceID, deviceName, alarmType, severity, description string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	priority := mapSeverityToPriority(severity)
 
 	wo := &models.WorkOrder{
@@ -47,7 +51,11 @@ func (ci *CMMSIntegrator) AutoCreateTicket(ctx context.Context, deviceID, device
 	}
 
 	if err := ci.adapter.CreateWorkOrder(ctx, wo); err != nil {
-		ci.logger.Error("auto-create ticket failed", "device", deviceID, "error", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			ci.logger.Warn("auto-create ticket timed out", "device", deviceID, "timeout", "30s")
+		} else {
+			ci.logger.Error("auto-create ticket failed", "device", deviceID, "error", err)
+		}
 		return "", fmt.Errorf("create ticket: %w", err)
 	}
 
@@ -62,8 +70,11 @@ func (ci *CMMSIntegrator) AutoCreateTicket(ctx context.Context, deviceID, device
 	return wo.ID, nil
 }
 
-// AutoCloseTicket закрывает тикет после успешного self-healing.
+// AutoCloseTicket закрывает тикет после успешного self-healing с таймаутом 30 секунд.
 func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketID, resolution string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	if ticketID == "" {
 		// Пробуем найти по deviceID
 		var ok bool
@@ -82,7 +93,11 @@ func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketI
 
 	updates["completed_at"] = time.Now()
 	if err := ci.adapter.UpdateWorkOrder(ctx, ticketID, updates); err != nil {
-		ci.logger.Error("auto-close ticket failed", "ticket_id", ticketID, "error", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			ci.logger.Warn("auto-close ticket timed out", "device_id", deviceID, "ticket_id", ticketID, "timeout", "30s")
+		} else {
+			ci.logger.Error("auto-close ticket failed", "ticket_id", ticketID, "error", err)
+		}
 		return fmt.Errorf("close ticket %s: %w", ticketID, err)
 	}
 
@@ -91,13 +106,24 @@ func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketI
 	return nil
 }
 
-// AddAuditNote добавляет audit-заметку к существующему тикету.
+// AddAuditNote добавляет audit-заметку к существующему тикету с таймаутом 15 секунд.
 func (ci *CMMSIntegrator) AddAuditNote(ctx context.Context, ticketID, action, details string) error {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
 	note := fmt.Sprintf("[%s] %s: %s", time.Now().Format(time.RFC3339), action, details)
 	updates := map[string]interface{}{
 		"notes": note,
 	}
-	return ci.adapter.UpdateWorkOrder(ctx, ticketID, updates)
+	if err := ci.adapter.UpdateWorkOrder(ctx, ticketID, updates); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			ci.logger.Warn("add audit note timed out", "ticket_id", ticketID, "timeout", "15s")
+		} else {
+			ci.logger.Error("add audit note failed", "ticket_id", ticketID, "error", err)
+		}
+		return fmt.Errorf("add audit note to %s: %w", ticketID, err)
+	}
+	return nil
 }
 
 // GetTicketForDevice возвращает ID тикета для устройства.

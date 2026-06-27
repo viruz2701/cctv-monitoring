@@ -149,7 +149,7 @@ export function ManualDownloadTab() {
         toast.success('PDF report downloaded');
     };
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         if (duration === 'custom') {
             if (!startDate || !endDate) {
                 toast.error(t('custom_date_required') || 'Please select both start and end dates for custom duration.');
@@ -174,7 +174,7 @@ export function ManualDownloadTab() {
         toast.info(t('generating_report') || 'Generating report...');
 
         try {
-            const result = generateExcelReport({
+            const result = await generateExcelReport({
                 type: reportType,
                 duration,
                 startDate,

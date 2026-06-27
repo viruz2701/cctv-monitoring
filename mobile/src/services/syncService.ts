@@ -1,3 +1,5 @@
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { workOrdersApi } from '../api/workOrders';
 import { devicesApi } from '../api/devices';
@@ -22,6 +24,36 @@ import {
 } from './offlineStorage';
 
 // ──────────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────────
+
+const BACKGROUND_SYNC_TASK = 'cctv-background-sync';
+const SYNC_INTERVAL_MINUTES = 15;
+
+// ──────────────────────────────────────────────────
+// Background Task Definition
+// ──────────────────────────────────────────────────
+
+TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
+  try {
+    const instance = syncService;
+
+    // Если offline — ничего не делаем
+    if (instance.status === 'offline') {
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+
+    // Запускаем синхронизацию
+    await instance.syncWhenOnline();
+
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  } catch (error) {
+    console.error('[SyncService] Background task failed:', error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
+
+// ──────────────────────────────────────────────────
 // Типы
 // ──────────────────────────────────────────────────
 
@@ -32,6 +64,7 @@ export interface SyncState {
   pendingCount: number;
   lastSyncAt: number | null;
   lastError: string | null;
+  isBackgroundRegistered: boolean;
 }
 
 type SyncListener = (state: SyncState) => void;
@@ -50,6 +83,7 @@ class SyncService {
   private _pendingCount: number = 0;
   private _pendingCountInterval: ReturnType<typeof setInterval> | null = null;
   private _initialized = false;
+  private _isBackgroundRegistered = false;
 
   // ── Getters ────────────────────────────────────
 
@@ -227,6 +261,107 @@ class SyncService {
     return getPendingMutationCount();
   }
 
+  // ── Background Sync Management ──────────────────
+
+  /**
+   * Зарегистрировать expo-background-fetch задачу.
+   * Автоматически вызывается из useBackgroundSync при монтировании.
+   */
+  async startBackgroundSync(): Promise<boolean> {
+    try {
+      // Проверяем статус background fetch
+      const bfStatus = await BackgroundFetch.getStatusAsync();
+
+      if (bfStatus === BackgroundFetch.BackgroundFetchStatus.Denied) {
+        console.warn('[SyncService] Background fetch denied');
+        this._isBackgroundRegistered = false;
+        this._notifyListeners();
+        return false;
+      }
+
+      // Регистрируем задачу, если ещё не зарегистрирована
+      const registered = await TaskManager.isTaskRegisteredAsync(
+        BACKGROUND_SYNC_TASK,
+      );
+
+      if (!registered) {
+        await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
+          minimumInterval: SYNC_INTERVAL_MINUTES * 60, // 15 минут
+          stopOnTerminate: false,
+          startOnBoot: true,
+        });
+        console.log('[SyncService] Background sync registered (15min interval)');
+      }
+
+      this._isBackgroundRegistered = true;
+      this._notifyListeners();
+      return true;
+    } catch (error) {
+      console.error('[SyncService] Failed to start background sync:', error);
+      this._isBackgroundRegistered = false;
+      this._notifyListeners();
+      return false;
+    }
+  }
+
+  /**
+   * Отменить регистрацию expo-background-fetch задачи.
+   */
+  async stopBackgroundSync(): Promise<boolean> {
+    try {
+      const registered = await TaskManager.isTaskRegisteredAsync(
+        BACKGROUND_SYNC_TASK,
+      );
+
+      if (registered) {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
+        console.log('[SyncService] Background sync unregistered');
+      }
+
+      this._isBackgroundRegistered = false;
+      this._notifyListeners();
+      return true;
+    } catch (error) {
+      console.error('[SyncService] Failed to stop background sync:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Немедленная синхронизация независимо от текущего статуса.
+   * В отличие от syncWhenOnline() — работает и возвращает результат.
+   */
+  async syncNow(): Promise<{ success: boolean; error?: string }> {
+    if (this._isSyncing) {
+      return { success: false, error: 'Sync already in progress' };
+    }
+
+    this._isSyncing = true;
+    this._setStatus('syncing');
+
+    try {
+      // Фаза 1: Push — отправляем pending мутации
+      await this._pushPendingMutations();
+
+      // Фаза 2: Pull — получаем свежие данные с сервера
+      await this.pullLatestData();
+
+      this._lastSyncAt = Date.now();
+      this._lastError = null;
+      this._setStatus(this._status === 'offline' ? 'offline' : 'online');
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown sync error';
+      this._lastError = message;
+      console.error('[SyncService] syncNow failed:', message);
+      this._setStatus(this._status === 'offline' ? 'offline' : 'online');
+      return { success: false, error: message };
+    } finally {
+      this._isSyncing = false;
+    }
+  }
+
   // ── Экстренное сохранение work order в offline ──
 
   /**
@@ -356,6 +491,7 @@ class SyncService {
       pendingCount: this._pendingCount,
       lastSyncAt: this._lastSyncAt,
       lastError: this._lastError,
+      isBackgroundRegistered: this._isBackgroundRegistered,
     };
   }
 

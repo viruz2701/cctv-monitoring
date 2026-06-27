@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"gb-telemetry-collector/internal/respond"
 )
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -150,6 +152,15 @@ func GetAccessTokenFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
+// GetRefreshTokenFromCookie извлекает refresh token из HttpOnly cookie.
+func GetRefreshTokenFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie(CookieNameRefreshToken)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
 // GetCSRFTokenFromCookie извлекает CSRF токен из cookie.
 func GetCSRFTokenFromCookie(r *http.Request) string {
 	cookie, err := r.Cookie(CookieNameCSRF)
@@ -231,8 +242,7 @@ func CookieAuthMiddleware(next http.Handler) http.Handler {
 func CSRFMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !ValidateCSRFToken(r) {
-			http.Error(w, `{"error":{"code":"CSRF_INVALID","message":"invalid CSRF token"}}`,
-				http.StatusForbidden)
+			respond.RespondError(w, r, respond.NewForbiddenError("invalid CSRF token"))
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -3,6 +3,8 @@ import { storage } from '../utils/storage';
 import { workOrdersApi } from '../api/workOrders';
 import { CompleteWorkOrderPayload } from '../types';
 import { ConflictData, ConflictResolutionAction } from '../components/ConflictResolutionModal';
+import { captureError } from '../lib/sentry';
+import { syncService } from '../services/syncService';
 
 interface SyncAction {
   id: string;
@@ -25,6 +27,21 @@ interface SyncState {
   addConflict: (conflict: ConflictData) => void;
   resolveConflict: (action: ConflictResolutionAction) => void;
   getConflicts: () => ConflictData[];
+}
+
+// ── Telemetry ─────────────────────────────────────
+
+function logTelemetry(
+  event: string,
+  payload: Record<string, unknown>,
+): void {
+  console.log(
+    JSON.stringify({
+      event: `conflict_resolution.${event}`,
+      timestamp: Date.now(),
+      payload,
+    }),
+  );
 }
 
 export const useSyncStore = create<SyncState>((set, get) => ({
@@ -103,12 +120,71 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
 
   resolveConflict: (action: ConflictResolutionAction) => {
-    set((state) => {
-      const remaining = state.conflicts.filter(
-        (c) => c.id !== action.conflictId,
-      );
-      return { conflicts: remaining };
-    });
+    const { conflicts, queue } = get();
+    const conflict = conflicts.find((c) => c.id === action.conflictId);
+    if (!conflict) return;
+
+    switch (action.type) {
+      case 'keep_local': {
+        // Применяем локальные изменения — ставим action обратно в очередь
+        const hasPending = queue.some(
+          (q) => q.workOrderId === action.conflictId && q.type === 'complete_work_order',
+        );
+        if (!hasPending) {
+          get().addToQueue({
+            type: 'complete_work_order',
+            workOrderId: action.conflictId,
+            payload: { notes: '', checklist: [], photos: [], parts_used: [] },
+          });
+        }
+        logTelemetry('resolved_keep_local', {
+          conflictId: action.conflictId,
+          label: conflict.label,
+        });
+        break;
+      }
+
+      case 'keep_server': {
+        // Отбрасываем локальные изменения, пулим серверную версию
+        syncService.pullLatestData().catch((err) => {
+          captureError(err, {
+            context: 'conflict_resolution_keep_server',
+            conflictId: action.conflictId,
+          });
+        });
+        logTelemetry('resolved_keep_server', {
+          conflictId: action.conflictId,
+          label: conflict.label,
+        });
+        break;
+      }
+
+      case 'merge': {
+        // Применяем объединённые поля — добавляем мутацию в syncService
+        syncService.enqueueMutation({
+          entityType: 'work_order',
+          entityId: action.conflictId,
+          mutationType: 'update',
+          payload: action.mergedFields,
+        }).catch((err) => {
+          captureError(err, {
+            context: 'conflict_resolution_merge_enqueue',
+            conflictId: action.conflictId,
+          });
+        });
+        logTelemetry('resolved_merge', {
+          conflictId: action.conflictId,
+          label: conflict.label,
+          mergedFields: Object.keys(action.mergedFields),
+        });
+        break;
+      }
+    }
+
+    // Удаляем конфликт из списка
+    set((state) => ({
+      conflicts: state.conflicts.filter((c) => c.id !== action.conflictId),
+    }));
   },
 
   getConflicts: () => {

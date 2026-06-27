@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 function cspPlugin(): Plugin {
@@ -35,62 +36,83 @@ function cspPlugin(): Plugin {
     }
   };
 }
+// Sentry source maps upload (только при наличии SENTRY_AUTH_TOKEN)
+const sentryPlugin = process.env.SENTRY_AUTH_TOKEN
+  ? sentryVitePlugin({
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: process.env.SENTRY_ORG || 'cctv-monitor',
+      project: process.env.SENTRY_PROJECT || 'frontend',
+      telemetry: false,
+      sourcemaps: {
+        assets: './dist/assets/**',
+        filesToDeleteAfterUpload: ['./dist/assets/*.map'],
+      },
+    })
+  : null;
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cspPlugin(), VitePWA({
-    registerType: 'autoUpdate',
-    includeAssets: ['vite.svg'],
-    manifest: {
-      name: 'CCTV Health Monitor',
-      short_name: 'CCTV Monitor',
-      description: 'CCTV Health Monitoring & CMMS — управление CCTV инфраструктурой',
-      theme_color: '#1e3a5f',
-      background_color: '#f8fafc',
-      display: 'standalone',
-      orientation: 'any',
-      start_url: '/',
-      icons: [
-        { src: '/vite.svg', sizes: '192x192', type: 'image/svg+xml' },
-        { src: '/vite.svg', sizes: '512x512', type: 'image/svg+xml' },
-      ],
-    },
-    workbox: {
-      // Cache-first для статики (JS, CSS, изображения, шрифты)
-      globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-      globIgnores: ['**/stats.html'],
-      runtimeCaching: [
-        {
-          // Network-first для API-запросов
-          urlPattern: /^\/api\/.*/i,
-          handler: 'NetworkFirst',
-          options: {
-            cacheName: 'api-cache',
-            expiration: {
-              maxEntries: 200,
-              maxAgeSeconds: 60 * 60 * 24, // 24 часа
-            },
-            networkTimeoutSeconds: 10,
-          },
-        },
-        {
-          // Cache-first для Google Fonts
-          urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-          handler: 'CacheFirst',
-          options: {
-            cacheName: 'google-fonts-cache',
-            expiration: {
-              maxEntries: 10,
-              maxAgeSeconds: 60 * 60 * 24 * 365, // 1 год
+  plugins: [
+    react(),
+    tailwindcss(),
+    cspPlugin(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['vite.svg'],
+      manifest: {
+        name: 'CCTV Health Monitor',
+        short_name: 'CCTV Monitor',
+        description: 'CCTV Health Monitoring & CMMS — управление CCTV инфраструктурой',
+        theme_color: '#1e3a5f',
+        background_color: '#f8fafc',
+        display: 'standalone',
+        orientation: 'any',
+        start_url: '/',
+        icons: [
+          { src: '/vite.svg', sizes: '192x192', type: 'image/svg+xml' },
+          { src: '/vite.svg', sizes: '512x512', type: 'image/svg+xml' },
+        ],
+      },
+      workbox: {
+        // Cache-first для статики (JS, CSS, изображения, шрифты)
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globIgnores: ['**/stats.html'],
+        runtimeCaching: [
+          {
+            // Network-first для API-запросов
+            urlPattern: /^\/api\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24, // 24 часа
+              },
+              networkTimeoutSeconds: 10,
             },
           },
-        },
-      ],
-    },
-  }), visualizer({
-    filename: 'dist/stats.html',
-    open: false,
-    gzipSize: true,
-    brotliSize: true
-  })],
+          {
+            // Cache-first для Google Fonts
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 год
+              },
+            },
+          },
+        ],
+      },
+    }),
+    sentryPlugin,
+    visualizer({
+      filename: 'dist/stats.html',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ].filter(Boolean),
   build: {
     rollupOptions: {
       output: {
@@ -121,7 +143,7 @@ export default defineConfig({
         },
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 2000,
   },
   server: {
     host: '0.0.0.0',
@@ -139,6 +161,32 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
-    exclude: ['e2e/**', 'node_modules/**']
+    exclude: ['e2e/**', 'node_modules/**', '**/*.stories.*'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: '../coverage',
+      include: [
+        'src/components/**/*.{ts,tsx}',
+        'src/hooks/**/*.{ts,tsx}',
+        'src/store/**/*.{ts,tsx}',
+        'src/services/**/*.{ts,tsx}',
+        'src/utils/**/*.{ts,tsx}',
+      ],
+      exclude: [
+        '**/*.stories.{ts,tsx}',
+        '**/*.test.{ts,tsx}',
+        '**/__tests__/**',
+        '**/index.ts',
+        'src/types/**',
+        'src/stories/**',
+      ],
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 80,
+        lines: 80,
+      },
+    },
   }
 });

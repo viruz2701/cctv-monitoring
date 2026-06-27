@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { LazyImage } from '../ui';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
     Bell,
@@ -227,7 +228,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                         <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                             <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white text-sm font-semibold rounded-full overflow-hidden">
                                 {user?.avatar && user.avatar.length > 4 ? (
-                                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                                    <LazyImage src={user.avatar!} alt={user.name ?? ''} className="w-full h-full object-cover" placeholderSize="sm" showSkeleton={false} />
                                 ) : (
                                     <span className="text-sm">{user?.avatar || (user?.name || '').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</span>
                                 )}

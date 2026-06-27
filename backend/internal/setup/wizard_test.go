@@ -273,8 +273,8 @@ func TestSetupCompleteHandler(t *testing.T) {
 
 func TestAvailableRegions(t *testing.T) {
 	regions := AvailableRegions()
-	if len(regions) != 3 {
-		t.Fatalf("expected 3 regions, got %d", len(regions))
+	if len(regions) != 4 {
+		t.Fatalf("expected 4 regions, got %d", len(regions))
 	}
 
 	regionMap := make(map[string]bool)
@@ -293,6 +293,9 @@ func TestAvailableRegions(t *testing.T) {
 
 	if !regionMap["BY"] {
 		t.Error("BY region missing")
+	}
+	if !regionMap["RU"] {
+		t.Error("RU region missing")
 	}
 	if !regionMap["EU"] {
 		t.Error("EU region missing")

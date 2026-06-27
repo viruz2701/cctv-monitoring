@@ -1,16 +1,37 @@
-import { useState, createContext, useContext, useEffect, ReactNode } from 'react';
-import { api, setAuthToken } from '../services/api';
+// ═══════════════════════════════════════════════════════════════════════
+// Auth Provider + Hook
+// ARCH.1: Использует Zustand authStore для состояния.
+// AuthProvider — только инициализация (fetch /users/me при монтировании).
+// Новый код ДОЛЖЕН импортировать useAuthStore напрямую из '../store'.
+// ═══════════════════════════════════════════════════════════════════════
 
-export interface AuthUser {
-    id: string;
-    username: string;
-    role: 'admin' | 'support' | 'owner' | 'manager' | 'technician' | 'viewer';
-    owner_id?: string | null;
-    name?: string;
-    email?: string;
-    avatar?: string;
-    sites?: string[];
+import { createContext, useContext, useEffect, ReactNode, useCallback } from 'react';
+import { useAuthStore, type AuthUser } from '../store/authStore';
+
+// P1-SEC.1: Читаем CSRF токен из cookie для отправки в заголовке.
+function getCSRFCookie(): string | null {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+    return match ? match[1] : null;
 }
+
+// P1-SEC.1: Вызов logout на backend — очищает HttpOnly cookies.
+async function callLogoutAPI(): Promise<void> {
+    try {
+        await fetch('/api/v1/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCSRFCookie() || '',
+            },
+        });
+    } catch {
+        // Ignore network errors on logout — cookie will be cleared client-side
+    }
+}
+
+// ─── Auth Context (backward compat) ─────────────────────────────────
 
 interface AuthContextType {
     user: AuthUser | null;
@@ -25,110 +46,149 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<AuthUser | null>(null);
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const user = useAuthStore((s) => s.user);
+    const token = useAuthStore((s) => s.token);
+    const setUser = useAuthStore((s) => s.setUser);
+    const setToken = useAuthStore((s) => s.setToken);
+    const setLoading = useAuthStore((s) => s.setLoading);
+    const setInitialized = useAuthStore((s) => s.setInitialized);
+    const storeLogout = useAuthStore((s) => s.logout);
+    const storeUpdateUser = useAuthStore((s) => s.updateUser);
+    const storeHasPermission = useAuthStore((s) => s.hasPermission);
 
+    // P1-SEC.1: При загрузке проверяем, аутентифицирован ли пользователь,
+    // вызывая /users/me (JWT передаётся через HttpOnly cookie).
     useEffect(() => {
-        if (token) {
-            api.getCurrentUser()
-                .then(data => {
-                    const mapped: AuthUser = {
-                        id: data.id,
-                        username: data.username,
-                        role: data.role,
-                        owner_id: data.owner_id,
-                        name: data.username,
-                        email: data.username,
-                        avatar: data.avatar || '',
-                        sites: data.sites || [],
-                    };
-                    setUser(mapped);
-                })
-                .catch(() => logout());
-        }
-    }, [token]);
+        let cancelled = false;
 
-   const login = async (username: string, password: string): Promise<{ requires2FA?: boolean; sessionToken?: string }> => {
-    try {
-        const response = await fetch('/api/v1/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-        });
-
-        if (response.status === 202) {
-            // 2FA required
-            const data = await response.json();
-            return { requires2FA: true, sessionToken: data.session_token };
-        }
-
-        if (!response.ok) {
-            const body = await response.text();
-            // Пытаемся извлечь человеческое сообщение из JSON-ответа ошибки
-            // Формат: {"error":{"code":"UNAUTHORIZED","message":"invalid credentials"},"timestamp":"...","trace_id":"..."}
-            try {
-                const parsed = JSON.parse(body);
-                const msg = parsed?.error?.message;
-                if (msg && typeof msg === 'string') {
-                    throw new Error(msg);
+        fetch('/api/v1/users/me', {
+            credentials: 'include',
+            headers: {
+                'X-CSRF-Token': getCSRFCookie() || '',
+            },
+        })
+            .then((res) => {
+                if (!res.ok) throw new Error('Not authenticated');
+                return res.json();
+            })
+            .then((data) => {
+                if (cancelled) return;
+                const mapped: AuthUser = {
+                    id: data.id,
+                    username: data.username,
+                    role: data.role,
+                    owner_id: data.owner_id,
+                    name: data.username,
+                    email: data.username,
+                    avatar: data.avatar || '',
+                    sites: data.sites || [],
+                };
+                setUser(mapped);
+                setLoading(false);
+                setInitialized(true);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setLoading(false);
+                    setInitialized(true);
                 }
-            } catch (e) {
-                if (e instanceof Error) throw e;
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [setUser, setLoading, setInitialized]);
+
+    const login = useCallback(
+        async (username: string, password: string): Promise<{ requires2FA?: boolean; sessionToken?: string }> => {
+            const response = await fetch('/api/v1/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+                credentials: 'include',
+            });
+
+            if (response.status === 202) {
+                // 2FA required
+                const data = await response.json();
+                return { requires2FA: true, sessionToken: data.session_token };
             }
-            throw new Error(body || 'Login failed');
-        }
 
-        const { token: newToken, user: userData } = await response.json();
-        setAuthToken(newToken);
-        setToken(newToken);
-        setUser({
-            id: userData.id,
-            username: userData.username,
-            role: userData.role,
-            owner_id: userData.owner_id,
-            name: userData.username,
-            email: userData.username,
-            avatar: userData.avatar || '',
-            sites: userData.sites || [],
-        });
-        return {};
-    } catch (err: any) {
-        throw err;
-    }
-};
+            if (!response.ok) {
+                const body = await response.text();
+                try {
+                    const parsed = JSON.parse(body);
+                    const msg = parsed?.error?.message;
+                    if (msg && typeof msg === 'string') {
+                        throw new Error(msg);
+                    }
+                } catch (e) {
+                    if (e instanceof Error) throw e;
+                }
+                throw new Error(body || 'Login failed');
+            }
 
-    const login2FAFn = async (sessionToken: string, code: string) => {
-        const { token: newToken, user: userData } = await api.login2FA(sessionToken, code);
-        setAuthToken(newToken);
-        setToken(newToken);
-        setUser({
-            id: userData.id,
-            username: userData.username,
-            role: userData.role,
-            owner_id: userData.owner_id,
-            name: userData.username,
-            email: userData.username,
-            avatar: userData.avatar || '',
-            sites: userData.sites || [],
-        });
-    };
+            // P1-SEC.1: JWT уже в HttpOnly cookie, не извлекаем из body.
+            const { user: userData } = await response.json();
+            setUser({
+                id: userData.id,
+                username: userData.username,
+                role: userData.role,
+                owner_id: userData.owner_id,
+                name: userData.username,
+                email: userData.username,
+                avatar: userData.avatar || '',
+                sites: userData.sites || [],
+            });
+            return {};
+        },
+        [setUser],
+    );
 
-    const logout = () => {
-        setAuthToken(null);
-        setToken(null);
-        setUser(null);
-    };
+    const login2FAFn = useCallback(
+        async (sessionToken: string, code: string) => {
+            const response = await fetch('/api/v1/auth/login/2fa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_token: sessionToken, code }),
+                credentials: 'include',
+            });
 
-    const hasPermission = (roles: string | string[]) => {
-        if (!user) return false;
-        if (user.role === 'admin') return true;
-        const allowed = Array.isArray(roles) ? roles : [roles];
-        return allowed.includes(user.role);
-    };
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(err || '2FA verification failed');
+            }
 
-    const updateUser = (data: Partial<AuthUser>) => {
-        if (user) setUser({ ...user, ...data });
-    };
+            // P1-SEC.1: JWT уже в HttpOnly cookie.
+            const { user: userData } = await response.json();
+            setUser({
+                id: userData.id,
+                username: userData.username,
+                role: userData.role,
+                owner_id: userData.owner_id,
+                name: userData.username,
+                email: userData.username,
+                avatar: userData.avatar || '',
+                sites: userData.sites || [],
+            });
+        },
+        [setUser],
+    );
+
+    const logout = useCallback(async () => {
+        await callLogoutAPI();
+        storeLogout();
+    }, [storeLogout]);
+
+    const hasPermission = useCallback(
+        (roles: string | string[]) => storeHasPermission(roles),
+        [storeHasPermission],
+    );
+
+    const updateUser = useCallback(
+        (data: Partial<AuthUser>) => storeUpdateUser(data),
+        [storeUpdateUser],
+    );
 
     return (
         <AuthContext.Provider value={{ user, token, login, login2FA: login2FAFn, logout, hasPermission, updateUser }}>

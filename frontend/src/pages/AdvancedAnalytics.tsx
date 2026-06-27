@@ -41,8 +41,8 @@ import {
   Clock,
   Shield,
   HardDrive,
-  RefreshCw,
 } from 'lucide-react';
+import { SkeletonAdvancedAnalytics } from '../components/layout';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
@@ -386,7 +386,13 @@ export function AdvancedAnalytics() {
   // Render
   // ══════════════════════════════════════════════════════════════════
 
-  if (errorMessage && !loadingPredictions && !loadingCost && !loadingReliability) {
+  const isLoading = loadingPredictions || loadingCost || loadingReliability;
+
+  if (isLoading) {
+    return <SkeletonAdvancedAnalytics />;
+  }
+
+  if (errorMessage) {
     return (
       <div className="p-8 text-center">
         <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-400" />
@@ -397,8 +403,6 @@ export function AdvancedAnalytics() {
       </div>
     );
   }
-
-  const isLoading = loadingPredictions || loadingCost || loadingReliability;
 
   return (
     <div className="space-y-6">
@@ -412,12 +416,6 @@ export function AdvancedAnalytics() {
             Predictive maintenance, cost analysis & vendor performance
           </p>
         </div>
-        {isLoading && (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>Loading...</span>
-          </div>
-        )}
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
@@ -432,13 +430,7 @@ export function AdvancedAnalytics() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">High Risk</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {isLoading ? (
-                    <span className="inline-block w-8 h-6 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
-                  ) : (
-                    highRiskCount
-                  )}
-                </p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{highRiskCount}</p>
               </div>
             </div>
           </div>
@@ -452,13 +444,7 @@ export function AdvancedAnalytics() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Predictions</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {isLoading ? (
-                    <span className="inline-block w-8 h-6 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
-                  ) : (
-                    totalPredicted
-                  )}
-                </p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{totalPredicted}</p>
               </div>
             </div>
           </div>
@@ -473,11 +459,7 @@ export function AdvancedAnalytics() {
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">MTBF</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {isLoading ? (
-                    <span className="inline-block w-12 h-6 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
-                  ) : (
-                    <>{overallMtbf.toLocaleString()} <span className="text-sm font-normal text-slate-500">ч</span></>
-                  )}
+                  {overallMtbf.toLocaleString()} <span className="text-sm font-normal text-slate-500">ч</span>
                 </p>
               </div>
             </div>
@@ -492,13 +474,7 @@ export function AdvancedAnalytics() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Top Device Cost</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {isLoading ? (
-                    <span className="inline-block w-16 h-6 bg-slate-200 dark:bg-slate-700 animate-pulse rounded" />
-                  ) : (
-                    <>${topDeviceCost.toLocaleString()}</>
-                  )}
-                </p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">${topDeviceCost.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -525,18 +501,7 @@ export function AdvancedAnalytics() {
             </Badge>
           </div>
 
-          {loadingPredictions ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 animate-pulse">
-                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-3" />
-                  <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-3" />
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full mb-2" />
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3" />
-                </div>
-              ))}
-            </div>
-          ) : attentionDevices.length === 0 ? (
+          {attentionDevices.length === 0 ? (
             <div className="text-center py-8">
               <Shield className="w-10 h-10 mx-auto mb-3 text-emerald-400" />
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -593,12 +558,7 @@ export function AdvancedAnalytics() {
             </h2>
           </div>
 
-          {loadingCost ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="h-[280px] bg-slate-100 dark:bg-slate-700/50 rounded-xl animate-pulse" />
-              <div className="h-[280px] bg-slate-100 dark:bg-slate-700/50 rounded-xl animate-pulse" />
-            </div>
-          ) : costError ? (
+          {costError ? (
             <div className="text-center py-6 text-sm text-red-500">{costError}</div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -691,13 +651,7 @@ export function AdvancedAnalytics() {
                 </Badge>
               </div>
 
-              {loadingReliability ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="h-16 bg-slate-100 dark:bg-slate-700/50 rounded-lg animate-pulse" />
-                  ))}
-                </div>
-              ) : reliabilityError ? (
+              {reliabilityError ? (
                 <div className="text-center py-6 text-sm text-red-500">{reliabilityError}</div>
               ) : reliability.length === 0 ? (
                 <div className="text-center py-8">
@@ -727,11 +681,7 @@ export function AdvancedAnalytics() {
                   Risk Distribution
                 </h2>
               </div>
-              {loadingPredictions ? (
-                <div className="h-[220px] bg-slate-100 dark:bg-slate-700/50 rounded-xl animate-pulse" />
-              ) : (
-                <RiskPieChart predictions={predictions} />
-              )}
+              <RiskPieChart predictions={predictions} />
             </div>
           </Card>
         </div>

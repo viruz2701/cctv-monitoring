@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { WorkOrder } from '../types';
 import { formatWorkOrderDate, formatSLADeadline, isSLAPast } from '../utils/dateHelpers';
@@ -8,7 +8,7 @@ interface Props {
   onPress: () => void;
 }
 
-export default function WorkOrderCard({ workOrder, onPress }: Props) {
+function WorkOrderCardInner({ workOrder, onPress }: Props) {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical':
@@ -50,8 +50,26 @@ export default function WorkOrderCard({ workOrder, onPress }: Props) {
     }
   };
 
-  const priorityColors = getPriorityColor(workOrder.priority);
-  const slaOverdue = workOrder.sla_deadline ? isSLAPast(workOrder.sla_deadline) : false;
+  const priorityColors = useMemo(
+    () => getPriorityColor(workOrder.priority),
+    [workOrder.priority],
+  );
+  const slaOverdue = useMemo(
+    () => (workOrder.sla_deadline ? isSLAPast(workOrder.sla_deadline) : false),
+    [workOrder.sla_deadline],
+  );
+  const formattedDate = useMemo(
+    () => formatWorkOrderDate(workOrder.created_at),
+    [workOrder.created_at],
+  );
+  const statusLabel = useMemo(
+    () => getStatusLabel(workOrder.status),
+    [workOrder.status],
+  );
+  const typeLabel = useMemo(
+    () => getTypeLabel(workOrder.type),
+    [workOrder.type],
+  );
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -69,7 +87,7 @@ export default function WorkOrderCard({ workOrder, onPress }: Props) {
             {workOrder.priority.toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.type}>{getTypeLabel(workOrder.type)}</Text>
+        <Text style={styles.type}>{typeLabel}</Text>
       </View>
 
       <Text style={styles.title} numberOfLines={2}>
@@ -83,8 +101,8 @@ export default function WorkOrderCard({ workOrder, onPress }: Props) {
       )}
 
       <View style={styles.footer}>
-        <Text style={styles.status}>{getStatusLabel(workOrder.status)}</Text>
-        <Text style={styles.date}>{formatWorkOrderDate(workOrder.created_at)}</Text>
+        <Text style={styles.status}>{statusLabel}</Text>
+        <Text style={styles.date}>{formattedDate}</Text>
       </View>
 
       {workOrder.sla_deadline && (
@@ -97,6 +115,11 @@ export default function WorkOrderCard({ workOrder, onPress }: Props) {
     </TouchableOpacity>
   );
 }
+
+// ═══ P3-UI.3: React.memo для оптимизации FlatList ═══
+// Предотвращает лишние ре-рендеры при скролле списка
+const WorkOrderCard = React.memo(WorkOrderCardInner);
+export default WorkOrderCard;
 
 const styles = StyleSheet.create({
   card: {

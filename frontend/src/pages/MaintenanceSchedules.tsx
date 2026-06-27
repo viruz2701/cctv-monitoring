@@ -16,11 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
 import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
-import FullCalendar from '@fullcalendar/react';
-import type { DatesSetArg } from '@fullcalendar/core';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import type { EventClickArg } from '@fullcalendar/core';
+import FullCalendarWrapper from '../components/planning/FullCalendarWrapper';
 
 type ViewMode = 'table' | 'calendar';
 
@@ -84,8 +80,12 @@ export const MaintenanceSchedules: React.FC = () => {
     }
   };
 
-  const handleEventClick = (info: EventClickArg) => {
-    setSelectedEvent(info.event.extendedProps.schedule as MaintenanceSchedule);
+  const handleEventClick = (schedule: MaintenanceSchedule) => {
+    setSelectedEvent(schedule);
+  };
+
+  const handleEventDrop = async (schedule: MaintenanceSchedule, newDate: string) => {
+    await updateScheduleMut.mutateAsync({ id: schedule.id, data: { next_due: newDate } });
   };
 
   const columns = [
@@ -236,33 +236,10 @@ export const MaintenanceSchedules: React.FC = () => {
             ) : filteredSchedules.length === 0 ? (
               <div className="flex items-center justify-center h-96 text-slate-400">{t('no_events')}</div>
             ) : (
-              <FullCalendar
-                  plugins={[dayGridPlugin, interactionPlugin]}
-                  initialView="dayGridMonth"
-                  events={calendarEvents}
-                  eventClick={handleEventClick}
-                  editable={true}
-                  eventDrop={async (info) => {
-                      const schedule = info.event.extendedProps.schedule as MaintenanceSchedule;
-                      const newDate = info.event.startStr;
-                      try {
-                          await updateScheduleMut.mutateAsync({ id: schedule.id, data: { next_due: newDate } });
-                          info.el.style.opacity = '1';
-                      } catch {
-                          info.revert();
-                      }
-                  }}
-                  height="auto"
-                  headerToolbar={{
-                      left: 'prev,next today',
-                      center: 'title',
-                      right: 'dayGridMonth,dayGridWeek',
-                  }}
-                  buttonText={{
-                      today: t('today'),
-                      month: t('month'),
-                      week: t('week'),
-                  }}
+              <FullCalendarWrapper
+                events={calendarEvents}
+                onEventClick={handleEventClick}
+                onEventDrop={handleEventDrop}
               />
             )}
           </div>

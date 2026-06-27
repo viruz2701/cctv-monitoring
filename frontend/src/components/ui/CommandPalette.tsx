@@ -132,34 +132,6 @@ const NAV_COMMANDS: CommandItem[] = [
     icon: LayoutDashboard,
     keywords: ['go', 'navigate', 'open'],
   },
-  {
-    id: 'manager-dashboard',
-    label: 'Manager Dashboard',
-    description: 'Management overview',
-    path: '/manager-dashboard',
-    category: 'dashboard',
-    icon: LayoutDashboard,
-    keywords: ['manager', 'management', 'kpi'],
-  },
-  {
-    id: 'executive-dashboard',
-    label: 'Executive Dashboard',
-    description: 'Executive-level metrics',
-    path: '/executive-dashboard',
-    category: 'dashboard',
-    icon: BarChart3,
-    keywords: ['executive', 'exec', 'metrics', 'business'],
-  },
-  {
-    id: 'technician-dashboard',
-    label: 'Technician Dashboard',
-    description: 'Technician work overview',
-    path: '/technician-dashboard',
-    category: 'dashboard',
-    icon: Activity,
-    keywords: ['technician', 'tech', 'field', 'work'],
-  },
-
   // Inventory & Assets
   {
     id: 'sites',

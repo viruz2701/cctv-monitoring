@@ -465,6 +465,16 @@ export default function DashboardScreen() {
             </View>
           ) : null
         }
+        // ═══ P3-UI.3: Performance оптимизации ═══
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        initialNumToRender={8}
+        updateCellsBatchingPeriod={50}
+        // Оптимизация для быстрого скролла
+        getItemLayout={undefined} // Динамическая высота — не можем предсказать
+        // Оптимизация памяти
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );

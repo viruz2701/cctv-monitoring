@@ -17,7 +17,7 @@ import (
 func (s *Server) atlasHealthCheck(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -49,7 +49,7 @@ func (s *Server) atlasHealthCheck(w http.ResponseWriter, r *http.Request) {
 func (s *Server) atlasFallbackStatus(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -71,7 +71,7 @@ func (s *Server) atlasFallbackStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) atlasRetryFallback(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -103,19 +103,19 @@ func (s *Server) atlasRetryFallback(w http.ResponseWriter, r *http.Request) {
 func (s *Server) atlasSyncAsset(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
 	deviceID := chi.URLParam(r, "deviceId")
 	if deviceID == "" {
-		respondError(w, r, NewBadRequestError("deviceId required"))
+		RespondError(w, r, NewBadRequestError("deviceId required"))
 		return
 	}
 
 	dev, ok := s.stateManager.Get(deviceID)
 	if !ok {
-		respondError(w, r, NewNotFoundError("device not found"))
+		RespondError(w, r, NewNotFoundError("device not found"))
 		return
 	}
 

@@ -80,6 +80,13 @@ export function Layout() {
             description: 'Открыть Command Palette',
             category: 'actions',
         },
+        // P1-UX.8: / (без модификаторов, вне input) → Command Palette
+        {
+            key: '/',
+            handler: () => openCommandPalette(),
+            description: 'Открыть поиск (Command Palette)',
+            category: 'actions',
+        },
         {
             key: '/',
             ctrl: true,

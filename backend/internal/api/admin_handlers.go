@@ -37,7 +37,7 @@ func (s *Server) handleListTenantRegions(w http.ResponseWriter, r *http.Request)
 
 	regions, err := s.regionStore.ListAll(r.Context())
 	if err != nil {
-		respondError(w, r, fmt.Errorf("list regions: %w", err))
+		RespondError(w, r, fmt.Errorf("list regions: %w", err))
 		return
 	}
 
@@ -48,22 +48,22 @@ func (s *Server) handleListTenantRegions(w http.ResponseWriter, r *http.Request)
 func (s *Server) handleGetTenantRegion(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenant_id")
 	if tenantID == "" {
-		respondError(w, r, fmt.Errorf("tenant_id is required"))
+		RespondError(w, r, fmt.Errorf("tenant_id is required"))
 		return
 	}
 
 	if s.regionStore == nil {
-		respondError(w, r, fmt.Errorf("region store not initialized"))
+		RespondError(w, r, fmt.Errorf("region store not initialized"))
 		return
 	}
 
 	tr, err := s.regionStore.GetTenantRegion(r.Context(), tenantID)
 	if err != nil {
-		respondError(w, r, fmt.Errorf("get tenant region: %w", err))
+		RespondError(w, r, fmt.Errorf("get tenant region: %w", err))
 		return
 	}
 	if tr == nil {
-		respondError(w, r, fmt.Errorf("tenant %s not found", tenantID))
+		RespondError(w, r, fmt.Errorf("tenant %s not found", tenantID))
 		return
 	}
 
@@ -74,7 +74,7 @@ func (s *Server) handleGetTenantRegion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSetTenantRegion(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenant_id")
 	if tenantID == "" {
-		respondError(w, r, fmt.Errorf("tenant_id is required"))
+		RespondError(w, r, fmt.Errorf("tenant_id is required"))
 		return
 	}
 
@@ -84,12 +84,12 @@ func (s *Server) handleSetTenantRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, fmt.Errorf("invalid request body: %w", err))
+		RespondError(w, r, fmt.Errorf("invalid request body: %w", err))
 		return
 	}
 
 	if s.regionStore == nil {
-		respondError(w, r, fmt.Errorf("region store not initialized"))
+		RespondError(w, r, fmt.Errorf("region store not initialized"))
 		return
 	}
 
@@ -101,7 +101,7 @@ func (s *Server) handleSetTenantRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.regionStore.SetTenantRegion(r.Context(), tr); err != nil {
-		respondError(w, r, fmt.Errorf("set tenant region: %w", err))
+		RespondError(w, r, fmt.Errorf("set tenant region: %w", err))
 		return
 	}
 
@@ -112,18 +112,18 @@ func (s *Server) handleSetTenantRegion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleFailoverTenant(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenant_id")
 	if tenantID == "" {
-		respondError(w, r, fmt.Errorf("tenant_id is required"))
+		RespondError(w, r, fmt.Errorf("tenant_id is required"))
 		return
 	}
 
 	if s.failoverService == nil {
-		respondError(w, r, fmt.Errorf("failover service not initialized"))
+		RespondError(w, r, fmt.Errorf("failover service not initialized"))
 		return
 	}
 
 	result, err := s.failoverService.ExecuteFailover(r.Context(), tenantID)
 	if err != nil {
-		respondError(w, r, fmt.Errorf("failover: %w", err))
+		RespondError(w, r, fmt.Errorf("failover: %w", err))
 		return
 	}
 
@@ -141,29 +141,29 @@ func (s *Server) handleFailoverTenant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRollbackTenant(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "tenant_id")
 	if tenantID == "" {
-		respondError(w, r, fmt.Errorf("tenant_id is required"))
+		RespondError(w, r, fmt.Errorf("tenant_id is required"))
 		return
 	}
 
 	if s.regionStore == nil {
-		respondError(w, r, fmt.Errorf("region store not initialized"))
+		RespondError(w, r, fmt.Errorf("region store not initialized"))
 		return
 	}
 
 	// Rollback: возвращаем tenant в primary_region из failover_region
 	tr, err := s.regionStore.GetTenantRegion(r.Context(), tenantID)
 	if err != nil {
-		respondError(w, r, fmt.Errorf("get tenant: %w", err))
+		RespondError(w, r, fmt.Errorf("get tenant: %w", err))
 		return
 	}
 	if tr == nil {
-		respondError(w, r, fmt.Errorf("tenant %s not found", tenantID))
+		RespondError(w, r, fmt.Errorf("tenant %s not found", tenantID))
 		return
 	}
 
 	// Сбрасываем статус на active
 	if err := s.regionStore.UpdateTenantStatus(r.Context(), tenantID, "active"); err != nil {
-		respondError(w, r, fmt.Errorf("rollback: %w", err))
+		RespondError(w, r, fmt.Errorf("rollback: %w", err))
 		return
 	}
 

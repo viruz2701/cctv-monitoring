@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,45 @@ export default function WorkOrderDetailScreen({ route }: Props) {
 
   const startMutation = useStartWorkOrder();
 
+  const handleStart = useCallback(() => {
+    Alert.alert('Начать работу', 'Вы уверены, что хотите начать выполнение?', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Начать',
+        onPress: () => startMutation.mutate(workOrderId),
+      },
+    ]);
+  }, [startMutation, workOrderId]);
+
+  const handleComplete = useCallback(() => {
+    if (!workOrder) return;
+    navigation.navigate('CompleteWorkOrder', { workOrder });
+  }, [navigation, workOrder]);
+
+  const handleScanQR = useCallback(() => {
+    navigation.navigate('QRScanner');
+  }, [navigation]);
+
+  const isActive = useMemo(
+    () => workOrder?.status === 'open' || workOrder?.status === 'in_progress',
+    [workOrder?.status],
+  );
+
+  const slaOverdue = useMemo(
+    () => (workOrder?.sla_deadline ? isSLAPast(workOrder.sla_deadline) : false),
+    [workOrder?.sla_deadline],
+  );
+
+  const workOrderType = useMemo(() => {
+    if (!workOrder) return '';
+    switch (workOrder.type) {
+      case 'preventive': return 'Плановое ТО';
+      case 'corrective': return 'Ремонт';
+      case 'emergency': return 'Аварийный';
+      default: return workOrder.type;
+    }
+  }, [workOrder?.type]);
+
   if (isLoading) {
     return (
       <View style={styles.centered}>
@@ -46,39 +85,12 @@ export default function WorkOrderDetailScreen({ route }: Props) {
     );
   }
 
-  const handleStart = () => {
-    Alert.alert('Начать работу', 'Вы уверены, что хотите начать выполнение?', [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Начать',
-        onPress: () => startMutation.mutate(workOrderId),
-      },
-    ]);
-  };
-
-  const handleComplete = () => {
-    navigation.navigate('CompleteWorkOrder', { workOrder });
-  };
-
-  const handleScanQR = () => {
-    navigation.navigate('QRScanner');
-  };
-
-  const isActive = workOrder.status === 'open' || workOrder.status === 'in_progress';
-  const slaOverdue = workOrder.sla_deadline ? isSLAPast(workOrder.sla_deadline) : false;
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <View style={styles.headerRow}>
           <StatusBadge status={workOrder.status} />
-          <Text style={styles.type}>
-            {workOrder.type === 'preventive'
-              ? 'Плановое ТО'
-              : workOrder.type === 'corrective'
-                ? 'Ремонт'
-                : 'Аварийный'}
-          </Text>
+          <Text style={styles.type}>{workOrderType}</Text>
         </View>
 
         <Text style={styles.deviceName}>{workOrder.device_name || workOrder.device_id}</Text>

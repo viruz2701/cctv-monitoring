@@ -1,14 +1,25 @@
-import { lazy, type ReactNode } from 'react';
+import { lazy, useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout, PageSuspense } from './components/layout';
 
 import { ThemeProvider } from './context/ThemeContext';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ToastProvider } from './components/ui';
 
+// ── Sentry (QA.4) ─────────────────────────────────────────────────────────
+// Инициализация на уровне модуля — до монтирования React
+import { initSentry, SentryErrorBoundary, setSentryUser } from './lib/sentry';
+initSentry(import.meta.env.VITE_SENTRY_DSN, {
+  environment: import.meta.env.MODE,
+  tracesSampleRate: import.meta.env.PROD ? 0.2 : 0.0,
+  replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 0.0,
+  replaysOnErrorSampleRate: import.meta.env.PROD ? 1.0 : 0.0,
+});
+
 // ── Lazy-loaded pages ─────────────────────────────────────────────────────
-const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const DashboardHub = lazy(() => import('./pages/DashboardHub').then((m) => ({ default: m.DashboardHub })));
+const SetupWizard = lazy(() => import('./pages/SetupWizard').then((m) => ({ default: m.SetupWizard })));
 const Sites = lazy(() => import('./pages/Sites').then((m) => ({ default: m.Sites })));
 const Devices = lazy(() => import('./pages/Devices').then((m) => ({ default: m.Devices })));
 const Tickets = lazy(() => import('./pages/Tickets').then((m) => ({ default: m.Tickets })));
@@ -26,11 +37,9 @@ const WorkloadAnalytics = lazy(() => import('./pages/WorkloadAnalytics').then((m
 const WorkRequestPortal = lazy(() => import('./pages/WorkRequestPortal').then((m) => ({ default: m.WorkRequestPortal })));
 const VendorPerformance = lazy(() => import('./pages/VendorPerformance').then((m) => ({ default: m.VendorPerformance })));
 const OnCallSchedule = lazy(() => import('./pages/OnCallSchedule').then((m) => ({ default: m.OnCallSchedule })));
-const ExecutiveDashboard = lazy(() => import('./pages/ExecutiveDashboard').then((m) => ({ default: m.ExecutiveDashboard })));
 const MaintenanceSchedules = lazy(() => import('./pages/MaintenanceSchedules').then((m) => ({ default: m.MaintenanceSchedules })));
 const SpareParts = lazy(() => import('./pages/SpareParts').then((m) => ({ default: m.SpareParts })));
 const WorkOrderDetail = lazy(() => import('./pages/WorkOrderDetail').then((m) => ({ default: m.WorkOrderDetail })));
-const TechnicianDashboard = lazy(() => import('./pages/TechnicianDashboard').then((m) => ({ default: m.TechnicianDashboard })));
 const TechnicianWeek = lazy(() => import('./pages/TechnicianWeek').then((m) => ({ default: m.TechnicianWeek })));
 const SLADashboard = lazy(() => import('./pages/SLADashboard').then((m) => ({ default: m.SLADashboard })));
 const MaintenanceReports = lazy(() => import('./pages/MaintenanceReports').then((m) => ({ default: m.MaintenanceReports })));
@@ -48,12 +57,11 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
 const Notifications = lazy(() => import('./pages/Notifications').then((m) => ({ default: m.Notifications })));
 const TotalCostDashboard = lazy(() => import('./pages/TotalCostDashboard').then((m) => ({ default: m.TotalCostDashboard })));
-const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard').then((m) => ({ default: m.ManagerDashboard })));
 const AssetOverview = lazy(() => import('./pages/AssetOverview').then((m) => ({ default: m.AssetOverview })));
 const AdvancedAnalytics = lazy(() => import('./pages/AdvancedAnalytics').then((m) => ({ default: m.AdvancedAnalytics })));
 const Glossary = lazy(() => import('./pages/Glossary').then((m) => ({ default: m.Glossary })));
+const SiteDetail = lazy(() => import('./pages/SiteDetail').then((m) => ({ default: m.SiteDetail })));
 
-import { useAuth } from './hooks/useAuth';
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -65,6 +73,25 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   return children;
+}
+
+// ── Sentry User Context Sync ─────────────────────────────────────────────
+function SentryUserSync({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      setSentryUser({
+        id: user.id,
+        email: user.email ?? '',
+        role: user.role ?? 'unknown',
+      });
+    } else {
+      setSentryUser(null);
+    }
+  }, [user]);
+
+  return <>{children}</>;
 }
 
 // ── React Query Client (ARCH-02) ─────────────────────────────────────
@@ -83,16 +110,23 @@ const queryClient = new QueryClient({
 
 function App() {
   return (
+    <SentryErrorBoundary context={{ layer: 'app-root' }}>
     <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
+          <SentryUserSync>
             <BrowserRouter>
               <Routes>
-                {/* Public Route */}
+                {/* Public Routes */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/request" element={<WorkRequestPortal />} />
+
+                {/* P0-CE.4: Setup Wizard — публичный, без Layout (On-Premise first-run) */}
+                <Route path="/setup" element={
+                  <PageSuspense><SetupWizard /></PageSuspense>
+                } />
 
                 {/* Protected Routes with Layout */}
                 <Route element={
@@ -100,8 +134,9 @@ function App() {
                     <Layout />
                   </ProtectedRoute>
                 }>
-                  <Route path="/dashboard" element={<PageSuspense><Dashboard /></PageSuspense>} />
+                  <Route path="/dashboard" element={<PageSuspense><DashboardHub /></PageSuspense>} />
                   <Route path="/sites" element={<PageSuspense><Sites /></PageSuspense>} />
+                  <Route path="/sites/:siteId" element={<PageSuspense><SiteDetail /></PageSuspense>} />
                   <Route path="/sites/device/:deviceId" element={<PageSuspense><DeviceDetail /></PageSuspense>} />
                   <Route path="/devices" element={<PageSuspense><Devices /></PageSuspense>} />
                   <Route path="/devices/:deviceId" element={<PageSuspense><DeviceDetail /></PageSuspense>} />
@@ -131,7 +166,7 @@ function App() {
                     <Route path="/api-keys" element={<PageSuspense><APIKeys /></PageSuspense>} />
                     <Route path="/webhooks" element={<PageSuspense><Webhooks /></PageSuspense>} />
                     <Route path="/workload-analytics" element={<PageSuspense><WorkloadAnalytics /></PageSuspense>} />
-                    <Route path="/executive-dashboard" element={<PageSuspense><ExecutiveDashboard /></PageSuspense>} />
+                    <Route path="/executive-dashboard" element={<Navigate to="/dashboard" replace />} />
                   </Route>
 
                   {/* Admin Only Routes - Settings */}
@@ -148,12 +183,12 @@ function App() {
                     <Route path="/work-orders" element={<PageSuspense><WorkOrders /></PageSuspense>} />
                     <Route path="/work-orders/:id" element={<PageSuspense><WorkOrderDetail /></PageSuspense>} />
                     <Route path="/spare-parts" element={<PageSuspense><SpareParts /></PageSuspense>} />
-                    <Route path="/technician-dashboard" element={<PageSuspense><TechnicianDashboard /></PageSuspense>} />
+                    <Route path="/technician-dashboard" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/technician-week" element={<PageSuspense><TechnicianWeek /></PageSuspense>} />
                   </Route>
 
                   <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager']} />}>
-                    <Route path="/manager-dashboard" element={<PageSuspense><ManagerDashboard /></PageSuspense>} />
+                    <Route path="/manager-dashboard" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/asset-overview" element={<PageSuspense><AssetOverview /></PageSuspense>} />
                     <Route path="/sla" element={<PageSuspense><SLADashboard /></PageSuspense>} />
                     <Route path="/maintenance-reports" element={<PageSuspense><MaintenanceReports /></PageSuspense>} />
@@ -177,10 +212,12 @@ function App() {
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </BrowserRouter>
+          </SentryUserSync>
         </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
+    </SentryErrorBoundary>
   );
 }
 

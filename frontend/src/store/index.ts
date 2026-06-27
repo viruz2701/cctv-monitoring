@@ -28,3 +28,14 @@ export {
 } from './reportsStore';
 export type { ReportHistoryItem } from './reportsStore';
 export { useSettingsStore } from './settingsStore';
+
+// ── ARCH.1: New stores ──────────────────────────────────────────────
+export { useAuthStore, type AuthUser } from './authStore';
+export type { AuthState } from './authStore';
+export { useUIStore, type UIState, type ModalConfig, type PanelState } from './uiStore';
+export {
+  useNotificationStore,
+  type NotificationItem,
+  type NotificationType,
+  type NotificationFilter,
+} from './notificationStore';

@@ -16,6 +16,8 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -45,6 +47,35 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("schema validation: %s.%s: %s", e.EventType, e.Field, e.Message)
 }
 
+// CircuitBreakerState — состояние circuit breaker.
+type CircuitBreakerState int
+
+const (
+	CBClosed CircuitBreakerState = iota // Валидация активна
+	CBOpen                              // Валидация отключена
+)
+
+// CircuitBreakerConfig — конфигурация circuit breaker для SchemaRegistry.
+type CircuitBreakerConfig struct {
+	// FailureThreshold — процент неудачных валидаций для срабатывания (0.0-1.0).
+	// При превышении circuit breaker отключает валидацию.
+	FailureThreshold float64 `json:"failure_threshold"`
+	// MinValidationCount — минимальное количество валидаций для срабатывания.
+	MinValidationCount int64 `json:"min_validation_count"`
+	// AutoResetInterval — интервал автоматического сброса circuit breaker.
+	AutoResetInterval time.Duration `json:"auto_reset_interval"`
+	// Enabled — включает/отключает circuit breaker.
+	Enabled bool `json:"enabled"`
+}
+
+// DefaultCircuitBreakerConfig — параметры circuit breaker по умолчанию.
+var DefaultCircuitBreakerConfig = CircuitBreakerConfig{
+	FailureThreshold:   0.10,            // 10% failed → circuit open
+	MinValidationCount: 100,             // минимум 100 валидаций
+	AutoResetInterval:  5 * time.Minute, // автосброс через 5 мин
+	Enabled:            true,
+}
+
 // SchemaRegistry управляет реестром схем событий.
 //
 // Позволяет:
@@ -56,6 +87,16 @@ type SchemaRegistry struct {
 	schemas map[string]*SchemaDefinition // key: "{source}.{event_type}"
 	mu      sync.RWMutex
 	logger  *slog.Logger
+
+	// Circuit breaker
+	cbConfig   CircuitBreakerConfig
+	cbState    CircuitBreakerState
+	cbMu       sync.RWMutex
+	cbOpenedAt time.Time
+
+	// Validation stats
+	totalValidations atomic.Int64
+	invalidEvents    atomic.Int64
 }
 
 // NewSchemaRegistry создаёт новый SchemaRegistry.
@@ -65,8 +106,10 @@ func NewSchemaRegistry(logger *slog.Logger) *SchemaRegistry {
 	}
 
 	reg := &SchemaRegistry{
-		schemas: make(map[string]*SchemaDefinition),
-		logger:  logger,
+		schemas:  make(map[string]*SchemaDefinition),
+		logger:   logger,
+		cbConfig: DefaultCircuitBreakerConfig,
+		cbState:  CBClosed,
 	}
 
 	// Регистрируем встроенные схемы
@@ -119,6 +162,100 @@ func (r *SchemaRegistry) GetSchema(source EventSource, eventType string) (*Schem
 	return def, ok
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Circuit Breaker
+// ═══════════════════════════════════════════════════════════════════════
+
+// SetCircuitBreakerConfig устанавливает конфигурацию circuit breaker.
+func (r *SchemaRegistry) SetCircuitBreakerConfig(cfg CircuitBreakerConfig) {
+	r.cbMu.Lock()
+	defer r.cbMu.Unlock()
+	r.cbConfig = cfg
+	r.logger.Info("schema registry circuit breaker configured",
+		"failure_threshold", cfg.FailureThreshold,
+		"min_count", cfg.MinValidationCount,
+		"reset_interval", cfg.AutoResetInterval,
+		"enabled", cfg.Enabled,
+	)
+}
+
+// CircuitBreakerState возвращает текущее состояние circuit breaker.
+func (r *SchemaRegistry) CircuitBreakerState() CircuitBreakerState {
+	r.cbMu.RLock()
+	defer r.cbMu.RUnlock()
+	return r.cbState
+}
+
+// CircuitBreakerConfig возвращает текущую конфигурацию circuit breaker.
+func (r *SchemaRegistry) CircuitBreakerConfig() CircuitBreakerConfig {
+	r.cbMu.RLock()
+	defer r.cbMu.RUnlock()
+	return r.cbConfig
+}
+
+// ValidationStats возвращает атомарные счётчики валидации.
+type ValidationCounters struct {
+	TotalValidations int64 `json:"total_validations"`
+	InvalidEvents    int64 `json:"invalid_events"`
+}
+
+func (r *SchemaRegistry) ValidationCounters() ValidationCounters {
+	return ValidationCounters{
+		TotalValidations: r.totalValidations.Load(),
+		InvalidEvents:    r.invalidEvents.Load(),
+	}
+}
+
+// checkCircuitBreaker проверяет, нужно ли отключить валидацию.
+// Возвращает true если валидация должна быть активна.
+func (r *SchemaRegistry) checkCircuitBreaker() bool {
+	r.cbMu.Lock()
+	defer r.cbMu.Unlock()
+
+	if !r.cbConfig.Enabled {
+		return true
+	}
+
+	// Auto-reset: если circuit open и прошло достаточно времени — закрываем
+	if r.cbState == CBOpen {
+		if time.Since(r.cbOpenedAt) > r.cbConfig.AutoResetInterval {
+			r.cbState = CBClosed
+			r.logger.Warn("schema registry circuit breaker auto-reset: validation re-enabled",
+				"failure_threshold", r.cbConfig.FailureThreshold,
+			)
+		} else {
+			return false
+		}
+	}
+
+	// Проверяем, нужно ли открыть circuit
+	total := r.totalValidations.Load()
+	if total < r.cbConfig.MinValidationCount {
+		return true // Слишком мало данных для решения
+	}
+
+	invalid := r.invalidEvents.Load()
+	failureRate := float64(invalid) / float64(total)
+
+	if failureRate > r.cbConfig.FailureThreshold && total >= r.cbConfig.MinValidationCount {
+		r.cbState = CBOpen
+		r.cbOpenedAt = time.Now()
+		r.logger.Error("schema registry circuit breaker opened: validation disabled due to high failure rate",
+			"failure_rate", failureRate,
+			"threshold", r.cbConfig.FailureThreshold,
+			"total_validations", total,
+			"invalid_events", invalid,
+		)
+		return false
+	}
+
+	return true
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Validation
+// ═══════════════════════════════════════════════════════════════════════
+
 // Validate проверяет событие на соответствие зарегистрированной схеме.
 //
 // Compliance:
@@ -129,7 +266,18 @@ func (r *SchemaRegistry) GetSchema(source EventSource, eventType string) (*Schem
 // Если схема не найдена:
 //   - Если Required == true: возвращаем ошибку
 //   - Если Required == false (default): пропускаем валидацию (log warn)
+//
+// Circuit breaker: при >10% failed validations за минуту — отключает валидацию.
 func (r *SchemaRegistry) Validate(record *EventRecord) error {
+	// Проверка circuit breaker
+	if !r.checkCircuitBreaker() {
+		r.logger.Warn("event validation skipped (circuit breaker open)",
+			"source", record.Source,
+			"event_type", record.EventType,
+		)
+		return nil
+	}
+
 	def, ok := r.GetSchema(record.Source, record.EventType)
 	if !ok {
 		// Схема не зарегистрирована
@@ -140,8 +288,13 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 		return nil
 	}
 
+	// Считаем валидацию
+	r.totalValidations.Add(1)
+
 	// Базовая валидация обязательных полей EventRecord
 	if record.ID == "" {
+		r.invalidEvents.Add(1)
+		r.checkCircuitBreaker()
 		return &ValidationError{
 			EventType: record.EventType,
 			Field:     "id",
@@ -149,6 +302,8 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 		}
 	}
 	if record.Timestamp.IsZero() {
+		r.invalidEvents.Add(1)
+		r.checkCircuitBreaker()
 		return &ValidationError{
 			EventType: record.EventType,
 			Field:     "timestamp",
@@ -156,6 +311,8 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 		}
 	}
 	if record.Data == nil || len(record.Data) == 0 {
+		r.invalidEvents.Add(1)
+		r.checkCircuitBreaker()
 		return &ValidationError{
 			EventType: record.EventType,
 			Field:     "data",
@@ -169,11 +326,16 @@ func (r *SchemaRegistry) Validate(record *EventRecord) error {
 
 	result, err := gojsonschema.Validate(schemaLoader, docLoader)
 	if err != nil {
+		r.invalidEvents.Add(1)
+		r.checkCircuitBreaker()
 		return fmt.Errorf("schema validation error for %s.%s: %w",
 			record.Source, record.EventType, err)
 	}
 
 	if !result.Valid() {
+		r.invalidEvents.Add(1)
+		r.checkCircuitBreaker()
+
 		// Собираем все ошибки валидации
 		var errs []string
 		for _, desc := range result.Errors() {

@@ -138,6 +138,21 @@ func (h *PresenceHub) GetResourcePresences(resource string) []*PresenceInfo {
 	return result
 }
 
+// GetAllPresences returns all active presences across all resources.
+func (h *PresenceHub) GetAllPresences() []*PresenceInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var result []*PresenceInfo
+	now := time.Now()
+	for _, p := range h.presences {
+		if now.Sub(p.UpdatedAt) < h.timeout {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
 // Cleanup removes all expired presences that have exceeded the timeout.
 func (h *PresenceHub) Cleanup() {
 	h.mu.Lock()
@@ -148,4 +163,177 @@ func (h *PresenceHub) Cleanup() {
 			delete(h.presences, key)
 		}
 	}
+}
+
+// ─── Cursor Sharing ────────────────────────────────────────────────────────
+
+// CursorPosition represents a user's cursor position on a resource.
+type CursorPosition struct {
+	UserID    string    `json:"user_id"`
+	UserName  string    `json:"user_name"`
+	Resource  string    `json:"resource"`
+	Field     string    `json:"field"`  // which field is focused
+	Offset    int       `json:"offset"` // cursor offset in text
+	Line      int       `json:"line"`   // line number
+	Col       int       `json:"col"`    // column number
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CursorHub tracks real-time cursor positions for collaboration.
+type CursorHub struct {
+	mu      sync.RWMutex
+	cursors map[string]*CursorPosition // key: "user_id:resource"
+	logger  *slog.Logger
+	timeout time.Duration
+}
+
+// NewCursorHub creates a new CursorHub.
+func NewCursorHub(logger *slog.Logger) *CursorHub {
+	return &CursorHub{
+		cursors: make(map[string]*CursorPosition),
+		logger:  logger.With("component", "cursor-hub"),
+		timeout: 10 * time.Second,
+	}
+}
+
+// SetCursor updates a user's cursor position on a resource.
+func (h *CursorHub) SetCursor(userID, userName, resource, field string, offset, line, col int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	key := userID + ":" + resource
+	h.cursors[key] = &CursorPosition{
+		UserID:    userID,
+		UserName:  userName,
+		Resource:  resource,
+		Field:     field,
+		Offset:    offset,
+		Line:      line,
+		Col:       col,
+		UpdatedAt: time.Now(),
+	}
+}
+
+// RemoveCursor removes a user's cursor from a resource.
+func (h *CursorHub) RemoveCursor(userID, resource string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.cursors, userID+":"+resource)
+}
+
+// GetResourceCursors returns all active cursors for a resource.
+func (h *CursorHub) GetResourceCursors(resource string) []*CursorPosition {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var result []*CursorPosition
+	now := time.Now()
+	for _, c := range h.cursors {
+		if c.Resource == resource && now.Sub(c.UpdatedAt) < h.timeout {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
+// Cleanup removes all expired cursors.
+func (h *CursorHub) Cleanup() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	now := time.Now()
+	for key, c := range h.cursors {
+		if now.Sub(c.UpdatedAt) >= h.timeout {
+			delete(h.cursors, key)
+		}
+	}
+}
+
+// ─── Collaboration Hub (composite) ─────────────────────────────────────────
+
+// CollaborationHub combines presence and cursor tracking for real-time collaboration.
+// It also manages room-based subscriptions so users only receive relevant updates.
+type CollaborationHub struct {
+	presence *PresenceHub
+	cursor   *CursorHub
+	rooms    map[string]map[string]bool // room -> set of userIDs
+	mu       sync.RWMutex
+	logger   *slog.Logger
+}
+
+// NewCollaborationHub creates a new CollaborationHub.
+func NewCollaborationHub(logger *slog.Logger) *CollaborationHub {
+	return &CollaborationHub{
+		presence: NewPresenceHub(logger),
+		cursor:   NewCursorHub(logger),
+		rooms:    make(map[string]map[string]bool),
+		logger:   logger.With("component", "collab-hub"),
+	}
+}
+
+// JoinRoom adds a user to a room.
+func (h *CollaborationHub) JoinRoom(room, userID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.rooms[room] == nil {
+		h.rooms[room] = make(map[string]bool)
+	}
+	h.rooms[room][userID] = true
+}
+
+// LeaveRoom removes a user from a room.
+func (h *CollaborationHub) LeaveRoom(room, userID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.rooms[room] != nil {
+		delete(h.rooms[room], userID)
+		if len(h.rooms[room]) == 0 {
+			delete(h.rooms, room)
+		}
+	}
+}
+
+// GetRoomUsers returns all users in a room.
+func (h *CollaborationHub) GetRoomUsers(room string) []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	var result []string
+	for userID := range h.rooms[room] {
+		result = append(result, userID)
+	}
+	return result
+}
+
+// SetPresence records presence and notifies the room.
+func (h *CollaborationHub) SetPresence(userID, userName, resource, action string) {
+	h.presence.SetPresence(userID, userName, resource, action)
+}
+
+// RemovePresence removes presence and notifies the room.
+func (h *CollaborationHub) RemovePresence(userID, resource string) {
+	h.presence.RemovePresence(userID, resource)
+}
+
+// GetResourcePresences returns all presences for a resource.
+func (h *CollaborationHub) GetResourcePresences(resource string) []*PresenceInfo {
+	return h.presence.GetResourcePresences(resource)
+}
+
+// SetCursor updates cursor position.
+func (h *CollaborationHub) SetCursor(userID, userName, resource, field string, offset, line, col int) {
+	h.cursor.SetCursor(userID, userName, resource, field, offset, line, col)
+}
+
+// RemoveCursor removes cursor.
+func (h *CollaborationHub) RemoveCursor(userID, resource string) {
+	h.cursor.RemoveCursor(userID, resource)
+}
+
+// GetResourceCursors returns all cursors for a resource.
+func (h *CollaborationHub) GetResourceCursors(resource string) []*CursorPosition {
+	return h.cursor.GetResourceCursors(resource)
+}
+
+// Cleanup removes all expired presences and cursors.
+func (h *CollaborationHub) Cleanup() {
+	h.presence.Cleanup()
+	h.cursor.Cleanup()
 }

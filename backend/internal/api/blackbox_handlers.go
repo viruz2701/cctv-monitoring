@@ -225,24 +225,24 @@ func (s *Server) handleTriggerIncident(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control (admin, support) ──
 	if !isBlackBoxRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions: admin or support role required"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin or support role required"))
 		return
 	}
 
 	// ── V5: Input Validation ──
 	var req triggerIncidentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body"))
+		RespondError(w, r, NewBadRequestError("invalid request body"))
 		return
 	}
 	if req.DeviceID == "" {
-		respondError(w, r, NewValidationError("device_id is required"))
+		RespondError(w, r, NewValidationError("device_id is required"))
 		return
 	}
 	if req.TriggerType == "" {
@@ -265,7 +265,7 @@ func (s *Server) handleTriggerIncident(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("blackbox: trigger incident failed",
 			"device_id", req.DeviceID, "error", err,
 		)
-		respondError(w, r, NewInternalError("failed to trigger incident", err))
+		RespondError(w, r, NewInternalError("failed to trigger incident", err))
 		return
 	}
 
@@ -304,13 +304,13 @@ func (s *Server) handleListReports(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control ──
 	if !isBlackBoxRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
 		return
 	}
 
@@ -324,7 +324,7 @@ func (s *Server) handleListReports(w http.ResponseWriter, r *http.Request) {
 		if v, err := strconv.Atoi(limitStr); err == nil && v > 0 && v <= 100 {
 			limit = v
 		} else {
-			respondError(w, r, NewValidationError("invalid limit: must be 1-100"))
+			RespondError(w, r, NewValidationError("invalid limit: must be 1-100"))
 			return
 		}
 	}
@@ -334,7 +334,7 @@ func (s *Server) handleListReports(w http.ResponseWriter, r *http.Request) {
 		if v, err := strconv.Atoi(offsetStr); err == nil && v >= 0 {
 			offset = v
 		} else {
-			respondError(w, r, NewValidationError("invalid offset: must be >= 0"))
+			RespondError(w, r, NewValidationError("invalid offset: must be >= 0"))
 			return
 		}
 	}
@@ -343,7 +343,7 @@ func (s *Server) handleListReports(w http.ResponseWriter, r *http.Request) {
 	reports, total, err := s.blackboxRecorder.ListReports(r.Context(), deviceID, limit, offset)
 	if err != nil {
 		s.logger.Error("blackbox: list reports failed", "error", err)
-		respondError(w, r, NewInternalError("failed to list reports", err))
+		RespondError(w, r, NewInternalError("failed to list reports", err))
 		return
 	}
 
@@ -393,20 +393,20 @@ func (s *Server) handleGetReport(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control ──
 	if !isBlackBoxRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
 		return
 	}
 
 	// ── V5: Input Validation ──
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewValidationError("report id is required"))
+		RespondError(w, r, NewValidationError("report id is required"))
 		return
 	}
 
@@ -414,11 +414,11 @@ func (s *Server) handleGetReport(w http.ResponseWriter, r *http.Request) {
 	report, err := s.blackboxRecorder.GetReport(r.Context(), id)
 	if err != nil {
 		s.logger.Error("blackbox: get report failed", "id", id, "error", err)
-		respondError(w, r, NewInternalError("failed to get report", err))
+		RespondError(w, r, NewInternalError("failed to get report", err))
 		return
 	}
 	if report == nil {
-		respondError(w, r, NewNotFoundError("report not found"))
+		RespondError(w, r, NewNotFoundError("report not found"))
 		return
 	}
 
@@ -450,20 +450,20 @@ func (s *Server) handleExportReport(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control ──
 	if !isBlackBoxRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
 		return
 	}
 
 	// ── V5: Input Validation ──
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewValidationError("report id is required"))
+		RespondError(w, r, NewValidationError("report id is required"))
 		return
 	}
 
@@ -472,7 +472,7 @@ func (s *Server) handleExportReport(w http.ResponseWriter, r *http.Request) {
 		format = "json"
 	}
 	if format != "json" && format != "pdf" {
-		respondError(w, r, NewValidationError("invalid format: must be 'json' or 'pdf'"))
+		RespondError(w, r, NewValidationError("invalid format: must be 'json' or 'pdf'"))
 		return
 	}
 
@@ -480,11 +480,11 @@ func (s *Server) handleExportReport(w http.ResponseWriter, r *http.Request) {
 	report, err := s.blackboxRecorder.GetReport(r.Context(), id)
 	if err != nil {
 		s.logger.Error("blackbox: export report failed", "id", id, "error", err)
-		respondError(w, r, NewInternalError("failed to export report", err))
+		RespondError(w, r, NewInternalError("failed to export report", err))
 		return
 	}
 	if report == nil {
-		respondError(w, r, NewNotFoundError("report not found"))
+		RespondError(w, r, NewNotFoundError("report not found"))
 		return
 	}
 
@@ -531,27 +531,27 @@ func (s *Server) handleDeleteReport(w http.ResponseWriter, r *http.Request) {
 	// ── V2: Authentication ──
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("authentication required"))
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
 		return
 	}
 
 	// ── V4: Access Control (admin only) ──
 	if !isAdminRole(claims.Role) {
-		respondError(w, r, NewForbiddenError("insufficient permissions: admin role required"))
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin role required"))
 		return
 	}
 
 	// ── V5: Input Validation ──
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		respondError(w, r, NewValidationError("report id is required"))
+		RespondError(w, r, NewValidationError("report id is required"))
 		return
 	}
 
 	// ── Удаляем ──
 	if err := s.blackboxRecorder.DeleteReport(r.Context(), id); err != nil {
 		s.logger.Error("blackbox: delete report failed", "id", id, "error", err)
-		respondError(w, r, NewInternalError("failed to delete report", err))
+		RespondError(w, r, NewInternalError("failed to delete report", err))
 		return
 	}
 

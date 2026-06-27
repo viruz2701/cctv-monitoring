@@ -8,11 +8,15 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ── Whitelist constants ────────────────────────────────────────────────
@@ -23,25 +27,63 @@ var (
 	validConnTypes    = []string{"ip", "p2p", "snmp", "syslog", "alarm", "gb28181", "onvif"}
 	validAssetClasses = []string{"critical", "confidential", "internal", "public"}
 	validHealthStatus = []string{"healthy", "faulty", "degraded"}
+	validWorkTypes    = []string{"installation", "maintenance", "repair", "inspection"}
+	validPriorities   = []string{"low", "medium", "high", "critical"}
+	validWOPriorities = []string{"low", "medium", "high", "critical"}
+	validWOStatuses   = []string{"open", "assigned", "in_progress", "completed", "cancelled", "on_hold"}
 )
+
+// ── Structured Field Error (P1-SEC.3) ───────────────────────────────────
+
+// FieldError представляет ошибку валидации для конкретного поля.
+type FieldError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+	Code    string `json:"code"`
+}
+
+// ValidationErrors — коллекция ошибок валидации с поддержкой JSON.
+type ValidationErrors struct {
+	Fields []FieldError `json:"fields"`
+}
+
+func (ve *ValidationErrors) Error() string {
+	msgs := make([]string, len(ve.Fields))
+	for i, fe := range ve.Fields {
+		msgs[i] = fe.Field + ": " + fe.Message
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// Add добавляет ошибку поля.
+func (ve *ValidationErrors) Add(field, message, code string) {
+	ve.Fields = append(ve.Fields, FieldError{Field: field, Message: message, Code: code})
+}
+
+// Valid возвращает true если нет ошибок.
+func (ve *ValidationErrors) Valid() bool {
+	return len(ve.Fields) == 0
+}
 
 // ── Validator ──────────────────────────────────────────────────────────
 
-// Validator provides simple struct field validation.
-// Заменяет github.com/go-playground/validator для избежания лишних зависимостей.
+// Validator provides simple struct field validation with structured errors.
+// P1-SEC.3: Все ошибки содержат field-level информацию для inline error mapping.
 type Validator struct {
-	errors []string
+	fieldErrors []FieldError
 }
 
 // NewValidator creates a new Validator.
 func NewValidator() *Validator {
-	return &Validator{errors: make([]string, 0)}
+	return &Validator{fieldErrors: make([]FieldError, 0)}
 }
 
 // Required проверяет, что строка не пуста.
 func (v *Validator) Required(field, value string) *Validator {
 	if strings.TrimSpace(value) == "" {
-		v.errors = append(v.errors, fmt.Sprintf("%s: required", field))
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: "required", Code: "REQUIRED",
+		})
 	}
 	return v
 }
@@ -49,7 +91,9 @@ func (v *Validator) Required(field, value string) *Validator {
 // MinLength проверяет минимальную длину строки.
 func (v *Validator) MinLength(field, value string, min int) *Validator {
 	if len(value) < min {
-		v.errors = append(v.errors, fmt.Sprintf("%s: minimum length %d", field, min))
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: fmt.Sprintf("minimum length %d", min), Code: "MIN_LENGTH",
+		})
 	}
 	return v
 }
@@ -57,7 +101,9 @@ func (v *Validator) MinLength(field, value string, min int) *Validator {
 // MaxLength проверяет максимальную длину строки.
 func (v *Validator) MaxLength(field, value string, max int) *Validator {
 	if len(value) > max {
-		v.errors = append(v.errors, fmt.Sprintf("%s: maximum length %d", field, max))
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: fmt.Sprintf("maximum length %d", max), Code: "MAX_LENGTH",
+		})
 	}
 	return v
 }
@@ -69,7 +115,9 @@ func (v *Validator) OneOf(field, value string, allowed []string) *Validator {
 			return v
 		}
 	}
-	v.errors = append(v.errors, fmt.Sprintf("%s: must be one of [%s]", field, strings.Join(allowed, ", ")))
+	v.fieldErrors = append(v.fieldErrors, FieldError{
+		Field: field, Message: fmt.Sprintf("must be one of [%s]", strings.Join(allowed, ", ")), Code: "INVALID_VALUE",
+	})
 	return v
 }
 
@@ -79,7 +127,9 @@ var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 // UUID проверяет, что строка является валидным UUID.
 func (v *Validator) UUID(field, value string) *Validator {
 	if value != "" && !uuidRegex.MatchString(value) {
-		v.errors = append(v.errors, fmt.Sprintf("%s: invalid UUID format", field))
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: "invalid UUID format", Code: "INVALID_FORMAT",
+		})
 	}
 	return v
 }
@@ -88,7 +138,9 @@ func (v *Validator) UUID(field, value string) *Validator {
 func (v *Validator) MAC(field, value string) *Validator {
 	if value != "" {
 		if _, err := net.ParseMAC(value); err != nil {
-			v.errors = append(v.errors, fmt.Sprintf("%s: invalid MAC address", field))
+			v.fieldErrors = append(v.fieldErrors, FieldError{
+				Field: field, Message: "invalid MAC address", Code: "INVALID_FORMAT",
+			})
 		}
 	}
 	return v
@@ -97,24 +149,173 @@ func (v *Validator) MAC(field, value string) *Validator {
 // RangeFloat проверяет, что число в диапазоне.
 func (v *Validator) RangeFloat(field string, value float64, min, max float64) *Validator {
 	if value < min || value > max {
-		v.errors = append(v.errors, fmt.Sprintf("%s: must be between %.0f and %.0f", field, min, max))
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: fmt.Sprintf("must be between %.0f and %.0f", min, max), Code: "OUT_OF_RANGE",
+		})
+	}
+	return v
+}
+
+// Email проверяет формат email (простая проверка).
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+func (v *Validator) Email(field, value string) *Validator {
+	if value != "" && !emailRegex.MatchString(value) {
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: "invalid email format", Code: "INVALID_FORMAT",
+		})
+	}
+	return v
+}
+
+// IP проверяет формат IP-адреса.
+func (v *Validator) IP(field, value string) *Validator {
+	if value != "" && net.ParseIP(value) == nil {
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: "invalid IP address", Code: "INVALID_FORMAT",
+		})
+	}
+	return v
+}
+
+// Port проверяет, что порт в допустимом диапазоне.
+func (v *Validator) Port(field string, value int) *Validator {
+	if value < 1 || value > 65535 {
+		v.fieldErrors = append(v.fieldErrors, FieldError{
+			Field: field, Message: "port must be between 1 and 65535", Code: "OUT_OF_RANGE",
+		})
 	}
 	return v
 }
 
 // Valid returns true if no validation errors.
 func (v *Validator) Valid() bool {
-	return len(v.errors) == 0
+	return len(v.fieldErrors) == 0
 }
 
-// Errors returns all validation errors.
-func (v *Validator) Errors() []string {
-	return v.errors
+// Errors возвращает все ошибки полей.
+func (v *Validator) Errors() []FieldError {
+	return v.fieldErrors
 }
 
-// Error returns combined error message.
+// Error возвращает объединённое сообщение об ошибке.
 func (v *Validator) Error() string {
-	return strings.Join(v.errors, "; ")
+	ve := &ValidationErrors{Fields: v.fieldErrors}
+	return ve.Error()
+}
+
+// ToValidationErrors преобразует ошибки валидатора в ValidationErrors.
+func (v *Validator) ToValidationErrors() *ValidationErrors {
+	return &ValidationErrors{Fields: v.fieldErrors}
+}
+
+// ── respondValidationError — отправка структурированной ошибки валидации ──
+
+// respondValidationError отправляет 400 с структурированными field-level ошибками.
+// P1-SEC.3: Формат позволяет фронтенду мапить ошибки к полям формы (inline error mapping).
+func respondValidationError(w http.ResponseWriter, r *http.Request, ve *ValidationErrors) {
+	traceID := traceFromRequest(r)
+
+	resp := map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    ErrCodeValidation,
+			"message": "validation failed",
+			"fields":  ve.Fields,
+		},
+		"trace_id":  traceID,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// traceFromRequest извлекает traceID из контекста запроса.
+func traceFromRequest(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+	return TraceIDFromContext(r.Context())
+}
+
+// ── Rate Limiting для failed validations (P1-SEC.3) ─────────────────────
+
+// validationRateLimiter отслеживает failed validation попытки по IP.
+// Блокирует IP после N failed validations за период.
+type validationRateLimiter struct {
+	mu        sync.Mutex
+	attempts  map[string]*validationAttempt
+	threshold int           // максимальное число failed validations
+	window    time.Duration // временное окно
+	banTime   time.Duration // время блокировки
+}
+
+type validationAttempt struct {
+	count    int
+	firstTry time.Time
+	banUntil time.Time
+}
+
+var defaultValidationRateLimiter = &validationRateLimiter{
+	attempts:  make(map[string]*validationAttempt),
+	threshold: 20,               // 20 failed validations
+	window:    5 * time.Minute,  // за 5 минут
+	banTime:   15 * time.Minute, // блокировка на 15 минут
+}
+
+// checkValidationRateLimit проверяет, не превышен ли лимит failed validations для IP.
+func (rl *validationRateLimiter) check(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	entry, exists := rl.attempts[ip]
+
+	if !exists {
+		rl.attempts[ip] = &validationAttempt{count: 1, firstTry: now}
+		return true
+	}
+
+	// Проверяем, не забанен ли IP
+	if !entry.banUntil.IsZero() && now.Before(entry.banUntil) {
+		return false
+	}
+
+	// Сброс если окно истекло
+	if now.Sub(entry.firstTry) > rl.window {
+		entry.count = 1
+		entry.firstTry = now
+		entry.banUntil = time.Time{}
+		return true
+	}
+
+	entry.count++
+
+	if entry.count > rl.threshold {
+		entry.banUntil = now.Add(rl.banTime)
+		return false
+	}
+
+	return true
+}
+
+// ValidationRateLimitMiddleware — middleware для rate limiting failed validations.
+func ValidationRateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Пропускаем safe методы
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ip := clientIP(r)
+		if !defaultValidationRateLimiter.check(ip) {
+			RespondError(w, r, NewRateLimitError("too many invalid requests. Try again later."))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ── Validation functions ───────────────────────────────────────────────
@@ -156,7 +357,7 @@ func validateCreateDeviceRequest(req *createDeviceRequestFields) error {
 	}
 
 	if !v.Valid() {
-		return errors.New(v.Error())
+		return v.ToValidationErrors()
 	}
 	return nil
 }
@@ -224,7 +425,60 @@ func validateUpdateDeviceRequest(req *updateDeviceRequestFields) error {
 	}
 
 	if !v.Valid() {
-		return errors.New(v.Error())
+		return v.ToValidationErrors()
+	}
+	return nil
+}
+
+// ── Domain Validators (P1-SEC.3) ────────────────────────────────────────
+
+// validateWorkOrderRequest проверяет запрос на создание/обновление Work Order.
+func validateWorkOrderRequest(title, workType, priority, description string) error {
+	v := NewValidator()
+	v.Required("title", title).
+		MinLength("title", title, 3).
+		MaxLength("title", title, 200).
+		Required("work_type", workType).
+		OneOf("work_type", workType, validWorkTypes).
+		Required("priority", priority).
+		OneOf("priority", priority, validPriorities).
+		Required("description", description).
+		MinLength("description", description, 10).
+		MaxLength("description", description, 5000)
+
+	if !v.Valid() {
+		return v.ToValidationErrors()
+	}
+	return nil
+}
+
+// validateSiteRequest проверяет запрос на создание/обновление Site.
+func validateSiteRequest(name, address, city string) error {
+	v := NewValidator()
+	v.Required("name", name).
+		MinLength("name", name, 2).
+		MaxLength("name", name, 200).
+		Required("address", address).
+		MaxLength("address", address, 500).
+		Required("city", city).
+		MaxLength("city", city, 100)
+
+	if !v.Valid() {
+		return v.ToValidationErrors()
+	}
+	return nil
+}
+
+// validateLoginRequest проверяет запрос логина.
+func validateLoginRequest(username, password string) error {
+	v := NewValidator()
+	v.Required("username", username).
+		MaxLength("username", username, 100).
+		Required("password", password).
+		MaxLength("password", password, 256)
+
+	if !v.Valid() {
+		return v.ToValidationErrors()
 	}
 	return nil
 }
@@ -233,6 +487,10 @@ func validateUpdateDeviceRequest(req *updateDeviceRequestFields) error {
 func formatValidationError(err error) string {
 	if err == nil {
 		return "validation failed"
+	}
+	var ve *ValidationErrors
+	if errors.As(err, &ve) {
+		return ve.Error()
 	}
 	return err.Error()
 }

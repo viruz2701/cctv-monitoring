@@ -41,7 +41,7 @@ func (s *Server) handleAuditVerify(w http.ResponseWriter, r *http.Request) {
 	`)
 	if err != nil {
 		s.logger.Error("audit verify: query failed", "error", err)
-		respondError(w, r, NewInternalError("query error", nil))
+		RespondError(w, r, NewInternalError("query error", nil))
 		return
 	}
 	defer rows.Close()
@@ -146,7 +146,7 @@ func (s *Server) handleListAuditLog(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Pool.Query(ctx, query, args...)
 	if err != nil {
 		s.logger.Error("audit list: query failed", "error", err)
-		respondError(w, r, NewInternalError("query error", nil))
+		RespondError(w, r, NewInternalError("query error", nil))
 		return
 	}
 	defer rows.Close()
@@ -201,7 +201,7 @@ func (s *Server) handleListAuditLog(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/audit/compliance
 func (s *Server) handleAuditCompliance(w http.ResponseWriter, r *http.Request) {
 	if s.auditChainStore == nil {
-		respondError(w, r, fmt.Errorf("audit chain store not initialized"))
+		RespondError(w, r, fmt.Errorf("audit chain store not initialized"))
 		return
 	}
 
@@ -211,7 +211,7 @@ func (s *Server) handleAuditCompliance(w http.ResponseWriter, r *http.Request) {
 	report, err := s.auditChainStore.GetComplianceReport(ctx)
 	if err != nil {
 		s.logger.Error("audit compliance: get report failed", "error", err)
-		respondError(w, r, NewInternalError("failed to get compliance report", nil))
+		RespondError(w, r, NewInternalError("failed to get compliance report", nil))
 		return
 	}
 
@@ -233,7 +233,7 @@ func (s *Server) handleAuditArchive(w http.ResponseWriter, r *http.Request) {
 	err := s.db.Pool.QueryRow(ctx, `SELECT archive_audit_logs($1)`, retentionYears).Scan(&archivedCount)
 	if err != nil {
 		s.logger.Error("audit archive: failed", "error", err)
-		respondError(w, r, NewInternalError("archive failed", nil))
+		RespondError(w, r, NewInternalError("archive failed", nil))
 		return
 	}
 

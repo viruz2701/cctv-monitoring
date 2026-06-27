@@ -25,14 +25,14 @@ func (s *Server) getPredictions(w http.ResponseWriter, r *http.Request) {
 	if claims.Role == "owner" {
 		dev, ok := s.stateManager.Get(deviceID)
 		if !ok || dev.OwnerID == nil || *dev.OwnerID != claims.UserID {
-			respondError(w, r, NewForbiddenError("forbidden"))
+			RespondError(w, r, NewForbiddenError("forbidden"))
 			return
 		}
 	}
 	predictions, err := s.db.GetPredictions(deviceID, limit)
 	if err != nil {
 		s.logger.Error("failed to get predictions", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 	jsonResponse(w, http.StatusOK, predictions)
@@ -43,7 +43,7 @@ func (s *Server) getPredictions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) searchLogs(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "support" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 	deviceID := r.URL.Query().Get("device_id")
@@ -55,7 +55,7 @@ func (s *Server) searchLogs(w http.ResponseWriter, r *http.Request) {
 	logs, err := s.db.SearchLogs(deviceID, level, keyword, timeFrom, timeTo)
 	if err != nil {
 		s.logger.Error("failed to search logs", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 	jsonResponse(w, http.StatusOK, logs)
@@ -77,7 +77,7 @@ func (s *Server) searchLogs(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getReliability(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -87,7 +87,7 @@ func (s *Server) getReliability(w http.ResponseWriter, r *http.Request) {
 	results, err := s.db.GetDeviceReliability(r.Context(), vendorType, deviceType)
 	if err != nil {
 		s.logger.Error("failed to get device reliability", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -142,7 +142,7 @@ func (s *Server) getReliability(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getTCOPerDevice(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -171,7 +171,7 @@ func (s *Server) getTCOPerDevice(w http.ResponseWriter, r *http.Request) {
 	results, err := s.db.GetTCOPerDevice(r.Context(), filter)
 	if err != nil {
 		s.logger.Error("failed to get TCO per device", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -193,7 +193,7 @@ func (s *Server) getTCOPerDevice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
@@ -201,7 +201,7 @@ func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) 
 	tcoResults, err := s.db.GetTCOPerDevice(r.Context(), models.TCOFilter{Limit: 500})
 	if err != nil {
 		s.logger.Error("failed to get downtime costs", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
@@ -261,14 +261,14 @@ func (s *Server) getDowntimeCostsBySite(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getWorkOrderCosts(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims.Role != "admin" && claims.Role != "support" && claims.Role != "manager" {
-		respondError(w, r, NewForbiddenError("forbidden"))
+		RespondError(w, r, NewForbiddenError("forbidden"))
 		return
 	}
 
 	summary, err := s.db.GetWorkOrderCostSummary(r.Context())
 	if err != nil {
 		s.logger.Error("failed to get work order cost summary", "error", err)
-		respondError(w, r, NewInternalError("internal error", nil))
+		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 

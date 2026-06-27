@@ -14,10 +14,13 @@
 package playbook
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -83,6 +86,38 @@ type VersionEntry struct {
 	RollbackOf string    `json:"rollback_of,omitempty"` // если это rollback — указывает исходную версию
 }
 
+// VersionTag — тег для версии плейбука.
+type VersionTag struct {
+	Name      string    `json:"name"`
+	Version   string    `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// VersionDiff — структурированный diff между двумя версиями.
+type VersionDiff struct {
+	Name            string            `json:"name"`
+	From            string            `json:"from"`
+	To              string            `json:"to"`
+	StepsAdded      []PlaybookStep    `json:"steps_added,omitempty"`
+	StepsRemoved    []PlaybookStep    `json:"steps_removed,omitempty"`
+	StepsChanged    []StepChange      `json:"steps_changed,omitempty"`
+	MetadataChanged map[string]Change `json:"metadata_changed,omitempty"`
+}
+
+// StepChange — изменение одного шага.
+type StepChange struct {
+	Name   string `json:"name"`
+	Field  string `json:"field"`
+	OldVal string `json:"old_val"`
+	NewVal string `json:"new_val"`
+}
+
+// Change — универсальное представление изменения.
+type Change struct {
+	Old interface{} `json:"old"`
+	New interface{} `json:"new"`
+}
+
 // RegistryConfig — конфигурация PlaybookRegistry.
 type RegistryConfig struct {
 	// WatchInterval — интервал проверки изменений для hot reload.
@@ -131,6 +166,7 @@ type PlaybookRegistry struct {
 	mu       sync.RWMutex
 	schemas  map[string]*PlaybookSchema // name → текущий (последний загруженный)
 	versions map[string][]VersionEntry  // name → история версий
+	tags     map[string][]VersionTag    // name → список тегов
 	files    map[string]string          // filePath → name (для hot reload)
 	dir      string                     // директория с плейбуками
 	cfg      RegistryConfig
@@ -148,11 +184,24 @@ func NewPlaybookRegistry(cfg RegistryConfig) *PlaybookRegistry {
 	return &PlaybookRegistry{
 		schemas:  make(map[string]*PlaybookSchema),
 		versions: make(map[string][]VersionEntry),
+		tags:     make(map[string][]VersionTag),
 		files:    make(map[string]string),
 		cfg:      cfg,
 		logger:   cfg.Logger.With("component", "playbook-registry"),
 		stopCh:   make(chan struct{}),
 	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Semver Validation
+// ═══════════════════════════════════════════════════════════════════════
+
+// semverPattern — regex для валидации semver (MAJOR.MINOR.PATCH с опциональными pre-release/build).
+var semverPattern = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-[\da-zA-Z-]+(\.[\da-zA-Z-]+)*)?(\+[\da-zA-Z-]+(\.[\da-zA-Z-]+)*)?$`)
+
+// isValidSemver проверяет, что строка является корректным semver.
+func isValidSemver(version string) bool {
+	return semverPattern.MatchString(version)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -222,9 +271,16 @@ func (r *PlaybookRegistry) LoadFile(path string) error {
 	if schema.Version == "" {
 		return fmt.Errorf("%s: playbook %q version is required", path, schema.Name)
 	}
+	if !isValidSemver(schema.Version) {
+		return fmt.Errorf("%s: playbook %q version %q is not valid semver", path, schema.Name, schema.Version)
+	}
 	if len(schema.Steps) == 0 {
 		return fmt.Errorf("%s: playbook %q must have at least one step", path, schema.Name)
 	}
+
+	// Вычисляем SHA256 хеш файла для audit trail
+	hash := sha256.Sum256(data)
+	sha256Hex := hex.EncodeToString(hash[:])
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -234,15 +290,16 @@ func (r *PlaybookRegistry) LoadFile(path string) error {
 		r.addVersionLocked(existing.Name, existing.Version, path, false)
 	}
 
-	// Активируем новую версию
+	// Активируем новую версию с SHA256
 	r.schemas[schema.Name] = &schema
 	r.files[path] = schema.Name
-	r.addVersionLocked(schema.Name, schema.Version, path, true)
+	r.addVersionLockedWithSHA(schema.Name, schema.Version, path, sha256Hex, true)
 
 	r.logger.Info("playbook loaded/updated",
 		"name", schema.Name,
 		"version", schema.Version,
 		"file", path,
+		"sha256", sha256Hex[:12], // префикс для логов
 		"steps", len(schema.Steps),
 		"deprecated", schema.Deprecated,
 	)
@@ -406,22 +463,20 @@ func (r *PlaybookRegistry) Rollback(name, version string) (bool, error) {
 
 	// Сохраняем текущую версию в историю перед rollback
 	if current, ok := r.schemas[name]; ok {
-		r.addVersionLocked(current.Name, current.Version, "", false)
-		r.schemas[name] = &PlaybookSchema{
-			Name:    name,
-			Version: target.Version,
-			Tags:    []string{"rollback"},
-		}
+		r.addVersionLocked(current.Name, current.Version, target.FilePath, false)
 	}
 
-	// Загружаем из файла (если есть)
-	if target.FilePath != "" {
-		r.mu.Unlock()
-		err := r.LoadFile(target.FilePath)
-		r.mu.Lock()
-		if err != nil {
-			return false, fmt.Errorf("rollback %s@%s: %w", name, version, err)
-		}
+	// Без файла не можем восстановить полную схему
+	if target.FilePath == "" {
+		return false, fmt.Errorf("rollback %s@%s: no file path in version entry", name, version)
+	}
+
+	// Загружаем из файла — LoadFile полностью восстановит схему
+	r.mu.Unlock()
+	err := r.LoadFile(target.FilePath)
+	r.mu.Lock()
+	if err != nil {
+		return false, fmt.Errorf("rollback %s@%s: %w", name, version, err)
 	}
 
 	// Помечаем в истории как rollback
@@ -464,6 +519,232 @@ func (r *PlaybookRegistry) RollbackLatest(name string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Versioning Enhancements
+// ═══════════════════════════════════════════════════════════════════════
+
+// getVersionEntry возвращает VersionEntry для указанной версии (без блокировки).
+func (r *PlaybookRegistry) getVersionEntry(name, version string) *VersionEntry {
+	history, ok := r.versions[name]
+	if !ok {
+		return nil
+	}
+	for i := range history {
+		if history[i].Version == version {
+			return &history[i]
+		}
+	}
+	return nil
+}
+
+// getSchemaByName возвращает схему по имени из history (без блокировки).
+func (r *PlaybookRegistry) getSchemaFromHistory(name, version string) *PlaybookSchema {
+	entry := r.getVersionEntry(name, version)
+	if entry == nil || entry.FilePath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(entry.FilePath)
+	if err != nil {
+		return nil
+	}
+	var schema PlaybookSchema
+	if err := yaml.Unmarshal(data, &schema); err != nil {
+		return nil
+	}
+	return &schema
+}
+
+// stepKey возвращает уникальный ключ шага (name:action:target).
+func stepKey(s PlaybookStep) string {
+	return fmt.Sprintf("%s:%s:%s", s.Name, s.Action, s.Target)
+}
+
+// DiffVersions возвращает структурированный diff между двумя версиями плейбука.
+//
+// Сравнивает:
+//   - Добавленные/удалённые шаги
+//   - Изменённые поля шагов
+//   - Изменения метаданных (description, min_agent_version, max_retries, cooldown)
+func (r *PlaybookRegistry) DiffVersions(name, v1, v2 string) (*VersionDiff, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	schema1 := r.getSchemaFromHistory(name, v1)
+	schema2 := r.getSchemaFromHistory(name, v2)
+
+	if schema1 == nil && schema2 == nil {
+		return nil, fmt.Errorf("playbook %q: neither version %q nor %q found", name, v1, v2)
+	}
+
+	diff := &VersionDiff{
+		Name:         name,
+		From:         v1,
+		To:           v2,
+		StepsAdded:   nil,
+		StepsRemoved: nil,
+		StepsChanged: nil,
+	}
+
+	// Собираем шаги по ключам
+	steps1 := make(map[string]PlaybookStep)
+	if schema1 != nil {
+		for _, s := range schema1.Steps {
+			steps1[stepKey(s)] = s
+		}
+		diff.From = schema1.Version
+	}
+
+	steps2 := make(map[string]PlaybookStep)
+	if schema2 != nil {
+		for _, s := range schema2.Steps {
+			steps2[stepKey(s)] = s
+		}
+		diff.To = schema2.Version
+	}
+
+	// Ищем добавленные и изменённые шаги
+	for key, s2 := range steps2 {
+		if s1, exists := steps1[key]; exists {
+			// Проверяем изменения полей
+			diff.StepsChanged = append(diff.StepsChanged, diffSteps(s1, s2)...)
+		} else {
+			diff.StepsAdded = append(diff.StepsAdded, s2)
+		}
+	}
+
+	// Ищем удалённые шаги
+	for key, s1 := range steps1 {
+		if _, exists := steps2[key]; !exists {
+			diff.StepsRemoved = append(diff.StepsRemoved, s1)
+		}
+	}
+
+	// Сравниваем метаданные
+	diff.MetadataChanged = make(map[string]Change)
+	if schema1 != nil && schema2 != nil {
+		if schema1.Description != schema2.Description {
+			diff.MetadataChanged["description"] = Change{Old: schema1.Description, New: schema2.Description}
+		}
+		if schema1.MinAgentVersion != schema2.MinAgentVersion {
+			diff.MetadataChanged["min_agent_version"] = Change{Old: schema1.MinAgentVersion, New: schema2.MinAgentVersion}
+		}
+		if schema1.MaxRetries != schema2.MaxRetries {
+			diff.MetadataChanged["max_retries"] = Change{Old: schema1.MaxRetries, New: schema2.MaxRetries}
+		}
+		if schema1.Cooldown != schema2.Cooldown {
+			diff.MetadataChanged["cooldown"] = Change{Old: schema1.Cooldown, New: schema2.Cooldown}
+		}
+		if schema1.Deprecated != schema2.Deprecated {
+			diff.MetadataChanged["deprecated"] = Change{Old: schema1.Deprecated, New: schema2.Deprecated}
+		}
+	}
+
+	return diff, nil
+}
+
+// diffSteps сравнивает два шага и возвращает список изменений полей.
+func diffSteps(s1, s2 PlaybookStep) []StepChange {
+	var changes []StepChange
+
+	if s1.Action != s2.Action {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "action", OldVal: s1.Action, NewVal: s2.Action})
+	}
+	if s1.Target != s2.Target {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "target", OldVal: s1.Target, NewVal: s2.Target})
+	}
+	if s1.Timeout != s2.Timeout {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "timeout", OldVal: s1.Timeout, NewVal: s2.Timeout})
+	}
+	if s1.Retries != s2.Retries {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "retries", OldVal: fmt.Sprintf("%d", s1.Retries), NewVal: fmt.Sprintf("%d", s2.Retries)})
+	}
+	if s1.RetryDelay != s2.RetryDelay {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "retry_delay", OldVal: s1.RetryDelay, NewVal: s2.RetryDelay})
+	}
+	if s1.OnFailure != s2.OnFailure {
+		changes = append(changes, StepChange{Name: s1.Name, Field: "on_failure", OldVal: s1.OnFailure, NewVal: s2.OnFailure})
+	}
+
+	return changes
+}
+
+// TagVersion добавляет тег к указанной версии плейбука.
+//
+// Теги позволяют помечать версии как "stable", "production", "testing" и т.д.
+// Если тег уже существует для этого плейбука — он перезаписывается.
+func (r *PlaybookRegistry) TagVersion(name, version, tag string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Проверяем, что версия существует
+	if _, ok := r.schemas[name]; !ok {
+		return fmt.Errorf("playbook %q not found", name)
+	}
+
+	entry := r.getVersionEntry(name, version)
+	if entry == nil {
+		return fmt.Errorf("playbook %q version %q not found in history", name, version)
+	}
+
+	// Удаляем существующий тег с таким именем для этого плейбука
+	tags := r.tags[name]
+	for i, t := range tags {
+		if t.Name == tag {
+			tags = append(tags[:i], tags[i+1:]...)
+			break
+		}
+	}
+
+	// Добавляем новый тег
+	r.tags[name] = append(tags, VersionTag{
+		Name:      tag,
+		Version:   version,
+		CreatedAt: time.Now().UTC(),
+	})
+
+	r.logger.Info("playbook version tagged",
+		"name", name,
+		"version", version,
+		"tag", tag,
+	)
+
+	return nil
+}
+
+// GetVersionByTag возвращает версию плейбука по тегу.
+func (r *PlaybookRegistry) GetVersionByTag(name, tag string) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	tags, ok := r.tags[name]
+	if !ok {
+		return "", false
+	}
+
+	for _, t := range tags {
+		if t.Name == tag {
+			return t.Version, true
+		}
+	}
+
+	return "", false
+}
+
+// ListTags возвращает все теги для указанного плейбука.
+func (r *PlaybookRegistry) ListTags(name string) []VersionTag {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	tags, ok := r.tags[name]
+	if !ok {
+		return nil
+	}
+
+	result := make([]VersionTag, len(tags))
+	copy(result, tags)
+	return result
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -558,9 +839,14 @@ func (r *PlaybookRegistry) Count() int {
 // ═══════════════════════════════════════════════════════════════════════
 
 func (r *PlaybookRegistry) addVersionLocked(name, version, filePath string, active bool) {
+	r.addVersionLockedWithSHA(name, version, filePath, "", active)
+}
+
+func (r *PlaybookRegistry) addVersionLockedWithSHA(name, version, filePath, sha256Hex string, active bool) {
 	entry := VersionEntry{
 		Version:  version,
 		FilePath: filePath,
+		SHA256:   sha256Hex,
 		LoadedAt: time.Now().UTC(),
 		Active:   active,
 	}

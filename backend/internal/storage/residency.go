@@ -31,6 +31,15 @@ import (
 )
 
 // ────────────────────────────────────────────────────────────────────────────
+// Audit callback types
+// ────────────────────────────────────────────────────────────────────────────
+
+// AuditViolationFunc — callback для записи нарушения residency в audit_log.
+// Вызывается при каждом заблокированном запросе на cross-border transfer.
+// tenantID может быть пустым если tenant не определён.
+type AuditViolationFunc func(violation Violation, tenantID string)
+
+// ────────────────────────────────────────────────────────────────────────────
 // S3 Region endpoints
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -92,10 +101,33 @@ type ResidencyEnforcer struct {
 	endpoints  map[string]S3EndpointConfig
 	violations *ViolationTracker
 	logger     *slog.Logger
+
+	// onViolation — callback для записи нарушения в audit_log (ISO 27001 A.12.4).
+	// Устанавливается через WithAuditCallback при создании.
+	onViolation AuditViolationFunc
+}
+
+// ResidencyOption — функциональная опция для ResidencyEnforcer.
+type ResidencyOption func(*ResidencyEnforcer)
+
+// WithAuditCallback устанавливает callback для записи нарушений в audit_log.
+// Соответствует: ISO 27001 A.12.4.1, СТБ 34.101.27 п. 7.2
+func WithAuditCallback(fn AuditViolationFunc) ResidencyOption {
+	return func(e *ResidencyEnforcer) {
+		e.onViolation = fn
+	}
+}
+
+// WithLogger устанавливает логгер для ResidencyEnforcer.
+func WithLogger(logger *slog.Logger) ResidencyOption {
+	return func(e *ResidencyEnforcer) {
+		e.logger = logger
+	}
 }
 
 // NewResidencyEnforcer создаёт новый ResidencyEnforcer.
-func NewResidencyEnforcer(customEndpoints map[string]S3EndpointConfig) *ResidencyEnforcer {
+// Опции: WithAuditCallback, WithLogger.
+func NewResidencyEnforcer(customEndpoints map[string]S3EndpointConfig, opts ...ResidencyOption) *ResidencyEnforcer {
 	e := &ResidencyEnforcer{
 		endpoints:  make(map[string]S3EndpointConfig),
 		violations: NewViolationTracker(),
@@ -111,7 +143,23 @@ func NewResidencyEnforcer(customEndpoints map[string]S3EndpointConfig) *Residenc
 		e.endpoints[k] = v
 	}
 
+	for _, opt := range opts {
+		opt(e)
+	}
+
 	return e
+}
+
+// GetMetrics возвращает текущую статистику нарушений residency.
+// Используется для Prometheus-метрик (P0-CE.6 Monitoring).
+func (e *ResidencyEnforcer) GetMetrics() ViolationStats {
+	return e.violations.GetStats()
+}
+
+// GetViolations возвращает список нарушений residency.
+// Соответствует: ISO 27001 A.12.4 (Audit trail review)
+func (e *ResidencyEnforcer) GetViolations() []Violation {
+	return e.violations.GetViolations()
 }
 
 // GetS3Endpoint возвращает S3 endpoint для указанного региона.
@@ -128,6 +176,8 @@ func (e *ResidencyEnforcer) GetS3Endpoint(region string) (S3EndpointConfig, erro
 
 // ValidateDataAccess проверяет, разрешён ли доступ к данным для указанного региона.
 // Возвращает ошибку если доступ запрещён политикой data residency.
+// При блокировке вызывает onViolation callback для записи в audit_log.
+// Соответствует: ISO 27001 A.12.4, СТБ 34.101.27 п. 7.2, GDPR Art. 44-49
 func (e *ResidencyEnforcer) ValidateDataAccess(requestRegion, dataRegion string, profile compliance.ComplianceProfile) error {
 	if profile == nil {
 		return fmt.Errorf("residency: nil compliance profile")
@@ -142,14 +192,26 @@ func (e *ResidencyEnforcer) ValidateDataAccess(requestRegion, dataRegion string,
 
 	// Проверка cross-border transfer
 	if !residency.CrossBorderTransferAllowed {
-		e.violations.Record(Violation{
+		v := Violation{
 			Type:          ViolationTypeCrossBorder,
 			RequestRegion: requestRegion,
 			DataRegion:    dataRegion,
 			ProfileRegion: profile.Region(),
 			Timestamp:     time.Now().UTC(),
 			Blocked:       true,
-		})
+		}
+		e.violations.Record(v)
+
+		// Audit callback (ISO 27001 A.12.4.1)
+		if e.onViolation != nil {
+			e.onViolation(v, "")
+		}
+
+		e.logger.Warn("residency violation: cross-border transfer blocked",
+			"request_region", requestRegion,
+			"data_region", dataRegion,
+			"profile_region", profile.Region(),
+		)
 		return fmt.Errorf("%w: cross-border transfer from %s to %s blocked by %s profile",
 			ErrCrossBorderBlocked, dataRegion, requestRegion, profile.Region())
 	}
@@ -163,14 +225,26 @@ func (e *ResidencyEnforcer) ValidateDataAccess(requestRegion, dataRegion string,
 		}
 	}
 	if !allowed {
-		e.violations.Record(Violation{
+		v := Violation{
 			Type:          ViolationTypeUnauthorizedRegion,
 			RequestRegion: requestRegion,
 			DataRegion:    dataRegion,
 			ProfileRegion: profile.Region(),
 			Timestamp:     time.Now().UTC(),
 			Blocked:       true,
-		})
+		}
+		e.violations.Record(v)
+
+		// Audit callback (ISO 27001 A.12.4.1)
+		if e.onViolation != nil {
+			e.onViolation(v, "")
+		}
+
+		e.logger.Warn("residency violation: unauthorized region access blocked",
+			"request_region", requestRegion,
+			"data_region", dataRegion,
+			"profile_region", profile.Region(),
+		)
 		return fmt.Errorf("%w: region %s not in allowed list for %s profile",
 			ErrUnauthorizedRegion, requestRegion, profile.Region())
 	}
@@ -297,7 +371,86 @@ func (e *ResidencyEnforcer) ValidateStorageOperation(ctx *StorageContext, target
 		return fmt.Errorf("residency: nil compliance profile in context")
 	}
 
-	return e.ValidateDataAccess(targetRegion, ctx.Region, ctx.ComplianceProfile)
+	// TenantID передаётся в audit callback через контекст
+	return e.ValidateDataAccessWithTenant(targetRegion, ctx.Region, ctx.ComplianceProfile, ctx.TenantID)
+}
+
+// ValidateDataAccessWithTenant — как ValidateDataAccess, но с указанием tenantID
+// для audit_log. Соответствует: ISO 27001 A.12.4.1 (сквозная трассировка).
+func (e *ResidencyEnforcer) ValidateDataAccessWithTenant(requestRegion, dataRegion string, profile compliance.ComplianceProfile, tenantID string) error {
+	if profile == nil {
+		return fmt.Errorf("residency: nil compliance profile")
+	}
+
+	// Если регионы совпадают — всегда разрешено
+	if requestRegion == dataRegion {
+		return nil
+	}
+
+	residency := profile.DataResidency()
+
+	// Проверка cross-border transfer
+	if !residency.CrossBorderTransferAllowed {
+		v := Violation{
+			Type:          ViolationTypeCrossBorder,
+			RequestRegion: requestRegion,
+			DataRegion:    dataRegion,
+			ProfileRegion: profile.Region(),
+			Timestamp:     time.Now().UTC(),
+			Blocked:       true,
+			Details:       "tenant: " + tenantID,
+		}
+		e.violations.Record(v)
+
+		if e.onViolation != nil {
+			e.onViolation(v, tenantID)
+		}
+
+		e.logger.Warn("residency violation: cross-border transfer blocked",
+			"request_region", requestRegion,
+			"data_region", dataRegion,
+			"profile_region", profile.Region(),
+			"tenant_id", tenantID,
+		)
+		return fmt.Errorf("%w: cross-border transfer from %s to %s blocked by %s profile (tenant: %s)",
+			ErrCrossBorderBlocked, dataRegion, requestRegion, profile.Region(), tenantID)
+	}
+
+	// Проверка allowed regions
+	allowed := false
+	for _, r := range residency.AllowedRegions {
+		if r == requestRegion {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		v := Violation{
+			Type:          ViolationTypeUnauthorizedRegion,
+			RequestRegion: requestRegion,
+			DataRegion:    dataRegion,
+			ProfileRegion: profile.Region(),
+			Timestamp:     time.Now().UTC(),
+			Blocked:       true,
+			Details:       "tenant: " + tenantID,
+		}
+		e.violations.Record(v)
+
+		if e.onViolation != nil {
+			e.onViolation(v, tenantID)
+		}
+
+		e.logger.Warn("residency violation: unauthorized region access blocked",
+			"request_region", requestRegion,
+			"data_region", dataRegion,
+			"profile_region", profile.Region(),
+			"tenant_id", tenantID,
+		)
+		return fmt.Errorf("%w: region %s not in allowed list for %s profile (tenant: %s)",
+			ErrUnauthorizedRegion, requestRegion, profile.Region(), tenantID)
+	}
+
+	return nil
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -69,17 +69,19 @@ type TelemetryEvent struct {
 
 // Publisher публикует события в NATS.
 type Publisher struct {
-	conn   *nats.Conn
-	js     nats.JetStreamContext
-	logger *slog.Logger
+	conn           *nats.Conn
+	js             nats.JetStreamContext
+	logger         *slog.Logger
+	schemaRegistry *SchemaRegistry // опциональная валидация
 }
 
 // PublisherConfig — параметры подключения.
 type PublisherConfig struct {
-	URL    string
-	Creds  string
-	UseTLS bool
-	Logger *slog.Logger
+	URL            string
+	Creds          string
+	UseTLS         bool
+	Logger         *slog.Logger
+	SchemaRegistry *SchemaRegistry // опциональный SchemaRegistry для валидации
 }
 
 // NewPublisher создаёт и подключает Publisher к NATS.
@@ -118,7 +120,13 @@ func NewPublisher(cfg PublisherConfig) (*Publisher, error) {
 		return nil, fmt.Errorf("nats jetstream: %w", err)
 	}
 
-	return &Publisher{conn: nc, js: js, logger: cfg.Logger}, nil
+	logger := cfg.Logger.With("component", "publisher")
+	return &Publisher{
+		conn:           nc,
+		js:             js,
+		logger:         logger,
+		schemaRegistry: cfg.SchemaRegistry,
+	}, nil
 }
 
 // Close закрывает соединение.
@@ -144,6 +152,44 @@ func (p *Publisher) PublishPrediction(event PredictionEvent) error {
 // PublishTelemetry публикует телеметрию.
 func (p *Publisher) PublishTelemetry(event TelemetryEvent) error {
 	return p.publishJSON(fmt.Sprintf(TopicTelemetry, event.DeviceID), event)
+}
+
+// ── Validated publish (с schema validation) ───────────────────────
+
+// PublishRecord публикует EventRecord с опциональной валидацией через SchemaRegistry.
+//
+// Если SchemaRegistry настроен — выполняет Validate() перед публикацией.
+// При failed validation логирует полный payload на уровне WARN.
+//
+// Compliance:
+//   - OWASP ASVS V5.1 (Input validation — whitelist validation)
+//   - OWASP ASVS V5.3 (Input validation — structured data validation)
+func (p *Publisher) PublishRecord(record *EventRecord) error {
+	subject := subjectForRecord(record)
+	return p.publishValidated(subject, record)
+}
+
+// publishValidated публикует EventRecord с валидацией (если schemaRegistry настроен).
+func (p *Publisher) publishValidated(subject string, record *EventRecord) error {
+	if p.schemaRegistry != nil {
+		if err := p.schemaRegistry.Validate(record); err != nil {
+			// Логируем failed validation с полным payload (WARN уровень)
+			payloadStr := string(record.Data)
+			if len(payloadStr) > 2000 {
+				payloadStr = payloadStr[:2000] + "... [truncated]"
+			}
+			p.logger.Warn("event validation failed, publishing skipped",
+				"subject", subject,
+				"source", record.Source,
+				"event_type", record.EventType,
+				"error", err,
+				"trace_id", record.TraceID,
+				"payload", payloadStr,
+			)
+			return fmt.Errorf("publish validation: %w", err)
+		}
+	}
+	return p.publishJSON(subject, record)
 }
 
 // JetStream возвращает JetStream context для прямых операций.

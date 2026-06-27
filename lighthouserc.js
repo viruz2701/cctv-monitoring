@@ -14,7 +14,7 @@ const config = {
     collect: {
       staticDistDir: 'frontend/dist',
       numberOfRuns: 3,
-      startServerCommand: 'npx vite preview --port 4173',
+      startServerCommand: 'cd frontend && npx vite preview --port 4173',
       // URL to collect (default: http://localhost:4173)
       url: ['http://localhost:4173/'],
       // Collect settings

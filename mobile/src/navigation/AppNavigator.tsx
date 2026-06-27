@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -6,9 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { useSyncStore } from '../store/syncStore';
 import { useOfflineSync } from '../hooks/useOfflineSync';
-import { useBackgroundSync } from '../hooks/useBackgroundSync';
-import { syncService } from '../services/syncService';
-import OfflineIndicator from '../components/OfflineIndicator';
 
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -80,26 +77,13 @@ function MainTabs() {
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, loadStoredAuth } = useAuthStore();
   const loadQueue = useSyncStore((s) => s.loadQueue);
-  const isOnline = useSyncStore((s) => s.isOnline);
 
   // Offline sync on app state change
   useOfflineSync();
 
-  // Background sync via Expo BackgroundFetch
-  useBackgroundSync();
-
   useEffect(() => {
     loadStoredAuth();
     loadQueue();
-
-    // Инициализация offline-first сервиса (SQLite + sync)
-    syncService.initialize().catch((err) => {
-      console.error('Failed to initialize sync service:', err);
-    });
-
-    return () => {
-      syncService.destroy();
-    };
   }, []);
 
   if (isLoading) {
@@ -108,8 +92,6 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      {/* Global offline indicator — всегда активен, сам решает когда показываться */}
-      <OfflineIndicator showQueueBadge />
 
       <Stack.Navigator
         screenOptions={{

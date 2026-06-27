@@ -12,6 +12,9 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
+    // P1-SEC.1: Мобильные клиенты получают токены в response body
+    // для хранения в secure storage (AsyncStorage/Keychain).
+    'X-Client-Type': 'mobile',
   },
 });
 

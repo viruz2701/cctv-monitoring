@@ -74,3 +74,18 @@ snmp:
   # privProtocol: "AES"
   # privPassword: "your_priv_pass"
   # engineID: ""
+
+# Event Store (DM-1.2.2: NATS JetStream + S3 Cold Storage)
+# Валидация JSON Schema включена по умолчанию (P0-SEC.1)
+event_store:
+  enabled: false
+  nats_url: "nats://localhost:4222"
+  # nats_creds: "/path/to/creds"
+  # nats_tls: false
+  validation_enabled: true
+  # S3/MinIO для cold storage (опционально)
+  # s3_endpoint: "http://localhost:9000"
+  # s3_region: "us-east-1"
+  # s3_bucket: "cctv-event-store"
+  # hot_retention_hours: 8760  # 1 год
+  # cold_retention_hours: 43800  # 5 лет

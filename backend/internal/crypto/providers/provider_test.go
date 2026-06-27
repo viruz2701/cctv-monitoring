@@ -411,8 +411,9 @@ func TestBeltStatus(t *testing.T) {
 
 func TestGOSTStatus(t *testing.T) {
 	p := NewGOSTCrypto()
-	if p.Status() != "stub" {
-		t.Errorf("expected status 'stub', got '%s'", p.Status())
+	// P2-RU.1: GOST provider теперь active (не stub)
+	if p.Status() != "active" {
+		t.Errorf("P2-RU.1: expected status 'active', got '%s'", p.Status())
 	}
 }
 

@@ -67,13 +67,13 @@ func (s *Server) handleGetFeatureFlags(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateFeatureFlag(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	if key == "" {
-		respondError(w, r, NewValidationError("feature flag key is required"))
+		RespondError(w, r, NewValidationError("feature flag key is required"))
 		return
 	}
 
 	// Валидация key: только буквы, цифры, точки и подчёркивания (OWASP ASVS V5.1)
 	if !isValidFeatureFlagKey(key) {
-		respondError(w, r, NewValidationError("invalid feature flag key format"))
+		RespondError(w, r, NewValidationError("invalid feature flag key format"))
 		return
 	}
 
@@ -81,7 +81,7 @@ func (s *Server) handleUpdateFeatureFlag(w http.ResponseWriter, r *http.Request)
 		Enabled bool `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body"))
+		RespondError(w, r, NewBadRequestError("invalid request body"))
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Server) handleUpdateFeatureFlag(w http.ResponseWriter, r *http.Request)
 			"enabled", req.Enabled,
 			"error", err,
 		)
-		respondError(w, r, NewInternalError("failed to update feature flag", err))
+		RespondError(w, r, NewInternalError("failed to update feature flag", err))
 		return
 	}
 

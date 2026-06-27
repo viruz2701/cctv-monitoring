@@ -49,13 +49,13 @@ type SaveLayoutRequest struct {
 func (s *Server) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("user not authenticated"))
+		RespondError(w, r, NewUnauthorizedError("user not authenticated"))
 		return
 	}
 
 	var req SaveLayoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, r, NewBadRequestError("invalid request body"))
+		RespondError(w, r, NewBadRequestError("invalid request body"))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 
 	// Валидация: layout должен быть JSON-массивом или объектом
 	if len(req.Layout) > 0 && !json.Valid(req.Layout) {
-		respondError(w, r, NewBadRequestError("invalid layout format: must be valid JSON"))
+		RespondError(w, r, NewBadRequestError("invalid layout format: must be valid JSON"))
 		return
 	}
 
@@ -82,7 +82,7 @@ func (s *Server) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 			"tab_id", req.TabID,
 			"error", err,
 		)
-		respondError(w, r, NewInternalError("failed to save layout", err))
+		RespondError(w, r, NewInternalError("failed to save layout", err))
 		return
 	}
 
@@ -102,7 +102,7 @@ func (s *Server) handleSaveLayout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetLayout(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r)
 	if claims == nil {
-		respondError(w, r, NewUnauthorizedError("user not authenticated"))
+		RespondError(w, r, NewUnauthorizedError("user not authenticated"))
 		return
 	}
 
