@@ -123,11 +123,11 @@ P0-N3: Multi-Tier Incident Response Engine
 - Legal hold + evidence preservation
 - Escalation matrix per region
 Критерий приёмки:
-- 6h reporting для India CERT-In
-- 4h reporting для EU DORA
-- Automated classification + evidence preservation
+- 6h reporting для India CERT-In ✅ (DORA 4h, CERT-In 6h, CSA 2h, ОАЦ 24h, ФСТЭК 24h)
+- 4h reporting для EU DORA ✅
+- Automated classification + evidence preservation ✅
 Effort: 5d
-Status: [ ]
+Status: [x] ✅ DONE (commit 3aa2677)
 
 P0-CE: Regional Compliance Engine (Стратегический приоритет)
 P0-CE.1: ComplianceProfile Abstraction Layer ✅ DONE (2026-06-28)

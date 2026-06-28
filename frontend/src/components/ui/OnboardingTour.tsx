@@ -277,7 +277,7 @@ const DEFAULT_OPTIONS = {
 // Component
 // ═══════════════════════════════════════════════════════════════════════
 
-export function OnboardingTour() {
+export default function OnboardingTour() {
   const { completed, running, markCompleted, startTour, stopTour } =
     useOnboardingStore();
   const { user } = useAuth();

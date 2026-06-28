@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
 import { Card, CardHeader, CardBody, CardFooter, Button, Select, Input, Badge, Modal, Table } from '../ui';
 import { FileText, Download, Calendar, Search, Filter, X } from 'lucide-react';
 import { useToast } from '../ui';
@@ -6,13 +6,13 @@ import { generateExcelReport, triggerBlobDownload } from '../../utils/reportGene
 import { useDevices, useSites, useTickets } from '../../hooks/useApiQuery';
 import { useReportsStore } from '../../store/reportsStore';
 import { useAuth } from '../../hooks/useAuth';
-import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { parseISO, format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { Device } from '../../types';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+
+// Lazy-loaded: react-datepicker (~100KB), jsPDF (~557KB)
+const LazyDatePicker = React.lazy(() => import('react-datepicker'));
 
 const StatCard: React.FC<{ label: string; value: number }> = ({ label, value }) => (
   <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -93,7 +93,9 @@ export function ManualDownloadTab() {
         { key: 'siteName' as keyof Device, header: t('site') || 'Site' },
     ];
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
+        const jsPDF = (await import('jspdf')).default;
+        await import('jspdf-autotable');
         const doc = new jsPDF();
 
         // Title
@@ -309,8 +311,12 @@ export function ManualDownloadTab() {
                                 />
                                 {duration === 'custom' && (
                                     <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('start_date')}</label><DatePicker selected={startDate ? parseISO(startDate) : null} onChange={(date: Date | null) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
-                                        <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('end_date')}</label><DatePicker selected={endDate ? parseISO(endDate) : null} onChange={(date: Date | null) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
+                                        <Suspense fallback={<div className="h-[38px] bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />}>
+                                            <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('start_date')}</label><LazyDatePicker selected={startDate ? parseISO(startDate) : null} onChange={(date: Date | null) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
+                                        </Suspense>
+                                        <Suspense fallback={<div className="h-[38px] bg-slate-100 dark:bg-slate-700 rounded animate-pulse" />}>
+                                            <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">{t('end_date')}</label><LazyDatePicker selected={endDate ? parseISO(endDate) : null} onChange={(date: Date | null) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')} dateFormat="dd/MM/yyyy" maxDate={new Date()} placeholderText="dd/mm/yyyy" className="w-full px-3.5 py-2.5 text-sm ..." /></div>
+                                        </Suspense>
                                     </div>
                                 )}
                             </div>

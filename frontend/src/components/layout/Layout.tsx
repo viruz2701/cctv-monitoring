@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -6,12 +6,14 @@ import { ErrorBoundaryLite } from '../ErrorBoundaryLite';
 import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
 import { ShortcutsCheatsheet } from '../ui/ShortcutsCheatsheet';
-import { OnboardingTour } from '../ui/OnboardingTour';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useSkipLink } from '../../hooks/useAccessibility';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import type { Shortcut } from '../../hooks/useKeyboardShortcuts';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
+
+// P1-PERF-BUNDLE: Lazy-load OnboardingTour (react-joyride ~200KB) — только для первой сессии
+const OnboardingTour = lazy(() => import('../ui/OnboardingTour'));
 
 export function Layout() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -152,8 +154,10 @@ export function Layout() {
             {/* Command Palette (⌘K) — UX-14.1.5 */}
             <CommandPalette />
 
-            {/* Onboarding Tour — UX-14.1.6 */}
-            <OnboardingTour />
+            {/* Onboarding Tour — UX-14.1.6 (lazy-loaded: react-joyride ~200KB) */}
+            <Suspense fallback={null}>
+                <OnboardingTour />
+            </Suspense>
 
             {/* Keyboard Shortcuts Cheatsheet (⌘/) — UX-14.1.8 */}
             <ShortcutsCheatsheet

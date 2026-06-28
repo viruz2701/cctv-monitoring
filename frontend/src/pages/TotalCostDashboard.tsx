@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
 import { Card, DataGrid, Badge, StatsCard, Button } from '../components/ui';
@@ -6,8 +6,6 @@ import {
   DollarSign, Briefcase, Wrench, Truck, TrendingUp,
   PieChart, BarChart3, Clock, Download, AlertTriangle,
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -86,9 +84,11 @@ export const TotalCostDashboard: React.FC = () => {
     }
   };
 
-  // ── PDF Export (BIZ-01) ──────────────────────────────────────────
+  // ── PDF Export (BIZ-01) — jsPDF lazy-loaded ────────────────────
 
-  const exportPDF = () => {
+  const exportPDF = useCallback(async () => {
+    const jsPDF = (await import('jspdf')).default;
+    await import('jspdf-autotable');
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -150,7 +150,7 @@ export const TotalCostDashboard: React.FC = () => {
     doc.text(`Total TCO (all devices): $${totalTCO.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, finalY + 18);
 
     doc.save('tco-downtime-report.pdf');
-  };
+  }, [data, tcoData]);
 
   const summary = data?.summary;
   const breakdown = data?.breakdown || [];
