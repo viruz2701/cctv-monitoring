@@ -16,6 +16,20 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// signTestToken подписывает claims с ECDSA P-256 (ES256) для тестов.
+func signTestToken(claims Claims) string {
+	key, err := GetBignPrivateKey()
+	if err != nil {
+		panic("signTestToken: " + err.Error())
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	s, err := token.SignedString(key)
+	if err != nil {
+		panic("signTestToken: " + err.Error())
+	}
+	return s
+}
+
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	// Создаём валидный JWT
 	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
@@ -109,15 +123,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called for expired token")
@@ -146,15 +152,7 @@ func TestAuthMiddleware_SessionTimeout(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-31 * time.Minute)), // > 30 min timeout
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called for idle session")
@@ -193,15 +191,7 @@ func TestAuthMiddleware_AdminBypassSessionTimeout(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-31 * time.Minute)), // > idle timeout
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Admin bypass должен пропустить запрос
@@ -230,15 +220,7 @@ func TestAuthMiddleware_SuperadminBypassSessionTimeout(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-31 * time.Minute)),
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -328,15 +310,7 @@ func TestAuthMiddleware_RUSessionTimeout(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-16 * time.Minute)), // > 15 min RU timeout
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not be called for idle session (RU policy)")
@@ -366,15 +340,7 @@ func TestAuthMiddleware_BYSessionWithinTimeout(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-10 * time.Minute)), // < 30 min BY timeout
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -404,15 +370,7 @@ func TestAuthMiddleware_SessionWarningHeader(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-28 * time.Minute)), // < 3m remaining → warning
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret, err := GetJWTSecret()
-	if err != nil {
-		t.Fatalf("get JWT secret: %v", err)
-	}
-	tokenStr, err := token.SignedString(secret)
-	if err != nil {
-		t.Fatalf("sign token: %v", err)
-	}
+	tokenStr := signTestToken(claims)
 
 	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

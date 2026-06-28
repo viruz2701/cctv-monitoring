@@ -8,22 +8,20 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// getTestJWTSecret — вспомогательная функция для тестов, возвращает JWT_SECRET
-// или паникует если не установлен (в тестах это ок).
-func getTestJWTSecret() []byte {
-	secret, err := GetJWTSecret()
-	if err != nil {
-		panic("JWT_SECRET not set: " + err.Error())
-	}
-	return secret
-}
-
 func TestMain(m *testing.M) {
-	// Set JWT secret for tests
+	// Set JWT secret for tests (legacy, for refresh tokens)
 	os.Setenv("JWT_SECRET", "test-secret-key-min-32-chars-long-for-hs256!")
+	// BIGN_PRIVATE_KEY не устанавливаем — будет использована автогенерация
+	ResetBignPrivateKey()
 	code := m.Run()
 	os.Unsetenv("JWT_SECRET")
+	ResetBignPrivateKey()
 	os.Exit(code)
+}
+
+// getTestBignKey returns the generated ECDSA P-256 key for tests.
+func getTestBignKey() (interface{}, error) {
+	return GetBignPrivateKey()
 }
 
 func TestGenerateJWT(t *testing.T) {
@@ -91,12 +89,6 @@ func TestInvalidJWT(t *testing.T) {
 }
 
 func TestExpiredJWT(t *testing.T) {
-	// Verify that our regular token has correct TTL
-	_, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
-	if err != nil {
-		t.Fatalf("GenerateJWT failed: %v", err)
-	}
-
 	// Verify expired token is rejected
 	expiredClaims := Claims{
 		UserID:   "user-1",
@@ -108,8 +100,14 @@ func TestExpiredJWT(t *testing.T) {
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
 		},
 	}
-	expiredToken := jwt.NewWithClaims(jwt.SigningMethodHS256, expiredClaims)
-	tokenString, err := expiredToken.SignedString(getTestJWTSecret())
+
+	key, err := GetBignPrivateKey()
+	if err != nil {
+		t.Fatalf("GetBignPrivateKey: %v", err)
+	}
+
+	expiredToken := jwt.NewWithClaims(jwt.SigningMethodES256, expiredClaims)
+	tokenString, err := expiredToken.SignedString(key)
 	if err != nil {
 		t.Fatalf("failed to sign expired token: %v", err)
 	}
@@ -120,8 +118,34 @@ func TestExpiredJWT(t *testing.T) {
 	}
 }
 
+func TestExpiredJWT_HS256Rejected(t *testing.T) {
+	// Ensure HS256 tokens are rejected by our ES256-only validation
+	expiredClaims := Claims{
+		UserID:   "user-1",
+		Username: "testuser",
+		Role:     "admin",
+		TenantID: "tenant-1",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
+		},
+	}
+
+	hs256Token := jwt.NewWithClaims(jwt.SigningMethodHS256, expiredClaims)
+	secret, _ := GetJWTSecret()
+	tokenString, err := hs256Token.SignedString(secret)
+	if err != nil {
+		t.Fatalf("failed to sign HS256 token: %v", err)
+	}
+
+	_, err = ValidateJWT(tokenString)
+	if err == nil {
+		t.Error("expected error for HS256 token validated as ES256")
+	}
+}
+
 func TestGenerateRefreshToken(t *testing.T) {
-	_ = getTestJWTSecret() // ensure JWT_SECRET is set
+	GetJWTSecret() // ensure JWT_SECRET is set
 	token, hash, expiresAt, err := GenerateRefreshToken()
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken failed: %v", err)
@@ -246,5 +270,58 @@ func TestValidateRegularTokenAsTempToken(t *testing.T) {
 	_, err = ValidateTempToken(token)
 	if err == nil {
 		t.Error("expected error when validating regular JWT as temp token")
+	}
+}
+
+func TestJWTAlgorithmES256(t *testing.T) {
+	token, err := GenerateJWT("user-1", "testuser", "admin", "tenant-1")
+	if err != nil {
+		t.Fatalf("GenerateJWT failed: %v", err)
+	}
+
+	// Парсим без валидации для проверки alg
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	parsed, _, err := parser.ParseUnverified(token, &Claims{})
+	if err != nil {
+		t.Fatalf("ParseUnverified failed: %v", err)
+	}
+
+	alg := parsed.Header["alg"]
+	if alg != "ES256" {
+		t.Fatalf("expected alg=ES256, got %v", alg)
+	}
+}
+
+func TestTempTokenAlgorithmES256(t *testing.T) {
+	token, err := GenerateTempToken("user-1", "testuser", "admin", "tenant-1")
+	if err != nil {
+		t.Fatalf("GenerateTempToken failed: %v", err)
+	}
+
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	parsed, _, err := parser.ParseUnverified(token, &Claims{})
+	if err != nil {
+		t.Fatalf("ParseUnverified failed: %v", err)
+	}
+
+	alg := parsed.Header["alg"]
+	if alg != "ES256" {
+		t.Fatalf("expected alg=ES256, got %v", alg)
+	}
+}
+
+func TestJWTWithRegion(t *testing.T) {
+	token, err := GenerateJWTWithRegion("user-1", "testuser", "tech", "tenant-1", "RU")
+	if err != nil {
+		t.Fatalf("GenerateJWTWithRegion failed: %v", err)
+	}
+
+	claims, err := ValidateJWT(token)
+	if err != nil {
+		t.Fatalf("ValidateJWT failed: %v", err)
+	}
+
+	if claims.Region != "RU" {
+		t.Fatalf("expected Region='RU', got '%s'", claims.Region)
 	}
 }

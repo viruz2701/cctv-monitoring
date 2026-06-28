@@ -1,4 +1,20 @@
-// backend/internal/auth/jwt.go
+// Package auth — аутентификация и управление доступом.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// P3-SEC.2: bign JWT — ECDSA P-256 (bign-curve256v1)
+//
+// Переход с HMAC-SHA256 (HS256) на ECDSA P-256 (ES256):
+//   - GenerateJWT / ValidateJWT используют ES256 с bign-curve256v1
+//   - GenerateTempToken / ValidateTempToken также используют ES256
+//   - Refresh tokens остаются на HMAC-SHA256 (не JWT, а opaque tokens)
+//
+// Compliance:
+//   - СТБ 34.101.45 — bign-curve256v1
+//   - СТБ 34.101.30 — Криптографические алгоритмы РБ
+//   - OWASP ASVS V6.2.2 — Асимметричная криптография
+//   - Приказ ОАЦ №66 п. 7.18.1 — Сертификаты bign
+//
+// ═══════════════════════════════════════════════════════════════════════════
 package auth
 
 import (
@@ -13,6 +29,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Claims — кастомные JWT claims для CCTV Health Monitor.
 type Claims struct {
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
@@ -27,14 +44,17 @@ type Claims struct {
 // AccessTokenTTL — время жизни access token (15 минут, OWASP ASVS V3.3.1).
 const AccessTokenTTL = 15 * time.Minute
 
+// GenerateJWT создаёт JWT с подписью bign-curve256v1 (ECDSA P-256 / ES256).
 func GenerateJWT(userID, username, role, tenantID string) (string, error) {
 	return GenerateJWTWithRegion(userID, username, role, tenantID, "")
 }
 
 // GenerateJWTWithRegion создаёт JWT с указанием региона для региональных политик (P2-CR.4).
 // Если region пустой, используется BY (наиболее строгие требования КИИ).
+//
+// Подпись: ECDSA P-256 (bign-curve256v1) через jwt.SigningMethodES256.
 func GenerateJWTWithRegion(userID, username, role, tenantID, region string) (string, error) {
-	secret, err := GetJWTSecret()
+	key, err := GetBignPrivateKey()
 	if err != nil {
 		return "", err
 	}
@@ -54,18 +74,23 @@ func GenerateJWTWithRegion(userID, username, role, tenantID, region string) (str
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return token.SignedString(key)
 }
 
+// ValidateJWT проверяет JWT и возвращает claims.
+// Использует ECDSA P-256 (bign-curve256v1) верификацию.
 func ValidateJWT(tokenString string) (*Claims, error) {
-	secret, err := GetJWTSecret()
+	key, err := GetBignPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return secret, nil
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, errors.New("unexpected signing method: expected ES256")
+		}
+		return key, nil
 	})
 	if err != nil {
 		return nil, err
@@ -77,13 +102,14 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 }
 
 // GenerateTempToken generates a short-lived token for 2FA verification step (5 minutes).
+// Использует ECDSA P-256 подпись.
 func GenerateTempToken(userID, username, role, tenantID string) (string, error) {
 	return GenerateTempTokenWithRegion(userID, username, role, tenantID, "")
 }
 
 // GenerateTempTokenWithRegion creates a 2FA temp token with region for session policies (P2-CR.4).
 func GenerateTempTokenWithRegion(userID, username, role, tenantID, region string) (string, error) {
-	secret, err := GetJWTSecret()
+	key, err := GetBignPrivateKey()
 	if err != nil {
 		return "", err
 	}
@@ -104,19 +130,22 @@ func GenerateTempTokenWithRegion(userID, username, role, tenantID, region string
 			Subject:   "2fa_pending",
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return token.SignedString(key)
 }
 
 // ValidateTempToken validates a temporary 2FA token.
 func ValidateTempToken(tokenString string) (*Claims, error) {
-	secret, err := GetJWTSecret()
+	key, err := GetBignPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return secret, nil
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, errors.New("unexpected signing method: expected ES256")
+		}
+		return key, nil
 	})
 	if err != nil {
 		return nil, err
@@ -130,8 +159,10 @@ func ValidateTempToken(tokenString string) (*Claims, error) {
 	return nil, errors.New("invalid temp token")
 }
 
-// P3-1.2: JWT → HttpOnly Cookies
-//
+// ────────────────────────────────────────────────────────────────────────────
+// JWT → HttpOnly Cookies (P0-SEC.3)
+// ────────────────────────────────────────────────────────────────────────────
+
 // SetAuthCookie записывает JWT в HttpOnly cookie.
 //   - HttpOnly, Secure, SameSite=Strict
 //   - CSRF token в заголовке X-CSRF-Token
@@ -176,8 +207,16 @@ func ExtractTokenFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Refresh Tokens (opaque, HMAC-SHA256)
+// ────────────────────────────────────────────────────────────────────────────
+
+// RefreshTokenTTL — время жизни refresh token (30 дней).
 const RefreshTokenTTL = 30 * 24 * time.Hour
 
+// GenerateRefreshToken генерирует opaque refresh token.
+// ⚠ Refresh tokens — opaque (не JWT), используют HMAC-SHA256 только для хеширования.
+// Для JWT access tokens используется ECDSA P-256 (bign-curve256v1).
 func GenerateRefreshToken() (string, string, time.Time, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -188,6 +227,8 @@ func GenerateRefreshToken() (string, string, time.Time, error) {
 	return token, HashRefreshToken(token), expiresAt, nil
 }
 
+// HashRefreshToken хеширует refresh token для хранения в БД.
+// Использует SHA-256 (не криптографический, а для хеширования токена).
 func HashRefreshToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

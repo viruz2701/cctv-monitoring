@@ -1,6 +1,11 @@
 package crypto
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -42,16 +47,43 @@ func TestValidateAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewBignSigningMethod(t *testing.T) {
-	// Key too short
-	_, err := NewBignSigningMethod("short")
-	if err == nil {
-		t.Fatal("should error on short key")
+func TestNewBignSigningMethod_EmptyKeyAutoGenerates(t *testing.T) {
+	// Empty key should auto-generate ECDSA P-256 key for dev
+	method, err := NewBignSigningMethod("")
+	if err != nil {
+		t.Fatalf("unexpected error with empty key: %v", err)
+	}
+	if method == nil {
+		t.Fatal("method should not be nil")
 	}
 
-	// Valid key
-	validKey := "this-is-a-256-bit-key-that-is-long-enough!"
-	method, err := NewBignSigningMethod(validKey)
+	// Should be able to sign with auto-generated key
+	claims := jwt.MapClaims{
+		"sub":  "test-user",
+		"role": "admin",
+		"iat":  1700000000,
+	}
+
+	token, err := method.Sign(claims)
+	if err != nil {
+		t.Fatalf("sign error: %v", err)
+	}
+	if token == "" {
+		t.Fatal("token should not be empty")
+	}
+}
+
+func TestNewBignSigningMethod_ValidPEMKey(t *testing.T) {
+	// Generate real ECDSA P-256 key and PEM-encode it
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	privDER, _ := x509.MarshalECPrivateKey(privKey)
+	privPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privDER})
+
+	method, err := NewBignSigningMethod(string(privPEM))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,9 +92,16 @@ func TestNewBignSigningMethod(t *testing.T) {
 	}
 }
 
+func TestNewBignSigningMethod_InvalidKey(t *testing.T) {
+	_, err := NewBignSigningMethod("not-a-valid-pem-key")
+	if err == nil {
+		t.Fatal("should error on invalid key material")
+	}
+}
+
 func TestBignSignAndVerify(t *testing.T) {
-	secret := "this-is-a-secure-256-bit-key-for-testing-only!!"
-	method, err := NewBignSigningMethod(secret)
+	// Auto-generate key
+	method, err := NewBignSigningMethod("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -82,7 +121,7 @@ func TestBignSignAndVerify(t *testing.T) {
 		t.Fatal("token should not be empty")
 	}
 
-	t.Logf("JWT token: %s", token)
+	t.Logf("JWT token (ES256): %s", token)
 
 	// Verify
 	verifiedClaims := jwt.MapClaims{}

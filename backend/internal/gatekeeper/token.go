@@ -26,12 +26,12 @@ const (
 	VerificationTokenTTL = 10 * time.Minute
 )
 
-// GenerateVerificationToken создаёт JWT-токен, подтверждающий успешную верификацию.
-// Токен действует 10 минут и должен быть передан в CompleteWorkOrder.
+// GenerateVerificationToken создаёт JWT-токен с подписью bign-curve256v1 (ECDSA P-256),
+// подтверждающий успешную верификацию. Токен действует 10 минут.
 //
-// Возвращает error если JWT_SECRET не установлен (graceful degradation).
+// Возвращает error если BIGN_PRIVATE_KEY не установлен (graceful degradation).
 func GenerateVerificationToken(workOrderID, technicianID string, gpsPassed, exifPassed, aiPassed, gpsSkipped bool) (string, error) {
-	secret, err := auth.GetJWTSecret()
+	key, err := auth.GetBignPrivateKey()
 	if err != nil {
 		return "", err
 	}
@@ -53,21 +53,24 @@ func GenerateVerificationToken(workOrderID, technicianID string, gpsPassed, exif
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(secret)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return token.SignedString(key)
 }
 
 // ValidateVerificationToken проверяет verification-токен и возвращает клеймы.
 //
-// Возвращает error если JWT_SECRET не установлен или токен невалиден.
+// Возвращает error если BIGN_PRIVATE_KEY не установлен или токен невалиден.
 func ValidateVerificationToken(tokenString string) (*VerificationClaims, error) {
-	secret, err := auth.GetJWTSecret()
+	key, err := auth.GetBignPublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &VerificationClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return secret, nil
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return key, nil
 	})
 	if err != nil {
 		return nil, err

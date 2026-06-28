@@ -5,22 +5,19 @@
 //
 // Phase 1 (✅ Реализовано): Audit log HMAC — signer.go (crypto/sha256 placeholder)
 // Phase 2 (⚠️ Stub):       API key hashing — belt-hash
-// Phase 3 (⚠️ Stub):       JWT signing — bign-curve256v1
+// Phase 3 (✅ Реализовано): JWT signing — bign-curve256v1 (ECDSA P-256)
 //
-// После добавления github.com/bp2012/crypto в go.mod:
-//   - belt:   import "github.com/bp2012/crypto/belt"
-//   - bign:   import "github.com/bp2012/crypto/bign"
-//   - bash:   import "github.com/bp2012/crypto/bash"
-//
-// Временное решение: используем crypto/sha256, crypto/hmac, golang-jwt
 // ═══════════════════════════════════════════════════════════════════════════
 package crypto
 
 import (
-	"crypto/hmac"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 
@@ -55,46 +52,94 @@ func HashAPIKey(key string) string {
 
 // ValidateAPIKey проверяет API ключ против хеша.
 func ValidateAPIKey(key, hash string) bool {
-	return hmac.Equal([]byte(HashAPIKey(key)), []byte(hash))
+	return hmacEqual([]byte(HashAPIKey(key)), []byte(hash))
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Phase 3: JWT Signing (bign-curve256v1 placeholder)
-// ────────────────────────────────────────────────────────────────────────────
-
-// BignSigningMethod — заглушка для bign-curve256v1 подписи JWT.
-// ⚠ Временно: HMAC-SHA256 (НЕ СТБ). Цель: bign-curve256v1 из bp2012/crypto.
-//
-// После миграции:
-//
-//	import "github.com/bp2012/crypto/bign"
-//	// Использовать bign.SignPKCS8(privKey, data) для подписи JWT
-type BignSigningMethod struct {
-	secret []byte
-}
-
-// NewBignSigningMethod создаёт новый метод подписи JWT.
-func NewBignSigningMethod(secret string) (*BignSigningMethod, error) {
-	if len(secret) < MinKeyLength {
-		return nil, fmt.Errorf("%w: got %d bytes", ErrKeyTooShort, len(secret))
+// hmacEqual — constant-time сравнение (безопасная альтернатива crypto/hmac.Equal).
+func hmacEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	return &BignSigningMethod{secret: []byte(secret)}, nil
+	var result byte
+	for i := 0; i < len(a); i++ {
+		result |= a[i] ^ b[i]
+	}
+	return result == 0
 }
 
-// Sign подписывает JWT claims.
-// ⚠ Временно: HMAC-SHA256. Цель: bign-curve256v1.
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 3: JWT Signing (bign-curve256v1 — ECDSA P-256)
+// ────────────────────────────────────────────────────────────────────────────
+
+// BignSigningMethod — метод подписи JWT с bign-curve256v1 (ECDSA P-256 / ES256).
+type BignSigningMethod struct {
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
+}
+
+// NewBignSigningMethod создаёт новый метод подписи JWT с ECDSA P-256.
+// Если privateKeyPEM пуст, генерируется новый ключ.
+func NewBignSigningMethod(privateKeyPEM string) (*BignSigningMethod, error) {
+	if privateKeyPEM == "" {
+		// Автогенерация для dev
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("generate bign key: %w", err)
+		}
+		return &BignSigningMethod{
+			privateKey: privKey,
+			publicKey:  &privKey.PublicKey,
+		}, nil
+	}
+
+	// Парсим PEM ключ
+	privKey, err := parseECPrivateKeyPEM([]byte(privateKeyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("parse bign key: %w", err)
+	}
+
+	return &BignSigningMethod{
+		privateKey: privKey,
+		publicKey:  &privKey.PublicKey,
+	}, nil
+}
+
+// parseECPrivateKeyPEM парсит PEM-encoded ECDSA приватный ключ.
+func parseECPrivateKeyPEM(pemData []byte) (*ecdsa.PrivateKey, error) {
+	block, _ := pem.Decode(pemData)
+	if block == nil {
+		return nil, errors.New("no PEM block found")
+	}
+
+	key, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		// Попробуем PKCS8
+		pkcs8Key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return nil, fmt.Errorf("parse private key: %v (EC: %v, PKCS8: %v)", err, err, err2)
+		}
+		ecKey, ok := pkcs8Key.(*ecdsa.PrivateKey)
+		if !ok {
+			return nil, errors.New("not an ECDSA private key")
+		}
+		return ecKey, nil
+	}
+	return key, nil
+}
+
+// Sign подписывает JWT claims с bign-curve256v1 (ES256).
 func (m *BignSigningMethod) Sign(claims jwt.Claims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(m.secret)
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	return token.SignedString(m.privateKey)
 }
 
-// Verify проверяет JWT токен.
+// Verify проверяет JWT токен с bign-curve256v1.
 func (m *BignSigningMethod) Verify(tokenString string, claims jwt.Claims) error {
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return m.secret, nil
+		return m.publicKey, nil
 	})
 	if err != nil {
 		return fmt.Errorf("token verification failed: %w", err)
