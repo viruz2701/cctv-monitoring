@@ -1603,7 +1603,7 @@ Parallel execution (<10min)
 
 Effort: 5 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — 9 spec файлов, ~61 E2E тест (цель 50+), все critical user journeys покрыты: Create WO с checklist, Complete WO с photo, Assign technician, Export report, Register P2P device, View RCA graph, Gatekeeper verification. Mock API isolation через shared-mocks.ts, parallel execution, CI integration через e2e-a11y.yml
 
 P1-QA.2: Accessibility Testing в CI
 Файлы: frontend/e2e/a11y/*.spec.ts, frontend/playwright.config.ts
@@ -1636,7 +1636,7 @@ Accessibility report в PR
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — @axe-core/playwright v4.12.1 интегрирован, tests/a11y/all-pages.spec.ts создан (20 pages проверяются на WCAG 2.1 AA, 0 critical violations threshold). CI workflow e2e-a11y.yml с a11y job, PR comment с результатами
 
 P1-QA.3: Frontend Error Monitoring (Sentry)
 Файлы: frontend/src/lib/sentry.ts, mobile/src/lib/sentry.ts, frontend/src/App.tsx
@@ -1706,7 +1706,7 @@ Historical trends
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — lighthouserc.js настроен (Performance >90, A11y >95, Best Practices >90), lighthouse.yml workflow с PR comment, historical trends (опционально LHCI server)
 
 P1-QA.5: Load Testing (k6)
 Файлы: tests/load/*.js, tests/load/k6.config.js
@@ -1741,7 +1741,7 @@ Performance report
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — 4 k6 сценария: devices.scenario.js (GET /devices, 1000 concurrent), work-orders.scenario.js (POST + GET, 1000 concurrent), websocket.scenario.js (1000 WS connections), smoke-test.js (CI/CD validation). Thresholds: p(95)<500ms, error rate<1%. README с инструкциями
 
 P1-QA.6: Frontend Test Coverage 80%
 Файлы: frontend/src/**/*.test.tsx, frontend/vitest.config.ts
@@ -1770,7 +1770,7 @@ Coverage report в PR
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — Coverage thresholds в vite.config.ts: statements=80, branches=75, functions=80, lines=80. Тесты для DeviceWizard (~30 тестов, все 5 шагов), AssetTree (~25 тестов, search/expand/status), BeforeAfterSlider (~20 тестов, drag/touch/percentage)
 
 P1-QA.7: Chaos Engineering Testing
 Файлы: tests/chaos/*.js, tests/chaos/scenarios/*.js
@@ -1799,7 +1799,7 @@ CI integration (опционально)
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — 7 chaos-сценариев: NATS down, NATS latency, Postgres down, Postgres slow, Redis down, API high load, Packet loss. Конфиг (chaos.config.js), runner (runner.js) с dry-run/toxiproxy режимами, recovery metrics, README
 
 P1-BACKEND: Backend Quality
 P1-BACKEND.1: ActionExecutor Unit Tests
