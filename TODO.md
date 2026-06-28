@@ -523,7 +523,7 @@ Effort: 4d | Status: [ ]
 
 ## 🚀 P1-PERF-BUNDLE — Bundle Size Optimization (2026-07)
 
-### Текущее состояние (vite build, 2026-06-28)
+### Текущее состояние (vite build, 2026-06-28, после Quick Wins commit b01ef28)
 | Чанк | Размер | gzip | Действие |
 |------|--------|------|----------|
 | `vendor-charts` (Recharts) | 429.76 KB | 121.37 KB | → Nivo (-250 KB) |
@@ -532,8 +532,8 @@ Effort: 4d | Status: [ ]
 | `vendor-pdf` (jsPDF) | 557.25 KB | 162.56 KB | dynamic import |
 | `vendor-sentry` | 249.77 KB | 81.98 KB | OK |
 | `vendor-other` | 368.16 KB | 119.58 KB | tree-shaking |
-| `index` (main) | 621.44 KB | 163.88 KB | lazy pages |
-| **Precache total** | **4651.21 KB** | — | **Target: <2MB** |
+| `index` (main) | 612.32 KB | 161.65 KB | lazy pages |
+| **Precache total** | **4669.56 KB** | — | **Target: <2MB** |
 
 ### P1-PERF-BUNDLE.1: Schedule-X Migration
 - **Файлы**: FullCalendarWrapper.tsx, WorkOrderCalendar.tsx, TechnicianCalendar.tsx, MaintenanceSchedules.tsx
@@ -559,11 +559,13 @@ Effort: 4d | Status: [ ]
 - **Сложность**: 4 дня
 - **Статус**: [ ]
 
-### Quick Wins (до миграций)
-- [ ] Tree-shaking lucide-react (иконки по FUS, не весь пакет)
-- [ ] Lazy-load jsPDF (только на страницах с экспортом)
-- [ ] Lazy-load react-joyride (только для первой сессии)
-- [ ] Lazy-load react-datepicker (только при открытии календаря)
+### ✅ Quick Wins — DONE (commit b01ef28)
+- [x] Tree-shaking lucide-react — уже ESM tree-shaking через named imports (lucide-react v0.563.0)
+- [x] Lazy-load jsPDF (~557KB) — dynamic import в TotalCostDashboard + ManualDownloadTab
+- [x] Lazy-load react-joyride (~200KB) — React.lazy OnboardingTour в Layout.tsx
+- [x] Lazy-load react-datepicker (~100KB) — React.lazy в ManualDownloadTab.tsx
+- **Экономия при начальной загрузке**: ~857 KB (jsPDF 557KB + joyride 200KB + datepicker 100KB)
+- **Важно**: PWA precache всё ещё включает эти чанки (фоновая загрузка SW), но основной бандл их не содержит
 
 ## 🧹 POLISH — Code Review Roadmap (2026-07)
 
