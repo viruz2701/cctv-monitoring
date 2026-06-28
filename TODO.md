@@ -1078,7 +1078,7 @@ E2E test: QR scan workflow
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — PartCard (image, QR, stock indicators), PartsGridView, PartHistoryTimeline, bulk ops, categories
 
 P1-UX.3: Dashboard Unification
 Файлы: frontend/src/pages/DashboardHub.tsx, frontend/src/pages/ManagerDashboard.tsx, frontend/src/pages/TechnicianDashboard.tsx, frontend/src/components/dashboard/DashboardTabs.tsx
@@ -1113,7 +1113,7 @@ E2E test: dashboard customization
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE — DashboardHub unified (role-based tabs, URL sync, drag-drop widgets)
 
 P1-UX.4: Skeleton на всех страницах
 Файлы: frontend/src/components/layout/SkeletonPage.tsx, frontend/src/pages/*.tsx
@@ -1148,7 +1148,7 @@ Visual regression test
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — SkeletonPage.tsx (7 variants: Dashboard, Analytics, Form, List, Detail, TechnicianWeek, ComplianceShield, AdvancedAnalytics)
 
 P1-UX.5: Calendar Date Mode Toggle
 Файлы: frontend/src/pages/WorkOrders.tsx, frontend/src/components/work-orders/WorkOrderCalendar.tsx
@@ -1179,7 +1179,7 @@ Unit тесты для toggle logic
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — WorkOrderCalendar dateMode toggle (deadline/creation), localStorage persistence
 
 P1-UX.6: RCA Widget в Device Overview
 Файлы: frontend/src/pages/DeviceDetail.tsx, frontend/src/components/rca/RCAWidget.tsx
@@ -1212,7 +1212,7 @@ Unit тесты для RCAWidget
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — RCAWidget (summary card, expand modal, PDF export, loading/error/no-data states, tests)
 
 P1-UX.7: Search Unification
 Файлы: frontend/src/components/layout/Header.tsx, frontend/src/components/CommandPalette.tsx
@@ -1245,7 +1245,7 @@ Unit тесты для search unification
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — CommandPalette unified, Header opens CommandPalette, Cmd+K shortcut
 
 P1-UX.8: Saved Filters
 Файлы: frontend/src/components/ui/DataGrid.tsx, frontend/src/store/savedViewsStore.ts, frontend/src/components/ui/SavedFiltersDropdown.tsx
@@ -1278,7 +1278,7 @@ Unit тесты для filter persistence
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — SavedViews (save/load/delete/rename per page, filter persistence, sort state)
 
 P1-UX.9: Bulk Operations Progress
 Файлы: frontend/src/components/ui/BulkProgressModal.tsx, frontend/src/hooks/useBulkOperations.ts
@@ -1315,7 +1315,7 @@ E2E test: bulk operation with progress
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — BulkProgressModal (progress bar, real-time status, cancel, retry failed)
 
 P1-UX.10: Contextual Tooltips
 Файлы: frontend/src/components/ui/InfoTooltip.tsx, frontend/src/pages/Glossary.tsx
@@ -1348,7 +1348,7 @@ Unit тесты для InfoTooltip
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — Tooltip (4 positions, keyboard accessible), InfoTooltip (glossary links, i18n), stories + tests
 
 P1-UX.11: Error Handling UI
 Файлы: frontend/src/components/ui/ErrorBoundary.tsx, frontend/src/hooks/useErrorHandler.ts
@@ -1381,7 +1381,7 @@ Unit тесты для ErrorBoundary
 
 Effort: 2 days
 
-Status: [ ] — ErrorBoundary есть, но не на всех страницах. Sentry уже интегрирован.
+Status: [x] DONE — ErrorBoundary.tsx created, RouteErrorBoundary.tsx exists, Sentry integration, retry button, fallback UI
 
 P1-PERF: Performance Optimization
 P1-PERF.1: Bundle Size Reduction

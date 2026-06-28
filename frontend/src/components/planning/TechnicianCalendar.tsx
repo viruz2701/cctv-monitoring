@@ -2,6 +2,11 @@
 // TechnicianCalendar — Resource timeline calendar for technician scheduling
 // P2-2.3: Resource Planning Calendar
 //
+// P1-UX.5: Calendar Date Mode Toggle (day/week/month)
+//   - Toggle between day/week/month views
+//   - Preference сохраняется в localStorage
+//   - Color coding: deadline (red), creation (blue)
+//
 // Uses FullCalendar resourceTimelineWeek view:
 //   - Technicians as resources (rows)
 //   - Work orders as draggable events
@@ -14,9 +19,10 @@
 //   - OWASP ASVS V1.8 (Stateless architecture)
 // ═══════════════════════════════════════════════════════════════════════
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
+import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventDropArg, EventContentArg, EventMountArg } from '@fullcalendar/core';
 import type { User } from '../../services/api';
@@ -28,6 +34,9 @@ import {
   Users,
   AlertCircle,
   User as UserIcon,
+  CalendarDays,
+  CalendarRange,
+  List,
 } from 'lucide-react';
 import type {
   ScheduleSlot,
@@ -78,6 +87,14 @@ function formatDateLabel(dateStr: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+// ── Date mode types ───────────────────────────────────────────────────
+
+export type CalendarDateMode = 'deadline' | 'creation';
+
+// ── View mode types ───────────────────────────────────────────────────
+
+export type CalendarViewMode = 'day' | 'week' | 'month';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════
@@ -90,6 +107,14 @@ export interface AnalyticsData {
 }
 
 export interface TechnicianCalendarProps {
+  /** P1-UX.5: Date mode: show by deadline or creation date */
+  dateMode?: CalendarDateMode;
+  /** P1-UX.5: Date mode change callback */
+  onDateModeChange?: (mode: CalendarDateMode) => void;
+  /** P1-UX.5: Current view mode */
+  viewMode?: CalendarViewMode;
+  /** P1-UX.5: View mode change callback */
+  onViewModeChange?: (mode: CalendarViewMode) => void;
   technicians: User[];
   slots: ScheduleSlot[];
   conflicts: ScheduleConflict[];
@@ -176,6 +201,10 @@ const AnalyticsCard = React.memo(function AnalyticsCard({
 
 export const TechnicianCalendar = React.memo(function TechnicianCalendar({
   technicians,
+  dateMode = 'deadline',
+  onDateModeChange,
+  viewMode: externalViewMode,
+  onViewModeChange,
   slots,
   conflicts,
   dayLoads,
@@ -187,6 +216,21 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
   const { t } = useTranslation();
   const [showConflicts, setShowConflicts] = useState(true);
   const [techFilter, setTechFilter] = useState<string>('all');
+
+  // P1-UX.5: View mode state with localStorage persistence
+  const [internalViewMode, setInternalViewMode] = useState<CalendarViewMode>(() => {
+    const stored = localStorage.getItem('technicianCalendar_viewMode');
+    if (stored === 'day' || stored === 'week' || stored === 'month') return stored;
+    return 'week';
+  });
+
+  const viewMode = externalViewMode ?? internalViewMode;
+
+  const setViewMode = useCallback((mode: CalendarViewMode) => {
+    setInternalViewMode(mode);
+    localStorage.setItem('technicianCalendar_viewMode', mode);
+    onViewModeChange?.(mode);
+  }, [onViewModeChange]);
 
   // ── Conflicts by work order ID for quick lookup ──────────────────
   const conflictMap = useMemo(() => {
@@ -560,6 +604,49 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
           </select>
         </div>
 
+        {/* P1-UX.5: View mode toggle (day/week/month) */}
+        <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setViewMode('day')}
+            className={`p-2 transition-colors ${
+              viewMode === 'day'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+            }`}
+            title={t('day_view') || 'Day View'}
+            aria-label={t('day_view') || 'Day View'}
+            aria-pressed={viewMode === 'day'}
+          >
+            <CalendarDays size={16} />
+          </button>
+          <button
+            onClick={() => setViewMode('week')}
+            className={`p-2 transition-colors ${
+              viewMode === 'week'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+            }`}
+            title={t('week_view') || 'Week View'}
+            aria-label={t('week_view') || 'Week View'}
+            aria-pressed={viewMode === 'week'}
+          >
+            <CalendarRange size={16} />
+          </button>
+          <button
+            onClick={() => setViewMode('month')}
+            className={`p-2 transition-colors ${
+              viewMode === 'month'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
+            }`}
+            title={t('month_view') || 'Month View'}
+            aria-label={t('month_view') || 'Month View'}
+            aria-pressed={viewMode === 'month'}
+          >
+            <List size={16} />
+          </button>
+        </div>
+
         {/* Availability legend */}
         <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 ml-auto">
           {Object.entries(AVAILABILITY_STYLES).map(([key, val]) => (
@@ -592,16 +679,41 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
       {!isLoading && (
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden print:border-none print:shadow-none">
           <FullCalendar
-            plugins={[resourceTimelinePlugin, interactionPlugin]}
-            initialView="resourceTimelineWeek"
+            plugins={[resourceTimelinePlugin, dayGridPlugin, interactionPlugin]}
             resources={resources}
             events={calendarEvents}
             resourceLabelContent={renderResourceLabel}
             eventContent={renderEventContent}
             eventDidMount={handleEventMount}
             eventClick={handleEventClick}
+            initialView={
+              viewMode === 'month'
+                ? 'dayGridMonth'
+                : viewMode === 'day'
+                  ? 'resourceTimelineDay'
+                  : 'resourceTimelineWeek'
+            }
             editable
             droppable
+            // P1-UX.5: Only use timeline views for day/week
+            views={{
+              resourceTimelineWeek: {
+                type: 'resource-timeline',
+                duration: { weeks: 1 },
+                buttonText: t('week') || 'Week',
+              },
+              resourceTimelineDay: {
+                type: 'resource-timeline',
+                duration: { days: 1 },
+                buttonText: t('day') || 'Day',
+              },
+              dayGridMonth: {
+                type: 'dayGrid',
+                buttonText: t('month') || 'Month',
+              },
+            }}
+            // P1-UX.5: Hide default header buttons, use custom toggle
+            headerToolbar={false}
             eventDrop={handleEventDrop}
             eventReceive={handleEventReceive}
             eventResizableFromStart
@@ -611,31 +723,10 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
             stickyHeaderDates
             nowIndicator
             firstDay={1}
-            slotMinTime="07:00:00"
-            slotMaxTime="19:00:00"
-            slotDuration="01:00:00"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'resourceTimelineWeek,resourceTimelineDay',
-            }}
-            buttonText={{
-              today: t('today') || 'Today',
-              week: t('week') || 'Week',
-              day: t('day') || 'Day',
-            }}
-            views={{
-              resourceTimelineWeek: {
-                type: 'resourceTimeline',
-                duration: { weeks: 1 },
-                buttonText: t('week') || 'Week',
-              },
-              resourceTimelineDay: {
-                type: 'resourceTimeline',
-                duration: { days: 1 },
-                buttonText: t('day') || 'Day',
-              },
-            }}
+            // P1-UX.5: Only apply timeline-specific props for timeline views
+            slotMinTime={viewMode !== 'month' ? '07:00:00' : undefined}
+            slotMaxTime={viewMode !== 'month' ? '19:00:00' : undefined}
+            slotDuration={viewMode !== 'month' ? '01:00:00' : undefined}
             locale="en"
           />
         </div>
