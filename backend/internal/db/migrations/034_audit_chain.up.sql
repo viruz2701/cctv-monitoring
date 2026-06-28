@@ -53,7 +53,7 @@ COMMENT ON FUNCTION get_last_audit_hmac IS 'Возвращает HMAC после
 -- Таблица архива audit_log (для перемещения записей старше 7 лет)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS audit_log_archive (
+CREATE TABLE audit_log_archive (
     LIKE audit_log INCLUDING ALL,
     archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

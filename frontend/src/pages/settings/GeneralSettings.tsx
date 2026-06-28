@@ -8,7 +8,7 @@ import { CURRENCY_LIST, getCurrencyCode, setCurrencyCode } from '../../utils/cur
 
 interface Props {
   formData: AppSettings;
-  onTopLevelChange: (field: string, value: any) => void;
+  onTopLevelChange: (field: string, value: string | number | boolean) => void;
   onSystemChange: (field: keyof AppSettings['system'], value: number) => void;
   onSave: () => void;
   onReset: () => void;
@@ -54,7 +54,7 @@ export const GeneralSettings: React.FC<Props> = ({
       setLoading(true);
       const data = await api.getAPIKeys();
       setKeys(Array.isArray(data) ? data : []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // silently fail - API keys may not be available
       setKeys([]);
     } finally {
@@ -74,8 +74,9 @@ export const GeneralSettings: React.FC<Props> = ({
       setShowKeyModal(true);
       setFormKeyData({ name: '', permissions: ['read'], expires_at: '' });
       loadKeys();
-    } catch (err: any) {
-      toast.error(err.message || t('api_key_create_error'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message || t('api_key_create_error'));
     }
   };
 
@@ -85,8 +86,9 @@ export const GeneralSettings: React.FC<Props> = ({
       await api.revokeAPIKey(id);
       toast.success(t('api_key_revoked'));
       loadKeys();
-    } catch (err: any) {
-      toast.error(err.message || t('api_key_revoke_error'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message || t('api_key_revoke_error'));
     }
   };
 

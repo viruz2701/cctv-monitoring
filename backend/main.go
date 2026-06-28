@@ -55,6 +55,13 @@ func (w *DBWriter) Submit(job func()) {
 	select {
 	case w.ch <- job:
 	default:
+		// ⚠ Буфер переполнен (1000) — джоба тихо дропается
+		// В production нужно увеличить bufferSize или использовать
+		// backpressure через channel blocking + timeout
+		w.db.Logger.Warn("DBWriter buffer full, job dropped",
+			"buffer_size", cap(w.ch),
+			"queue_len", len(w.ch),
+		)
 	}
 }
 
@@ -227,7 +234,9 @@ func retryStart(ctx context.Context, name string, logger *slog.Logger, fn func(c
 
 func main() {
 	// Загружаем .env файл перед чтением конфигурации
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		slog.Warn(".env file not loaded, using system environment variables", "error", err)
+	}
 
 	cfg := config.Load()
 
@@ -250,7 +259,7 @@ func main() {
 		Host:              getEnv("DB_HOST", "localhost"),
 		Port:              5432,
 		User:              getEnv("DB_USER", "gb_user"),
-		Password:          getEnv("DB_PASSWORD", "gb_password"),
+		Password:          getEnv("DB_PASSWORD", ""),
 		DBName:            getEnv("DB_NAME", "gb_telemetry"),
 		SSLMode:           getEnv("DB_SSLMODE", "disable"),
 		MaxConns:          getEnvInt32("DB_MAX_CONNS", 25),
@@ -258,6 +267,10 @@ func main() {
 		MaxConnLifetime:   getEnvDuration("DB_MAX_CONN_LIFETIME", 5*time.Minute),
 		MaxConnIdleTime:   getEnvDuration("DB_MAX_CONN_IDLE_TIME", 3*time.Minute),
 		HealthCheckPeriod: getEnvDuration("DB_HEALTH_CHECK_PERIOD", time.Minute),
+	}
+
+	if dbCfg.Password == "" {
+		logger.Warn("DB_PASSWORD is empty — database will reject connection if password is required")
 	}
 
 	// Run golang-migrate migrations (replaces initSchema)
@@ -768,5 +781,10 @@ func (r *Reaper) check() {
 }
 
 func (r *Reaper) Stop() {
-	close(r.stopCh)
+	select {
+	case <-r.stopCh:
+		// Канал уже закрыт — защита от double-close
+	default:
+		close(r.stopCh)
+	}
 }

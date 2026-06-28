@@ -492,6 +492,7 @@ func Load() *Config {
 	bindEnv("nats_url", "GB_NATS_URL")
 	bindEnv("nats_creds", "GB_NATS_CREDS")
 	bindEnv("nats_tls", "GB_NATS_TLS")
+	bindEnv("nats_required", "GB_NATS_REQUIRED")
 
 	// ITSM Webhook secrets
 	bindEnv("servicenow_webhook_secret", "GB_SERVICENOW_WEBHOOK_SECRET")

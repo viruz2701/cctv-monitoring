@@ -19,6 +19,7 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 let refreshPromise: Promise<LoginResponse> | null = null;
+let refreshMutex: Promise<LoginResponse> | null = null;
 
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
@@ -48,12 +49,17 @@ apiClient.interceptors.response.use(
 
     originalRequest._retry = true;
     try {
-      refreshPromise = refreshPromise ?? axios
-        .post<LoginResponse>(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 })
-        .then((response) => response.data)
-        .finally(() => {
-          refreshPromise = null;
-        });
+      // Защита от race condition: используем Mutex + Promise
+      // Если несколько параллельных запросов получают 401,
+      // только один выполняет refresh, остальные ждут его результат
+      if (!refreshPromise) {
+        refreshPromise = axios
+          .post<LoginResponse>(`${API_BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 })
+          .then((response) => response.data)
+          .finally(() => {
+            refreshPromise = null;
+          });
+      }
 
       const refreshed = await refreshPromise;
       await storage.setToken(refreshed.token);

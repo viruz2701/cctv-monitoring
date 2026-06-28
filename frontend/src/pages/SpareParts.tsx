@@ -17,17 +17,33 @@ import {
   useUpdateSparePartCategory,
   useDeleteSparePartCategory,
 } from '../hooks/useApiQuery';
+import type { ToastOptions } from '../components/ui';
 import {
   Button, Modal, Input, useToast, EmptyState, SkeletonCard, ConfirmModal,
 } from '../components/ui';
 import { PartsGridView } from '../components/spare-parts/PartsGridView';
 import { PartHistoryTimeline } from '../components/spare-parts/PartHistoryTimeline';
+import type { PartCardPart } from '../components/spare-parts/PartCard';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import {
   Plus, Search, AlertTriangle, RefreshCw, ShoppingCart, Tag,
   Edit, Trash2, Upload, MapPin, Download, FileSpreadsheet,
   History,
 } from 'lucide-react';
+import type { SparePart, SparePartCategory } from '../services/sparePartsApi';
+
+// ─── Local Types ─────────────────────────────────────────────────────
+
+interface ToastApi {
+  success: (options: ToastOptions) => string;
+  error: (options: ToastOptions) => string;
+  warning: (options: ToastOptions) => string;
+  info: (options: ToastOptions) => string;
+}
+
+interface LowStockPart extends SparePart {
+  suggested_order: number;
+}
 
 const CATEGORY_COLORS = [
   '#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6',
@@ -56,7 +72,7 @@ export const SpareParts: React.FC = () => {
   const [showBulkLocationModal, setShowBulkLocationModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyPartId, setHistoryPartId] = useState<string | null>(null);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [editingCategory, setEditingCategory] = useState<SparePartCategory | null>(null);
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -117,8 +133,9 @@ export const SpareParts: React.FC = () => {
       toast.success(`Stock updated for ${selectedParts.length} parts`);
       setShowBulkStockModal(false);
       setSelectedIds(new Set());
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update stock');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update stock';
+      toast.error(message);
     }
   }, [selectedParts, bulkStockValue, adjustStockMut, toast]);
 
@@ -130,8 +147,9 @@ export const SpareParts: React.FC = () => {
       toast.success(`Location updated for ${selectedParts.length} parts`);
       setShowBulkLocationModal(false);
       setSelectedIds(new Set());
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update location');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update location';
+      toast.error(message);
     }
   }, [selectedParts, bulkLocationValue, updateSparePartMut, toast]);
 
@@ -166,7 +184,7 @@ export const SpareParts: React.FC = () => {
       label: 'Update Stock',
       icon: <RefreshCw size={14} />,
       variant: 'primary' as const,
-      onClick: (items: any[]) => {
+      onClick: (_items: PartCardPart[]) => {
         setShowBulkStockModal(true);
       },
     },
@@ -174,7 +192,7 @@ export const SpareParts: React.FC = () => {
       label: 'Change Location',
       icon: <MapPin size={14} />,
       variant: 'secondary' as const,
-      onClick: (items: any[]) => {
+      onClick: (_items: PartCardPart[]) => {
         setShowBulkLocationModal(true);
       },
     },
@@ -288,7 +306,7 @@ export const SpareParts: React.FC = () => {
       <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={editingCategory ? t('edit_category') || 'Edit Category' : t('add_category') || 'Add Category'} size="md">
         <div className="space-y-4">
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {categories.map((cat) => (
+            {categories.map((cat: SparePartCategory) => (
               <div key={cat.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color || '#3b82f6' }} />
@@ -339,8 +357,9 @@ export const SpareParts: React.FC = () => {
                 }
                 setCatForm({ name: '', description: '', color: CATEGORY_COLORS[0] });
                 setEditingCategory(null);
-              } catch (err: any) {
-                toast.error(err?.message || (t('operation_failed') || 'Operation failed'));
+              } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : (t('operation_failed') || 'Operation failed');
+                toast.error(message);
               }
             }} className="space-y-3">
               <Input
@@ -475,7 +494,7 @@ export const SpareParts: React.FC = () => {
 // CreatePartForm — форма создания новой запчасти
 // ═══════════════════════════════════════════════════════════════════════
 
-const CreatePartForm: React.FC<{ onClose: () => void; categories: any[] }> = ({ onClose, categories }) => {
+const CreatePartForm: React.FC<{ onClose: () => void; categories: SparePartCategory[] }> = ({ onClose, categories }) => {
   const { t } = useTranslation();
   const createSparePart = useCreateSparePart();
   const createCategory = useCreateSparePartCategory();
@@ -520,7 +539,7 @@ const CreatePartForm: React.FC<{ onClose: () => void; categories: any[] }> = ({ 
             className="flex-1 border rounded px-3 py-2 dark:bg-slate-800 dark:border-slate-600"
           >
             <option value="">{t('select_category') || 'Select category...'}</option>
-            {categories.map((cat: any) => (
+            {categories.map((cat: SparePartCategory) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
             <option value="__new__">+ {t('create_new_category') || 'Create new category'}</option>
@@ -561,16 +580,18 @@ const CreatePartForm: React.FC<{ onClose: () => void; categories: any[] }> = ({ 
 // ═══════════════════════════════════════════════════════════════════════
 
 const LowStockAlertsContent: React.FC<{
-  lowStockParts: any[];
+  lowStockParts: SparePart[];
   adjustStock: (id: string, qty: number) => Promise<void>;
-  toast: any;
+  toast: ToastApi;
   t: (key: string) => string;
 }> = ({ lowStockParts, adjustStock, toast, t }) => {
-  const autoReorderSuggestions = useMemo(() => {
-    return lowStockParts.map((p: any) => ({
-      ...p,
-      suggested_order: Math.max(p.min_stock * 2 - p.stock, p.min_stock),
-    })).filter((p: any) => p.suggested_order > 0);
+  const autoReorderSuggestions = useMemo((): LowStockPart[] => {
+    return lowStockParts
+      .map((p) => ({
+        ...p,
+        suggested_order: Math.max(p.min_stock * 2 - p.stock, p.min_stock),
+      }))
+      .filter((p) => p.suggested_order > 0);
   }, [lowStockParts]);
 
   return (
@@ -583,7 +604,7 @@ const LowStockAlertsContent: React.FC<{
       </div>
 
       <div className="space-y-3">
-        {lowStockParts.map((part: any) => (
+        {lowStockParts.map((part: SparePart) => (
           <div
             key={part.id}
             className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700"
@@ -630,7 +651,7 @@ const LowStockAlertsContent: React.FC<{
             <span className="font-medium text-sm">{t('auto_reorder_suggestions')}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {autoReorderSuggestions.map((part: any) => (
+            {autoReorderSuggestions.map((part) => (
               <span key={part.id} className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-sm border border-emerald-200 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                 onClick={() => {
                   adjustStock(part.id, part.suggested_order);

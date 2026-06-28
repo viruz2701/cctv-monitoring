@@ -1,26 +1,82 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"p2p-gateway/pkg/adapters"
 	"p2p-gateway/pkg/jftech"
 )
 
-func NewRouter(dm *DeviceManager) *chi.Mux {
+// apiKeyAuth — middleware для проверки API-ключа
+// Соответствует: OWASP ASVS V2 (Authentication), Приказ ОАЦ №66 п.7.18.1
+func apiKeyAuth(cfg *Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Пропускаем health-check без аутентификации
+			if r.URL.Path == "/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			apiKey := r.Header.Get("X-API-Key")
+			if apiKey == "" {
+				apiKey = r.URL.Query().Get("api_key")
+			}
+
+			if cfg.BackendAPIKey == "" {
+				jsonError(w, http.StatusInternalServerError, "API key not configured on server")
+				return
+			}
+
+			// Constant-time comparison для предотвращения timing attack
+			if subtle.ConstantTimeCompare([]byte(apiKey), []byte(cfg.BackendAPIKey)) != 1 {
+				jsonError(w, http.StatusUnauthorized, "invalid API key")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// securityHeaders — middleware для security-заголовков
+// Соответствует: OWASP ASVS V14 (Security Configuration)
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "0") // Современные браузеры не используют
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=()")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func NewRouter(dm *DeviceManager, cfg *Config) *chi.Mux {
 	r := chi.NewRouter()
+
+	// ── Middleware ──────────────────────────────────────────────────────
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(securityHeaders)
+	r.Use(apiKeyAuth(cfg))
 
 	// Health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, http.StatusOK, map[string]string{
-			"status":    "ok",
-			"service":   "p2p-gateway",
-			"adapters":  dm.GetAdapterCounts(),
+			"status":   "ok",
+			"service":  "p2p-gateway",
+			"adapters": dm.GetAdapterCounts(),
 		})
 	})
 
@@ -35,13 +91,13 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 			IPAddress    string `json:"ip_address"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			jsonError(w, http.StatusBadRequest, "invalid request: "+err.Error())
 			return
 		}
 
 		dev, err := dm.AddDevice(req.Brand, req.Serial, req.Username, req.Password, req.SecurityCode, req.IPAddress)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
@@ -58,17 +114,17 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 		id := chi.URLParam(r, "id")
 		dev, ok := dm.GetDevice(id)
 		if !ok {
-			http.Error(w, "device not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "device not found")
 			return
 		}
 		adapter, ok := dm.GetAdapter(dev.Brand)
 		if !ok {
-			http.Error(w, "adapter not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "adapter not found")
 			return
 		}
 		status, err := adapter.GetStatus(dev)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -83,7 +139,7 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 		id := chi.URLParam(r, "id")
 		dev, ok := dm.GetDevice(id)
 		if !ok {
-			http.Error(w, "device not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "device not found")
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -100,29 +156,29 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 			Speed   int    `json:"speed"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			jsonError(w, http.StatusBadRequest, "invalid request: "+err.Error())
 			return
 		}
 		dev, ok := dm.GetDevice(id)
 		if !ok {
-			http.Error(w, "device not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "device not found")
 			return
 		}
 		adapter, ok := dm.GetAdapter(dev.Brand)
 		if !ok {
-			http.Error(w, "adapter not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "adapter not found")
 			return
 		}
 		xAdapter, ok := adapter.(*adapters.XiongmaiAdapter)
 		if !ok {
-			http.Error(w, "PTZ not supported for this device", http.StatusBadRequest)
+			jsonError(w, http.StatusBadRequest, "PTZ not supported for this device")
 			return
 		}
 		if req.Speed == 0 {
 			req.Speed = 5
 		}
 		if err := xAdapter.SendPTZCommand(dev, req.Command, req.Speed); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -181,22 +237,22 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 		id := chi.URLParam(r, "id")
 		dev, ok := dm.GetDevice(id)
 		if !ok {
-			http.Error(w, "device not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "device not found")
 			return
 		}
 		adapter, ok := dm.GetAdapter(dev.Brand)
 		if !ok {
-			http.Error(w, "adapter not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "adapter not found")
 			return
 		}
 		xAdapter, ok := adapter.(*adapters.XiongmaiAdapter)
 		if !ok {
-			http.Error(w, "snapshot not supported for this device", http.StatusBadRequest)
+			jsonError(w, http.StatusBadRequest, "snapshot not supported for this device")
 			return
 		}
 		imageData, err := xAdapter.GetSnapshot(dev)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
@@ -215,22 +271,22 @@ func NewRouter(dm *DeviceManager) *chi.Mux {
 		}
 		dev, ok := dm.GetDevice(id)
 		if !ok {
-			http.Error(w, "device not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "device not found")
 			return
 		}
 		adapter, ok := dm.GetAdapter(dev.Brand)
 		if !ok {
-			http.Error(w, "adapter not found", http.StatusNotFound)
+			jsonError(w, http.StatusNotFound, "adapter not found")
 			return
 		}
 		xAdapter, ok := adapter.(*adapters.XiongmaiAdapter)
 		if !ok {
-			http.Error(w, "logs not supported for this device", http.StatusBadRequest)
+			jsonError(w, http.StatusBadRequest, "logs not supported for this device")
 			return
 		}
 		logs, err := xAdapter.GetLogs(dev, startTime, endTime)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		jsonResponse(w, http.StatusOK, map[string]interface{}{

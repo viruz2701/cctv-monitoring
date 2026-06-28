@@ -38,7 +38,6 @@ export function useAlarmWebSocket() {
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            console.log('WebSocket connected');
             reconnectAttempts.current = 0;
         };
 
@@ -55,7 +54,6 @@ export function useAlarmWebSocket() {
         };
 
         ws.onclose = (event) => {
-            console.log('WebSocket closed', event.code, event.reason);
             wsRef.current = null;
 
             // Если код закрытия указывает на ошибку авторизации — не реконнектимся
@@ -90,7 +88,6 @@ export function useAlarmWebSocket() {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
         reconnectAttempts.current += 1;
 
-        console.log(`Scheduling WebSocket reconnect ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
         reconnectTimeoutRef.current = setTimeout(() => {
             connect();
         }, delay);

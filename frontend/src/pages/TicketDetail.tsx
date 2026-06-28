@@ -5,7 +5,8 @@ import { Card, CardBody, Button, Badge, TicketStatusBadge, PriorityBadge, Textar
 import { Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
-import type { Ticket, TicketStatus, TicketComment } from '../types';
+import type { Ticket, TicketStatus, TicketComment as UITicketComment } from '../types';
+import type { TicketComment } from '../services/api';
 import { useTickets, useUpdateTicket, useDeleteTicket } from '../hooks/useApiQuery';
 import { useTranslation } from 'react-i18next';
 import { api, Alarm } from '../services/api';
@@ -33,10 +34,10 @@ export function TicketDetail() {
         assignee: t.assignee || '',
         createdAt: t.created_at,
         updatedAt: t.updated_at,
-        comments: (t.comments || []).map((c: any) => ({
+        comments: (t.comments || []).map((c: TicketComment) => ({
             id: c.id,
             ticketId: c.ticket_id,
-            userId: c.user_id,
+            userId: c.user_id || '',
             userName: c.user_name || '',
             content: c.content,
             createdAt: c.created_at,
@@ -78,7 +79,7 @@ export function TicketDetail() {
     const handleAddComment = () => {
         if (!newComment.trim() || !user) return;
 
-        const comment: TicketComment = {
+        const comment: UITicketComment = {
             id: `cm-${generateUUID()}`,
             ticketId: ticket.id,
             userId: user.id,

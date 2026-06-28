@@ -63,10 +63,10 @@ export function Login() {
             }
 
             // No 2FA required - login successful
-            console.log('login finished, navigating to /dashboard');
             navigate('/dashboard');
-        } catch (err: any) {
-            setError(err.message || t('login_failed') || 'Login failed');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message || t('login_failed') || 'Login failed');
         } finally {
             setLoading(false);
         }
@@ -86,8 +86,9 @@ export function Login() {
         try {
             await login2FA(sessionToken, otp);
             navigate('/dashboard');
-        } catch (err: any) {
-            setError(err.message || t('login_error_otp') || 'Invalid authentication code');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            setError(message || t('login_error_otp') || 'Invalid authentication code');
         } finally {
             setLoading(false);
         }

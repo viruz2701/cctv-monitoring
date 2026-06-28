@@ -50,9 +50,9 @@ const TenantAdminBypass = "*"
 //
 // Соответствует: IEC 62443 SR 2.1, ISO 27001 A.9.1.2
 func SetTenantContext(ctx context.Context, pool *pgxpool.Pool, tenantID, role string) error {
-	// SET LOCAL в отдельном соединении (без транзакции) — непредсказуемо.
-	// LЛучше использовать WithTenantQuery, который делает SET LOCAL
-	// в начале каждой транзакции/запроса.
+	// WARNING: SET_CONFIG без транзакции действует только в рамках текущего
+	// соединения. При возврате в пул контекст сбрасывается.
+	// Используйте WithTenantTx для гарантированной изоляции.
 	if tenantID == "" {
 		tenantID = ""
 	}
@@ -85,7 +85,8 @@ func SetTenantContext(ctx context.Context, pool *pgxpool.Pool, tenantID, role st
 //
 // Соответствует: IEC 62443 SR 5.1, ISO 27001 A.9.1.2
 func WithTenantQuery(ctx context.Context, pool *pgxpool.Pool, tenantID, role string, fn func(context.Context) error) error {
-	// Устанавливаем контекст для RLS
+	// ⚠ SetTenantContext вне транзакции — RLS контекст может сброситься
+	// при возврате соединения в пул. Используйте WithTenantTx для гарантии.
 	if err := SetTenantContext(ctx, pool, tenantID, role); err != nil {
 		return fmt.Errorf("with tenant query: %w", err)
 	}

@@ -2,10 +2,13 @@ package db
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"gb-telemetry-collector/internal/auth"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,10 +40,10 @@ func New(cfg Config, logger *slog.Logger) (*DB, error) {
 		return nil, fmt.Errorf("database min connections (%d) cannot exceed max connections (%d)", cfg.MinConns, cfg.MaxConns)
 	}
 
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
+	connURL := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.DBName, cfg.SSLMode)
 
-	poolConfig, err := pgxpool.ParseConfig(connStr)
+	poolConfig, err := pgxpool.ParseConfig(connURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database config: %w", err)
 	}
@@ -59,11 +62,16 @@ func New(cfg Config, logger *slog.Logger) (*DB, error) {
 	defer cancel()
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("unable to connect to database: %w", err)
+		return nil, fmt.Errorf("unable to connect to database at %s:%d/%s: %w",
+			cfg.Host, cfg.Port, cfg.DBName, err)
 	}
 
-	logger.Info("database pool initialized", "max_conns", cfg.MaxConns, "min_conns", cfg.MinConns)
-	// Миграции выполняются отдельно — вызов db.RunMigrations() перед New()
+	logger.Info("database pool initialized",
+		"max_conns", cfg.MaxConns,
+		"min_conns", cfg.MinConns,
+		"host", cfg.Host,
+		"db", cfg.DBName,
+	)
 	return &DB{Pool: pool, Logger: logger}, nil
 }
 
@@ -108,7 +116,23 @@ func (db *DB) SeedDefaultAdmin() error {
 		return nil
 	}
 
-	hashed, err := auth.HashPassword("admin123")
+	// ═══ БЕЗОПАСНОСТЬ: пароль администратора ТОЛЬКО из env ═══
+	// GB_ADMIN_PASSWORD — обязателен при первом запуске (seed)
+	// Если не задан — генерируем случайный 32-символьный пароль
+	adminPassword := os.Getenv("GB_ADMIN_PASSWORD")
+	if adminPassword == "" {
+		randomBytes := make([]byte, 24)
+		if _, err := rand.Read(randomBytes); err != nil {
+			return fmt.Errorf("seed: failed to generate random password: %w", err)
+		}
+		adminPassword = hex.EncodeToString(randomBytes)
+		db.Logger.Warn("GB_ADMIN_PASSWORD not set — generated random password",
+			"password", adminPassword,
+			"warn", "SAVE THIS PASSWORD — it will not be shown again",
+		)
+	}
+
+	hashed, err := auth.HashPassword(adminPassword)
 	if err != nil {
 		return fmt.Errorf("seed: hash password: %w", err)
 	}
@@ -119,7 +143,10 @@ func (db *DB) SeedDefaultAdmin() error {
 		return fmt.Errorf("seed: create admin: %w", err)
 	}
 
-	db.Logger.Info("Default admin user created: admin / admin123")
+	db.Logger.Info("Default admin user created",
+		"username", "admin",
+		"password_source", map[bool]string{true: "env", false: "auto-generated"}[os.Getenv("GB_ADMIN_PASSWORD") != ""],
+	)
 	return nil
 }
 

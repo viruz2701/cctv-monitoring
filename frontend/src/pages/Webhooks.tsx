@@ -95,8 +95,9 @@ export function Webhooks() {
     try {
       await deleteMutation.mutateAsync(id);
       toast.success(t('webhook_deleted') || 'Webhook deleted');
-    } catch (err: any) {
-      toast.error(err.message || t('delete_failed') || 'Failed to delete');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(message || t('delete_failed') || 'Failed to delete');
     }
   };
 
@@ -105,8 +106,9 @@ export function Webhooks() {
     try {
       const result = await testMutation.mutateAsync(id);
       toast.success(`${t('webhook_test_result') || 'Test result'}: ${result.status}`);
-    } catch (err: any) {
-      toast.error(`${t('webhook_test_failed') || 'Test failed'}: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`${t('webhook_test_failed') || 'Test failed'}: ${message}`);
     } finally {
       setTesting(null);
     }

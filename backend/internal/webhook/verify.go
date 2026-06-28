@@ -168,13 +168,17 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 				return
 			}
 
-			body, err := io.ReadAll(r.Body)
+			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
 			if err != nil {
 				options.Logger.Error("webhook: read body", "error", err)
 				respond.Error(w, http.StatusBadRequest, "read error")
 				return
 			}
-			r.Body.Close()
+
+			// Восстанавливаем тело ДО верификации, чтобы последующие
+			// handler'ы/middleware могли прочитать его повторно.
+			// ⚠ НЕ закрываем r.Body до восстановления — race condition.
+			r.Body = io.NopCloser(bytes.NewReader(body))
 
 			if !VerifyHMAC(secret, sig, body, opts...) {
 				options.Logger.Warn("webhook: invalid signature",
@@ -184,8 +188,6 @@ func VerifyMiddleware(secret string, opts ...VerifyOption) func(http.Handler) ht
 				return
 			}
 
-			// Восстанавливаем тело для последующих handler'ов
-			r.Body = io.NopCloser(bytes.NewReader(body))
 			next.ServeHTTP(w, r)
 		})
 	}

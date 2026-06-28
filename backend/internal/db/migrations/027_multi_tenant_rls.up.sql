@@ -69,15 +69,26 @@ CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
 -- Если app.tenant_id = '*' — возвращается true (admin bypass).
 CREATE OR REPLACE FUNCTION rls_tenant_check(row_tenant_id TEXT)
 RETURNS BOOLEAN AS $$
+DECLARE
+    session_tenant TEXT;
 BEGIN
     -- Admin bypass: '*' означает "видеть все tenant'ы"
-    IF current_setting('app.tenant_id', true) = '*' THEN
+    session_tenant := current_setting('app.tenant_id', true);
+    IF session_tenant = '*' THEN
         RETURN TRUE;
     END IF;
+
+    -- Защита: если row_tenant_id пустой — это означает "не назначен tenant'у"
+    -- Такие строки ДОЛЖНЫ быть видны ТОЛЬКО при совпадении session_tenant = ''
+    -- или через admin bypass. Без этого условия RLS не работает.
+    IF row_tenant_id = '' OR row_tenant_id IS NULL THEN
+        RETURN session_tenant = '';
+    END IF;
+
     -- Проверка совпадения tenant_id
-    RETURN row_tenant_id = '' OR row_tenant_id = current_setting('app.tenant_id', true);
+    RETURN row_tenant_id = session_tenant;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$ LANGUAGE plpgsql STABLE;
 
 COMMENT ON FUNCTION rls_tenant_check(TEXT) IS
     'F-0.2.3: Проверяет tenant_id строки против session-local app.tenant_id. Admin bypass: wildcard пропускает все tenant''ы.';

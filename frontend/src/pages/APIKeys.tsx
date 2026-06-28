@@ -42,8 +42,9 @@ export function APIKeys() {
             setLoading(true);
             const data = await api.getAPIKeys();
             setKeys(Array.isArray(data) ? data : []);
-        } catch (err: any) {
-            toast.error(err.message || t('api_keys_load_error'));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            toast.error(message || t('api_keys_load_error'));
             setKeys([]);
         } finally {
             setLoading(false);
@@ -70,8 +71,9 @@ export function APIKeys() {
             resetApiKeyValidation();
             setFormData({ name: '', permissions: ['read'], expires_at: '' });
             loadKeys();
-        } catch (err: any) {
-            toast.error(err.message || t('api_key_create_error'));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            toast.error(message || t('api_key_create_error'));
         }
     };
 
@@ -87,8 +89,9 @@ export function APIKeys() {
             await api.revokeAPIKey(id);
             toast.success(t('api_key_revoked'));
             loadKeys();
-        } catch (err: any) {
-            toast.error(err.message || t('api_key_revoke_error'));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            toast.error(message || t('api_key_revoke_error'));
         }
     };
 

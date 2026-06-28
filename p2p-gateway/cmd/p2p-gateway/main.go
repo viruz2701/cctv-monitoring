@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"log"
 	"net/http"
 	"os"
@@ -20,7 +22,7 @@ func main() {
 		cfg = &Config{ListenAddr: ":8082"}
 	}
 
-	dm := NewDeviceManager(8554)
+	dm := NewDeviceManager(cfg.ProxyBaseRTSPPort)
 
 	// Регистрация адаптеров
 	dm.RegisterAdapter("hikvision", adapters.NewHikvisionAdapter())
@@ -51,11 +53,47 @@ func main() {
 		log.Println("Jftech config not found or incomplete – skipping Xiongmai adapter")
 	}
 
-	router := NewRouter(dm)
+	router := NewRouter(dm, cfg)
 
 	srv := &http.Server{
-		Addr:    cfg.ListenAddr,
-		Handler: router,
+		Addr:         cfg.ListenAddr,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// ═══════════════════════════════════════════════════════════════════
+	// mTLS Configuration (Приказ ОАЦ №66 п. 7.18.2)
+	// ═══════════════════════════════════════════════════════════════════
+	if cfg.TLSEnabled {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS13, // TLS 1.3 mandatory
+		}
+
+		// Загрузка серверного сертификата
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+		if err != nil {
+			log.Fatalf("Failed to load TLS cert/key: %v", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+
+		// Настройка mTLS (mutual TLS)
+		if cfg.MTLSRequired && cfg.TLSClientCA != "" {
+			caCert, err := os.ReadFile(cfg.TLSClientCA)
+			if err != nil {
+				log.Fatalf("Failed to load client CA: %v", err)
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+			tlsConfig.ClientCAs = caCertPool
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			log.Println("mTLS enabled: client certificate required")
+		} else if cfg.MTLSRequired {
+			log.Fatal("mTLS required but TLSClientCA not set")
+		}
+
+		srv.TLSConfig = tlsConfig
 	}
 
 	// Канал для сигналов ОС
@@ -64,8 +102,19 @@ func main() {
 
 	// Запуск сервера в горутине
 	go func() {
-		log.Printf("P2P gateway listening on %s", cfg.ListenAddr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		proto := "HTTP"
+		if cfg.TLSEnabled {
+			proto = "HTTPS (mTLS)"
+		}
+		log.Printf("P2P gateway listening on %s [%s]", cfg.ListenAddr, proto)
+
+		var err error
+		if cfg.TLSEnabled {
+			err = srv.ListenAndServeTLS("", "") // Используем cert из TLSConfig
+		} else {
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
 	}()

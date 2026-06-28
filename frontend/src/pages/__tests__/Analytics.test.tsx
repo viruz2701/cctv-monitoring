@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import { Analytics } from '../Analytics';
 
 const queryClient = new QueryClient({
@@ -9,7 +10,11 @@ const queryClient = new QueryClient({
 });
 
 function renderWithProviders(ui: React.ReactElement) {
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  );
 }
 
 vi.mock('react-i18next', () => ({

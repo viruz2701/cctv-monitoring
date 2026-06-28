@@ -11,7 +11,7 @@
 --   СТБ 34.101.27 п. 7.3 (Анализ защищённости — прогнозирование отказов)
 --   Приказ ОАЦ №66 п. 7.18.3 (Audit trail для edge devices)
 
-CREATE TABLE IF NOT EXISTS predictions (
+CREATE TABLE predictions (
     id                      BIGSERIAL,
     device_id               TEXT NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
     prediction_date         TIMESTAMPTZ NOT NULL DEFAULT NOW(),

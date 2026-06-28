@@ -37,10 +37,25 @@ func RunMigrations(dsn string, logger *slog.Logger) error {
 	// перед запуском миграций. Используется для восстановления после
 	// неудачной миграции (например, "Dirty database version 5").
 	// Установите FORCE_MIGRATION_VERSION=<последняя_чистая_версия>
-	if forceVerStr := os.Getenv("FORCE_MIGRATION_VERSION"); forceVerStr != "" {
+	//
+	// Также поддерживает FORCE_MIGRATION_VERSION=auto — автоматически
+	// находит последнюю доступную миграцию и форсирует её.
+	forceVerStr := os.Getenv("FORCE_MIGRATION_VERSION")
+	if forceVerStr == "auto" {
+		// Автоматическое определение последней версии миграции
+		// из файлов в директории migrations
+		latestVer := findLatestMigrationVersion(migrationsDir)
+		if latestVer > 0 {
+			forceVerStr = strconv.Itoa(latestVer)
+			logger.Warn("auto-detected latest migration version for dirty recovery",
+				"version", latestVer,
+			)
+		}
+	}
+	if forceVerStr != "" {
 		forceVer, err := strconv.Atoi(forceVerStr)
 		if err != nil {
-			return fmt.Errorf("invalid FORCE_MIGRATION_VERSION: must be integer, got %q", forceVerStr)
+			return fmt.Errorf("invalid FORCE_MIGRATION_VERSION: must be integer or 'auto', got %q", forceVerStr)
 		}
 		logger.Warn("forcing migration version (dirty state recovery)",
 			"force_version", forceVer,
@@ -59,9 +74,10 @@ func RunMigrations(dsn string, logger *slog.Logger) error {
 	} else if dirty {
 		logger.Error("database is in dirty state",
 			"version", currentVer,
-			"action", "set FORCE_MIGRATION_VERSION=<last_clean_version> to recover",
+			"action_hint_1", "set FORCE_MIGRATION_VERSION=<last_clean_version> to recover",
+			"action_hint_2", "set FORCE_MIGRATION_VERSION=auto for automatic recovery",
 		)
-		return fmt.Errorf("dirty database version %d. Set FORCE_MIGRATION_VERSION=<last_clean_version> and restart", currentVer)
+		return fmt.Errorf("dirty database version %d. Set FORCE_MIGRATION_VERSION=<last_clean_version> or FORCE_MIGRATION_VERSION=auto and restart", currentVer)
 	}
 
 	// === Run pending migrations ===
@@ -107,4 +123,37 @@ func findMigrationsDir() string {
 	}
 
 	return ""
+}
+
+// findLatestMigrationVersion находит наибольший номер миграции в директории.
+func findLatestMigrationVersion(dir string) int {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0
+	}
+
+	latest := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// Миграции имеют формат NNN_name.direction.sql
+		if len(name) < 4 || name[0] < '0' || name[0] > '9' {
+			continue
+		}
+		// Извлекаем номер: первые цифры до подчёркивания
+		ver := 0
+		for _, c := range name {
+			if c >= '0' && c <= '9' {
+				ver = ver*10 + int(c-'0')
+			} else {
+				break
+			}
+		}
+		if ver > latest {
+			latest = ver
+		}
+	}
+	return latest
 }

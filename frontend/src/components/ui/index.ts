@@ -1,5 +1,5 @@
 // UI Components
-export { Card, CardHeader, CardBody, CardFooter } from './Card';
+export { Card, CardHeader, CardContent as CardBody, CardFooter } from './Card';
 export { Badge, StatusBadge, HealthBadge, PriorityBadge, TicketStatusBadge, RoleBadge } from './Badge';
 export { Button, IconButton } from './Button';
 export { StatsCard, MiniStatsCard } from './StatsCard';

@@ -122,14 +122,17 @@ export function Card({
 
 export function CardHeader({
   children,
+  action,
   className = '',
 }: {
   children: React.ReactNode;
+  action?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={`flex items-center justify-between mb-4 ${className}`}>
-      {children}
+      <div className="flex-1 min-w-0">{children}</div>
+      {action && <div className="flex-shrink-0 ml-2">{action}</div>}
     </div>
   );
 }

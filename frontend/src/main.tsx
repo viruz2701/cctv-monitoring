@@ -14,11 +14,6 @@ function registerServiceWorker(): void {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log(
-            '[SW] Registered successfully, scope:',
-            registration.scope,
-          );
-
           // Проверяем обновления
           registration.addEventListener('updatefound', () => {
             const installingWorker = registration.installing;
@@ -27,9 +22,7 @@ function registerServiceWorker(): void {
                 if (installingWorker.state === 'installed') {
                   if (navigator.serviceWorker.controller) {
                     // Новый SW доступен — уведомляем пользователя
-                    console.log(
-                      '[SW] New version available. Reload to update.',
-                    );
+                    // Пользователь будет уведомлён через Toast в будущем
                   }
                 }
               });
@@ -39,13 +32,6 @@ function registerServiceWorker(): void {
         .catch((error) => {
           console.error('[SW] Registration failed:', error);
         });
-
-      // Слушаем сообщения от Service Worker
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data?.type === 'CACHE_CLEARED') {
-          console.log('[SW] Cache cleared');
-        }
-      });
     });
   }
 }

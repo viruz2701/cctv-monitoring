@@ -5,7 +5,7 @@ import { useFormValidation } from '../hooks/useFormValidation';
 import { ticketSchema } from '../lib/validations';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket, useDeleteTicket } from '../hooks/useApiQuery';
-import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
+import type { Ticket as APITicket, Device as APIDevice, TicketComment } from '../services/api';
 import {
     Filter,
     Plus,
@@ -45,10 +45,10 @@ function mapAPITicketToUI(t: APITicket): TicketType {
         assignee: t.assignee || '',
         createdAt: t.created_at,
         updatedAt: t.updated_at,
-        comments: (t.comments || []).map((c: any) => ({
+        comments: (t.comments || []).map((c: TicketComment) => ({
             id: c.id,
             ticketId: c.ticket_id,
-            userId: c.user_id,
+            userId: c.user_id || '',
             userName: c.user_name || '',
             content: c.content,
             createdAt: c.created_at,
@@ -89,7 +89,7 @@ export function Tickets() {
 
     const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
     const devices = useMemo(() => apiDevicesData.map(mapAPIDeviceToUI), [apiDevicesData]);
-    const sites = useMemo(() => apiSitesData.map((s: any) => ({
+    const sites = useMemo(() => apiSitesData.map((s) => ({
         id: s.id,
         name: s.name || 'Unnamed',
         address: s.address || '',

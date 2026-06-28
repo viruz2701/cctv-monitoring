@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
 import { SkeletonDetailPage } from '../components/layout';
-import type { Ticket as APITicket, Device as APIDevice } from '../services/api';
+import type { Ticket as APITicket, Device as APIDevice, TicketComment } from '../services/api';
 import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
     ArrowLeft,
@@ -190,10 +190,10 @@ function mapAPITicketToUI(t: APITicket): import('../types').Ticket {
         assignee: t.assignee || '',
         createdAt: t.created_at,
         updatedAt: t.updated_at,
-        comments: (t.comments || []).map((c: any) => ({
+        comments: (t.comments || []).map((c: TicketComment) => ({
             id: c.id,
             ticketId: c.ticket_id,
-            userId: c.user_id,
+            userId: c.user_id || '',
             userName: c.user_name || '',
             content: c.content,
             createdAt: c.created_at,
