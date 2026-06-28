@@ -106,12 +106,12 @@ P0-N2: Vulnerability Disclosure Program (VDP)
 - Coordinated Disclosure timeline (90 дней)
 - Bug bounty policy template
 Критерий приёмки:
-- security.txt на всех доменах
-- SECURITY.md в репозитории
-- Security advisories page с RSS
+- security.txt на всех доменах ✅
+- SECURITY.md в репозитории ✅
+- Security advisories page с RSS ✅
 - CNA application submitted
 Effort: 2d
-Status: [ ]
+Status: [x] ✅ DONE (commit 9c7f157)
 
 P0-N3: Multi-Tier Incident Response Engine
 Файлы: backend/internal/compliance/incident_response.go, backend/internal/notifications/incident_router.go
