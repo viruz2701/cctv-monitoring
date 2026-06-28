@@ -153,58 +153,15 @@ P2-MKT.6: Kazakhstan Localization
 Решение: Казахский язык, reuse 152-ФЗ code, eGov.kz SSO, KZT billing
 Effort: 2w
 Status: [ ]
-Phase 2: Simple High-Demand Markets (Weeks 11-18)
-P2-MKT.7: Turkey Entry (Highest ROI)
-Язык: ✅ Уже есть (tr)
-TAM: $42M
-Решение: KVKK compliance, e-Devlet SSO, KEP (registered email), TRY billing
-Crypto: НЕ требуется!
-Effort: 2w
-Status: [ ]
-P2-MKT.8: Brazil Entry (Largest LATAM)
-Язык: ✅ Уже есть (pt, minor PT-BR polish)
-TAM: $75M
-Решение: LGPD compliance (reuse 70% GDPR code), Gov.br SSO, PIX, BRL billing
-Crypto: НЕ требуется!
-Effort: 2w
-Status: [ ]
-P2-MKT.9: Mexico Entry (Nearshoring Boom)
-Язык: ✅ Уже есть (es)
-TAM: $50M
-Решение: LFPDPPP, SAT integration, CURP, MXN billing
-Effort: 2w
-Status: [ ]
-P2-MKT.10: Vietnam Entry (Fastest Growing 28% YoY)
-Язык: ❌ Нужен (vi) — 1 неделя
-TAM: $50M
-Решение: Вьетнамский язык, Decree 13/2023 (data residency), VND billing
-Effort: 2w
-Status: [ ]
-P2-MKT.11: Indonesia Entry (Largest SEA)
-Язык: ❌ Нужен (id) — 1 неделя
-TAM: $65M
-Решение: Bahasa Indonesia, UU PDP, SATUSEHAT (health), IDR billing
-Effort: 2w
-Status: [ ]
-Phase 3: Africa Expansion (Weeks 19-24)
-P2-MKT.12: Nigeria Entry
-Язык: ✅ Уже есть (en)
-TAM: $32M (30% YoY — fastest growing)
-Решение: NDPR, NIMC, BVN, NGN billing, low-bandwidth mode
-Effort: 2w
-Status: [ ]
-P2-MKT.13: Kenya Entry (East Africa Hub)
-Язык: ❌ Нужен Swahili (sw)
-TAM: $10M (но East Africa hub)
-Решение: DPA 2019, M-Pesa integration (CRITICAL), eCitizen, KES billing
-Effort: 2w
-Status: [ ]
-P2-MKT.14: South Africa Entry
-Язык: ✅ Уже есть (en)
-TAM: $20M
-Решение: POPIA, Cybercrimes Act, SARS, ZAR billing
-Effort: 2w
-Status: [ ]
+Phase 2-3: Market Entries (10 рынков) — бизнес-задачи, кодовая база готова
+P2-MKT.7: Turkey (TR) 📋 — KVKK/EN62676 ✅, i18n tr ✅, нужен e-Devlet/KEP
+P2-MKT.8: Brazil (BR) 📋 — LGPD/ABNT ✅, i18n pt ✅, нужен Gov.br/PIX
+P2-MKT.9: Mexico (MX) 📋 — LFPDPPP ✅, i18n es ✅, нужен SAT/CURP
+P2-MKT.10: Vietnam (VN) 📋 — TCVN ✅, i18n vi ❌, нужна локализация
+P2-MKT.11: Indonesia (ID) 📋 — SNI+UU PDP ✅, i18n id ❌, нужна локализация
+P2-MKT.12: Nigeria (NG) 📋 — базовый INTL, i18n en ✅
+P2-MKT.13: Kenya (KE) 📋 — базовый INTL, i18n sw ❌, нужна M-Pesa
+P2-MKT.14: South Africa (ZA) 📋 — SANS+POPIA ✅, i18n en ✅
 P2-REG: Advanced Maintenance Templates ⭐ NEW
 P2-REG.8: Regional Templates ✅ DONE
 - TR, VN, ID, BR, ZA (041_regional_templates — 11 регламентов, 95 чек-листов)
@@ -216,22 +173,10 @@ P2-CR.2: Regional Compliance Reports ✅ (compliance/reports.go)
 P2-CR.3: Regional Password Policies ✅ (auth/password_policy.go, 5 profiles)
 P2-CR.4: Session & Auth Regional Policies ✅ (auth/session_policy.go, 5 profiles)
 P2-AI: Advanced Analytics & AI
-P2-AI.1: Real ML Model Integration
-Файлы: backend/analytics/predict.py
-Решение: XGBoost на real TimescaleDB data, NATS publishing, confidence score
-Effort: 5d
-Status: [ ]
-P2-AI.2: AI Assistant Chat
-Файлы: frontend/src/components/ai/AIAssistantPanel.tsx
-Решение: DeepSeek integration, context-aware recommendations, RCA suggestions
-Effort: 4d
-Status: [ ]
+P2-AI.1: Real ML Model Integration ✅ DONE (predict.py, XGBoost, TimescaleDB, NATS, confidence score)
+P2-AI.2: AI Assistant Chat ✅ DONE (459 строк, DeepSeek SSE, Markdown, RCA suggestions)
 P2-WF: Workflow & Automation
-P2-WF.1: Workflow Builder UI
-Файлы: frontend/src/components/workflow/WorkflowBuilder.tsx
-Решение: React Flow, CEL conditions editor, testing mode, version control
-Effort: 5d
-Status: [ ]
+P2-WF.1: Workflow Builder UI ✅ DONE (878 строк, React Flow, CEL, test mode, version control)
 P2-WF.2: Resource Planning Calendar ✅ DONE
 Status: [x] TechnicianWeek.tsx с drag-and-drop
 P2-INT: Integration Ecosystem
