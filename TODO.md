@@ -1912,7 +1912,7 @@ Benchmarks added
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — добавлены тесты extractFaultString, DefaultSNMPConfig, benchmarks
 
 P1-BACKEND.2: Playbook Registry Versioning
 Файлы: backend/internal/playbook/registry.go, backend/internal/playbook/version.go
@@ -1945,7 +1945,7 @@ Unit тесты для versioning
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — уже реализован: Version, semver, hot reload, rollback, diff, tags, 23 теста
 
 P1-BACKEND.3: CMMSIntegrator Context Timeouts
 Файлы: backend/internal/cmms/integrator.go, backend/internal/cmms/adapter.go
@@ -1978,7 +1978,7 @@ Unit тесты для timeout logic
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — уже реализован: AutoCreateTicket (30s), AutoCloseTicket (30s), AddAuditNote (15s), 16 тестов
 
 P1-BACKEND.4: RCA Graph Auto-Update
 Файлы: backend/internal/rca/graph_builder.go, backend/internal/rca/event_listener.go
@@ -2011,7 +2011,7 @@ Unit тесты для auto-update
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE (2026-06-28) — уже реализован: StartAutoRefresh, StopAutoRefresh, DeviceStateProvider, 5 тестов
 
 P1-BACKEND.5: RCA BuildFromState Accuracy
 Файлы: backend/internal/rca/graph_builder.go, backend/internal/rca/validation.go
