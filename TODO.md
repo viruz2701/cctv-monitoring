@@ -378,6 +378,13 @@ Security Policy: docs/iso27001/security-policy.md
 ✅ P2-CR.1-4: Retention, Reports, Password, Session
 ✅ P3-DX.2: Onboarding Tour (react-joyride)
 ✅ P3-SEC.3: Certificate Pinning (expo-secure-store)
+✅ P1-ARCH.2: API Routes Organization (router.go + middleware package)
+✅ P2-REG.8: 31 regional templates (041 — 5 регионов, 042 — 5 СНГ)
+✅ P2-WF.1: Workflow Builder (878 строк, React Flow)
+✅ P2-AI.1-2: ML Model + AI Chat
+✅ POLISH: 23 задачи code review (5 phases, все DONE)
+✅ i18n: 15→20 языков (+vi, id, sw, kk, uz)
+✅ P3-UI.3: Mobile responsiveness (FlatList + ScrollView)
 2026-06-28 — Major Update: Regional Maintenance Compliance Engine
 ✅ Добавлена P0-REG секция: Maintenance Regulations Data Model (7 таблиц)
 ✅ Добавлена P1-REG секция: Mobile Checklist, Regulatory Dashboard, License Verification
@@ -387,7 +394,7 @@ Security Policy: docs/iso27001/security-policy.md
 MaintenanceCron → regulatory_cron.go
 audit/chain.go (HMAC) → signed journals
 Gatekeeper → evidence для regulatory acts
-15 языков i18n → 9 рынков с existing localization
+20 языков i18n → 12 рынков с existing localization (добавлены vi, id, sw, kk, uz)
 ✅ Нормативная база покрыта:
 🇧🇾 СН 3.02.19-2025 (вводится 24.09.2025)
 🇷🇺 РД 25.964-90, РД 009-01-96, РД 009-02-96, РД 78.145-93
