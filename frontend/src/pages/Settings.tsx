@@ -6,7 +6,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Bell, Shield, Globe, Settings as SettingsIcon, Lock, Server, Palette, FileText } from 'lucide-react';
 import { Tabs, useToast } from '../components/ui';
-import { useSettings } from '../context/SettingsContext';
+import { useSettingsStore } from '../store/settingsStore';
+import { useServicesSettings, useServicesStatus, useUpdateServicesSettings } from '../hooks/useApiQuery';
+import type { ServicesSettings as ServicesSettingsAPI } from '../services/api';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +28,29 @@ export function Settings() {
   const { user } = useAuth();
   const { tab = 'general' } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
-  const { settings, updateSettings, servicesSettings, servicesLoading, servicesStatus, servicesStatusLoading, updateServicesSettings, saveServicesSettings, refreshServicesStatus } = useSettings();
+  const { settings, updateSettings } = useSettingsStore();
+  const { data: servicesSettingsRaw, isLoading: servicesLoading } = useServicesSettings();
+  const { data: servicesStatusRaw, isLoading: servicesStatusLoading, refetch: refreshServicesStatus } = useServicesStatus();
+  const servicesMutation = useUpdateServicesSettings();
+
+  // Services draft — local editing state (was in old SettingsContext bridge)
+  const [servicesDraft, setServicesDraft] = useState<ServicesSettingsAPI | null>(null);
+  useEffect(() => {
+    if (servicesSettingsRaw && !servicesDraft) {
+      setServicesDraft(servicesSettingsRaw);
+    }
+  }, [servicesSettingsRaw]);
+
+  const servicesSettings = servicesDraft ?? servicesSettingsRaw ?? null;
+  const servicesStatus = servicesStatusRaw ?? {};
+  const updateServicesSettings = (updates: Partial<ServicesSettingsAPI>) => {
+    setServicesDraft(prev => prev ? { ...prev, ...updates } : null);
+  };
+  const saveServicesSettings = async () => {
+    if (servicesDraft) {
+      await servicesMutation.mutateAsync(servicesDraft);
+    }
+  };
   const toast = useToast();
 
   const [formData, setFormData] = useState(settings);

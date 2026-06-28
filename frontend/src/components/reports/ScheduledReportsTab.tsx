@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardBody, Button, Badge, Modal, Input, Select } from '../ui';
 import { Plus, Clock, Users, Mail, Settings, Play, Trash2, Pause, X } from 'lucide-react';
 import { useToast } from '../ui';
-import { useReportsStore } from '../../context/ReportsContext';
+import { useReportsStore } from '../../store/reportsStore';
 import { useTranslation } from 'react-i18next';
 
 interface ScheduledReport {

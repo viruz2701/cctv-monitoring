@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout, PageSuspense } from './components/layout';
 
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider } from './store';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ToastProvider } from './components/ui';
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card, CardBody, Button, Badge, Input, Select } from '../ui';
 import { Download, FileText, Calendar, Clock, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useToast, SearchInput } from '../ui';
-import { useReportsStore } from '../../context/ReportsContext';
+import { useReportsStore } from '../../store/reportsStore';
 import { useTranslation } from 'react-i18next';
 
 export function ReportHistoryTab() {

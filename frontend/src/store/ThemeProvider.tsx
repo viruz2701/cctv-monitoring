@@ -1,18 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════
-// ThemeContext — Bridge to Zustand Theme Store (ARCH-02)
+// ThemeProvider — React provider for backward compatibility
+// ARCH-02: Part of Context→Zustand migration (P1-ARCH.1)
 //
-// Эта обёртка обеспечивает обратную совместимость с существующим кодом.
-// Новый код ДОЛЖЕН импортировать useThemeStore напрямую из store/.
-//
-// Миграция:
-//   Было:  import { useTheme } from './context/ThemeContext'
-//   Стало: import { useThemeStore } from '../store'
-//
-// После полной миграции: удалить этот файл.
+// Новый код: используй useThemeStore напрямую из '../store'
+// Legacy: используй ThemeProvider + useTheme из этого файла
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { createContext, useContext } from 'react';
-import { useThemeStore, type Theme } from '../store';
+import { useThemeStore, type Theme } from './themeStore';
 
 type ThemeContextType = {
     theme: Theme;
@@ -35,8 +30,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useTheme() {
-    // Новый код: используй useThemeStore напрямую
-    // Legacy: используй этот хук
     const context = useContext(ThemeContext);
     if (context === undefined) {
         throw new Error('useTheme must be used within a ThemeProvider');

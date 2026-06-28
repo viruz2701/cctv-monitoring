@@ -4,7 +4,7 @@ import { FileText, Download, Calendar, Search, Filter, X } from 'lucide-react';
 import { useToast } from '../ui';
 import { generateExcelReport, triggerBlobDownload } from '../../utils/reportGenerator';
 import { useDevices, useSites, useTickets } from '../../hooks/useApiQuery';
-import { useReportsStore } from '../../context/ReportsContext';
+import { useReportsStore } from '../../store/reportsStore';
 import { useAuth } from '../../hooks/useAuth';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';

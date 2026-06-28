@@ -29,6 +29,9 @@ export {
 export type { ReportHistoryItem } from './reportsStore';
 export { useSettingsStore } from './settingsStore';
 
+// ── ARCH.1: Theme Provider (migrated from context/ThemeContext) ─────
+export { ThemeProvider, useTheme } from './ThemeProvider';
+
 // ── ARCH.1: New stores ──────────────────────────────────────────────
 export { useAuthStore, type AuthUser } from './authStore';
 export type { AuthState } from './authStore';

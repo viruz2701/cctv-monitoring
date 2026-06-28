@@ -26,7 +26,7 @@ import {
 import { getArrayData } from '../../utils/helpers';
 import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../ui';
 import { useTickets, useAlarms, useDevices, useSites } from '../../hooks/useApiQuery';
-import { useSettings } from '../../context/SettingsContext';
+import { useSettingsStore } from '../../store/settingsStore';
 import { AlertBanner } from '../dashboard/AlertBanner';
 import { DragDropDashboard } from '../dashboard/DragDropDashboard';
 import type { DashboardWidget } from '../dashboard/DragDropDashboard';
@@ -121,7 +121,7 @@ export default function OverviewTab() {
     const { data: apiAlarms } = useAlarms();
     const { data: apiDevices } = useDevices();
     const { data: apiSites } = useSites();
-    const { dashboardConfig, updateDashboardConfig } = useSettings();
+    const { dashboardConfig, updateDashboardConfig } = useSettingsStore();
     const [pageLoading, setPageLoading] = React.useState(true);
     const [customizeMode, setCustomizeMode] = React.useState(false);
 

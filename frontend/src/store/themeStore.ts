@@ -271,6 +271,40 @@ const removeWhiteLabel = (): void => {
 // Store
 // ═══════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════
+// ThemeProvider — React provider for backward compatibility
+// ═══════════════════════════════════════════════════════════════════════
+
+import React, { createContext, useContext } from 'react';
+
+type ThemeContextType = {
+    theme: Theme;
+    setTheme: (theme: Theme) => void;
+    isDark: boolean;
+};
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+    const theme = useThemeStore((s) => s.theme);
+    const setTheme = useThemeStore((s) => s.setTheme);
+    const isDark = useThemeStore((s) => s.isDark);
+
+    return (
+        <ThemeContext.Provider value={{ theme, setTheme, isDark }}>
+            {children}
+        </ThemeContext.Provider>
+    );
+}
+
+export function useTheme() {
+    const context = useContext(ThemeContext);
+    if (context === undefined) {
+        throw new Error('useTheme must be used within a ThemeProvider');
+    }
+    return context;
+}
+
 export const useThemeStore = create<ThemeState>()((set, get) => {
   const initialPreset = getInitialPreset();
   const initialPrimary = getInitialPrimary();

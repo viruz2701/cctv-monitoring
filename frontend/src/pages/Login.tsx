@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Camera, Eye, EyeOff, Lock, Mail, Shield } from 'lucide-react';
 import { Button } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { useSettings } from '../context/SettingsContext';
+import { useSettingsStore } from '../store/settingsStore';
 import { useTranslation } from 'react-i18next';
 
 export function Login() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { login, login2FA } = useAuth();
-    const { settings } = useSettings();
+    const { settings } = useSettingsStore();
 
     const [step, setStep] = useState<'credentials' | '2fa'>('credentials');
     const [email, setEmail] = useState('');
