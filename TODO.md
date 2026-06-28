@@ -142,8 +142,12 @@ Phase 1: СНГ Foundation (Weeks 1-10)
 P2-MKT.1: ГОСТ Crypto Providers (RU/KZ) ✅ DONE (Магма, Стрибог, HSM, 149-ФЗ)
 P2-MKT.2: 152-ФЗ Features (RU/KZ) ✅ DONE (personal_data.go, consent, DSAR)
 P2-MKT.3: belt-GCM + bign-curve (BY) ⛔ ПРОПУСК — нет bp2012/crypto
-P2-MKT.4: ОАЦ Pre-Certification Package (BY) [ ] — business development
-P2-MKT.5: Uzbekistan Entry [ ] — бизнес-задача (партнёры, локализация)
+P2-MKT.4: ОАЦ Pre-Certification Package (BY) 📋 — бизнес-задача (консалтинг, бюджет $15-25K)
+P2-MKT.5-14: Market entries (10 рынков) 📋 — бизнес-задачи:
+  - UZ (2w), KZ (2w), TR (2w, KVKK ✅), BR (2w, LGPD ✅), MX (2w),
+    VN (2w, +1w vi), ID (2w, +1w id), NG (2w), KE (2w, +1w sw), ZA (2w)
+  - Требуют: local partner, billing integration, SSO, licensing
+  - Техническая база готова: i18n (15 языков), ComplianceProfile, crypto providers
 P2-MKT.6: Kazakhstan Localization
 Файлы: frontend/src/locales/kk/
 Решение: Казахский язык, reuse 152-ФЗ code, eGov.kz SSO, KZT billing
@@ -251,7 +255,7 @@ P3-DX.5: Swagger UI ✅ DONE (openapi.yaml + handler)
 P3-UI: UI/UX Polish
 P3-UI.1: Design Tokens ✅ DONE (CSS variables в index.css)
 P3-UI.2: Micro-interactions ✅ DONE (ripple, card-hover, transitions)
-P3-UI.3: Mobile Responsiveness ⛔ ПРОПУЩЕН — частично (DashboardScreen на FlatList)
+P3-UI.3: Mobile Responsiveness ✅ DONE — DashboardScreen на FlatList, остальные экраны (Profile, WODetail, Checklist) используют ScrollView для фиксированного контента (не списков)
 P3-NICE: Nice-to-Have
 P3-NICE.1: Real-time Collaboration ✅ DONE (WebSocket Presence Hub)
 P3-NICE.2: White-label Theming ✅ DONE (в themeStore, код реализован)
