@@ -13,6 +13,11 @@ import ja from './locales/ja/translation.json';
 import ko from './locales/ko/translation.json';
 import ar from './locales/ar/translation.json';
 import tr from './locales/tr/translation.json';
+import vi from './locales/vi/translation.json';
+import id from './locales/id/translation.json';
+import sw from './locales/sw/translation.json';
+import kk from './locales/kk/translation.json';
+import uz from './locales/uz/translation.json';
 
 const resources = {
   en: {
@@ -1636,7 +1641,12 @@ const resources = {
   ja: { translation: ja },
   ko: { translation: ko },
   ar: { translation: ar },
-  tr: { translation: tr }
+  tr: { translation: tr },
+  vi: { translation: vi },
+  id: { translation: id },
+  sw: { translation: sw },
+  kk: { translation: kk },
+  uz: { translation: uz }
 };
 
 i18n

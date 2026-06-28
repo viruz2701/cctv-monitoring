@@ -19,6 +19,8 @@ const LANGUAGES: LanguageGroup[] = [
       { code: 'ru', label: 'Русский', flag: '🇷🇺' },
       { code: 'be', label: 'Беларуская', flag: '🇧🇾' },
       { code: 'uk', label: 'Українська', flag: '🇺🇦' },
+      { code: 'kk', label: 'Қазақша', flag: '🇰🇿' },
+      { code: 'uz', label: 'O\'zbek', flag: '🇺🇿' },
     ],
   },
   {
@@ -40,12 +42,15 @@ const LANGUAGES: LanguageGroup[] = [
       { code: 'ja', label: '日本語', flag: '🇯🇵' },
       { code: 'ko', label: '한국어', flag: '🇰🇷' },
       { code: 'tr', label: 'Türkçe', flag: '🇹🇷' },
+      { code: 'vi', label: 'Tiếng Việt', flag: '🇻🇳' },
+      { code: 'id', label: 'Bahasa Indonesia', flag: '🇮🇩' },
     ],
   },
   {
-    group: 'Other',
+    group: 'Africa & Middle East',
     languages: [
       { code: 'ar', label: 'العربية', flag: '🇸🇦' },
+      { code: 'sw', label: 'Kiswahili', flag: '🇹🇿' },
     ],
   },
 ];
