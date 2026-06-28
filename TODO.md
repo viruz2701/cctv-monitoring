@@ -156,14 +156,25 @@
 - [ ] **P0-REG.5**: Mobile checklist с offline-first
 
 ### P0-CLEANUP: Remove Legacy Dependencies
-**Файлы**: `frontend/package.json`, `frontend/vite.config.ts`
-**Контекст**: После миграций остались упоминания старых пакетов
-**Effort**: 3d | **Статус**: ⏳ Частично
+**Файлы**: `frontend/package.json`, `frontend/src/**/*.{ts,tsx}`, `frontend/vite.config.ts`
+**Проблема**: После миграций остались старые ссылки на jspdf, xlsx, recharts, @fullcalendar
+**Решение**: Проверить grep-ом все импорты, удалить неиспользуемые зависимости
+**Критерий приёмки**: Нет импортов jspdf/xlsx/recharts/@fullcalendar. `npm run build` без ошибок.
+**Effort**: 3d | **Статус**: ⏳ Частично | **Risk**: HIGH
 
 - [x] **P0-CLEANUP.1**: Удалить xlsx/recharts/@fullcalendar из package.json ✅
-- [x] **P0-CLEANUP.2**: Проверить vendor-pdf, vendor-calendar chunks ✅
+  - `grep -r "from 'xlsx'" frontend/src/` → 0 результатов ✅
+  - `grep -r "from 'recharts'" frontend/src/` → 0 результатов ✅
+  - `grep -r "from '@fullcalendar" frontend/src/` → 0 результатов ✅
+- [x] **P0-CLEANUP.2**: vendor-pdf/vendor-calendar chunks проверены ✅
+  - vendor-pdf: jsPDF оставлен (dynamic import), html2canvas не найден в package.json
+  - vendor-calendar: заменён на vendor-schedule-x в vite.config.ts
 - [ ] **P0-CLEANUP.3**: Удалить html2canvas если не используется
-- [ ] **P0-CLEANUP.4**: Проверить jspdf — оставить (dynamic import, нужен для совместимости)
+  - Проверить: `grep -r "html2canvas" frontend/`
+  - Если не используется — удалить из package.json и vite.config.ts
+- [ ] **P0-CLEANUP.4**: Проверить jspdf — оставить или удалить
+  - jsPDF сейчас lazy-loaded (dynamic import) — нужен для обратной совместимости
+  - После P0-PDF (server-side PDF) можно будет удалить полностью
 
 ---
 
@@ -189,10 +200,32 @@
 ### P1-OPT: Bundle Micro-Optimizations
 **Effort**: 6.5d | **Статус**: [ ]
 
-- [ ] **P1-OPT.1**: lucide-react tree-shaking (централизованный Icons.tsx вместо разрозненных импортов)
-- [ ] **P1-OPT.2**: `@xyflow/react` lazy-load (только на странице WorkflowBuilder)
-- [ ] **P1-OPT.3**: i18n lazy-load per language (не грузить все 20 языков сразу)
-- [ ] **P1-OPT.4**: `react-grid-layout` lazy-load (только на DashboardHub)
+**P1-OPT.1**: Optimize lucide-react imports
+- **Проблема**: lucide-react (~150KB) — много файлов с >10 импортами
+- **Решение**: Создать `frontend/src/components/ui/Icons.tsx` с централизованными re-exports
+- **Проверка**: `grep -r "from 'lucide-react'" frontend/src/ | wc -l` — текущее количество файлов
+- **Критерий**: Нет файлов с >15 прямыми импортами из lucide-react, bundle <50KB
+- **Effort**: 2d
+
+**P1-OPT.2**: Optimize @xyflow/react (Workflow Builder)
+- **Проблема**: @xyflow/react ~300KB, используется только в Workflow Builder
+- **Решение**: Lazy-load через React.lazy() для WorkflowBuilder
+- **Проверка**: `grep -r "@xyflow/react" frontend/src/`
+- **Критерий**: Workflow Builder lazy-loaded, vendor-workflow chunk отдельный, initial bundle без @xyflow
+- **Effort**: 1d
+
+**P1-OPT.3**: Optimize i18n bundles
+- **Проблема**: 20 языков × ~50KB переводов = ~1MB
+- **Решение**: Lazy-load языков, default ru/en/be (~150KB), остальные по требованию
+- **Критерий**: Initial bundle включает только ru/en/be, переключение языка без reload
+- **Effort**: 2d
+
+**P1-OPT.4**: Optimize react-grid-layout
+- **Проблема**: react-grid-layout ~150KB, только для Dashboard customization
+- **Решение**: React.lazy() или замена на CSS Grid + drag-and-drop API
+- **Проверка**: `grep -r "react-grid-layout" frontend/src/`
+- **Критерий**: react-grid-layout lazy-loaded или заменён, Dashboard customization работает
+- **Effort**: 1.5d
 
 ### P1-QUOTA: SaaS Protection (Tenant Quota Management)
 **Файлы**: `backend/internal/tenant/quota.go`, `backend/internal/db/migrations/043_tenant_quotas.sql`
@@ -322,6 +355,34 @@
 - [ ] **P2-REGIONS.4**: India: CERT-In 6h reporting
 - [ ] **P2-REGIONS.5**: Market entries (TR, BR, MX, VN, ID, NG, KE, ZA)
 
+### P2-OPT: Additional Bundle Optimizations
+**Effort**: 3d | **Статус**: [ ]
+
+**P2-OPT.1**: Optimize images and assets
+- **Проблема**: Изображения могут быть неоптимизированы (PNG/JPG)
+- **Решение**: Конвертировать PNG/JPG в WebP, оптимизировать SVG через svgo
+- **Критерий**: Все изображения в WebP, SVG уменьшены на 30%+, lazy-loading для off-screen
+- **Effort**: 1d
+
+**P2-OPT.2**: Optimize Tailwind CSS purging
+- **Проблема**: Tailwind может генерировать неиспользуемые классы
+- **Решение**: Проверить `tailwind.config.js` content paths, включить safelist только для динамических классов
+- **Проверка**: `du -sh dist/assets/*.css` — если CSS >100KB — оптимизировать
+- **Effort**: 0.5d
+
+**P2-OPT.3**: Optimize polyfills
+- **Проблема**: Polyfills могут быть избыточны для современных браузеров
+- **Решение**: Обновить browserslist для современных браузеров, проверить Vite polyfills
+- **Критерий**: Polyfills <50KB, нет console errors в supported browsers
+- **Effort**: 0.5d
+
+**P2-OPT.4**: Analyze и оптимизировать code splitting
+- **Проблема**: Code splitting может быть неоптимальным (main chunk >200KB)
+- **Решение**: Запустить bundle analyzer, проверить размер route chunks (<100KB каждый)
+- **Проверка**: `npx vite build --mode analyze` или открыть `dist/stats.html`
+- **Критерий**: Main chunk <200KB, все route chunks <100KB, initial load time <2s
+- **Effort**: 1d
+
 ---
 
 ## 🔵 P3 — POLISH & DEBT (Q2 2027)
@@ -383,6 +444,27 @@
 - [ ] **P3-CERT.2**: ОАЦ РБ (8 weeks, ~$25K)
 - [ ] **P3-CERT.3**: ФСТЭК РФ (12 weeks, ~$40K)
 - [ ] **P3-CERT.4**: EU CRA notified body assessment
+
+### P3-MICRO: Micro-Optimizations
+**Effort**: 3d | **Статус**: [ ]
+
+**P3-MICRO.1**: Optimize React.memo usage
+- **Проблема**: Не все тяжёлые компоненты используют React.memo
+- **Решение**: Найти компоненты с частыми re-renders (`<5` в React DevTools), добавить React.memo
+- **Критерий**: Тяжёлые компоненты используют React.memo, <5 re-renders
+- **Effort**: 1d
+
+**P3-MICRO.2**: Optimize useMemo/useCallback
+- **Проблема**: Вычисляемые значения и callbacks могут пересоздаваться при каждом render
+- **Решение**: Найти компоненты с вычислениями, обернуть в useMemo/useCallback
+- **Критерий**: Все вычисления обёрнуты в useMemo, все callbacks в useCallback
+- **Effort**: 1.5d
+
+**P3-MICRO.3**: Optimize font loading
+- **Проблема**: Шрифты могут блокировать рендеринг
+- **Решение**: `font-display: swap`, preload критических шрифтов, system fonts fallback
+- **Критерий**: Шрифты не блокируют рендеринг, Lighthouse performance score улучшился
+- **Effort**: 0.5d
 
 ---
 
@@ -460,6 +542,13 @@ Gatekeeper + regulatory act — уникальное сочетание (GPS + A
 ✅ P0-PDF, P0-CLEANUP, P1-OPT добавлены
 ✅ Все выполненные задачи сохранены в истории
 ✅ Success Metrics обновлены
+
+**2026-06-28 — Unified TODO v2: Детальные описания задач**
+✅ P0-CLEANUP: детальные инструкции по grep-проверкам, критерии приёмки, Risk: HIGH
+✅ P1-OPT.1-4: полные описания с проблемой/решением/критерием/effort для каждой
+✅ P2-OPT.1-4: Image/WebP, Tailwind purging, polyfills, code splitting
+✅ P3-MICRO.1-3: React.memo, useMemo/useCallback, font loading
+✅ Общий total effort: P0 15.5d + P1 31.5d + P2 38d + P3 40.5d = **125.5d**
 
 ---
 
