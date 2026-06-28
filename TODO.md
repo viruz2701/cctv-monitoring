@@ -131,44 +131,19 @@ P1-QA.5: Load Testing k6 ✅ DONE
 P1-BACKEND.1: ActionExecutor Unit Tests ✅ DONE
 P1-BACKEND.2: PlaybookRegistry Versioning ✅ DONE
 P1-BACKEND.3: RCA Graph Auto-Update ✅ DONE
-P1-ARCH.1: Context Migration to Zustand — ❌ не выполнена (4d)
+P1-ARCH.1: Context Migration to Zustand ✅ DONE (удалены 3 bridge-контекста)
 P1-ARCH.2: API Routes Organization — ❌ не выполнена (3d)
-P1-ARCH.3: OpenAPI TypeScript Generation — ❌ не выполнена (3d)
+P1-ARCH.3: OpenAPI TypeScript Generation ✅ DONE (oapi-codegen, type-safe клиент)
 🟢 P2 — ENTERPRISE FEATURES (Q1 2027, до 2027-03-31)
 P2-MARKET: Regional Expansion ⭐ NEW
 Стратегия: Использовать 15 языков i18n + ComplianceProfile для быстрого входа на рынки
 Цель: $461M TAM за 9 месяцев, $6-10M ARR в Year 1
 Phase 1: СНГ Foundation (Weeks 1-10)
-P2-MKT.1: ГОСТ Crypto Providers (RU/KZ)
-Файлы: backend/internal/crypto/providers/gost.go
-TAM: $85M (RU) + $20M (KZ)
-Решение: GOST 28147-89, Стрибог-256, ГОСТ Р 34.10-2012
-Effort: 4d
-Status: [ ]
-P2-MKT.2: 152-ФЗ Features (RU/KZ shared)
-Файлы: backend/internal/compliance/personal_data.go
-Решение: Consent management, DSAR workflow, Data inventory, Роскомнадзор reports
-Reuse: 80% для KZ, 60% для UZ
-Effort: 3w (15d)
-Status: [ ]
-P2-MKT.3: belt-GCM + bign-curve (BY)
-Файлы: backend/internal/crypto/belt.go, bign.go
-Решение: belt-GCM, bign-curve256v1 для JWT, bash-256 для audit
-Effort: 4w (20d)
-Status: [ ]
-P2-MKT.4: ОАЦ Pre-Certification Package (BY)
-Файлы: docs/compliance/oac-certification/
-Решение: Documentation package + СТБ compliance tests + consulting engagement
-Budget: $15-25K
-Effort: 4w (parallel)
-Status: [ ]
-P2-MKT.5: Uzbekistan Entry (Lowest Friction)
-Файлы: frontend/src/locales/uz/, backend/internal/compliance/uzbekistan.go
-Язык: Нужен (uz) — 1 неделя
-Решение: Law "On Personal Data" (procedural), ID.UZ SSO (optional), my.gov.uz, UZS billing
-Crypto: НЕ требуется!
-Effort: 2w
-Status: [ ]
+P2-MKT.1: ГОСТ Crypto Providers (RU/KZ) ✅ DONE (Магма, Стрибог, HSM, 149-ФЗ)
+P2-MKT.2: 152-ФЗ Features (RU/KZ) ✅ DONE (personal_data.go, consent, DSAR)
+P2-MKT.3: belt-GCM + bign-curve (BY) ⛔ ПРОПУСК — нет bp2012/crypto
+P2-MKT.4: ОАЦ Pre-Certification Package (BY) [ ] — business development
+P2-MKT.5: Uzbekistan Entry [ ] — бизнес-задача (партнёры, локализация)
 P2-MKT.6: Kazakhstan Localization
 Файлы: frontend/src/locales/kk/
 Решение: Казахский язык, reuse 152-ФЗ code, eGov.kz SSO, KZT billing
@@ -236,23 +211,11 @@ BR: ABNT NBR + LGPD
 ZA: SANS + POPIA
 Effort: 6d
 Status: [ ]
-P2-CR: Compliance Features
-P2-CR.1: Regional Retention Policies
-Решение: Per-region retention (BY 5y, EU min necessary, CN 6m)
-Effort: 3d
-Status: [ ]
-P2-CR.2: Regional Compliance Reports
-Решение: PDF/XML для ОАЦ, ФСТЭК, GDPR DPIA, NIS2
-Effort: 5d
-Status: [ ]
-P2-CR.3: Regional Password Policies
-Решение: BY: 12 chars + 90d rotation; EU: NIST (no forced rotation)
-Effort: 2d
-Status: [ ]
-P2-CR.4: Session & Auth Regional Policies
-Решение: BY: 30 min timeout (КИИ); RU: 15 min (ФСТЭК); EU/US: 8h
-Effort: 2d
-Status: [ ]
+P2-CR: Compliance Features — ✅ ALL DONE
+P2-CR.1: Regional Retention Policies ✅ (retention/policy.go, 600 строк, 5 регионов)
+P2-CR.2: Regional Compliance Reports ✅ (compliance/reports.go)
+P2-CR.3: Regional Password Policies ✅ (auth/password_policy.go, 5 profiles)
+P2-CR.4: Session & Auth Regional Policies ✅ (auth/session_policy.go, 5 profiles)
 P2-AI: Advanced Analytics & AI
 P2-AI.1: Real ML Model Integration
 Файлы: backend/analytics/predict.py
@@ -300,48 +263,48 @@ P3-NICE.2: White-label Theming ✅ DONE (в themeStore, код реализов�
 P3-NICE.3: Edge Agent SL-4 Security ⛔ ПРОПУЩЕН — отдельный проект (neolink)
 ## 🧹 POLISH — Code Review Roadmap (2026-07)
 
-### Phase 1: Critical Fixes (2 дня)
+### Phase 1: Critical Fixes ✅ DONE
 | # | Задача | Файл | Статус |
 |---|--------|------|--------|
-| 1 | Header.tsx — убрать useDevices/useSites | Header.tsx | [ ] |
-| 2 | Modal.tsx — aria-modal, role="dialog" | Modal.tsx | [ ] |
-| 3 | Toast.tsx — role="alert", aria-live | Toast.tsx | [ ] |
-| 4 | Dropdown.tsx — aria-expanded | Dropdown.tsx | [ ] |
-| 5 | CSP connect-src в config | vite.config.ts | [ ] |
-| 6 | EmptyState.tsx — role="status" | EmptyState.tsx | [ ] |
+| 1 | Header.tsx — убрать useDevices/useSites | Header.tsx | ✅ |
+| 2 | Modal.tsx — aria-modal, role="dialog" | Modal.tsx | ✅ уже был |
+| 3 | Toast.tsx — role="alert", aria-live | Toast.tsx | ✅ уже был |
+| 4 | Dropdown.tsx — aria-expanded | Dropdown.tsx | ✅ уже был |
+| 5 | CSP connect-src в config | vite.config.ts | ⏩ backlog |
+| 6 | EmptyState.tsx — role="status" | EmptyState.tsx | ✅ |
 
-### Phase 2: Accessibility (3 дня)
+### Phase 2: Accessibility ✅ DONE
 | # | Задача | Файл | Статус |
 |---|--------|------|--------|
-| 7 | DataGrid.tsx — aria-sort | DataGrid.tsx | [ ] |
-| 8 | Button.tsx — aria-disabled, aria-busy | Button.tsx | [ ] |
-| 9 | Header.tsx — aria-label на icons | Header.tsx | [ ] |
-| 10 | prefers-contrast-more media query | index.css | [ ] |
-| 11 | AssetTree keyboard navigation | AssetTree.tsx | [ ] |
-| 12 | Skip link для main content | Layout.tsx | [ ] |
+| 7 | DataGrid.tsx — aria-sort | DataGrid.tsx | ✅ |
+| 8 | Button.tsx — aria-disabled, aria-busy | Button.tsx | ✅ |
+| 9 | Header.tsx — aria-label на icons | Header.tsx | ✅ |
+| 10 | prefers-contrast-more media query | index.css | ✅ |
+| 11 | AssetTree keyboard navigation | AssetTree.tsx | ✅ |
+| 12 | Skip link для main content | Layout.tsx | ✅ уже был |
 
-### Phase 3: Performance (3 дня)
+### Phase 3: Performance ✅ DONE
 | # | Задача | Файл | Статус |
 |---|--------|------|--------|
-| 13 | WorkOrderDetail.tsx <500 строк | WorkOrderDetail.tsx | [ ] |
-| 14 | useApiQuery.ts разбить по доменам | hooks/ | [ ] |
-| 15 | index.css разбить на модули | CSS modules | [ ] |
-| 16 | React.memo для DataGrid, AssetTree, Sidebar | 3 компонента | [ ] |
-| 17 | SRI в Vite config | vite.config.ts | [ ] |
+| 13 | WorkOrderDetail.tsx <500 строк | WorkOrderDetail.tsx | ✅ (280 строк) |
+| 14 | useApiQuery.ts разбить по доменам | hooks/ | ✅ (5 модулей) |
+| 15 | index.css разбить на модули | CSS modules | ✅ (3 файла) |
+| 16 | React.memo для DataGrid, AssetTree, Sidebar | 3 компонента | ✅ |
+| 17 | SRI в Vite config | vite.config.ts | ⏩ backlog |
 
-### Phase 4: Security (2 дня)
+### Phase 4: Security ✅ DONE
 | # | Задача | Файл | Статус |
 |---|--------|------|--------|
-| 18 | X-Content-Type-Options + Referrer-Policy | backend/ | [ ] |
-| 19 | Storybook a11y CI | CI workflow | [ ] |
-| 20 | Unit test expansion (10→30) | __tests__/ | [ ] |
+| 18 | X-Content-Type-Options + Referrer-Policy | backend/ | ✅ уже был |
+| 19 | Storybook a11y CI | CI workflow | ✅ |
+| 20 | Unit test expansion (10→30) | __tests__/ | ✅ (+42 теста) |
 
-### Phase 5: DX (3 дня)
+### Phase 5: DX ✅ DONE
 | # | Задача | Файл | Статус |
 |---|--------|------|--------|
-| 21 | Barrel export для lazy pages | App.tsx | [ ] |
-| 22 | Error boundaries per route | Layout.tsx | [ ] |
-| 23 | ESLint exhaustive-deps rule | .eslintrc | [ ] |
+| 21 | Barrel export для lazy pages | App.tsx | ✅ |
+| 22 | Error boundaries per route | Layout.tsx | ✅ |
+| 23 | ESLint exhaustive-deps rule | .eslintrc | ✅ |
 
 📊 Success Metrics (обновлено 2026-06-28)
 Метрика
