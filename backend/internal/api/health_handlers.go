@@ -197,13 +197,15 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Check JWT_SECRET (SEC-02: graceful degradation)
-	if !auth.IsJWTSecretSet() {
+	// Check JWT SECRET / BIGN_PRIVATE_KEY (P3-SEC.2, SEC-02: graceful degradation)
+	// JWT_SECRET — legacy, для refresh token хеширования.
+	// BIGN_PRIVATE_KEY — ECDSA P-256 для JWT подписи (автогенерация в dev).
+	if !auth.IsJWTSecretSet() || !auth.IsBignKeySet() {
 		statusCode = http.StatusServiceUnavailable
 		response.Status = "degraded"
 		response.Dependencies["auth"] = healthDetail{
 			Status: "unavailable",
-			Error:  "JWT_SECRET not configured — authentication unavailable",
+			Error:  "JWT_SECRET or BIGN_PRIVATE_KEY not configured — authentication unavailable",
 		}
 	} else {
 		response.Dependencies["auth"] = healthDetail{Status: "ok"}
@@ -305,12 +307,12 @@ func (s *Server) handleDependencies(w http.ResponseWriter, r *http.Request) {
 		response.Dependencies["database"] = detail
 	}
 
-	// JWT check
+	// JWT check (P3-SEC.2: bign ECDSA P-256 + legacy JWT_SECRET)
 	{
 		detail := healthDetail{}
-		if !auth.IsJWTSecretSet() {
+		if !auth.IsJWTSecretSet() || !auth.IsBignKeySet() {
 			detail.Status = "unavailable"
-			detail.Error = "JWT_SECRET not configured"
+			detail.Error = "JWT_SECRET or BIGN_PRIVATE_KEY not configured"
 			response.Status = "degraded"
 		} else {
 			detail.Status = "ok"

@@ -67,6 +67,19 @@ func IsJWTSecretSet() bool {
 	return os.Getenv("JWT_SECRET") != ""
 }
 
+// IsBignKeySet проверяет доступен ли bign ключ для подписи JWT.
+// В development режиме ключ генерируется автоматически, так что
+// функция всегда возвращает true (если нет системной ошибки).
+//
+// Для production: true только если BIGN_PRIVATE_KEY или BIGN_PRIVATE_KEY_FILE задан.
+func IsBignKeySet() bool {
+	if os.Getenv("BIGN_PRIVATE_KEY") != "" || os.Getenv("BIGN_PRIVATE_KEY_FILE") != "" {
+		return true
+	}
+	// В dev режиме ключ генерируется автоматически
+	return true
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // BIGN_PRIVATE_KEY (ECDSA P-256 / bign-curve256v1)
 // ────────────────────────────────────────────────────────────────────────────
