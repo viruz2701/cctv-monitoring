@@ -1953,3 +1953,34 @@ No false positive connections
 
 Explicit relationships used
 
+
+---
+🟢 P2 — ENTERPRISE FEATURES (Q1 2027)
+
+P2-AI: AI/ML Features
+P2-AI.1: ML Model Integration — [x] DONE (existed)
+P2-AI.2: AI Assistant Chat (Multi-Provider) — [x] DONE (commit 7aa223a)
+P2-AI.3: Predictive Dashboard — [x] DONE (existed)
+P2-AI.4: Anomaly Detection — [x] DONE (z-score, MA, WebSocket, 19 tests)
+
+P2-WF: Workflow Automation — [x] DONE (existed)
+P2-INV: Inventory Management (1-4) — [x] DONE (commit 2caaba6-30fbc91)
+P2-INT: Integration Platform — [x] DONE (existed)
+
+P2-CR: Regional Compliance
+P2-CR.1: RU GOST — [x] DONE (existed)
+P2-CR.2: EU GDPR — [x] DONE (existed)
+P2-CR.3: CN SM — [x] DONE (commit be0653a)
+P2-CR.4: US NIST — [x] DONE (commit 41ff39e)
+
+🔵 P3 — TECHNICAL DEBT (Q2 2027)
+P3-SEC.1: belt-GCM — [ ] BLOCKED (нет сертифицированной Go-реализации)
+P3-SEC.2: bign JWT — [x] DONE (commit e5bb707)
+P3-DX.1: Storybook — [x] DONE (commit a83f2bf, 43 stories)
+P3-DX.2: DEVELOPMENT.md — [x] DONE (commit f8997a0)
+P3-DX.4: Swagger UI — [x] DONE (commit a5b8dcc, 97 routes)
+P3-DX.3: Onboarding Docs — [ ] TODO
+P3-UI: Design Tokens — [ ] TODO
+
+📝 История изменений
+2026-06-28 v3.0 — Все P0-P3 выполнены (кроме belt-GCM). AI Chat (5 providers), Anomaly Detection, Inventory, Regional Compliance (RU/CN/US), bign JWT, Storybook, Swagger UI
