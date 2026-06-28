@@ -119,31 +119,74 @@ export default defineConfig({
         // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
         // P1-2.1: Bundle size reduction — выделение тяжёлых библиотек в отдельные чанки
         manualChunks(id: string) {
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) {
+          // Core React
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router') || id.includes('node_modules/react-hook-form')) {
             return 'vendor-react';
           }
-          if (id.includes('node_modules/recharts')) {
+          // Charts & visualization
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/chart')) {
             return 'vendor-charts';
           }
+          // PDF generation
           if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {
             return 'vendor-pdf';
           }
+          // i18n
           if (id.includes('node_modules/i18next')) {
             return 'vendor-i18n';
           }
+          // Calendar (FullCalendar — 6 пакетов, ~500KB combined)
           if (id.includes('node_modules/@fullcalendar')) {
             return 'vendor-calendar';
           }
+          // Excel
           if (id.includes('node_modules/xlsx') || id.includes('node_modules/sheetjs')) {
             return 'vendor-xlsx';
           }
+          // Drag & Drop
           if (id.includes('node_modules/@hello-pangea')) {
             return 'vendor-dnd';
+          }
+          // Workflow builder (@xyflow/react ~300KB)
+          if (id.includes('node_modules/@xyflow') || id.includes('node_modules/react-flow')) {
+            return 'vendor-workflow';
+          }
+          // Grid layout (react-grid-layout ~150KB)
+          if (id.includes('node_modules/react-grid-layout')) {
+            return 'vendor-grid';
+          }
+          // Tutorials & onboarding (react-joyride ~200KB)
+          if (id.includes('node_modules/react-joyride')) {
+            return 'vendor-joyride';
+          }
+          // Markdown (react-markdown + remark/rehype ~150KB)
+          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-') || id.includes('node_modules/rehype-') || id.includes('node_modules/unified') || id.includes('node_modules/mdast')) {
+            return 'vendor-markdown';
+          }
+          // Date picker (react-datepicker ~100KB)
+          if (id.includes('node_modules/react-datepicker')) {
+            return 'vendor-datepicker';
+          }
+          // Query & state management
+          if (id.includes('node_modules/@tanstack/react-query') || id.includes('node_modules/zustand')) {
+            return 'vendor-state';
+          }
+          // Form handling (hookform + zod)
+          if (id.includes('node_modules/zod') || id.includes('node_modules/@hookform')) {
+            return 'vendor-forms';
+          }
+          // Sentry
+          if (id.includes('node_modules/@sentry')) {
+            return 'vendor-sentry';
+          }
+          // Everything else from node_modules
+          if (id.includes('node_modules')) {
+            return 'vendor-other';
           }
         },
       },
     },
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 500,
   },
   server: {
     host: '0.0.0.0',
