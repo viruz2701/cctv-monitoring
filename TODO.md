@@ -1039,7 +1039,7 @@ E2E test: bulk operations
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE — WODataGrid.tsx создан (inline edit, bulk actions, CSV export, column resize)
 
 P1-UX.2: SpareParts Redesign (Shelf.nu Pattern)
 Файлы: frontend/src/pages/SpareParts.tsx, frontend/src/components/spare-parts/PartCard.tsx
