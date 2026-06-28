@@ -1042,6 +1042,201 @@ func TestActionExecutor_ONVIFActionsTable(t *testing.T) {
 	}
 }
 
+// ── extractFaultString Tests ─────────────────────────────────────────────
+
+func TestExtractFaultString_Standard(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope">
+	 <SOAP-ENV:Body>
+	   <SOAP-ENV:Fault>
+	     <faultstring>Action not supported by this device</faultstring>
+	   </SOAP-ENV:Fault>
+	 </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`)
+
+	result := extractFaultString(body)
+	if result != "Action not supported by this device" {
+		t.Errorf("expected 'Action not supported by this device', got %q", result)
+	}
+}
+
+func TestExtractFaultString_WithSubcode(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope">
+	 <SOAP-ENV:Body>
+	   <SOAP-ENV:Fault>
+	     <faultstring>Operation timeout</faultstring>
+	     <faultcode>env:Sender</faultcode>
+	   </SOAP-ENV:Fault>
+	 </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`)
+
+	result := extractFaultString(body)
+	if result != "Operation timeout" {
+		t.Errorf("expected 'Operation timeout', got %q", result)
+	}
+}
+
+func TestExtractFaultString_NoFault(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+	 <s:Body>
+	   <SystemRebootResponse xmlns="http://www.onvif.org/ver10/device/wsdl"/>
+	 </s:Body>
+</s:Envelope>`)
+
+	result := extractFaultString(body)
+	if result != "unknown fault" {
+		t.Errorf("expected 'unknown fault', got %q", result)
+	}
+}
+
+func TestExtractFaultString_EmptyBody(t *testing.T) {
+	t.Parallel()
+
+	result := extractFaultString([]byte{})
+	if result != "unknown fault" {
+		t.Errorf("expected 'unknown fault', got %q", result)
+	}
+}
+
+func TestExtractFaultString_NoFaultstringTag(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`<SOAP-ENV:Fault><faultcode>env:Server</faultcode></SOAP-ENV:Fault>`)
+	result := extractFaultString(body)
+	if result != "unknown fault" {
+		t.Errorf("expected 'unknown fault' when no faultstring tag, got %q", result)
+	}
+}
+
+// ── DefaultSNMPConfig Tests ───────────────────────────────────────────────
+
+func TestDefaultSNMPConfig_Values(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultSNMPConfig()
+
+	if cfg.Port != 161 {
+		t.Errorf("expected Port=161, got %d", cfg.Port)
+	}
+	if cfg.Community != "public" {
+		t.Errorf("expected Community='public', got %q", cfg.Community)
+	}
+	if cfg.Version != "2c" {
+		t.Errorf("expected Version='2c', got %q", cfg.Version)
+	}
+	if cfg.TimeoutSec != 5 {
+		t.Errorf("expected TimeoutSec=5, got %d", cfg.TimeoutSec)
+	}
+	if cfg.Retries != 2 {
+		t.Errorf("expected Retries=2, got %d", cfg.Retries)
+	}
+	if cfg.RebootOID != "" {
+		t.Errorf("expected empty RebootOID, got %q", cfg.RebootOID)
+	}
+}
+
+func TestDefaultSNMPConfig_IndependentInstances(t *testing.T) {
+	t.Parallel()
+
+	cfg1 := DefaultSNMPConfig()
+	cfg2 := DefaultSNMPConfig()
+
+	cfg1.Port = 1161
+	cfg1.Community = "private"
+
+	if cfg2.Port == cfg1.Port {
+		t.Error("cfg2.Port should not be affected by cfg1 mutation")
+	}
+	if cfg2.Community == cfg1.Community {
+		t.Error("cfg2.Community should not be affected by cfg1 mutation")
+	}
+}
+
+// ── Benchmark Tests ───────────────────────────────────────────────────────
+
+func BenchmarkActionExecutor_New(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		NewActionExecutor("http://gateway:8080", "test-key", slog.Default())
+	}
+}
+
+func BenchmarkActionExecutor_ISAPIReboot(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	e := testActionExecutor()
+	host := extractHost(server.URL)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = e.ISAPIReboot(ctx, host, "admin", "password")
+	}
+}
+
+func BenchmarkActionExecutor_ONVIFReboot(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+	 <s:Body>
+	   <SystemRebootResponse xmlns="http://www.onvif.org/ver10/device/wsdl"/>
+	 </s:Body>
+</s:Envelope>`)
+	}))
+	defer server.Close()
+
+	e := testActionExecutor()
+	host := extractHost(server.URL)
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = e.ONVIFReboot(ctx, host, "admin", "password")
+	}
+}
+
+func BenchmarkActionExecutor_ISAPIRebootViaP2P(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"status":"ok"}`)
+	}))
+	defer server.Close()
+
+	e := testActionExecutor(withP2PGateway(server.URL, "bench-api-key"))
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = e.ISAPIRebootViaP2P(ctx, "SN-BENCH-001")
+	}
+}
+
+func BenchmarkExtractFaultString(b *testing.B) {
+	body := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://www.w3.org/2003/05/soap-envelope">
+	 <SOAP-ENV:Body>
+	   <SOAP-ENV:Fault>
+	     <faultstring>Action not supported</faultstring>
+	   </SOAP-ENV:Fault>
+	 </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		extractFaultString(body)
+	}
+}
+
 // ── Helper Functions ──────────────────────────────────────────────────────
 
 // createTempSSHKey creates a temporary file with a test SSH key.
