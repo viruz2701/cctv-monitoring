@@ -20,4 +20,7 @@ export default defineConfig([globalIgnores(['dist']), {
     ecmaVersion: 2020,
     globals: globals.browser,
   },
+  rules: {
+    'react-hooks/exhaustive-deps': ['warn', { additionalHooks: '(useMutation|useQuery)' }],
+  },
 }, ...storybook.configs["flat/recommended"]])

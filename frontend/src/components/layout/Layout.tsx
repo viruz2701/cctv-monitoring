@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { ErrorBoundaryLite } from '../ErrorBoundaryLite';
 import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
 import { ShortcutsCheatsheet } from '../ui/ShortcutsCheatsheet';
@@ -170,7 +171,9 @@ export function Layout() {
                     }`}
             >
                 <div className="p-4 md:p-6 lg:p-8">
-                    <Outlet />
+                    <ErrorBoundaryLite>
+                        <Outlet />
+                    </ErrorBoundaryLite>
                 </div>
             </main>
         </div>
