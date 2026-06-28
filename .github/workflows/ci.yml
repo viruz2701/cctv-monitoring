@@ -103,6 +103,12 @@ jobs:
       - name: Test
         run: cd frontend && npx vitest run --coverage
 
+      - name: Build Storybook
+        run: cd frontend && npm run build-storybook 2>&1 | tail -5
+
+      - name: A11y Smoke Test
+        run: cd frontend && npm run test:a11y:smoke:ci
+
   # ── Mobile (React Native / Expo) ──────────────────────────────
   mobile:
     name: Mobile (React Native)

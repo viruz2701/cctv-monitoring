@@ -148,7 +148,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
 
 		// CSP with nonce (OWASP ASVS V5.3.3)
 		// strict-dynamic отключает fallback к 'self' в старых браузерах — это нормально
