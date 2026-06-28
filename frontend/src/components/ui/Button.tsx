@@ -79,6 +79,7 @@ export function Button({
         ${className}
       `}
             disabled={isDisabled}
+            aria-disabled={isDisabled || undefined}
             aria-busy={loading || undefined}
             onClick={handleClick}
             {...props}

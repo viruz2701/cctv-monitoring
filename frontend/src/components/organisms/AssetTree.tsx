@@ -153,6 +153,8 @@ function AssetTreeNode({
   searchTerm,
   breadcrumbs,
   onNodeSelect,
+  focusedNodeId,
+  onFocusChange,
 }: {
   node: AssetTreeNode;
   onToggle: (id: string) => void;
@@ -160,6 +162,8 @@ function AssetTreeNode({
   searchTerm: string;
   breadcrumbs: BreadcrumbItem[];
   onNodeSelect?: (node: AssetTreeNode, crumbs: BreadcrumbItem[]) => void;
+  focusedNodeId?: string | null;
+  onFocusChange?: (id: string | null) => void;
 }) {
   const Icon = TYPE_ICONS[node.type] || DEFAULT_ICON;
   const hasChildren = node.children.length > 0 || (node.devices && node.devices.length > 0);
@@ -186,13 +190,36 @@ function AssetTreeNode({
     onNodeSelect?.(node, nodeBreadcrumbs);
   }, [node, nodeBreadcrumbs, onToggle, onNodeSelect]);
 
+  const isFocused = focusedNodeId === node.id;
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Let the tree container handle arrow navigation
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(e.key)) {
+      return; // handled by the container's onKeyDown
+    }
+  }, []);
+
+  const handleFocus = useCallback(() => {
+    onFocusChange?.(node.id);
+  }, [node.id, onFocusChange]);
+
   return (
     <div>
       <div
+        ref={nodeRef}
+        role="treeitem"
+        tabIndex={isFocused ? 0 : -1}
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        aria-selected={isFocused}
+        data-node-id={node.id}
         className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors
-          ${isHighlighted ? 'bg-yellow-50 border border-yellow-200' : 'hover:bg-slate-50'}`}
+          ${isHighlighted ? 'bg-yellow-50 border border-yellow-200' : 'hover:bg-slate-50'}
+          ${isFocused ? 'ring-2 ring-blue-500 ring-inset' : ''}`}
         style={{ paddingLeft: `${12 + node.level * 24}px` }}
         onClick={handleClick}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
       >
         {/* Expand/collapse */}
         <button
@@ -265,6 +292,8 @@ function AssetTreeNode({
               searchTerm={searchTerm}
               breadcrumbs={nodeBreadcrumbs}
               onNodeSelect={onNodeSelect}
+              focusedNodeId={focusedNodeId}
+              onFocusChange={onFocusChange}
             />
           ))}
           {node.devices?.map((device) => {
@@ -503,6 +532,70 @@ export function AssetTree({
     [onNodeSelect]
   );
 
+  // ── Keyboard Navigation (WCAG 2.1 AA) ────────────────────────────
+
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleTreeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const tree = treeContainerRef.current;
+    if (!tree) return;
+
+    const items = tree.querySelectorAll<HTMLElement>('[role="treeitem"]');
+    if (items.length === 0) return;
+
+    const currentIndex = focusedNodeId
+      ? Array.from(items).findIndex((el) => el.dataset.nodeId === focusedNodeId)
+      : -1;
+
+    switch (e.key) {
+      case 'ArrowDown': {
+        e.preventDefault();
+        const next = Math.min(currentIndex + 1, items.length - 1);
+        items[next]?.focus();
+        setFocusedNodeId(items[next]?.dataset.nodeId ?? null);
+        break;
+      }
+      case 'ArrowUp': {
+        e.preventDefault();
+        const prev = Math.max(currentIndex - 1, 0);
+        items[prev]?.focus();
+        setFocusedNodeId(items[prev]?.dataset.nodeId ?? null);
+        break;
+      }
+      case 'ArrowRight': {
+        e.preventDefault();
+        if (currentIndex >= 0) {
+          const el = items[currentIndex];
+          const expandBtn = el?.querySelector<HTMLElement>('[aria-label="Expand"], [aria-label="Collapse"]');
+          if (expandBtn && el?.getAttribute('aria-expanded') === 'false') {
+            expandBtn.click();
+          }
+        }
+        break;
+      }
+      case 'ArrowLeft': {
+        e.preventDefault();
+        if (currentIndex >= 0) {
+          const el = items[currentIndex];
+          const expandBtn = el?.querySelector<HTMLElement>('[aria-label="Expand"], [aria-label="Collapse"]');
+          if (expandBtn && el?.getAttribute('aria-expanded') === 'true') {
+            expandBtn.click();
+          }
+        }
+        break;
+      }
+      case 'Enter':
+      case ' ': {
+        e.preventDefault();
+        if (currentIndex >= 0) {
+          items[currentIndex]?.click();
+        }
+        break;
+      }
+    }
+  }, [focusedNodeId]);
+
   // ── Filter by search ──────────────────────────────────────────────
 
   const filteredTree = useMemo(() => {
@@ -650,7 +743,13 @@ export function AssetTree({
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div
+              ref={treeContainerRef}
+              role="tree"
+              aria-label={t('asset_tree') || 'Asset tree'}
+              onKeyDown={handleTreeKeyDown}
+              className="divide-y divide-slate-100"
+            >
               {filteredTree.map((node) => (
                 <AssetTreeNode
                   key={node.id}
@@ -660,6 +759,8 @@ export function AssetTree({
                   searchTerm={searchTerm}
                   breadcrumbs={[]}
                   onNodeSelect={handleNodeSelect}
+                  focusedNodeId={focusedNodeId}
+                  onFocusChange={setFocusedNodeId}
                 />
               ))}
             </div>

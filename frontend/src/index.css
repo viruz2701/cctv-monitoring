@@ -684,3 +684,19 @@ textarea,
     scroll-behavior: auto !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   WCAG 2.1 SC 1.4.6 — prefers-contrast: more
+   Усиливает контраст для пользователей с нарушениями зрения
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-contrast: more) {
+  :root {
+    --color-primary: #1d4ed8;
+    --color-border: #000000;
+    --shadow-sm: none;
+    --shadow-md: none;
+  }
+  .card-hover:hover {
+    transform: none;
+  }
+}

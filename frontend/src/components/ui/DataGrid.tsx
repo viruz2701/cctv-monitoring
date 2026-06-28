@@ -915,7 +915,7 @@ export function DataGrid<T>({
                   aria-sort={
                     sortColumn === colKey
                       ? sortDirection === 'asc' ? 'ascending' : 'descending'
-                      : undefined
+                      : 'none'
                   }
                   tabIndex={column.sortable ? 0 : undefined}
                   onKeyDown={(e) => {

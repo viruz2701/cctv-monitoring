@@ -16,8 +16,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
-import { useDevices, useSites, useNotifications, useMarkAllNotificationsRead } from '../../hooks/useApiQuery';
-import { getArrayData } from '../../utils/helpers';
+import { useNotifications, useMarkAllNotificationsRead } from '../../hooks/useApiQuery';
 import { ConfirmModal } from '../ui/Modal';
 import { useTranslation } from 'react-i18next';
 import { useThemeStore, type Theme } from '../../store/themeStore';
@@ -35,10 +34,6 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const { user, logout } = useAuth();
     const { data: apiNotifications = [] } = useNotifications();
     const markAllAsReadMut = useMarkAllNotificationsRead();
-    const { data: rawDevices } = useDevices();
-    const { data: rawSites } = useSites();
-    const safeDevices = getArrayData<Record<string, any>>(rawDevices);
-    const safeSites = getArrayData<Record<string, any>>(rawSites);
 
     const commandPalette = useCommandPaletteStore();
 
@@ -55,38 +50,6 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
     const markAllAsRead = () => markAllAsReadMut.mutate();
-
-    const mapAPIDeviceToUI = (d: Record<string, any>): { id: string; name: string; siteId: string; siteName: string; type: string; status: string; health: string; recordingStatus: string; lastSeen: string; ipAddress: string; model: string; firmware: string; owner_id: any } => ({
-        id: d.device_id,
-        name: d.name || d.device_id,
-        siteId: d.site_id || 'site-default',
-        siteName: d.location || 'Unknown',
-        type: d.vendor_type === 'camera' ? 'camera' : 'nvr',
-        status: (d.status || 'offline').toLowerCase(),
-        health: d.status === 'online' ? 'healthy' : 'faulty',
-        recordingStatus: 'recording',
-        lastSeen: d.last_seen || new Date().toISOString(),
-        ipAddress: '',
-        model: d.vendor_type || '',
-        firmware: '',
-        owner_id: d.owner_id,
-    });
-
-    const devices = useMemo(() => safeDevices.map(mapAPIDeviceToUI), [safeDevices]);
-
-    const mapAPISiteToUI = (s: Record<string, any>) => ({
-        id: s.id,
-        name: s.name || 'Unnamed',
-        address: s.address || '',
-        city: s.city || '',
-        organization: s.organization || '',
-        latitude: s.latitude || 0,
-        longitude: s.longitude || 0,
-        status: s.status || 'active',
-        lastSync: s.last_sync || new Date().toISOString(),
-    });
-
-    const sites = useMemo(() => safeSites.map(mapAPISiteToUI), [safeSites]);
 
     const { theme, setTheme } = useThemeStore();
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -141,7 +104,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                     <WorkspaceSwitcher />
                     <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
                     <LanguageSwitcher />
-                    <button onClick={onMobileMenuToggle} className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    <button onClick={onMobileMenuToggle} className="lg:hidden p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg" aria-label={t('header:toggle_menu') || 'Toggle menu'}>
                         <Menu className="w-5 h-5" />
                     </button>
                     <div>
@@ -178,6 +141,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                     <button
                         onClick={cycleTheme}
                         title={themeLabels[theme]}
+                        aria-label={t('header:toggle_theme') || themeLabels[theme]}
                         className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg group"
                     >
                         <span className="block transition-transform duration-300 ease-in-out group-active:rotate-90">
@@ -190,7 +154,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
 
                     {/* Notifications */}
                     <div className="relative">
-                        <button onClick={() => setNotificationsOpen(!notificationsOpen)} className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                        <button onClick={() => setNotificationsOpen(!notificationsOpen)} className="relative p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg" aria-label={t('header:notifications') || 'Notifications'}>
                             <Bell className="w-5 h-5" />
                             {unreadCount > 0 && <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                         </button>
@@ -225,7 +189,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
 
                     {/* User Menu */}
                     <div className="relative">
-                        <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={t('header:user_menu') || 'User menu'}>
                             <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white text-sm font-semibold rounded-full overflow-hidden">
                                 {user?.avatar && user.avatar.length > 4 ? (
                                     <LazyImage src={user.avatar!} alt={user.name ?? ''} className="w-full h-full object-cover" placeholderSize="sm" showSkeleton={false} />
@@ -241,10 +205,10 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
                         </button>
                         {userMenuOpen && (
                             <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 py-2 z-50">
-                                <Link to="/profile" className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)}><User className="w-4 h-4" /> {t('profile')}</Link>
-                                <Link to="/settings" className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)}><Settings className="w-4 h-4" /> {t('settings')}</Link>
+                                <Link to="/profile" className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)} aria-label={t('header:profile') || 'Profile'}><User className="w-4 h-4" /> {t('profile')}</Link>
+                                <Link to="/settings" className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setUserMenuOpen(false)} aria-label={t('header:settings') || 'Settings'}><Settings className="w-4 h-4" /> {t('settings')}</Link>
                                 <hr className="my-2 border-slate-100 dark:border-slate-800" />
-                                <button onClick={() => { setUserMenuOpen(false); setIsLogoutModalOpen(true); }} className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"><LogOut className="w-4 h-4" /> {t('sign_out')}</button>
+                                <button onClick={() => { setUserMenuOpen(false); setIsLogoutModalOpen(true); }} className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10" aria-label={t('header:sign_out') || 'Sign out'}><LogOut className="w-4 h-4" /> {t('sign_out')}</button>
                             </div>
                         )}
                     </div>

@@ -80,6 +80,7 @@ export function EmptyState({
 
   return (
     <div
+      role="status"
       className={`flex flex-col items-center justify-center text-center ${cfg.wrapper} px-6`}
     >
       {/* Icon container */}
