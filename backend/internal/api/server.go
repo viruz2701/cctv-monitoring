@@ -161,6 +161,9 @@ type Server struct {
 
 	// P0-N1: SBOM (Software Bill of Materials) Provider
 	sbomProvider *SBOMProvider
+
+	// P0-N2: Well-Known URI Handler (RFC 8615, RFC 9116)
+	wellKnownHandler *WellKnownHandler
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -203,6 +206,11 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	// P0-N1: SBOM Provider (загружается из директории sbom/ при старте)
 	// В production SBOM генерируется в CI/CD и копируется в sbom/ директорию.
 	sbomProvider := NewSBOMProvider("./sbom", "unknown", "0.0.0-dev")
+
+	// P0-N2: Well-Known Handler (security.txt, security policy)
+	// security.txt находится в backend/.well-known/security.txt
+	wellKnownHandler := NewWellKnownHandler(".well-known/security.txt")
+
 	r := chi.NewRouter()
 
 	// TraceID — must be first for audit trail
@@ -256,6 +264,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
 		recaptchaValidator: recaptchaValidator,
 		sbomProvider:       sbomProvider,
+		wellKnownHandler:   wellKnownHandler,
 		serverStart:        time.Now(),
 	}
 

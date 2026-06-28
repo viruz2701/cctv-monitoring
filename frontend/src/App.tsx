@@ -80,6 +80,7 @@ function App() {
                 <Route path="/login" element={<Pages.Login />} />
                 <Route path="/forgot-password" element={<Pages.ForgotPassword />} />
                 <Route path="/request" element={<Pages.WorkRequestPortal />} />
+                <Route path="/security-advisories" element={<PageSuspense><Pages.SecurityAdvisories /></PageSuspense>} />
 
                 {/* P0-CE.4: Setup Wizard — публичный, без Layout (On-Premise first-run) */}
                 <Route path="/setup" element={

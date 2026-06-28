@@ -70,6 +70,13 @@ func (s *Server) MountRoutes(r chi.Router) {
 	s.mountSBOMRoutes(r)
 
 	// ═════════════════════════════════════════════════════════════════
+	// P0-N2: Well-Known URIs (RFC 8615, RFC 9116) — public endpoints
+	//   GET /.well-known/security.txt     — Vulnerability Disclosure Policy
+	//   GET /.well-known/security-policy  — HTML version of SECURITY.md
+	// ═════════════════════════════════════════════════════════════════
+	s.mountWellKnownRoutes(r)
+
+	// ═════════════════════════════════════════════════════════════════
 	// P3-DX.5: OpenAPI 3.1 + Swagger UI (без JWT)
 	//   GET /api/v1/openapi.json — OpenAPI spec (JSON)
 	//   GET /api/v1/docs         — Swagger UI (HTML)

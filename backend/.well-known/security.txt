@@ -1,0 +1,30 @@
+# ════════════════════════════════════════════════════════════
+# security.txt — RFC 9116 Vulnerability Disclosure
+# P0-N2: Vulnerability Disclosure Program (VDP)
+# ════════════════════════════════════════════════════════════
+
+# Contact information
+Contact: mailto:security@gb-telemetry.com
+Contact: https://github.com/gb-telemetry-collector/security/advisories/new
+Contact: https://gb-telemetry.com/.well-known/pgp-key.txt
+
+# Encryption
+Encryption: https://gb-telemetry.com/.well-known/pgp-key.txt
+
+# Disclosure policy
+Policy: https://gb-telemetry.com/.well-known/security-policy
+Policy: https://github.com/gb-telemetry-collector/blob/main/SECURITY.md
+
+# Hall of Fame
+Acknowledgments: https://gb-telemetry.com/security-advisories
+
+# Hiring
+# (Optional) Security team contact for employment inquiries
+# Hiring: https://gb-telemetry.com/careers
+
+# Expiry and preferred languages
+Expires: 2027-06-28T20:00:00.000Z
+Preferred-Languages: en, ru, zh
+
+# Canonical URL
+Canonical: https://gb-telemetry.com/.well-known/security.txt

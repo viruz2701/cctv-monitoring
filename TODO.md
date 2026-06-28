@@ -91,10 +91,10 @@ P0-N1: Supply Chain Security (SBOM + SSDF)
 - VEX (Vulnerability Exploitability eXchange) statements
 Критерий приёмки:
 - SBOM генерируется автоматически в CI, CycloneDX + SPDX
-- SBOM endpoint /api/v1/sbom
+- SBOM endpoint /api/v1/sbom (GET /api/v1/sbom, GET /api/v1/sbom/{format})
 - VEX statements для known vulnerabilities
 Effort: 3d
-Status: [ ]
+Status: [x] ✅ DONE (commit 6fb4d13)
 
 P0-N2: Vulnerability Disclosure Program (VDP)
 Файлы: backend/.well-known/security.txt, SECURITY.md, frontend/src/pages/SecurityAdvisories.tsx
