@@ -34,10 +34,10 @@ import { useTranslation } from 'react-i18next';
 import type { Device as APIDevice, Ticket as APITicket, Alarm as APIAlarm } from '../../../services/api';
 import type { Device as UIDevice, Ticket as UITicket, Alert } from '../../../types';
 import { useMemo } from 'react';
-import {
-    LineChart, Line, AreaChart, Area, BarChart, Bar,
-    XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-} from 'recharts';
+
+// Nivo charts
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsiveLine } from '@nivo/line';
 
 const sparklineData = [
     { name: 'Mon', value: 40 }, { name: 'Tue', value: 55 },
@@ -210,6 +210,16 @@ export default function OverviewTab() {
         { name: 'Offline', value: stats.offlineDevices, fill: '#f97316' },
     ];
 
+    // ── Nivo theme for dark mode compatibility ─────────────────────
+
+    const nivoTheme = {
+        axis: {
+            ticks: { text: { fontSize: 11, fill: '#94a3b8' } },
+            domain: { line: { stroke: '#e2e8f0', strokeWidth: 1 } },
+        },
+        grid: { line: { stroke: '#e2e8f0', strokeDasharray: '3 3', strokeWidth: 1 } },
+    };
+
     // ── Widget definitions for DragDropDashboard ─────────────────────
 
     const dashboardWidgets = React.useMemo<DashboardWidget[]>(() => [
@@ -270,15 +280,36 @@ export default function OverviewTab() {
             content: (
                 <div key="deviceHealthChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('device_health_distribution') || 'Device Health'}</h3>
-                    <ResponsiveContainer width="100%" height="80%">
-                        <BarChart data={deviceHealthChartData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} />
-                            <Tooltip />
-                            <Bar dataKey="value" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <div style={{ height: '80%', minHeight: 200 }}>
+                        <ResponsiveBar
+                            data={deviceHealthChartData}
+                            keys={['value']}
+                            indexBy="name"
+                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                            padding={0.3}
+                            colors={['#22c55e', '#ef4444', '#f97316']}
+                            colorBy="indexValue"
+                            borderRadius={4}
+                            borderColor={{ from: 'color', modifiers: [['darker', 1.6]] }}
+                            axisBottom={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            axisLeft={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            theme={nivoTheme}
+                            enableLabel={false}
+                            tooltip={({ data: d }) => (
+                                <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                    {String(d.name)}: {Number(d.value)}
+                                </div>
+                            )}
+                        />
+                    </div>
                 </div>
             ),
         },
@@ -287,21 +318,46 @@ export default function OverviewTab() {
             content: (
                 <div key="alertTrendChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('alert_trend') || 'Alert Trend'}</h3>
-                    <ResponsiveContainer width="100%" height="80%">
-                        <AreaChart data={sparklineData}>
-                            <defs>
-                                <linearGradient id="alertGradient" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} />
-                            <Tooltip />
-                            <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="url(#alertGradient)" strokeWidth={2} />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                    <div style={{ height: '80%', minHeight: 200 }}>
+                        <ResponsiveLine
+                            data={[{
+                                id: 'alerts',
+                                data: sparklineData.map(d => ({ x: d.name, y: d.value })),
+                            }]}
+                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                            xScale={{ type: 'point' }}
+                            yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                            curve="monotoneX"
+                            lineWidth={2}
+                            colors={['#3b82f6']}
+                            enablePoints={false}
+                            enableArea={true}
+                            areaOpacity={0.15}
+                            enableGridX={false}
+                            axisBottom={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            axisLeft={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            theme={nivoTheme}
+                            enableSlices="x"
+                            sliceTooltip={({ slice }) => {
+                                if (!slice.points.length) return null;
+                                return (
+                                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                        {slice.points.map(p => (
+                                            <div key={p.id}><strong>{String(p.data.x)}</strong>: {Number(p.data.y)}</div>
+                                        ))}
+                                    </div>
+                                );
+                            }}
+                        />
+                    </div>
                 </div>
             ),
         },
@@ -310,18 +366,61 @@ export default function OverviewTab() {
             content: (
                 <div key="ticketTrendChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('ticket_trend') || 'Ticket Trend'}</h3>
-                    <ResponsiveContainer width="100%" height="80%">
-                        <LineChart data={ticketTrendData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis tick={{ fontSize: 11 }} />
-                            <Tooltip />
-                            <Line type="monotone" dataKey="critical" stroke="#ef4444" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="high" stroke="#f97316" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="medium" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                            <Line type="monotone" dataKey="low" stroke="#22c55e" strokeWidth={2} dot={false} />
-                        </LineChart>
-                    </ResponsiveContainer>
+                    <div style={{ height: '80%', minHeight: 200 }}>
+                        <ResponsiveLine
+                            data={[
+                                { id: 'critical', data: ticketTrendData.map(d => ({ x: d.name, y: d.critical })) },
+                                { id: 'high', data: ticketTrendData.map(d => ({ x: d.name, y: d.high })) },
+                                { id: 'medium', data: ticketTrendData.map(d => ({ x: d.name, y: d.medium })) },
+                                { id: 'low', data: ticketTrendData.map(d => ({ x: d.name, y: d.low })) },
+                            ]}
+                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                            xScale={{ type: 'point' }}
+                            yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                            curve="monotoneX"
+                            lineWidth={2}
+                            colors={['#ef4444', '#f97316', '#3b82f6', '#22c55e']}
+                            enablePoints={false}
+                            enableGridX={false}
+                            axisBottom={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            axisLeft={{
+                                tickSize: 5,
+                                tickPadding: 5,
+                                tickRotation: 0,
+                            }}
+                            theme={nivoTheme}
+                            legends={[
+                                {
+                                    anchor: 'bottom',
+                                    direction: 'row',
+                                    translateY: 36,
+                                    itemWidth: 60,
+                                    itemHeight: 14,
+                                    itemTextColor: '#94a3b8',
+                                    symbolSize: 10,
+                                    symbolShape: 'circle',
+                                },
+                            ]}
+                            enableSlices="x"
+                            sliceTooltip={({ slice }) => {
+                                if (!slice.points.length) return null;
+                                return (
+                                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{String(slice.points[0].data.x)}</div>
+                                        {slice.points.map(p => (
+                                            <div key={p.id} style={{ color: String(p.color) }}>
+                                                {p.seriesId}: {Number(p.data.y)}
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            }}
+                        />
+                    </div>
                 </div>
             ),
         },

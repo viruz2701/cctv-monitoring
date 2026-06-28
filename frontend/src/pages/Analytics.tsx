@@ -3,11 +3,9 @@ import { Card, DataGrid, Badge, SkeletonStatsCard, SkeletonChart, SkeletonTable 
 import { api, Prediction } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
-import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts';
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsivePie } from '@nivo/pie';
+import { ResponsiveLine } from '@nivo/line';
 import { Activity, Clock, TrendingUp, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const mtbfTrendData = [
@@ -23,11 +21,19 @@ const mttrTrendData = [
 ];
 
 const failureByTypeData = [
-  { name: 'Камеры', value: 45, color: '#3b82f6' },
-  { name: 'NVR', value: 25, color: '#f97316' },
-  { name: 'Коммутаторы', value: 15, color: '#22c55e' },
-  { name: 'Другое', value: 15, color: '#a855f7' },
+  { id: 'Камеры', label: 'Камеры', value: 45, color: '#3b82f6' },
+  { id: 'NVR', label: 'NVR', value: 25, color: '#f97316' },
+  { id: 'Коммутаторы', label: 'Коммутаторы', value: 15, color: '#22c55e' },
+  { id: 'Другое', label: 'Другое', value: 15, color: '#a855f7' },
 ];
+
+const nivoTheme = {
+  axis: {
+    ticks: { text: { fontSize: 12, fill: '#94a3b8' } },
+    domain: { line: { stroke: '#e2e8f0', strokeWidth: 1 } },
+  },
+  grid: { line: { stroke: '#e2e8f0', strokeDasharray: '3 3', strokeWidth: 1 } },
+};
 
 export function Analytics() {
   const { t } = useTranslation();
@@ -168,21 +174,43 @@ export function Analytics() {
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
               MTBF Trend (Mean Time Between Failures)
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={mtbfTrendData}>
-                <defs>
-                  <linearGradient id="mtbfGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} unit=" ч" />
-                <Tooltip />
-                <Area type="monotone" dataKey="mtbf" stroke="#3b82f6" fill="url(#mtbfGradient)" strokeWidth={2} dot={{ r: 4 }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="h-[250px]">
+              <ResponsiveLine
+                data={[{
+                  id: 'mtbf',
+                  data: mtbfTrendData.map(d => ({ x: d.month, y: d.mtbf })),
+                }]}
+                margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
+                xScale={{ type: 'point' }}
+                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                curve="monotoneX"
+                lineWidth={2}
+                colors={['#3b82f6']}
+                enablePoints={true}
+                pointSize={6}
+                pointColor="#3b82f6"
+                enableArea={true}
+                areaOpacity={0.15}
+                enableGridX={false}
+                axisBottom={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                }}
+                axisLeft={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  format: (v: number) => `${v} ч`,
+                }}
+                theme={nivoTheme}
+                enableSlices="x"
+                sliceTooltip={({ slice }) => {
+                  if (!slice.points.length) return null;
+                  return (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} ч
+                    </div>
+                  );
+                }}
+              />
+            </div>
           </div>
         </Card>
 
@@ -192,21 +220,43 @@ export function Analytics() {
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
               MTTR Trend (Mean Time To Repair)
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={mttrTrendData}>
-                <defs>
-                  <linearGradient id="mttrGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} unit=" мин" reversed />
-                <Tooltip />
-                <Area type="monotone" dataKey="mttr" stroke="#22c55e" fill="url(#mttrGradient)" strokeWidth={2} dot={{ r: 4 }} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="h-[250px]">
+              <ResponsiveLine
+                data={[{
+                  id: 'mttr',
+                  data: mttrTrendData.map(d => ({ x: d.month, y: d.mttr })),
+                }]}
+                margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
+                xScale={{ type: 'point' }}
+                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                curve="monotoneX"
+                lineWidth={2}
+                colors={['#22c55e']}
+                enablePoints={true}
+                pointSize={6}
+                pointColor="#22c55e"
+                enableArea={true}
+                areaOpacity={0.15}
+                enableGridX={false}
+                axisBottom={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                }}
+                axisLeft={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  format: (v: number) => `${v} мин`,
+                }}
+                theme={nivoTheme}
+                enableSlices="x"
+                sliceTooltip={({ slice }) => {
+                  if (!slice.points.length) return null;
+                  return (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} мин
+                    </div>
+                  );
+                }}
+              />
+            </div>
           </div>
         </Card>
 
@@ -216,25 +266,28 @@ export function Analytics() {
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
               Распределение отказов по типу
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={failureByTypeData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={4}
-                  dataKey="value"
-                  label={({ name, percent }: any) => `${name} ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                >
-                  {failureByTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="h-[250px]">
+              <ResponsivePie
+                data={failureByTypeData}
+                margin={{ top: 20, right: 40, bottom: 20, left: 40 }}
+                innerRadius={0.55}
+                padAngle={4}
+                cornerRadius={4}
+                colors={{ datum: 'data.color' }}
+                arcLinkLabelsSkipAngle={10}
+                arcLinkLabelsTextColor="#64748b"
+                arcLinkLabelsThickness={1}
+                arcLinkLabelsColor={{ from: 'color' }}
+                arcLabelsSkipAngle={10}
+                arcLabelsTextColor="#ffffff"
+                theme={nivoTheme}
+                tooltip={({ datum }) => (
+                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                    <strong>{datum.label}</strong>: {datum.value} ({((datum.value / failureByTypeData.reduce((s, d) => s + d.value, 0)) * 100).toFixed(0)}%)
+                  </div>
+                )}
+              />
+            </div>
           </div>
         </Card>
 
@@ -244,19 +297,35 @@ export function Analytics() {
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
               Прогноз отказов по вероятности
             </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={[
-                { name: 'Высокий (>70%)', count: predictions.filter(p => p.failure_probability > 70).length, fill: '#ef4444' },
-                { name: 'Средний (30-70%)', count: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 70).length, fill: '#f97316' },
-                { name: 'Низкий (<30%)', count: predictions.filter(p => p.failure_probability <= 30).length, fill: '#22c55e' },
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="h-[250px]">
+              <ResponsiveBar
+                data={[
+                  { name: 'Высокий (>70%)', count: predictions.filter(p => p.failure_probability > 70).length },
+                  { name: 'Средний (30-70%)', count: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 70).length },
+                  { name: 'Низкий (<30%)', count: predictions.filter(p => p.failure_probability <= 30).length },
+                ]}
+                keys={['count']}
+                indexBy="name"
+                margin={{ top: 10, right: 20, bottom: 50, left: 50 }}
+                padding={0.3}
+                colors={['#ef4444', '#f97316', '#22c55e']}
+                colorBy="indexValue"
+                borderRadius={4}
+                axisBottom={{
+                  tickSize: 5, tickPadding: 5, tickRotation: -15,
+                }}
+                axisLeft={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                }}
+                theme={nivoTheme}
+                enableLabel={false}
+                tooltip={({ data: d }) => (
+                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                    {String(d.name)}: {Number(d.count)}
+                  </div>
+                )}
+              />
+            </div>
           </div>
         </Card>
       </div>

@@ -5,12 +5,10 @@ import { Card, DataGrid, Badge, Button, StatsCard } from '../components/ui';
 import { useNavigate } from 'react-router-dom';
 import {
   Clock, AlertTriangle, CheckCircle, Filter,
-  BarChart3, TrendingUp, Calendar, RefreshCw,
+  BarChart3, PieChart, TrendingUp, Calendar, RefreshCw,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
-} from 'recharts';
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsivePie } from '@nivo/pie';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -115,7 +113,8 @@ export function WOAging() {
   }));
 
   const pieData = buckets.filter(b => b.count > 0).map(b => ({
-    name: b.label,
+    id: b.label,
+    label: b.label,
     value: b.count,
     color: b.color,
   }));
@@ -190,6 +189,14 @@ export function WOAging() {
       ),
     },
   ];
+
+  const nivoTheme = {
+    axis: {
+      ticks: { text: { fontSize: 11, fill: '#94a3b8' } },
+      domain: { line: { stroke: '#f1f5f9', strokeWidth: 1 } },
+    },
+    grid: { line: { stroke: '#f1f5f9', strokeDasharray: '3 3', strokeWidth: 1 } },
+  };
 
   return (
     <div className="space-y-6">
@@ -270,22 +277,29 @@ export function WOAging() {
             </h3>
             {chartData.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      formatter={(value: any, name: any) => [value, t('work_orders') || 'Нарядов']}
-                    />
-                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {chartData.map((entry, idx) => (
-                        <Cell key={idx} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <ResponsiveBar
+                  data={chartData}
+                  keys={['count']}
+                  indexBy="name"
+                  margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
+                  padding={0.3}
+                  colors={{ datum: 'data.fill' }}
+                  colorBy="indexValue"
+                  borderRadius={4}
+                  axisBottom={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  }}
+                  axisLeft={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  }}
+                  theme={nivoTheme}
+                  enableLabel={false}
+                  tooltip={({ data: d }) => (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      <strong>{String(d.name)}</strong>: {Number(d.count)} {t('work_orders') || 'Нарядов'}
+                    </div>
+                  )}
+                />
               </div>
             ) : (
               <div className="flex items-center justify-center h-64 text-sm text-slate-400">
@@ -304,31 +318,38 @@ export function WOAging() {
             </h3>
             {pieData.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, idx) => (
-                        <Cell key={idx} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                      formatter={(value: any, name: any) => [value, t('work_orders') || 'Нарядов']}
-                    />
-                    <Legend
-                      wrapperStyle={{ fontSize: 11 }}
-                      formatter={(value: string) => <span className="text-slate-600">{value}</span>}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ResponsivePie
+                  data={pieData}
+                  margin={{ top: 20, right: 40, bottom: 20, left: 40 }}
+                  innerRadius={0.45}
+                  padAngle={2}
+                  cornerRadius={4}
+                  colors={{ datum: 'data.color' }}
+                  arcLinkLabelsSkipAngle={10}
+                  arcLinkLabelsTextColor="#64748b"
+                  arcLinkLabelsThickness={1}
+                  arcLinkLabelsColor={{ from: 'color' }}
+                  arcLabelsSkipAngle={10}
+                  arcLabelsTextColor="#ffffff"
+                  theme={nivoTheme}
+                  tooltip={({ datum }) => (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      <strong>{datum.label}</strong>: {datum.value} {t('work_orders') || 'Нарядов'}
+                    </div>
+                  )}
+                  legends={[
+                    {
+                      anchor: 'bottom',
+                      direction: 'row',
+                      translateY: 36,
+                      itemWidth: 60,
+                      itemHeight: 14,
+                      itemTextColor: '#94a3b8',
+                      symbolSize: 10,
+                      symbolShape: 'circle',
+                    },
+                  ]}
+                />
               </div>
             ) : (
               <div className="flex items-center justify-center h-64 text-sm text-slate-400">

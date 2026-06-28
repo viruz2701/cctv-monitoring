@@ -9,11 +9,7 @@ import {
   BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   RefreshCw, Loader2, Zap, Clock,
 } from 'lucide-react';
-import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { ResponsiveLine } from '@nivo/line';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -90,10 +86,6 @@ function formatValue(value: number, unit: string): string {
   return value.toFixed(1);
 }
 
-// ── Chart Colors ─────────────────────────────────────────────────────
-
-const CHART_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#6366f1'];
-
 // ── Metric Card ──────────────────────────────────────────────────────
 
 function MetricCard({ kind, readings, unit }: { kind: string; readings: MeterReading[]; unit: string }) {
@@ -153,8 +145,8 @@ function MetricCard({ kind, readings, unit }: { kind: string; readings: MeterRea
 function TimeSeriesChart({ kind, readings, unit }: { kind: string; readings: MeterReading[]; unit: string }) {
   const cfg = METER_CONFIG[kind] || DEFAULT_METER_CONFIG;
   const data = readings.map((r) => ({
-    time: formatTime(r.time),
-    value: r.value,
+    x: formatTime(r.time),
+    y: r.value,
   }));
 
   if (data.length === 0) {
@@ -167,32 +159,42 @@ function TimeSeriesChart({ kind, readings, unit }: { kind: string; readings: Met
 
   return (
     <div className="h-48">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-          <defs>
-            <linearGradient id={`grad-${kind}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={cfg.color} stopOpacity={0.2} />
-              <stop offset="95%" stopColor={cfg.color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-          <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-          <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-            formatter={(value: any) => [formatValue(Number(value) || 0, unit), cfg.label]}
-          />
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke={cfg.color}
-            strokeWidth={2}
-            fill={`url(#grad-${kind})`}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+      <ResponsiveLine
+        data={[{ id: kind, data }]}
+        margin={{ top: 10, right: 10, bottom: 25, left: 40 }}
+        xScale={{ type: 'point' }}
+        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+        curve="monotoneX"
+        lineWidth={2}
+        colors={[cfg.color]}
+        enablePoints={false}
+        enableArea={true}
+        areaOpacity={0.12}
+        enableGridX={false}
+        axisBottom={{
+          tickSize: 5, tickPadding: 5, tickRotation: 0,
+        }}
+        axisLeft={{
+          tickSize: 5, tickPadding: 5, tickRotation: 0,
+        }}
+        theme={{
+          axis: {
+            ticks: { text: { fontSize: 10, fill: '#94a3b8' } },
+            domain: { line: { stroke: '#f1f5f9', strokeWidth: 1 } },
+          },
+          grid: { line: { stroke: '#f1f5f9', strokeDasharray: '3 3', strokeWidth: 1 } },
+        }}
+        enableSlices="x"
+        sliceTooltip={({ slice }) => {
+          if (!slice.points.length) return null;
+          const point = slice.points[0];
+          return (
+            <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+              <strong>{String(point.data.x)}</strong>: {formatValue(Number(point.data.y), unit)}
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

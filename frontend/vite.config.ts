@@ -123,9 +123,9 @@ export default defineConfig({
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router') || id.includes('node_modules/react-hook-form')) {
             return 'vendor-react';
           }
-          // Charts & visualization
-          if (id.includes('node_modules/recharts') || id.includes('node_modules/chart')) {
-            return 'vendor-charts';
+          // Charts & visualization (Nivo — tree-shakeable, ~180KB)
+          if (id.includes('node_modules/@nivo') || id.includes('node_modules/chart')) {
+            return 'vendor-nivo';
           }
           // PDF generation
           if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {

@@ -27,11 +27,9 @@ import type {
   TopExpensiveDevice,
   VendorReliability,
 } from '../services/api';
-import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts';
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsiveLine } from '@nivo/line';
+import { ResponsivePie } from '@nivo/pie';
 import {
   AlertTriangle,
   TrendingUp,
@@ -74,6 +72,18 @@ function formatDate(dateStr: string): string {
 }
 
 const MONTH_NAMES = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+
+// ═══════════════════════════════════════════════════════════════════════
+// Nivo theme
+// ═══════════════════════════════════════════════════════════════════════
+
+const nivoTheme = {
+  axis: {
+    ticks: { text: { fontSize: 11, fill: '#94a3b8' } },
+    domain: { line: { stroke: '#e2e8f0', strokeWidth: 1 } },
+  },
+  grid: { line: { stroke: '#e2e8f0', strokeDasharray: '3 3', strokeWidth: 1 } },
+};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Sub-components
@@ -211,17 +221,47 @@ function TCOBarChart({ data }: { data: CostData[] }) {
   if (chartData.length === 0) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={chartData} barGap={2}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={50} />
-        <YAxis tick={{ fontSize: 11 }} unit="k" />
-        <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString()}k`, undefined]} />
-        <Legend />
-        <Bar dataKey="maintenance" name="Maintenance" fill="#3b82f6" radius={[2, 2, 0, 0]} stackId="a" />
-        <Bar dataKey="energy" name="Energy" fill="#f97316" radius={[2, 2, 0, 0]} stackId="a" />
-      </BarChart>
-    </ResponsiveContainer>
+    <div style={{ height: 280 }}>
+      <ResponsiveBar
+        data={chartData}
+        keys={['maintenance', 'energy']}
+        indexBy="name"
+        margin={{ top: 10, right: 20, bottom: 60, left: 50 }}
+        padding={0.3}
+        groupMode="stacked"
+        colors={['#3b82f6', '#f97316']}
+        colorBy="indexValue"
+        borderRadius={2}
+        axisBottom={{
+          tickSize: 5, tickPadding: 5, tickRotation: -20,
+          legend: undefined,
+        }}
+        axisLeft={{
+          tickSize: 5, tickPadding: 5, tickRotation: 0,
+          format: (v: number) => `${v}k`,
+        }}
+        theme={nivoTheme}
+        enableLabel={false}
+        legends={[
+          {
+            dataFrom: 'keys',
+            anchor: 'bottom',
+            direction: 'row',
+            translateY: 50,
+            itemWidth: 100,
+            itemHeight: 14,
+            itemTextColor: '#94a3b8',
+            symbolSize: 10,
+            symbolShape: 'square',
+          },
+        ]}
+        tooltip={({ data: d, id, value }) => (
+          <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+            <strong>{String(d.name)}</strong> — {String(id)}: ${Number(value).toLocaleString()}k
+          </div>
+        )}
+      />
+    </div>
   );
 }
 
@@ -233,29 +273,44 @@ function CostTrendChart({ data }: { data: CostTrend[] }) {
   if (data.length === 0) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <AreaChart data={data}>
-        <defs>
-          <linearGradient id="costTrendGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-        <YAxis tick={{ fontSize: 11 }} unit="$" />
-        <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString()}`, undefined]} />
-        <Area
-          type="monotone"
-          dataKey="total_cost"
-          stroke="#3b82f6"
-          fill="url(#costTrendGradient)"
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          name="Total Cost"
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div style={{ height: 280 }}>
+      <ResponsiveLine
+        data={[{
+          id: 'total_cost',
+          data: data.map(d => ({ x: d.month, y: d.total_cost })),
+        }]}
+        margin={{ top: 10, right: 20, bottom: 30, left: 60 }}
+        xScale={{ type: 'point' }}
+        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+        curve="monotoneX"
+        lineWidth={2}
+        colors={['#3b82f6']}
+        enablePoints={true}
+        pointSize={6}
+        pointColor="#3b82f6"
+        enableArea={true}
+        areaOpacity={0.15}
+        enableGridX={false}
+        axisBottom={{
+          tickSize: 5, tickPadding: 5, tickRotation: 0,
+        }}
+        axisLeft={{
+          tickSize: 5, tickPadding: 5, tickRotation: 0,
+          format: (v: number) => `$${v.toLocaleString()}`,
+        }}
+        theme={nivoTheme}
+        enableSlices="x"
+        sliceTooltip={({ slice }) => {
+          if (!slice.points.length) return null;
+          const point = slice.points[0];
+          return (
+            <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+              <strong>{String(point.data.x)}</strong>: ${Number(point.data.y).toLocaleString()}
+            </div>
+          );
+        }}
+      />
+    </div>
   );
 }
 
@@ -265,34 +320,37 @@ function CostTrendChart({ data }: { data: CostTrend[] }) {
 
 function RiskPieChart({ predictions }: { predictions: Prediction[] }) {
   const data = useMemo(() => [
-    { name: 'Высокий (>70%)', value: predictions.filter(p => p.failure_probability > 70).length, color: '#ef4444' },
-    { name: 'Средний (50-70%)', value: predictions.filter(p => p.failure_probability > 50 && p.failure_probability <= 70).length, color: '#f97316' },
-    { name: 'Умеренный (30-50%)', value: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 50).length, color: '#eab308' },
-    { name: 'Низкий (<30%)', value: predictions.filter(p => p.failure_probability <= 30).length, color: '#22c55e' },
+    { id: 'Высокий (>70%)', label: 'Высокий (>70%)', value: predictions.filter(p => p.failure_probability > 70).length, color: '#ef4444' },
+    { id: 'Средний (50-70%)', label: 'Средний (50-70%)', value: predictions.filter(p => p.failure_probability > 50 && p.failure_probability <= 70).length, color: '#f97316' },
+    { id: 'Умеренный (30-50%)', label: 'Умеренный (30-50%)', value: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 50).length, color: '#eab308' },
+    { id: 'Низкий (<30%)', label: 'Низкий (<30%)', value: predictions.filter(p => p.failure_probability <= 30).length, color: '#22c55e' },
   ].filter(d => d.value > 0), [predictions]);
 
   if (data.length === 0) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          innerRadius={50}
-          outerRadius={90}
-          paddingAngle={3}
-          dataKey="value"
-          label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
-        >
-          {data.map((entry, idx) => (
-            <Cell key={`cell-${idx}`} fill={entry.color} />
-          ))}
-        </Pie>
-        <Tooltip />
-      </PieChart>
-    </ResponsiveContainer>
+    <div style={{ height: 220 }}>
+      <ResponsivePie
+        data={data}
+        margin={{ top: 10, right: 30, bottom: 10, left: 30 }}
+        innerRadius={0.5}
+        padAngle={3}
+        cornerRadius={4}
+        colors={{ datum: 'data.color' }}
+        arcLinkLabelsSkipAngle={15}
+        arcLinkLabelsTextColor="#64748b"
+        arcLinkLabelsThickness={1}
+        arcLinkLabelsColor={{ from: 'color' }}
+        arcLabelsSkipAngle={15}
+        arcLabelsTextColor="#ffffff"
+        theme={nivoTheme}
+        tooltip={({ datum }) => (
+          <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+            <strong>{datum.label}</strong>: {datum.value} ({((datum.value / data.reduce((s, d) => s + d.value, 0)) * 100).toFixed(0)}%)
+          </div>
+        )}
+      />
+    </div>
   );
 }
 

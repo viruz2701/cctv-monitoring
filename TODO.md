@@ -523,25 +523,23 @@ Effort: 4d | Status: [ ]
 
 ## 🚀 P1-PERF-BUNDLE — Bundle Size Optimization (2026-07)
 
-### Текущее состояние (vite build, 2026-06-28, после Quick Wins commit b01ef28)
-| Чанк | Размер | gzip | Действие |
-|------|--------|------|----------|
-| `vendor-charts` (Recharts) | 429.76 KB | 121.37 KB | → Nivo (-250 KB) |
-| `vendor-calendar` (FullCalendar) | 328.24 KB | 95.76 KB | → Schedule-X (-248 KB) |
-| `vendor-xlsx` (SheetJS) | 424.85 KB | 141.54 KB | → ExcelJS (-75 KB) |
-| `vendor-pdf` (jsPDF) | 557.25 KB | 162.56 KB | dynamic import |
-| `vendor-sentry` | 249.77 KB | 81.98 KB | OK |
-| `vendor-other` | 368.16 KB | 119.58 KB | tree-shaking |
-| `index` (main) | 612.32 KB | 161.65 KB | lazy pages |
-| **Precache total** | **4669.56 KB** | — | **Target: <2MB** |
+### 📊 Текущее состояние (vite build, 2026-06-28, после Schedule-X migration commit 8eccc81)
+| Чанк | Размер | gzip | Статус | Действие |
+|------|--------|------|--------|----------|
+| `vendor-schedule-x` | 167.82 KB | 41.94 KB | ✅ | ~160KB saved vs FullCalendar |
+| `vendor-charts` (Recharts) | 440.66 KB | 124.67 KB | 🔴 | → Nivo (-250 KB) |
+| `vendor-xlsx` (SheetJS) | 424.85 KB | 141.54 KB | 🔴 | → ExcelJS (-75 KB) |
+| `vendor-pdf` (jsPDF) | 558.05 KB | 162.75 KB | ✅ | lazy-loaded |
+| `vendor-other` | 397.58 KB | 130.43 KB | ⚠️ | tree-shaking |
+| `index` (main) | 612.25 KB | 161.69 KB | ⚠️ | lazy pages |
+| **Precache total** | **4548.48 KB** | — | **Target: <2MB** |
 
-### P1-PERF-BUNDLE.1: Schedule-X Migration
-- **Файлы**: FullCalendarWrapper.tsx, WorkOrderCalendar.tsx, TechnicianCalendar.tsx, MaintenanceSchedules.tsx
-- **Текущий**: FullCalendar ~328KB + GPL license risk
-- **Цель**: Schedule-X ~80KB, MIT, dark mode, resource timeline
-- **Экономия**: -248 KB
-- **Сложность**: 7 дней
-- **Статус**: [ ]
+### P1-PERF-BUNDLE.1: Schedule-X Migration ✅ DONE (commit 8eccc81)
+- **Файлы**: ScheduleXWrapper.tsx, WorkOrderCalendar.tsx, TechnicianCalendar.tsx, MaintenanceSchedules.tsx
+- **До**: FullCalendar ~328KB (6 пакетов) + GPL license risk
+- **После**: Schedule-X ~168KB (включая preact), MIT, dark mode
+- **Экономия**: ~160 KB (gzip: 95.76→41.94 KB)
+- **Факт**: 9 файлов изменено, +508/-723 строки
 
 ### P1-PERF-BUNDLE.2: Nivo Migration
 - **Файлы**: SLAHeatmap.tsx, SLATrendChart.tsx, Analytics.tsx, PredictiveMaintenance.tsx

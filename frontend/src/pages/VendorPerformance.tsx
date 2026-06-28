@@ -6,11 +6,8 @@ import {
   Building2, TrendingUp, TrendingDown, RefreshCw,
   BarChart3, Star, Truck, Clock, DollarSign,
 } from 'lucide-react';
-import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from 'recharts';
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsivePie } from '@nivo/pie';
 
 interface Vendor {
   id: string;
@@ -27,6 +24,14 @@ interface Vendor {
 }
 
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+
+const nivoTheme = {
+  axis: {
+    ticks: { text: { fontSize: 10, fill: '#94a3b8' } },
+    domain: { line: { stroke: '#f1f5f9', strokeWidth: 1 } },
+  },
+  grid: { line: { stroke: '#f1f5f9', strokeDasharray: '3 3', strokeWidth: 1 } },
+};
 
 export function VendorPerformance() {
   const { t } = useTranslation();
@@ -59,7 +64,8 @@ export function VendorPerformance() {
   }));
 
   const pieData = vendors.filter(v => (v.total_cost || 0) > 0).map(v => ({
-    name: v.name,
+    id: v.name,
+    label: v.name,
     value: v.total_cost || 0,
   }));
 
@@ -118,17 +124,43 @@ export function VendorPerformance() {
               {t('rating_vs_delivery') || 'Рейтинг и сроки доставки'}
             </h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="rating" name={t('rating') || 'Rating'} fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="delivery" name={t('delivery_days') || 'Delivery days'} fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <ResponsiveBar
+                data={barData}
+                keys={['rating', 'delivery']}
+                indexBy="name"
+                margin={{ top: 10, right: 20, bottom: 40, left: 50 }}
+                padding={0.3}
+                groupMode="grouped"
+                colors={['#f59e0b', '#3b82f6']}
+                colorBy="indexValue"
+                borderRadius={4}
+                axisBottom={{
+                  tickSize: 5, tickPadding: 5, tickRotation: -20,
+                }}
+                axisLeft={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                }}
+                theme={nivoTheme}
+                enableLabel={false}
+                legends={[
+                  {
+                    dataFrom: 'keys',
+                    anchor: 'bottom',
+                    direction: 'row',
+                    translateY: 36,
+                    itemWidth: 100,
+                    itemHeight: 14,
+                    itemTextColor: '#94a3b8',
+                    symbolSize: 10,
+                    symbolShape: 'square',
+                  },
+                ]}
+                tooltip={({ data: d, id, value }) => (
+                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                    <strong>{String(d.name)}</strong> — {String(id)}: {value}
+                  </div>
+                )}
+              />
             </div>
           </div>
         </Card>
@@ -140,19 +172,38 @@ export function VendorPerformance() {
               {t('cost_distribution') || 'Распределение затрат'}
             </h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={pieData.length > 0 ? pieData : [{ name: 'No data', value: 1 }]}
-                    cx="50%" cy="50%" innerRadius={50} outerRadius={80}
-                    dataKey="value" paddingAngle={2}>
-                    {pieData.map((_, idx) => (
-                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: any) => [`$${Number(v).toFixed(2)}`, 'Cost']} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
+              <ResponsivePie
+                data={pieData.length > 0 ? pieData : [{ id: 'No data', label: 'No data', value: 1 }]}
+                margin={{ top: 20, right: 40, bottom: 20, left: 40 }}
+                innerRadius={0.45}
+                padAngle={2}
+                cornerRadius={4}
+                colors={PIE_COLORS}
+                arcLinkLabelsSkipAngle={10}
+                arcLinkLabelsTextColor="#64748b"
+                arcLinkLabelsThickness={1}
+                arcLinkLabelsColor={{ from: 'color' }}
+                arcLabelsSkipAngle={10}
+                arcLabelsTextColor="#ffffff"
+                theme={nivoTheme}
+                tooltip={({ datum }) => (
+                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                    <strong>{datum.label}</strong>: ${Number(datum.value).toFixed(2)}
+                  </div>
+                )}
+                legends={[
+                  {
+                    anchor: 'bottom',
+                    direction: 'row',
+                    translateY: 36,
+                    itemWidth: 80,
+                    itemHeight: 14,
+                    itemTextColor: '#94a3b8',
+                    symbolSize: 10,
+                    symbolShape: 'circle',
+                  },
+                ]}
+              />
             </div>
           </div>
         </Card>

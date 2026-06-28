@@ -6,10 +6,7 @@ import {
   Users, TrendingUp, TrendingDown, Calendar,
   RefreshCw, BarChart3, Grid3X3, AlertTriangle,
 } from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, Legend,
-} from 'recharts';
+import { ResponsiveBar } from '@nivo/bar';
 
 interface TechnicianWorkload {
   user_id: string;
@@ -20,7 +17,7 @@ interface TechnicianWorkload {
   base_location: string;
 }
 
-const WORKLOAD_COLORS = ['#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#f59e0b', '#f97316', '#ef4444', '#ec4899'];
+const WORKLOAD_COLORS = ['#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#f59e0b', '#f97316', '#ef4444', '#ec4898'];
 
 const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -47,14 +44,11 @@ export function WorkloadAnalytics() {
   const overloaded = data.filter(t => t.current_workload >= t.max_workload).length;
   const available = data.filter(t => t.current_workload < t.max_workload * 0.5).length;
 
-  // Bar chart data
+  // Bar chart data for Nivo
   const barData = data.map(t => ({
     name: t.user_name,
     current: t.current_workload,
     max: t.max_workload,
-    fill: t.current_workload >= t.max_workload ? '#ef4444'
-      : t.current_workload >= t.max_workload * 0.8 ? '#f59e0b'
-      : '#10b981',
   }));
 
   // Heatmap data (simulated: day_of_week × tech)
@@ -116,6 +110,14 @@ export function WorkloadAnalytics() {
     },
   ];
 
+  const nivoTheme = {
+    axis: {
+      ticks: { text: { fontSize: 11, fill: '#94a3b8' } },
+      domain: { line: { stroke: '#e2e8f0', strokeWidth: 1 } },
+    },
+    grid: { line: { stroke: '#f1f5f9', strokeDasharray: '3 3', strokeWidth: 1 } },
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -150,21 +152,43 @@ export function WorkloadAnalytics() {
           </h3>
           {barData.length > 0 ? (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ left: -15 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                  <Legend />
-                  <Bar dataKey="current" name={t('current') || 'Текущая'} radius={[4, 4, 0, 0]}>
-                    {barData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="max" name={t('capacity') || 'Мощность'} fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <ResponsiveBar
+                data={barData}
+                keys={['current', 'max']}
+                indexBy="name"
+                margin={{ top: 10, right: 20, bottom: 40, left: 50 }}
+                padding={0.3}
+                groupMode="grouped"
+                colors={['#10b981', '#e2e8f0']}
+                colorBy="indexValue"
+                borderRadius={4}
+                axisBottom={{
+                  tickSize: 5, tickPadding: 5, tickRotation: -20,
+                }}
+                axisLeft={{
+                  tickSize: 5, tickPadding: 5, tickRotation: 0,
+                }}
+                theme={nivoTheme}
+                enableLabel={false}
+                legends={[
+                  {
+                    dataFrom: 'keys',
+                    anchor: 'bottom',
+                    direction: 'row',
+                    translateY: 36,
+                    itemWidth: 80,
+                    itemHeight: 14,
+                    itemTextColor: '#94a3b8',
+                    symbolSize: 10,
+                    symbolShape: 'square',
+                  },
+                ]}
+                tooltip={({ data: d, id, value }) => (
+                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                    <strong>{String(d.name)}</strong> — {String(id)}: {value}
+                  </div>
+                )}
+              />
             </div>
           ) : (
             <div className="flex items-center justify-center h-72 text-sm text-slate-400">{t('no_data') || 'Нет данных'}</div>
