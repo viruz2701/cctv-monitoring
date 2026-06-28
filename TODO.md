@@ -615,13 +615,13 @@ Effort: 4d | Status: [ ]
 | 22 | Error boundaries per route | Layout.tsx | ✅ |
 | 23 | ESLint exhaustive-deps rule | .eslintrc | ✅ |
 
-📊 Success Metrics (обновлено 2026-06-28 после Code Review)
+📊 Success Metrics (обновлено 2026-06-28 после P1-PERF-BUNDLE)
 Метрика
 Текущее
 Цель Q4 2026
 Статус
 Bundle Size (precache)
-5.02 MB
+5.02 MB (ExcelJS 930KB добавлен)
 <2 MB
 🔴 -3.02 MB over
 Bundle gzip
@@ -727,6 +727,12 @@ CI/CD: .github/workflows/
 Regional Compliance: docs/compliance/regional-profiles.md (создать)
 Maintenance Regulations: docs/compliance/maintenance-regulations.md (создать)
 Security Policy: docs/iso27001/security-policy.md
+2026-06-28 — P1-PERF-BUNDLE: Bundle Size Optimization
+✅ Quick Wins: lazy-load jsPDF, react-joyride, react-datepicker (commit b01ef28)
+✅ P1-PERF-BUNDLE.1: FullCalendar(~328KB) → Schedule-X(~168KB) (commit 8eccc81)
+✅ P1-PERF-BUNDLE.2: Recharts(~440KB) → Nivo(~387KB) (commit 5f78b99)
+✅ P1-PERF-BUNDLE.3: xlsx/SheetJS(425KB) → ExcelJS(930KB, MIT) (commit 45cdd63)
+✅ 9 vendor chunks оптимизированы, license risk снят (GPL+Pro→MIT)
 📝 История изменений
 2026-06-28 — CIS Templates + API Routes
 ✅ P1-ARCH.2: API Routes Organization (router.go, middleware package)
