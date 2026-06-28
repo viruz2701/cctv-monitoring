@@ -36,6 +36,16 @@ import (
 //   - Приказ ОАЦ № 66 п. 7.18 — Идентификация узлов
 //   - ISO 27001 A.12.4 — Audit trail
 
+// ────────────────────────────────────────────────────────────────────────────
+// Region constants — ValidRegions update (P2-CR.3: +CN, P2-CR.4: +US)
+// ────────────────────────────────────────────────────────────────────────────
+
+// init обновляет ValidRegions при загрузке пакета.
+func init() {
+	ValidRegions = []string{RegionBY, RegionEU, RegionINTL, RegionRU, RegionCN, RegionUS}
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // BYProfile implements ComplianceProfile для Республики Беларусь.
 type BYProfile struct {
 	*BaseProfile
@@ -347,6 +357,115 @@ func (p *RUProfile) Session() SessionPolicy {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CN Profile — Китай (SM2/SM3/SM4, MLPS 2.0, Cybersecurity Law)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - GM/T 0002-2012 (SM4) — Block cipher
+//   - GM/T 0003-2012 (SM2) — Public key cryptography
+//   - GM/T 0004-2012 (SM3) — Hash function
+//   - MLPS 2.0 (GB/T 22239-2019) — Multi-Level Protection Scheme
+//   - China Cybersecurity Law (网络安全法) — Data localization
+//   - PIPL (个人信息保护法) — Personal Information Protection
+//   - DSL (数据安全法) — Data Security Law
+//   - ISO 27001 A.5.1 — Information security policies
+
+// CNProfile implements ComplianceProfile для Китая.
+type CNProfile struct {
+	*BaseProfile
+}
+
+// NewCNProfile создаёт CN Compliance Profile.
+func NewCNProfile() *CNProfile {
+	return &CNProfile{
+		BaseProfile: NewBaseProfile(RegionCN,
+			"SM (Китайская Народная Республика)",
+			"Профиль соответствия для КНР. SM2/SM3/SM4, MLPS 2.0, Cybersecurity Law, PIPL.",
+		),
+	}
+}
+
+func (p *CNProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoSM4, // SM4 (GM/T 0002-2012)
+		KeySize:       128,       // SM4 128-bit ключ
+		AADRequired:   true,
+		TLSMinVersion: "1.3",
+	}
+}
+
+func (p *CNProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSM3, // SM3 (GM/T 0004-2012)
+		SaltRequired:   true,
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *CNProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureSM2, // SM2 (GM/T 0003-2012)
+		Curve:       "sm2p256v1",
+		HashForSign: HashSM3,
+	}
+}
+
+func (p *CNProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              10, // MLPS 2.0: минимум 10 символов
+		RequireMFA:             true,
+		MFATypes:               []MFAType{MFATOTP, MFASMS},
+		MaxAgeDays:             90, // Ротация 90 дней (MLPS 2.0)
+		HistoryCount:           5,
+		RequireComplexity:      true,
+		LockoutThreshold:       5,
+		LockoutDurationMinutes: 15,
+	}
+}
+
+func (p *CNProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionCN},
+		CrossBorderTransferAllowed: false, // Cybersecurity Law: data localization
+		ColdStorageRegion:          RegionCN,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true,
+	}
+}
+
+func (p *CNProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       365, // 1 год (MLPS 2.0 Level 3)
+		EventDataDays:      180, // 6 месяцев
+		VideoDataDays:      90,  // 90 дней (MLPS 2.0 для video surveillance)
+		LegalHoldSupported: true,
+		AutoDeleteEnabled:  false, // Ручное удаление (PIPL)
+	}
+}
+
+func (p *CNProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true,
+		ChainHashPrev:   true,
+		RetentionYears:  1, // 1 год (MLPS 2.0)
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *CNProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       30, // 30 мин бездействия (MLPS 2.0)
+		MaxSessionHours:          12, // 12 часов
+		MaxConcurrentSessions:    2,  // 2 сессии (MLPS 2.0)
+		FailedLoginLockout:       5,
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // INTL Profile — International (ISO 27001, ISO 27019, IEC 62443)
 // ═══════════════════════════════════════════════════════════════════════════
 //
@@ -474,6 +593,7 @@ func RegisterBaselineProfiles(logger *slog.Logger) *ProfileRegistry {
 		WithProfile(NewBYProfile()),
 		WithProfile(NewRUProfile()),
 		WithProfile(NewEUProfile()),
+		WithProfile(NewCNProfile()),
 		WithProfile(NewINTLProfile()),
 	)
 
