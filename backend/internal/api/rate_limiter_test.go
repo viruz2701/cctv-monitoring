@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -176,5 +178,88 @@ func TestExtractClientIP(t *testing.T) {
 			_ = tt.headers
 			_ = tt.remote
 		})
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P1-PERF.5: Performance Benchmarks — 10k ops/sec target
+// ═══════════════════════════════════════════════════════════════════════
+
+// BenchmarkRateLimiterSingleIP benchmarks rate limiter throughput for a single IP.
+// Target: >10,000 ops/sec with minimal allocation.
+func BenchmarkRateLimiterSingleIP(b *testing.B) {
+	rl := newRateLimiter(100000, time.Minute)
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			rl.allow("192.168.1.1")
+		}
+	})
+
+	rl.stop()
+}
+
+// BenchmarkRateLimiterManyIPs benchmarks rate limiter with many unique IPs.
+// Simulates real-world load with distributed clients.
+func BenchmarkRateLimiterManyIPs(b *testing.B) {
+	rl := newRateLimiter(100, time.Minute)
+	ips := make([]string, 1000)
+	for i := range ips {
+		ips[i] = fmt.Sprintf("10.0.0.%d", i%256)
+	}
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		idx := 0
+		for pb.Next() {
+			rl.allow(ips[idx%len(ips)])
+			idx++
+		}
+	})
+
+	rl.stop()
+}
+
+// BenchmarkRateLimiterHighContention benchmarks rate limiter under high contention.
+// Single IP, many goroutines — worst case for mutex.
+func BenchmarkRateLimiterHighContention(b *testing.B) {
+	rl := newRateLimiter(100000, time.Minute)
+	b.ResetTimer()
+
+	b.SetParallelism(100) // 100 goroutines on single IP
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			rl.allow("10.0.0.1")
+		}
+	})
+
+	rl.stop()
+}
+
+// BenchmarkRateLimiterRejected benchmarks rate limiter when limit is exceeded.
+func BenchmarkRateLimiterRejected(b *testing.B) {
+	rl := newRateLimiter(1, time.Minute) // limit 1 request per minute
+	rl.allow("192.168.1.1")              // consume the only allowed request
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			rl.allow("192.168.1.1")
+		}
+	})
+
+	rl.stop()
+}
+
+// BenchmarkExtractClientIP benchmarks IP extraction with various headers.
+func BenchmarkExtractClientIP(b *testing.B) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")
+	req.RemoteAddr = "192.168.1.1:54321"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		extractClientIP(req)
 	}
 }
