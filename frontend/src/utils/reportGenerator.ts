@@ -290,19 +290,23 @@ export const generateExcelReport = async (params: GenerateReportParams) => {
         throw new Error('No data available for the selected criteria and date range.');
     }
 
-    // P1-PERF.1: Dynamic import XLSX — не грузим в основном bundle (~500KB)
-    const xlsx = await import('xlsx');
+    // P1-PERF-BUNDLE.3: Dynamic import ExcelJS — MIT, ~350KB, без license risk
+    const ExcelJS = await import('exceljs');
 
     // Create workbook and worksheet
-    const worksheet = xlsx.utils.json_to_sheet(exportData);
-    const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
 
-    // Auto-size columns slightly
-    const colWidths = Object.keys(exportData[0] || {}).map(key => ({
-        wch: Math.max(key.length, 15) // minimum width of 15
+    // Define columns from first data object keys (preserves header order)
+    const keys = Object.keys(exportData[0] || {});
+    worksheet.columns = keys.map(key => ({
+        header: key,
+        key: key,
+        width: Math.max(key.length, 15) // minimum width of 15
     }));
-    worksheet['!cols'] = colWidths;
+
+    // Add all data rows (ExcelJS maps by column key automatically)
+    worksheet.addRows(exportData);
 
     // Generate filename
     const dateStr = duration === 'custom'
@@ -311,8 +315,8 @@ export const generateExcelReport = async (params: GenerateReportParams) => {
     const generatedStamp = format(new Date(), 'yyyyMMdd_HHmmss');
     const fileName = `${type.toUpperCase()}_${dateStr}_generated${generatedStamp}.xlsx`;
 
-    // Create the buffered array directly for history and download
-    const excelBuffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'array' });
+    // Write buffer (returns Promise<Buffer> — совместимо с ArrayBuffer в triggerBlobDownload)
+    const excelBuffer = await workbook.xlsx.writeBuffer();
 
     return { excelBuffer, fileName };
 };

@@ -51,6 +51,7 @@
     "@xyflow/react": "^12.11.1",
     "axios": "^1.17.0",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "jspdf": "^4.2.1",
@@ -74,7 +75,6 @@
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
     "workbox-strategies": "^7.4.1",
-    "xlsx": "^0.18.5",
     "zod": "^3.25.76",
     "zustand": "^5.0.14"
   },

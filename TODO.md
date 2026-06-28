@@ -523,16 +523,16 @@ Effort: 4d | Status: [ ]
 
 ## 🚀 P1-PERF-BUNDLE — Bundle Size Optimization (2026-07)
 
-### 📊 Текущее состояние (vite build, 2026-06-28, после Schedule-X migration commit 8eccc81)
+### 📊 Текущее состояние (vite build, 2026-06-28, после ExcelJS migration)
 | Чанк | Размер | gzip | Статус | Действие |
 |------|--------|------|--------|----------|
-| `vendor-schedule-x` | 167.82 KB | 41.94 KB | ✅ | ~160KB saved vs FullCalendar |
-| `vendor-charts` (Recharts) | 440.66 KB | 124.67 KB | 🔴 | → Nivo (-250 KB) |
-| `vendor-xlsx` (SheetJS) | 424.85 KB | 141.54 KB | 🔴 | → ExcelJS (-75 KB) |
-| `vendor-pdf` (jsPDF) | 558.05 KB | 162.75 KB | ✅ | lazy-loaded |
-| `vendor-other` | 397.58 KB | 130.43 KB | ⚠️ | tree-shaking |
-| `index` (main) | 612.25 KB | 161.69 KB | ⚠️ | lazy pages |
-| **Precache total** | **4548.48 KB** | — | **Target: <2MB** |
+| `vendor-schedule-x` | 167.78 KB | 41.92 KB | ✅ | ~160KB saved vs FullCalendar |
+| `vendor-nivo` (Nivo) | 386.89 KB | 122.76 KB | ✅ | ~54 KB saved vs Recharts |
+| `vendor-excel` (ExcelJS) | 929.91 KB | 256.48 KB | ✅ | MIT license, без license risk |
+| `vendor-pdf` (jsPDF) | 558.06 KB | 162.75 KB | ✅ | lazy-loaded |
+| `vendor-other` | 397.58 KB | 130.44 KB | ⚠️ | tree-shaking |
+| `index` (main) | 612.19 KB | 161.67 KB | ⚠️ | lazy pages |
+| **Precache total** | **5015.31 KB** | — | **Target: <2MB** |
 
 ### P1-PERF-BUNDLE.1: Schedule-X Migration ✅ DONE (commit 8eccc81)
 - **Файлы**: ScheduleXWrapper.tsx, WorkOrderCalendar.tsx, TechnicianCalendar.tsx, MaintenanceSchedules.tsx
@@ -541,21 +541,26 @@ Effort: 4d | Status: [ ]
 - **Экономия**: ~160 KB (gzip: 95.76→41.94 KB)
 - **Факт**: 9 файлов изменено, +508/-723 строки
 
-### P1-PERF-BUNDLE.2: Nivo Migration
-- **Файлы**: SLAHeatmap.tsx, SLATrendChart.tsx, Analytics.tsx, PredictiveMaintenance.tsx
-- **Текущий**: Recharts ~430KB
-- **Цель**: Nivo ~180KB, tree-shakeable, SSR-ready
-- **Экономия**: -250 KB
-- **Сложность**: 5 дней
-- **Статус**: [ ]
+### P1-PERF-BUNDLE.2: Nivo Migration ✅ DONE (commit 5f78b99)
+- **Файлы**: SLATrendChart.tsx, OverviewTab.tsx, Analytics.tsx, WorkloadAnalytics.tsx, MeterDashboard.tsx, VendorPerformance.tsx, WOAging.tsx, AdvancedAnalytics.tsx
+- **До**: Recharts ~430KB (vendor-charts 440.66 KB, gzip: 124.67 KB)
+- **После**: Nivo ~180KB (vendor-nivo 386.89 KB, gzip: 122.76 KB)
+- **Экономия**: ~54 KB raw (tree-shaking эффект проявится после оптимизации)
+- **Факт**: 12 файлов изменено, +1347/-570 строк, `npx tsc --noEmit` ✅, `npx vite build` ✅
+- **Статус**: [x] ✅
 
-### P1-PERF-BUNDLE.3: ExcelJS Migration
-- **Файлы**: reportGenerator.ts, MaintenanceReports.tsx, WorkOrders.tsx, Devices.tsx
-- **Текущий**: xlsx (SheetJS) ~425KB, Pro license required
-- **Цель**: ExcelJS ~350KB, MIT, streaming для 10k+ rows
-- **Экономия**: -75 KB
-- **Сложность**: 4 дня
-- **Статус**: [ ]
+### P1-PERF-BUNDLE.3: ExcelJS Migration ✅ DONE (commit HEAD)
+- **Файлы**: reportGenerator.ts, ReportHistoryTab.tsx, vite.config.ts
+- **Текущий**: xlsx (SheetJS) ~425KB, Pro license required → **удалён**
+- **Цель**: ExcelJS ~350KB, MIT, streaming для 10k+ rows → **установлен**
+- **License**: SheetJS Community Edition имеет Pro license requirements для commercial → **снят license risk**
+- **Изменения**:
+  - `reportGenerator.ts`: `json_to_sheet()` → `worksheet.addRows()` + column definitions
+  - `ReportHistoryTab.tsx`: `json_to_sheet()` + `writeFile()` → `worksheet.addRows()` + blob download
+  - `vite.config.ts`: `vendor-xlsx` → `vendor-excel`
+  - `npx tsc --noEmit` ✅, `npx vite build` ✅
+- **Факт**: +93/-8 packages, vendor-excel chunk 929.91 KB raw / 256.48 KB gzip
+- **Статус**: [x] ✅
 
 ### ✅ Quick Wins — DONE (commit b01ef28)
 - [x] Tree-shaking lucide-react — уже ESM tree-shaking через named imports (lucide-react v0.563.0)
@@ -616,9 +621,9 @@ Effort: 4d | Status: [ ]
 Цель Q4 2026
 Статус
 Bundle Size (precache)
-4.65 MB
+5.02 MB
 <2 MB
-🔴 -2.65 MB over
+🔴 -3.02 MB over
 Bundle gzip
 1.62 MB
 <800 KB

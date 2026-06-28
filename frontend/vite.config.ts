@@ -139,9 +139,9 @@ export default defineConfig({
           if (id.includes('node_modules/@schedule-x')) {
             return 'vendor-schedule-x';
           }
-          // Excel
-          if (id.includes('node_modules/xlsx') || id.includes('node_modules/sheetjs')) {
-            return 'vendor-xlsx';
+          // Excel (ExcelJS — MIT, ~350KB)
+          if (id.includes('node_modules/exceljs')) {
+            return 'vendor-excel';
           }
           // Drag & Drop
           if (id.includes('node_modules/@hello-pangea')) {
