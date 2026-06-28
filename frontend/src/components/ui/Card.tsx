@@ -161,6 +161,9 @@ export function CardContent({
   return <div className={`text-slate-600 dark:text-slate-300 ${className}`}>{children}</div>;
 }
 
+// CardBody — алиас для CardContent (обратная совместимость)
+export const CardBody = CardContent;
+
 export function CardFooter({
   children,
   className = '',

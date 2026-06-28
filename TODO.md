@@ -76,7 +76,58 @@ Regional compliance проверен (если применимо)
 </details>
 
 🔴 P0 — CRITICAL (Q3 2026, до 2026-09-30)
-✅ **Все P0 задачи выполнены** (см. историю выше)
+### P0-LEGACY: ✅ Все выполнены (см. историю выше)
+
+### P0-NEW: Критические gaps (Q3 2026, EU CRA + Security)
+
+P0-N1: Supply Chain Security (SBOM + SSDF)
+Файлы: .github/workflows/sbom.yml, backend/sbom.json, frontend/sbom.json
+Проблема: EU CRA (Dec 2027) и US EO 14028 требуют SBOM при продаже ПО.
+Решение:
+- Auto-generate CycloneDX/SPDX SBOM при каждом CI build
+- Backend: cyclonedx-gomod для Go dependencies
+- Frontend: @cyclonedx/bom для npm dependencies
+- Mobile: SBOM для expo dependencies
+- VEX (Vulnerability Exploitability eXchange) statements
+Критерий приёмки:
+- SBOM генерируется автоматически в CI, CycloneDX + SPDX
+- SBOM endpoint /api/v1/sbom
+- VEX statements для known vulnerabilities
+Effort: 3d
+Status: [ ]
+
+P0-N2: Vulnerability Disclosure Program (VDP)
+Файлы: backend/.well-known/security.txt, SECURITY.md, frontend/src/pages/SecurityAdvisories.tsx
+Проблема: EU CRA требует Coordinated Vulnerability Disclosure.
+Решение:
+- /.well-known/security.txt (RFC 9116)
+- SECURITY.md в корне
+- Security advisories page (CVE tracking)
+- Coordinated Disclosure timeline (90 дней)
+- Bug bounty policy template
+Критерий приёмки:
+- security.txt на всех доменах
+- SECURITY.md в репозитории
+- Security advisories page с RSS
+- CNA application submitted
+Effort: 2d
+Status: [ ]
+
+P0-N3: Multi-Tier Incident Response Engine
+Файлы: backend/internal/compliance/incident_response.go, backend/internal/notifications/incident_router.go
+Проблема: Разные регионы требуют разные сроки reporting (India 6h, EU DORA 4h, Singapore 2h).
+Решение:
+- Incident classification engine (NIS2, DORA, CERT-In)
+- Multi-tier routing per region
+- Automated report generation per regulator format
+- Legal hold + evidence preservation
+- Escalation matrix per region
+Критерий приёмки:
+- 6h reporting для India CERT-In
+- 4h reporting для EU DORA
+- Automated classification + evidence preservation
+Effort: 5d
+Status: [ ]
 
 P0-CE: Regional Compliance Engine (Стратегический приоритет)
 P0-CE.1: ComplianceProfile Abstraction Layer ✅ DONE (2026-06-28)
@@ -134,6 +185,98 @@ P1-BACKEND.3: RCA Graph Auto-Update ✅ DONE
 P1-ARCH.1: Context Migration to Zustand ✅ DONE
 P1-ARCH.2: API Routes Organization ✅ DONE (router.go + middleware package)
 P1-ARCH.3: OpenAPI TypeScript Generation ✅ DONE
+
+### P1-NEW: High Value Features (Q4 2026)
+
+P1-N1: Tenant Quota Management
+Файлы: backend/internal/tenant/quota.go, backend/internal/db/migrations/043_tenant_quotas.sql
+Проблема: Нет ограничений на ресурсы tenant → risk of abuse в SaaS.
+Решение:
+- Quotas: devices, users, storage, API calls, work orders
+- Usage tracking (Redis real-time counters)
+- Soft limit (80% warning) + Hard limit (100% block)
+- Over-quota grace period (7 дней)
+- Admin UI для quota management + usage dashboard
+Критерий приёмки: Migration 043, quota enforcement на всех API, admin UI
+Effort: 4d | Status: [ ]
+
+P1-N2: Playbook Marketplace
+Файлы: frontend/src/pages/PlaybookMarketplace.tsx, backend/internal/playbook/marketplace.go
+Проблема: Нет community/templates для sharing playbooks.
+Решение:
+- Public marketplace с pre-built playbooks (Hikvision, Dahua, Axis, Uniview)
+- Rating + review system, version compatibility matrix
+- One-click install, private sharing между tenants
+- Vendor-verified badges
+Критерий приёмки: 20+ pre-built playbooks, rating/review, one-click install
+Effort: 5d | Status: [ ]
+
+P1-N3: Calendar Sync (Google + Outlook)
+Файлы: backend/internal/integrations/calendar/google.go, calendar/outlook.go
+Проблема: WO и maintenance не sync с external calendars.
+Решение:
+- Google Calendar API + Microsoft Graph API (OAuth2)
+- Auto-create events при WO assignment
+- Auto-update при status change / reschedule
+- Bi-directional sync + conflict detection
+Критерий приёмки: Google + Outlook sync, auto-create events, bi-directional
+Effort: 5d | Status: [ ]
+
+P1-N4: Photo Annotation Advanced
+Файлы: frontend/src/components/PhotoAnnotation.tsx, mobile/src/components/PhotoAnnotation.tsx
+Проблема: Basic tools (arrows, circles). Нужны advanced как в MaintainX.
+Решение:
+- Freehand drawing, text labels, measurement tool
+- Blur/Redact sensitive areas (faces, license plates)
+- Layer management + export annotated image
+- Annotation history per photo
+Критерий приёмки: 8+ tools, blur/redact, offline (mobile)
+Effort: 4d | Status: [ ]
+
+P1-N5: Differential Sync для Mobile
+Файлы: mobile/src/services/differentialSync.ts, backend/internal/api/sync/diff.go
+Проблема: Full record sync → slow на 3G (Africa/SEA).
+Решение:
+- Delta sync (only changed fields)
+- Change tracking via updated_at + field-level diff
+- Compression (gzip/brotli), bandwidth monitoring
+- Partial sync priority (WO status > photos > audit)
+Критерий приёмки: -70% payload, compression, backward compatible
+Effort: 5d | Status: [ ]
+
+P1-N6: Rate Limiting Middleware
+Файлы: backend/internal/api/rate_limiter.go, backend/internal/api/middleware/ratelimit.go
+Проблема: Нет distributed rate limiting → DDoS risk.
+Решение:
+- Token bucket per tenant/user (Redis-based)
+- Configurable limits: read 100/min, write 30/min
+- X-RateLimit-* headers, 429 Retry-After
+- Prometheus metrics
+Критерий приёмки: All endpoints protected, per-tenant limits, metrics
+Effort: 3d | Status: [ ]
+
+P1-N7: Event Replay UI
+Файлы: frontend/src/pages/EventReplay.tsx, backend/internal/events/replay.go
+Проблема: NATS JetStream events есть, но нет UI для debugging.
+Решение:
+- Event browser (filter by type, tenant, date)
+- JSON payload viewer, replay capability
+- Dead letter queue viewer
+- Event flow visualization (Sankey diagram)
+Критерий приёмки: Search/filter, replay, DLQ viewer, admin-only access
+Effort: 4d | Status: [ ]
+
+P1-N8: Dashboard PDF Export
+Файлы: frontend/src/components/dashboard/DashboardExport.tsx, backend/internal/reports/dashboard_pdf.go
+Проблема: Нет export dashboard как PDF для reporting.
+Решение:
+- Puppeteer-based PDF rendering (server-side)
+- All widgets + current filters included
+- Scheduled exports (email weekly/monthly)
+- Branded templates per tenant
+Критерий приёмки: PDF export всех widget types, scheduled, branded
+Effort: 3d | Status: [ ]
+
 🟢 P2 — ENTERPRISE FEATURES (Q1 2027, до 2027-03-31)
 P2-MARKET: Regional Expansion ⭐ NEW
 Стратегия: Использовать 15 языков i18n + ComplianceProfile для быстрого входа на рынки
@@ -186,6 +329,80 @@ P2-INT.2: OAuth2 для External Adapters ✅ DONE
 Status: [x] ServiceNow, Jira с encrypted storage
 P2-INT.3: Excel Import/Export для WO ✅ DONE
 Status: [x] Export handlers
+
+### P2-NEW: Enterprise & Competitive (Q1 2027)
+
+P2-N1: Production ML Pipeline -пропускаем.
+Файлы: backend/internal/ml/pipeline.go, backend/internal/ml/feature_store.go, backend/analytics/train.py
+Проблема: XGBoost на синтетических данных. Нужен continuous learning.
+Решение:
+- Feature store на TimescaleDB (offline_ratio, error_count, temperature, age_days)
+- Automated retraining (weekly), A/B testing (champion/challenger)
+- Model registry + SHAP explanations + drift detection
+Критерий приёмки: Feature store, weekly retraining, SHAP, drift alerts, >75% accuracy
+Effort: 8d | Status: [ ]
+
+P2-N2: Embedded BI (Self-Service Analytics)
+Файлы: frontend/src/pages/CustomReports.tsx, backend/internal/analytics/query_builder.go
+Проблема: Только analytics templates. Enterprise хочет self-service BI.
+Решение:
+- Visual query builder (drag-and-drop dimensions + measures)
+- Pre-built SQL templates (MTTR, MTBF, first-time fix rate, cost per WO)
+- Custom charts + saved reports + scheduled delivery
+- Export: PDF, Excel, CSV, PNG
+Критерий приёмки: Visual query builder, 10+ templates, scheduled delivery
+Effort: 6d | Status: [ ]
+
+P2-N3: Real-Time Chat per Work Order
+Файлы: frontend/src/components/chat/WOChat.tsx, backend/internal/ws/chat.go
+Проблема: Technicians не могут общаться в контексте WO (MaintainX has this).
+Решение:
+- WebSocket chat per WO: text, photo, voice note, checklist reference
+- @mentions + push notifications, reactions, read receipts
+- Searchable history, offline queue
+Критерий приёмки: Real-time messaging per WO, photo sharing, @mentions, offline
+Effort: 5d | Status: [ ]
+
+P2-N4: Voice-to-Text Notes
+Файлы: frontend/src/components/VoiceNote.tsx, mobile/src/components/VoiceNote.tsx
+Проблема: Technicians работают hands-free - могут делать отчеты и заметки по задаче (ladder, tools).
+Решение:
+- Web Speech API (browser) + expo-speech (mobile)
+- Auto-transcribe voice → text, language detection (20 i18n langs)
+- Attach to WO / checklist, playback + edit
+Критерий приёмки: Voice recording (web+mobile), >85% accuracy, playback
+Effort: 3d | Status: [ ]
+
+P2-N5: Conditional Checklists (MaintainX-level)
+Файлы: frontend/src/components/checklists/ConditionalChecklist.tsx, backend/internal/models/checklist.go
+Проблема: Checklists статичны. Нужна conditional logic.
+Решение:
+- depends_on/operator/value conditions, dynamic show/hide
+- Sub-items, scoring, mandatory vs optional
+- Conditional required photos, templates per device type
+Критерий приёмки: Conditional logic, scoring, templates, backward compatible
+Effort: 4d | Status: [ ]
+
+P2-N6: Custom Fields Advanced (Shelf.nu-level)
+Файлы: frontend/src/components/custom-fields/FieldBuilder.tsx, backend/internal/models/custom_field.go
+Проблема: 5 basic field types. Shelf.nu has 15+.
+Решение:
+- 15+ field types: text, number, date, dropdown, multi-select, URL, email, barcode, signature, file upload
+- Validation rules, conditional visibility, field groups
+- Bulk apply, REST API, drag-and-drop ordering
+Критерий приёмки: 15+ types, validation, conditional, REST API
+Effort: 6d | Status: [ ]
+
+P2-N7: API Versioning Strategy
+Файлы: backend/internal/api/versioning.go, backend/internal/api/v1/, backend/internal/api/v2/
+Проблема: Нет API versioning → breaking changes ломают integrations.
+Решение:
+- URL-based (/api/v1/, /api/v2/) + header-based (X-API-Version)
+- Deprecation policy (6 months notice + Sunset header)
+- API changelog + migration guides + backward compat tests
+Критерий приёмки: Versioned endpoints, deprecation headers, changelog
+Effort: 3d | Status: [ ]
+
 🔵 P3 — TECHNICAL DEBT (Q2 2027) — 9/12 DONE
 P3-SEC: Security & Compliance
 P3-SEC.1: belt-GCM Migration ⛔ ПРОПУЩЕН — требуется bp2012/crypto (недоступен)
@@ -205,6 +422,149 @@ P3-NICE: Nice-to-Have
 P3-NICE.1: Real-time Collaboration ✅ DONE (WebSocket Presence Hub)
 P3-NICE.2: White-label Theming ✅ DONE (в themeStore, код реализован)
 P3-NICE.3: Edge Agent SL-4 Security ⛔ ПРОПУЩЕН — отдельный проект (neolink)
+
+### P3-NEW: Infrastructure & Operations (Q2 2027)
+
+P3-N1: Monitoring Dashboards (Grafana) -пропускаем
+Файлы: infra/grafana/dashboards/, infra/prometheus/rules/
+Проблема: OpenTelemetry есть, нет visualization.
+Решение:
+- Grafana dashboards: System Health, SLA, API Performance, NATS Events, DB Queries
+- Prometheus alerting: error rate, slow queries, NATS lag, disk
+- PagerDuty/OpsGenie integration, SLO/SLI tracking
+- Public status page для SaaS
+Критерий приёмки: 5+ dashboards, alerting rules, PagerDuty, status page
+Effort: 4d | Status: [ ]
+
+P3-N2: Disaster Recovery Automation
+Файлы: infra/dr/failover.sh, infra/dr/runbook.md, backend/internal/dr/health.go
+Проблема: Multi-region DR спроектирован, failover semi-manual.
+Решение:
+- Automated health checks (30s), auto-failover (admin confirm)
+- DNS failover (Route53/Cloudflare), DB promotion (standby→primary)
+- NATS stream handover, DR drill automation (quarterly)
+- RTO/RPO monitoring dashboard
+Критерий приёмки: Failover <15min, data loss <5min, quarterly drills
+Effort: 5d | Status: [ ]
+
+P3-N3: Database Connection Pooling Optimization
+Файлы: backend/internal/db/pool.go, backend/config.yaml
+Проблема: Connection pooling не оптимизирован для 10K+ devices.
+Решение:
+- PgBouncer (transaction mode), read replicas routing
+- Pool monitoring (active, idle, wait), slow query detection
+- Query plan analysis, index recommendations
+Критерий приёмки: PgBouncer, read replicas, slow query alerts, index recs
+Effort: 3d | Status: [ ]
+
+P3-N4: AR-Assisted Maintenance (Future) - пропускаем, можно подготовить заготовки
+Файлы: mobile/src/screens/ARMaintenance.tsx, mobile/src/components/AROverlay.tsx
+Проблема: Technicians тратят время на поиск оборудования.
+Решение:
+- ARKit/ARCore overlay для equipment identification
+- QR scan → AR overlay с device info
+- Virtual arrows guiding to device location
+- AR checklist overlay + photo capture
+Критерий приёмки: Equipment ID via AR, navigation arrows, offline, <20% battery drain/hour
+Effort: 12d | Status: [ ]
+
+P3-N5: White-Label Theming Engine
+Файлы: frontend/src/store/whiteLabelStore.ts, frontend/src/components/WhiteLabelConfigurator.tsx
+Проблема: Enterprise clients хотят branded experience.
+Решение:
+- Per-tenant logo, favicon, colors, custom domain (CNAME)
+- Email template branding, login page customization
+- PDF report branding, preview mode
+Критерий приёмки: Custom branding per tenant, custom domain, branded PDFs
+Effort: 4d | Status: [ ]
+
+## 🔴 CODE REVIEW 2026-06-28 — Найденные и исправленные баги
+
+### Bug #1 — CardBody не экспортировался (CRITICAL)
+- **Файл**: `frontend/src/components/ui/Card.tsx`
+- **Проблема**: `index.ts` экспортировал `CardBody` из `Card.tsx`, но `Card.tsx` определял только `CardContent`
+- **Симптом**: `"Element type is invalid... got: undefined"` — 10 тестов RCAWidget падали
+- **Fix**: Добавлен `export const CardBody = CardContent` в `Card.tsx`
+- **Статус**: ✅ Исправлено
+
+### Bug #2 — IntersectionObserver не замокан (CRITICAL)
+- **Файл**: `frontend/src/test-setup.ts`
+- **Проблема**: `IntersectionObserver` не был замокан в jsdom-окружении
+- **Симптом**: LazyImage + DataGrid LazyRow крашились в тестах
+- **Fix**: Добавлен `MockIntersectionObserver` с симуляцией немедленной видимости
+- **Статус**: ✅ Исправлено
+
+### Bug #3 — Analytics.test.tsx без Router (HIGH)
+- **Файл**: `frontend/src/pages/__tests__/Analytics.test.tsx`
+- **Проблема**: `DataGrid` использует `useSearchParams()` но нет Router
+- **Симптом**: `useLocation() may be used only in the context of a <Router>`
+- **Fix**: Добавлен `<MemoryRouter>` в `renderWithProviders`
+- **Статус**: ✅ Исправлено
+
+### Bug #4 — LazyImage.test.tsx пустой (HIGH)
+- **Файл**: `frontend/src/components/ui/__tests__/LazyImage.test.tsx`
+- **Проблема**: Файл содержал только 9 строк — ни одного теста
+- **Fix**: Добавлены 4 теста (placeholder, alt, aspectRatio, showSkeleton)
+- **Статус**: ✅ Исправлено
+
+### Bug #5 — JSX в `.ts` файле (CRITICAL)
+- **Файл**: `frontend/src/store/themeStore.ts`
+- **Проблема**: Дублирующийся `ThemeProvider` с JSX в `.ts` (должен быть `.tsx`)
+- **Симптом**: `vite build` падал с `Expected '>' but found 'Identifier'`
+- **Fix**: Удалён дубликат (уже есть в `ThemeProvider.tsx`)
+- **Статус**: ✅ Исправлено
+
+### Bug #6 — Лишний символ 'j' в Card.tsx (CRITICAL)
+- **Файл**: `frontend/src/components/ui/Card.tsx`
+- **Проблема**: Строка 1 начиналась с `j// ═══...`
+- **Симптом**: `ReferenceError: j is not defined`
+- **Fix**: Удалён лишний символ
+- **Статус**: ✅ Исправлено
+
+## 🚀 P1-PERF-BUNDLE — Bundle Size Optimization (2026-07)
+
+### Текущее состояние (vite build, 2026-06-28)
+| Чанк | Размер | gzip | Действие |
+|------|--------|------|----------|
+| `vendor-charts` (Recharts) | 429.76 KB | 121.37 KB | → Nivo (-250 KB) |
+| `vendor-calendar` (FullCalendar) | 328.24 KB | 95.76 KB | → Schedule-X (-248 KB) |
+| `vendor-xlsx` (SheetJS) | 424.85 KB | 141.54 KB | → ExcelJS (-75 KB) |
+| `vendor-pdf` (jsPDF) | 557.25 KB | 162.56 KB | dynamic import |
+| `vendor-sentry` | 249.77 KB | 81.98 KB | OK |
+| `vendor-other` | 368.16 KB | 119.58 KB | tree-shaking |
+| `index` (main) | 621.44 KB | 163.88 KB | lazy pages |
+| **Precache total** | **4651.21 KB** | — | **Target: <2MB** |
+
+### P1-PERF-BUNDLE.1: Schedule-X Migration
+- **Файлы**: FullCalendarWrapper.tsx, WorkOrderCalendar.tsx, TechnicianCalendar.tsx, MaintenanceSchedules.tsx
+- **Текущий**: FullCalendar ~328KB + GPL license risk
+- **Цель**: Schedule-X ~80KB, MIT, dark mode, resource timeline
+- **Экономия**: -248 KB
+- **Сложность**: 7 дней
+- **Статус**: [ ]
+
+### P1-PERF-BUNDLE.2: Nivo Migration
+- **Файлы**: SLAHeatmap.tsx, SLATrendChart.tsx, Analytics.tsx, PredictiveMaintenance.tsx
+- **Текущий**: Recharts ~430KB
+- **Цель**: Nivo ~180KB, tree-shakeable, SSR-ready
+- **Экономия**: -250 KB
+- **Сложность**: 5 дней
+- **Статус**: [ ]
+
+### P1-PERF-BUNDLE.3: ExcelJS Migration
+- **Файлы**: reportGenerator.ts, MaintenanceReports.tsx, WorkOrders.tsx, Devices.tsx
+- **Текущий**: xlsx (SheetJS) ~425KB, Pro license required
+- **Цель**: ExcelJS ~350KB, MIT, streaming для 10k+ rows
+- **Экономия**: -75 KB
+- **Сложность**: 4 дня
+- **Статус**: [ ]
+
+### Quick Wins (до миграций)
+- [ ] Tree-shaking lucide-react (иконки по FUS, не весь пакет)
+- [ ] Lazy-load jsPDF (только на страницах с экспортом)
+- [ ] Lazy-load react-joyride (только для первой сессии)
+- [ ] Lazy-load react-datepicker (только при открытии календаря)
+
 ## 🧹 POLISH — Code Review Roadmap (2026-07)
 
 ### Phase 1: Critical Fixes ✅ DONE
@@ -250,59 +610,71 @@ P3-NICE.3: Edge Agent SL-4 Security ⛔ ПРОПУЩЕН — отдельный 
 | 22 | Error boundaries per route | Layout.tsx | ✅ |
 | 23 | ESLint exhaustive-deps rule | .eslintrc | ✅ |
 
-📊 Success Metrics (обновлено 2026-06-28)
+📊 Success Metrics (обновлено 2026-06-28 после Code Review)
 Метрика
 Текущее
-✅ Q4 2026 Target
-Q2 2027 Target
-Bundle Size
-<2MB ✅
-<2MB
-<1.5MB
+Цель Q4 2026
+Статус
+Bundle Size (precache)
+4.65 MB
+<2 MB
+🔴 -2.65 MB over
+Bundle gzip
+1.62 MB
+<800 KB
+🔴 -820 KB over
 Lighthouse Score
 87
 >95
->98
+⚠️ 8 points under
+Unit Tests (Frontend)
+292/292 ✅
+300+
+✅ achieved
+Unit Tests (Backend)
+50/50 packages ✅
+50+
+✅ achieved
 E2E Coverage
-109 scenarios ✅
-50+
-80+
+109 scenarios
+150+
+⚠️ 73% done
 Mobile E2E
-86 тестов ✅
-20+
-50+
+86 тестов
+100+
+✅ 86% done
 A11y Violations
-0 critical ✅
 0 critical
 0 violations
-Context Count
-3 ✅
-4
-2
+✅ achieved
 Test Coverage (React)
 75%
->80%
 >85%
+⚠️ 10% under
 Test Coverage (Go)
 85%
->88%
 >90%
+⚠️ 5% under
+Runtime Bugs Found
+6 (все исправлены)
+0
+✅ fixed
+CSP/OWASP ASVS L3
+✅ compliant
+✅
+✅ achieved
 Supported Regions
-3 (BY, EU, INTL) ✅
-3 (BY, EU, INTL)
-14+
-Active Markets
-4
-4
-14
-Regional Revenue %
-100% BY
-30% BY / 70% INTL
-40% BY / 60% global
-ARR from New Markets
-$0
-$3M
-$6-10M
+10
+15+
+⚠️ 5 remaining
+Certifications
+0
+2-3 (ОАЦ, ISO 27001)
+🔴 Not started
+Enterprise Deals
+2-3 signed
+10+ active
+⚠️ In progress
 
 
 Приоритизационные правила для Roo

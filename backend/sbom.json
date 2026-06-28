@@ -1,0 +1,78 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "serialNumber": "urn:uuid:dev-placeholder-0000-0000-000000000000",
+  "metadata": {
+    "timestamp": "2026-06-28T20:00:00Z",
+    "tools": [
+      {
+        "vendor": "CCTV Health Monitor",
+        "name": "sbom-generator",
+        "version": "0.0.0-dev"
+      }
+    ],
+    "component": {
+      "name": "gb-telemetry-collector",
+      "version": "0.0.0-dev",
+      "type": "application",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/gb-telemetry-collector@0.0.0-dev",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/gb-telemetry-collector"
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "SWID:TagVersion",
+        "value": "0.0.0-dev"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "github.com/go-chi/chi/v5",
+      "version": "5.2.1",
+      "type": "library",
+      "purl": "pkg:golang/github.com/go-chi/chi%2Fv5@5.2.1"
+    },
+    {
+      "name": "github.com/jackc/pgx/v5",
+      "version": "5.10.0",
+      "type": "library",
+      "purl": "pkg:golang/github.com/jackc/pgx%2Fv5@5.10.0"
+    },
+    {
+      "name": "github.com/redis/go-redis/v9",
+      "version": "9.21.0",
+      "type": "library",
+      "purl": "pkg:golang/github.com/redis/go-redis%2Fv9@9.21.0"
+    },
+    {
+      "name": "github.com/nats-io/nats.go",
+      "version": "1.41.1",
+      "type": "library",
+      "purl": "pkg:golang/github.com/nats-io/nats.go@1.41.1"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:github/gb-telemetry-collector@0.0.0-dev",
+      "dependsOn": [
+        "pkg:golang/github.com/go-chi/chi%2Fv5@5.2.1",
+        "pkg:golang/github.com/jackc/pgx%2Fv5@5.10.0",
+        "pkg:golang/github.com/redis/go-redis%2Fv9@9.21.0",
+        "pkg:golang/github.com/nats-io/nats.go@1.41.1"
+      ]
+    }
+  ]
+}

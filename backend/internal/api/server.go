@@ -158,6 +158,9 @@ type Server struct {
 
 	// Server start time for uptime tracking (PERF.4)
 	serverStart time.Time
+
+	// P0-N1: SBOM (Software Bill of Materials) Provider
+	sbomProvider *SBOMProvider
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -175,17 +178,18 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		// CSP with nonce (OWASP ASVS V5.3.3)
 		// strict-dynamic отключает fallback к 'self' в старых браузерах — это нормально
 		// unpkg.com — CDN для Swagger UI (P3-DX.5: /api/v1/docs)
+		// ⚠ 'unsafe-inline' ЗАПРЕЩЁН для OWASP ASVS L3 — используем nonce для стилей
 		csp := fmt.Sprintf(
 			"default-src 'self'; "+
-				"script-src 'self' 'nonce-%s' 'strict-dynamic' https://unpkg.com; "+
-				"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "+
+				"script-src 'self' 'nonce-%s' 'strict-dynamic'; "+
+				"style-src 'self' 'nonce-%s' https://fonts.googleapis.com https://unpkg.com; "+
 				"font-src 'self' https://fonts.gstatic.com; "+
 				"img-src 'self' data: https:; "+
 				"connect-src 'self'; "+
 				"frame-ancestors 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self'",
-			nonce,
+			nonce, nonce,
 		)
 		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
@@ -196,6 +200,9 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 // NewServer создаёт новый экземпляр HTTP-сервера с настроенным роутером.
 // Роуты монтируются через MountRoutes() с chi Router Groups.
 func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler, syncEng *syncengine.SyncEngine) *Server {
+	// P0-N1: SBOM Provider (загружается из директории sbom/ при старте)
+	// В production SBOM генерируется в CI/CD и копируется в sbom/ директорию.
+	sbomProvider := NewSBOMProvider("./sbom", "unknown", "0.0.0-dev")
 	r := chi.NewRouter()
 
 	// TraceID — must be first for audit trail
@@ -248,6 +255,7 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		p2pAPIKey:          cfg.P2PAPIKey,
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
 		recaptchaValidator: recaptchaValidator,
+		sbomProvider:       sbomProvider,
 		serverStart:        time.Now(),
 	}
 

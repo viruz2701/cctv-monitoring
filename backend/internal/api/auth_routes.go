@@ -3,6 +3,7 @@ package api
 
 import (
 	"gb-telemetry-collector/internal/auth"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -13,12 +14,13 @@ func (s *Server) mountAuthRoutes(r chi.Router) {
 	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/login", s.handleLogin)
 	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/refresh", s.handleRefreshToken)
 
-	// 2FA login
-	r.Post("/api/v1/auth/login/2fa", s.handleLogin2FA)
+	// 2FA login (rate-limited: 10 req/min для предотвращения brute force TOTP)
+	// OWASP ASVS V2.2.1: защита от brute force аутентификации
+	r.With(s.newRateLimiterMiddleware(10, time.Minute)).Post("/api/v1/auth/login/2fa", s.handleLogin2FA)
 
-	// Telegram login
-	r.Post("/api/v1/auth/telegram/request-code", s.handleTelegramRequestCode)
-	r.Post("/api/v1/auth/telegram/verify", s.handleTelegramVerify)
+	// Telegram login (rate-limited: 5 req/min)
+	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/telegram/request-code", s.handleTelegramRequestCode)
+	r.With(s.rateLimitMiddleware).Post("/api/v1/auth/telegram/verify", s.handleTelegramVerify)
 
 	// Password reset
 	r.Post("/api/v1/auth/forgot-password", s.handleForgotPassword)

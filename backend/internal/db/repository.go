@@ -82,7 +82,7 @@ func (db *DB) GetDevicesByGB28181Parent(parentID string) ([]models.Device, error
 	defer cancel()
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT device_id, name, vendor_type, status, last_seen, gb28181_device_id
+		SELECT device_id, name, vendor_type, status, last_seen
 		FROM devices WHERE gb28181_parent_id = $1 ORDER BY name
 	`, parentID)
 	if err != nil {
@@ -93,7 +93,7 @@ func (db *DB) GetDevicesByGB28181Parent(parentID string) ([]models.Device, error
 	var devices []models.Device
 	for rows.Next() {
 		var dev models.Device
-		if err := rows.Scan(&dev.DeviceID, &dev.Name, &dev.VendorType, &dev.Status, &dev.LastSeen, nil); err != nil {
+		if err := rows.Scan(&dev.DeviceID, &dev.Name, &dev.VendorType, &dev.Status, &dev.LastSeen); err != nil {
 			return nil, err
 		}
 		devices = append(devices, dev)

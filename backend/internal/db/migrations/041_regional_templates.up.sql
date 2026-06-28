@@ -22,7 +22,7 @@
 -- P2-REG.8.1: Таблица maintenance_regulations — шаблоны регламентов ТО
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS maintenance_regulations (
+CREATE TABLE maintenance_regulations (
     id                  TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     region_code         VARCHAR(2) NOT NULL,
     regulation_code     VARCHAR(20) NOT NULL UNIQUE,
@@ -70,7 +70,7 @@ COMMENT ON COLUMN maintenance_regulations.docs_required IS
 -- P2-REG.8.2: Таблица maintenance_checklists — пункты чек-листов ТО
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS maintenance_checklists (
+CREATE TABLE maintenance_checklists (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     regulation_id   TEXT NOT NULL REFERENCES maintenance_regulations(id) ON DELETE CASCADE,
     item_order      INT NOT NULL CHECK (item_order > 0),

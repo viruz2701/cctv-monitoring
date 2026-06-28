@@ -119,6 +119,7 @@ func (db *DB) SeedDefaultAdmin() error {
 	// ═══ БЕЗОПАСНОСТЬ: пароль администратора ТОЛЬКО из env ═══
 	// GB_ADMIN_PASSWORD — обязателен при первом запуске (seed)
 	// Если не задан — генерируем случайный 32-символьный пароль
+	// ⚠ КРИТИЧЕСКИ: пароль НЕ ДОЛЖЕН логироваться (OWASP ASVS V6.2, ISO 27001 A.10.1.2)
 	adminPassword := os.Getenv("GB_ADMIN_PASSWORD")
 	if adminPassword == "" {
 		randomBytes := make([]byte, 24)
@@ -126,10 +127,15 @@ func (db *DB) SeedDefaultAdmin() error {
 			return fmt.Errorf("seed: failed to generate random password: %w", err)
 		}
 		adminPassword = hex.EncodeToString(randomBytes)
-		db.Logger.Warn("GB_ADMIN_PASSWORD not set — generated random password",
-			"password", adminPassword,
-			"warn", "SAVE THIS PASSWORD — it will not be shown again",
-		)
+		db.Logger.Warn("GB_ADMIN_PASSWORD not set — generated random password. " +
+			"Check server startup logs for the generated password (saved to /tmp/cctv-admin-credentials.txt once). " +
+			"CHANGE THIS PASSWORD IMMEDIATELY after first login.")
+		// Записываем пароль в отдельный защищённый файл, а не в логи
+		if err := os.WriteFile("/tmp/cctv-admin-credentials.txt",
+			[]byte("Admin password: "+adminPassword+"\nCHANGE IMMEDIATELY AFTER FIRST LOGIN\n"),
+			0600); err != nil {
+			db.Logger.Warn("Failed to save admin credentials file", "error", err)
+		}
 	}
 
 	hashed, err := auth.HashPassword(adminPassword)

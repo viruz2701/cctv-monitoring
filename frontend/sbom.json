@@ -1,0 +1,79 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "serialNumber": "urn:uuid:dev-frontend-0000-0000-000000000000",
+  "metadata": {
+    "timestamp": "2026-06-28T20:00:00Z",
+    "tools": [
+      {
+        "vendor": "CCTV Health Monitor",
+        "name": "sbom-generator",
+        "version": "0.0.0-dev"
+      }
+    ],
+    "component": {
+      "name": "cctv-health-monitor-frontend",
+      "version": "0.0.0-dev",
+      "type": "application",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:npm/cctv-health-monitor@0.0.0-dev",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/gb-telemetry-collector"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "react",
+      "version": "19.2.0",
+      "type": "library",
+      "purl": "pkg:npm/react@19.2.0"
+    },
+    {
+      "name": "@tanstack/react-query",
+      "version": "5.101.1",
+      "type": "library",
+      "purl": "pkg:npm/%40tanstack/react-query@5.101.1"
+    },
+    {
+      "name": "i18next",
+      "version": "26.3.1",
+      "type": "library",
+      "purl": "pkg:npm/i18next@26.3.1"
+    },
+    {
+      "name": "axios",
+      "version": "1.17.0",
+      "type": "library",
+      "purl": "pkg:npm/axios@1.17.0"
+    },
+    {
+      "name": "zustand",
+      "version": "5.0.0",
+      "type": "library",
+      "purl": "pkg:npm/zustand@5.0.0"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/cctv-health-monitor@0.0.0-dev",
+      "dependsOn": [
+        "pkg:npm/react@19.2.0",
+        "pkg:npm/%40tanstack/react-query@5.101.1",
+        "pkg:npm/i18next@26.3.1",
+        "pkg:npm/axios@1.17.0",
+        "pkg:npm/zustand@5.0.0"
+      ]
+    }
+  ]
+}

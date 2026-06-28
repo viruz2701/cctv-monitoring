@@ -23,16 +23,16 @@ import {
     Server,
     Pencil,
 } from 'lucide-react';
-import { getArrayData } from '../../utils/helpers';
-import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../ui';
-import { useTickets, useAlarms, useDevices, useSites } from '../../hooks/useApiQuery';
-import { useSettingsStore } from '../../store/settingsStore';
-import { AlertBanner } from '../dashboard/AlertBanner';
-import { DragDropDashboard } from '../dashboard/DragDropDashboard';
-import type { DashboardWidget } from '../dashboard/DragDropDashboard';
+import { getArrayData } from '../../../utils/helpers';
+import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../../ui';
+import { useTickets, useAlarms, useDevices, useSites } from '../../../hooks/useApiQuery';
+import { useSettingsStore } from '../../../store/settingsStore';
+import { AlertBanner } from '../AlertBanner';
+import { DragDropDashboard } from '../DragDropDashboard';
+import type { DashboardWidget } from '../DragDropDashboard';
 import { useTranslation } from 'react-i18next';
-import type { Device as APIDevice, Ticket as APITicket, Alarm as APIAlarm } from '../../services/api';
-import type { Device as UIDevice, Ticket as UITicket, Alert } from '../../types';
+import type { Device as APIDevice, Ticket as APITicket, Alarm as APIAlarm } from '../../../services/api';
+import type { Device as UIDevice, Ticket as UITicket, Alert } from '../../../types';
 import { useMemo } from 'react';
 import {
     LineChart, Line, AreaChart, Area, BarChart, Bar,
@@ -128,7 +128,7 @@ export default function OverviewTab() {
     const apiTicketsData = getArrayData<APITicket>(apiTickets);
     const apiAlarmsData = getArrayData<APIAlarm>(apiAlarms);
     const apiDevicesData = getArrayData<APIDevice>(apiDevices);
-    const apiSitesData = getArrayData<import('../../services/api').Site>(apiSites);
+    const apiSitesData = getArrayData<import('../../../services/api').Site>(apiSites);
 
     const tickets = useMemo(() => apiTicketsData.map(mapAPITicketToUI), [apiTicketsData]);
     const alerts = useMemo(() => apiAlarmsData.map(mapAlarmToAlert), [apiAlarmsData]);

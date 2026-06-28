@@ -20,7 +20,7 @@
 -- P2-INV.1: Auto Parts — конфигурация авто-заказа
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS auto_order_config (
+CREATE TABLE auto_order_config (
     id                   TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     part_id              TEXT NOT NULL REFERENCES spare_parts(id) ON DELETE CASCADE,
     low_stock_threshold  INT NOT NULL DEFAULT 50,    -- % от min_stock
@@ -50,7 +50,7 @@ COMMENT ON TABLE auto_order_config IS
 -- P2-INV.2: Vendor Scorecards — скор-карты поставщиков
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS vendor_scorecards (
+CREATE TABLE vendor_scorecards (
     id                      TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     vendor_id               TEXT NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
 
@@ -90,7 +90,7 @@ COMMENT ON TABLE vendor_scorecards IS
 -- P2-INV.3: Lifecycle Costs — стоимость владения
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS lifecycle_costs (
+CREATE TABLE lifecycle_costs (
     id                    TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     part_id               TEXT NOT NULL REFERENCES spare_parts(id) ON DELETE CASCADE,
     currency              TEXT NOT NULL DEFAULT 'USD',
@@ -135,7 +135,7 @@ COMMENT ON TABLE lifecycle_costs IS
 -- P2-INV.4: Reorder Rules — правила перезаказа
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS reorder_rules (
+CREATE TABLE reorder_rules (
     id                    TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     part_id               TEXT NOT NULL REFERENCES spare_parts(id) ON DELETE CASCADE,
 

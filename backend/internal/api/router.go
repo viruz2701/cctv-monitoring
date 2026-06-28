@@ -52,7 +52,7 @@ import (
 // MountRoutes монтирует все API маршруты на предоставленный chi роутер.
 //
 // Разделение на:
-//   - Публичные (без JWT): health, auth/login, refresh, setup wizard, OpenAPI
+//   - Публичные (без JWT): health, auth/login, refresh, setup wizard, OpenAPI, SBOM
 //   - Защищённые (JWT): все остальные
 //   - API key: внешние alarm webhook
 //   - ITSM Webhooks: ServiceNow, Jira, 1C:TOIR (HMAC, rate-limited)
@@ -60,6 +60,14 @@ func (s *Server) MountRoutes(r chi.Router) {
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
 	s.mountHealthRoutes(r)
 	s.mountAuthRoutes(r)
+
+	// ═════════════════════════════════════════════════════════════════
+	// P0-N1: SBOM (Software Bill of Materials) — public endpoints
+	//   GET /api/v1/sbom          — список доступных форматов SBOM
+	//   GET /api/v1/sbom/{format} — SBOM в указанном формате (JSON)
+	//   GET /api/v1/sbom/{format}/raw — "сырой" SBOM (для инструментов)
+	// ═════════════════════════════════════════════════════════════════
+	s.mountSBOMRoutes(r)
 
 	// ═════════════════════════════════════════════════════════════════
 	// P3-DX.5: OpenAPI 3.1 + Swagger UI (без JWT)
