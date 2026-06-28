@@ -894,7 +894,7 @@ E2E test: passwordless login
 
 Effort: 5 days
 
-Status: [ ]
+Status: [x] DONE (commit 713deaa) — WebAuthn/FIDO2 backend + frontend + recovery codes + 15 unit tests
 
 P1-SEC.2: Data Loss Prevention (DLP)
 Файлы: backend/internal/dlp/detector.go, backend/internal/api/export_handlers.go
@@ -929,7 +929,7 @@ Integration test: export with PII redaction
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE (commit 88fb465) — PII detection (regex: email, phone, SSN, passport, bank card, INN, address), redaction engine, audit record, 21 unit tests
 
 P1-SEC.3: Rate Limiting Enhancement (Redis-based)
 Файлы: backend/internal/api/rate_limiter.go (уже in-memory), backend/internal/redis/rate_limit.go
@@ -999,7 +999,7 @@ Unit тесты для rotation logic
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE (commit 15918f8) — RotationManager (90-day auto-rotation, grace period 24h, audit log, manual trigger, MemoryStore), 16 unit tests
 
 P1-UX: Competitive UX Parity
 P1-UX.1: WorkOrders Redesign (Snipe-IT Pattern)
