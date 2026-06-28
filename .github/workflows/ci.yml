@@ -88,6 +88,9 @@ jobs:
       - name: Install
         run: cd frontend && npm ci
 
+      - name: Validate OpenAPI Types
+        run: cd frontend && npm run generate:api:check
+
       - name: Lint
         run: cd frontend && npx eslint .
 
