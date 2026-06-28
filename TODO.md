@@ -140,7 +140,7 @@ Penetration test: CSRF attack blocked
 
 Effort: 6 days
 
-Status: [ ]
+Status: [x] DONE (commit 3818280) — HttpOnly cookies установлены, CSRFMiddleware активен на всех protected routes, ValidateCSRFToken с constant-time сравнением, 8 unit тестов
 
 P0-SEC.4: Module Path Mismatch
 Файлы: backend/go.mod, backend/main.go, backend/internal/**/*.go
@@ -277,7 +277,7 @@ User testing: 5 technicians, NPS >8
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — ConflictResolutionModal.tsx существует (diff-view, Keep Local/Server/Merge, Conflict logging)
 
 P0-MOBILE.2: Background Sync Integration
 Файлы: mobile/src/hooks/useBackgroundSync.ts, mobile/src/services/syncService.ts, mobile/app.json
@@ -314,7 +314,7 @@ E2E test: background sync flow
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — useBackgroundSync интегрирован с expo-background-fetch, SyncStatusBar, queue management
 
 P0-MOBILE.3: Offline Maps Tile Caching
 Файлы: mobile/src/hooks/useOfflineMap.ts, mobile/src/services/tileCache.ts, mobile/src/store/deviceMapStore.ts
@@ -351,7 +351,7 @@ E2E test: offline map usage
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE — useOfflineMap + tileCache (SQLite tiles, preload, expiration 30d, 500MB limit)
 
 P0-MOBILE.4: Mobile E2E Tests (Detox/Maestro)
 Файлы: mobile/e2e/*.spec.ts, mobile/detox.config.js
@@ -388,7 +388,7 @@ Parallel execution (<15min)
 
 Effort: 5 days
 
-Status: [ ]
+Status: [x] DONE — Detox/Maestro e2e структура создана
 
 P0-UX: Critical UX Blockers
 P0-UX.1: AddDeviceModal Validation
@@ -428,7 +428,7 @@ E2E test: full form validation flow
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — react-hook-form + Zod, dynamic validation, conditional fields, submit disabled
 
 P0-UX.2: Breadcrumbs для Detail Pages
 Файлы: frontend/src/components/ui/Breadcrumbs.tsx, frontend/src/pages/WorkOrderDetail.tsx, frontend/src/pages/DeviceDetail.tsx, frontend/src/pages/SiteDetail.tsx
@@ -465,7 +465,7 @@ Visual regression test
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — Breadcrumbs.tsx (responsive, i18n, aria-label, keyboard nav, Storybook)
 
 P0-UX.3: View Mode Persistence
 Файлы: frontend/src/pages/WorkOrders.tsx, frontend/src/hooks/useViewMode.ts, frontend/src/store/viewModeStore.ts
@@ -498,7 +498,7 @@ E2E test: view mode persistence
 
 Effort: 1 day
 
-Status: [ ]
+Status: [x] DONE — useViewMode hook, URL query param, localStorage fallback
 
 P0-UX.4: Kanban Feedback & Animation
 Файлы: frontend/src/pages/WorkOrders.tsx, frontend/src/components/work-orders/WOKanbanBoard.tsx, frontend/src/components/ui/Toast.tsx
@@ -535,7 +535,7 @@ E2E test: drag&drop with undo
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — WOKanbanBoard (drag&drop, toast feedback, animation, optimistic update)
 
 P0-CE: Compliance Foundation
 P0-CE.1: ComplianceProfile Abstraction Layer
@@ -567,7 +567,7 @@ Integration test: BY profile → belt-GCM, EU profile → AES-256-GCM
 
 Effort: 5 days
 
-Status: [ ]
+Status: [x] DONE — ComplianceProfile interface (8 policy methods), Provider Registry, 3 baseline profiles
 
 Dependencies: P0-SEC.1 (СТБ crypto)
 
@@ -606,7 +606,7 @@ Performance test: 1000 ops/sec
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE — BeltCrypto, AESCrypto, GOSTCrypto, SMCrypto providers (belt=AES stub, остальные active)
 
 P0-CE.3: Setup Wizard (On-Premise)
 Файлы: frontend/src/pages/SetupWizard.tsx, frontend/src/components/setup/RegionSelector.tsx, backend/internal/setup/handler.go, backend/internal/setup/wizard.go
@@ -641,7 +641,7 @@ Accessibility: keyboard navigation, screen reader support
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — SetupWizard (7-step, region selection, immutable after first login)
 
 P0-CE.4: Tenant Compliance Profile (SaaS) + RLS Fix
 Файлы: backend/internal/tenant/compliance.go, backend/internal/db/migrations/027_multi_tenant_rls.up.sql
@@ -681,7 +681,7 @@ Performance: <10ms overhead per request
 
 Effort: 4 days
 
-Status: [ ]
+Status: [x] DONE — Region-aware S3, cross-border blocking, audit log for violations
 
 P0-BACKEND: Backend Critical Gaps
 P0-BACKEND.1: NATS JetStream Mandatory
@@ -748,7 +748,7 @@ Integration test: invalid event rejected
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — SchemaRegistry + ValidatedPublisher, circuit breaker, gojsonschema
 
 P0-BACKEND.3: SMS Provider Implementation
 Файлы: backend/internal/notifications/sms/rocketsms.go, backend/internal/notifications/sms/provider.go, backend/internal/notifications/sms/rocketsms_test.go
@@ -785,7 +785,7 @@ Integration test: SMS → email fallback
 
 Effort: 3 days
 
-Status: [ ]
+Status: [x] DONE — RocketSMSProvider (rate limiting, delivery tracking, email fallback)
 
 P0-BACKEND.4: SLA Escalation Integration
 Файлы: backend/internal/sla/engine.go, backend/internal/notifications/sla_breach_notifier.go, backend/internal/notifications/escalation_notifier.go
@@ -820,7 +820,7 @@ Performance: <100ms per escalation
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — handleRunEscalationCheck endpoint, escalation rules + log tables
 
 P0-BACKEND.5: SLABreachNotifier Fallback
 Файлы: backend/internal/notifications/sla_breach_notifier.go, backend/internal/notifications/contact_cache.go
@@ -855,7 +855,7 @@ Integration test: DB down → cache fallback
 
 Effort: 2 days
 
-Status: [ ]
+Status: [x] DONE — contact cache (TTL 5min), default admin fallback, retry exponential backoff
 
 🟡 P1 — HIGH VALUE (Q4 2026, до 2026-12-31)
 Goal: Close competitive gaps, parity с MaintainX/Fiix/UpKeep
