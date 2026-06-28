@@ -53,9 +53,34 @@ func TestGOSTEncryptDecrypt(t *testing.T) {
 	testEncryptDecryptRoundTrip(t, p)
 }
 
+// smTestKey — 16-byte key для SM4 тестов.
+var smTestKey = []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+	0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10}
+
 func TestSMEncryptDecrypt(t *testing.T) {
 	p := NewSMCrypto()
-	testEncryptDecryptRoundTrip(t, p)
+
+	ciphertext, err := p.Encrypt(smTestKey, testData)
+	if err != nil {
+		t.Fatalf("Encrypt error: %v", err)
+	}
+
+	if len(ciphertext) == 0 {
+		t.Fatal("ciphertext must not be empty")
+	}
+
+	if bytes.Equal(ciphertext, testData) {
+		t.Fatal("ciphertext must not equal plaintext")
+	}
+
+	decrypted, err := p.Decrypt(smTestKey, ciphertext)
+	if err != nil {
+		t.Fatalf("Decrypt error: %v", err)
+	}
+
+	if !bytes.Equal(decrypted, testData) {
+		t.Fatalf("decrypted data doesn't match original: got %v, want %v", decrypted, testData)
+	}
 }
 
 func testEncryptDecryptRoundTrip(t *testing.T, p stb.CryptoProvider) {
@@ -419,8 +444,9 @@ func TestGOSTStatus(t *testing.T) {
 
 func TestSMStatus(t *testing.T) {
 	p := NewSMCrypto()
-	if p.Status() != "stub" {
-		t.Errorf("expected status 'stub', got '%s'", p.Status())
+	// P2-CR.3: SM provider теперь active (не stub)
+	if p.Status() != "active" {
+		t.Errorf("P2-CR.3: expected status 'active', got '%s'", p.Status())
 	}
 }
 

@@ -266,9 +266,9 @@ func TestRegisterBaselineProfiles(t *testing.T) {
 		t.Fatal("RegisterBaselineProfiles must return non-nil registry")
 	}
 
-	// BY, RU, EU, INTL = 4 baseline profiles
-	if registry.Count() != 4 {
-		t.Errorf("expected 4 baseline profiles, got %d", registry.Count())
+	// BY, RU, EU, CN, US, INTL = 6 baseline profiles
+	if registry.Count() != 6 {
+		t.Errorf("expected 6 baseline profiles, got %d", registry.Count())
 	}
 
 	// Verify all required profiles exist

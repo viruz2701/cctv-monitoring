@@ -573,13 +573,122 @@ func (p *INTLProfile) Session() SessionPolicy {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// US Profile — США (NIST SP 800-53, FedRAMP, FIPS 140-3)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - NIST SP 800-53 Rev. 5 — Security and Privacy Controls
+//   - FedRAMP Rev. 5 — Federal Risk and Authorization Management Program
+//   - FIPS 140-3 — Cryptographic Module Validation
+//   - FIPS 199 — Security Categorization
+//   - HIPAA Security Rule — Healthcare (if applicable)
+//   - SOC 2 Type II — Service Organization Controls
+//   - ISO 27001 A.5.1 — Information security policies
+//   - IEC 62443-3-3 — IACS Security
+
+// USProfile implements ComplianceProfile для США.
+type USProfile struct {
+	*BaseProfile
+}
+
+// NewUSProfile создаёт US Compliance Profile.
+func NewUSProfile() *USProfile {
+	return &USProfile{
+		BaseProfile: NewBaseProfile(RegionUS,
+			"NIST SP 800-53 (United States)",
+			"Профиль соответствия для США. NIST SP 800-53, FedRAMP, FIPS 140-3, SOC 2.",
+		),
+	}
+}
+
+func (p *USProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoAES256GCM, // AES-256-GCM (FIPS 140-3 validated)
+		KeySize:       256,
+		AADRequired:   false,
+		TLSMinVersion: "1.2", // NIST SP 800-52 Rev. 2 (TLS 1.2+)
+	}
+}
+
+func (p *USProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSHA256, // SHA-256 (FIPS 180-4)
+		SaltRequired:   false,
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *USProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureES256, // ECDSA P-256 (FIPS 186-5)
+		Curve:       "P-256",
+		HashForSign: HashSHA256,
+	}
+}
+
+func (p *USProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID, // NIST SP 800-63B
+		MinLength:              8,                // NIST SP 800-63B A.3
+		RequireMFA:             true,             // FedRAMP: MFA required
+		MFATypes:               []MFAType{MFATOTP, MFAFIDO2},
+		MaxAgeDays:             0, // NIST SP 800-63B: no forced rotation
+		HistoryCount:           3,
+		RequireComplexity:      false, // NIST SP 800-63B
+		LockoutThreshold:       5,     // FedRAMP: 5 attempts
+		LockoutDurationMinutes: 30,    // FedRAMP: 30 min lockout
+	}
+}
+
+func (p *USProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionUS},
+		CrossBorderTransferAllowed: true, // With adequate safeguards
+		ColdStorageRegion:          RegionUS,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold, StorageArchive},
+		RequireEncryptionAtRest:    true, // FedRAMP SC-13
+	}
+}
+
+func (p *USProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       365,  // 1 год (NIST SP 800-53 AU-11)
+		EventDataDays:      365,  // 1 год (FedRAMP AU-4)
+		VideoDataDays:      90,   // 90 дней
+		LegalHoldSupported: true, // FedRAMP: legal hold
+		AutoDeleteEnabled:  true,
+	}
+}
+
+func (p *USProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true, // NIST SP 800-53 AU-3
+		ChainHashPrev:   false,
+		RetentionYears:  1,    // FedRAMP AU-11
+		LogAllMutations: true, // FedRAMP AU-2
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *USProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       30, // FedRAMP AC-12
+		MaxSessionHours:          24,
+		MaxConcurrentSessions:    3, // FedRAMP AC-10
+		FailedLoginLockout:       5, // FedRAMP AC-7
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // RegisterBaselineProfiles — регистрация всех baseline профилей
 // ═══════════════════════════════════════════════════════════════════════════
 
 // RegisterBaselineProfiles создаёт и регистрирует все baseline профили.
 // Используется при startup для инициализации реестра.
 //
-// Возвращает настроенный ProfileRegistry с BY, EU и INTL профилями.
+// Возвращает настроенный ProfileRegistry с BY, EU, RU, CN, US и INTL профилями.
 // INTL является обязательным профилем (startup фейлится если не зарегистрирован).
 func RegisterBaselineProfiles(logger *slog.Logger) *ProfileRegistry {
 	if logger == nil {
@@ -594,6 +703,7 @@ func RegisterBaselineProfiles(logger *slog.Logger) *ProfileRegistry {
 		WithProfile(NewRUProfile()),
 		WithProfile(NewEUProfile()),
 		WithProfile(NewCNProfile()),
+		WithProfile(NewUSProfile()),
 		WithProfile(NewINTLProfile()),
 	)
 
