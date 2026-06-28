@@ -634,106 +634,116 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
 
-	// 1. Reaper stop
-	logger.Info("Shutting down reaper...")
-	reaper.Stop()
-	logger.Info("Reaper stopped")
+	shutdownStart := time.Now()
 
-	// 2. HTTP server graceful shutdown
-	logger.Info("Shutting down HTTP server...")
-	if err := apiServer.Stop(shutdownCtx); err != nil {
-		logger.Error("HTTP server graceful shutdown failed", "error", err)
-	} else {
-		logger.Info("HTTP server stopped")
+	// P1-PERF.6: Helper для логирования времени выполнения шага shutdown
+	shutdownStep := func(name string, fn func()) {
+		stepStart := time.Now()
+		logger.Info("Shutting down " + name + "...")
+		fn()
+		logger.Info(name+" stopped", "duration", time.Since(stepStart).Round(time.Millisecond).String())
 	}
 
+	// 1. Reaper stop
+	shutdownStep("reaper", func() {
+		reaper.Stop()
+	})
+
+	// 2. HTTP server graceful shutdown
+	shutdownStep("HTTP server", func() {
+		if err := apiServer.Stop(shutdownCtx); err != nil {
+			logger.Error("HTTP server graceful shutdown failed", "error", err)
+		}
+	})
+
 	// 3. SIP server stop
-	logger.Info("Shutting down SIP server...")
-	sipHandler.Stop()
-	logger.Info("SIP server stopped")
+	shutdownStep("SIP server", func() {
+		sipHandler.Stop()
+	})
 
 	// 4. Protocol manager stop (FTP, Dahua, Hikvision, etc.)
-	logger.Info("Shutting down protocol handlers...")
-	protocolManager.StopAll()
-	logger.Info("Protocol handlers stopped")
+	shutdownStep("protocol handlers", func() {
+		protocolManager.StopAll()
+	})
 
 	// 5. Log server stop
-	logger.Info("Shutting down log server...")
-	logServer.Stop()
-	logger.Info("Log server stopped")
+	shutdownStep("log server", func() {
+		logServer.Stop()
+	})
 
 	// 6. Telegram bot stop
 	if telegramBot != nil {
-		logger.Info("Shutting down Telegram bot...")
-		telegramBot.Stop()
-		logger.Info("Telegram bot stopped")
+		shutdownStep("Telegram bot", func() {
+			telegramBot.Stop()
+		})
 	}
 
 	// 7. ITSM sync engine stop
 	if syncEng != nil {
-		logger.Info("Shutting down ITSM sync engine...")
-		syncEng.Stop()
-		logger.Info("ITSM sync engine stopped")
+		shutdownStep("ITSM sync engine", func() {
+			syncEng.Stop()
+		})
 	}
 
 	// 8. Event Store shutdown (DM-1.2.2)
 	if eventStore != nil {
-		logger.Info("Shutting down Event Store...")
-		// Публикуем событие остановки
-		shutdownEvent := eventStore.NewRecord(
-			events.SourceSystem,
-			"system.shutdown",
-			"cctv-backend",
-			map[string]interface{}{
-				"reason": "graceful_shutdown",
-				"signal": "SIGTERM",
-			},
-		)
-		_ = eventStore.StoreSync(shutdownCtx, shutdownEvent)
+		shutdownStep("Event Store", func() {
+			// Публикуем событие остановки
+			shutdownEvent := eventStore.NewRecord(
+				events.SourceSystem,
+				"system.shutdown",
+				"cctv-backend",
+				map[string]interface{}{
+					"reason": "graceful_shutdown",
+					"signal": "SIGTERM",
+				},
+			)
+			_ = eventStore.StoreSync(shutdownCtx, shutdownEvent)
 
-		if err := eventStore.Close(); err != nil {
-			logger.Error("Event Store close failed", "error", err)
-		} else {
-			logger.Info("Event Store shut down")
-		}
+			if err := eventStore.Close(); err != nil {
+				logger.Error("Event Store close failed", "error", err)
+			}
+		})
 	}
 
 	// 9. Feature Flag manager stop
 	if ffManager != nil {
-		logger.Info("Shutting down Feature Flag manager...")
-		ffManager.Stop()
+		shutdownStep("Feature Flag manager", func() {
+			ffManager.Stop()
+		})
 	}
 
 	// 10. JetStream KV State Manager stop (ARCH-01)
 	if jetStreamManager != nil {
-		logger.Info("Shutting down JetStream KV state manager...")
-		jetStreamManager.Stop()
-		logger.Info("JetStream KV state manager stopped")
+		shutdownStep("JetStream KV state manager", func() {
+			jetStreamManager.Stop()
+		})
 	}
 
 	// 11. NATS drain (если подключен)
 	if natsConn != nil {
-		logger.Info("Draining NATS connection...")
-		if err := natsConn.Drain(); err != nil {
-			logger.Error("NATS drain failed", "error", err)
-		} else {
-			logger.Info("NATS connection drained")
-		}
+		shutdownStep("NATS connection", func() {
+			if err := natsConn.Drain(); err != nil {
+				logger.Error("NATS drain failed", "error", err)
+			}
+		})
 	}
 
-	// 12. DBWriter drain
-	logger.Info("Draining DB writer...")
-	dbWriter.Stop()
-	logger.Info("DB writer drained")
+	// 12. DBWriter drain с таймаутом
+	shutdownStep("DB writer", func() {
+		dbWriter.Stop()
+	})
 
 	// 13. Database connection close
-	logger.Info("Closing database connection...")
-	database.Close()
-	logger.Info("Database connection closed")
+	shutdownStep("database connection", func() {
+		database.Close()
+	})
 
-	// Если shutdown занял больше времени чем таймаут, принудительно выходим
-	// (этот код выполнится после shutdownCtx, если все завершилось раньше — ок)
-	logger.Info("✅ Graceful shutdown complete")
+	totalDuration := time.Since(shutdownStart).Round(time.Millisecond)
+	logger.Info("✅ Graceful shutdown complete",
+		"total_duration", totalDuration.String(),
+		"timeout", shutdownTimeout.String(),
+	)
 }
 
 type Reaper struct {
