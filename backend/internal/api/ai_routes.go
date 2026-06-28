@@ -1,4 +1,4 @@
-// Package api — AI Assistant Chat proxy (DeepSeek SSE streaming).
+// Package api — AI Assistant Chat proxy (DeepSeek SSE streaming) + Anomaly Detection.
 //
 // P2-1.2: AI Assistant Chat
 //   - Backend proxy для DeepSeek API (API key не светится на клиенте)
@@ -6,10 +6,17 @@
 //   - Контекст: current page, device_id, wo_id, tenant
 //   - Feedback: thumbs up/down (сохраняется в audit_log)
 //
+// P2-AI.4: Anomaly Detection
+//   - Сбор метрик устройств (heartbeat, ошибки, лаги)
+//   - Статистические методы (z-score, moving average)
+//   - API endpoint GET /api/v1/ai/anomalies
+//   - WebSocket уведомления при обнаружении
+//
 // Compliance:
 //   - OWASP ASVS V3 (Session Management — JWT)
 //   - OWASP ASVS V5 (Input Validation — whitelist)
 //   - IEC 62443 SR 7.1 (Resource availability — timeout controls)
+//   - IEC 62443 SR 3.3 (Security monitoring — anomaly detection)
 //   - СТБ 34.101.27 (Audit trail — feedback logging)
 //   - ISO 27001 A.12.4.1 (Event logging)
 package api
@@ -117,10 +124,20 @@ Rules:
 
 // ─── Routes ───────────────────────────────────────────────────────────
 
-// mountAIRoutes регистрирует AI Assistant маршруты в защищённой группе.
+// mountAIRoutes регистрирует AI Assistant и Anomaly Detection маршруты в защищённой группе.
 func (s *Server) mountAIRoutes(r chi.Router) {
+	// AI Chat
 	r.Post("/api/v1/ai/chat", s.handleAIChat)         // Streaming chat
 	r.Post("/api/v1/ai/feedback", s.handleAIFeedback) // Feedback
+
+	// P2-AI.4: Anomaly Detection
+	if s.anomalyService != nil {
+		r.Get("/api/v1/ai/anomalies", s.handleListAnomalies)                        // List anomalies
+		r.Post("/api/v1/ai/anomalies/feed", s.handleFeedMetric)                     // Feed metric
+		r.Post("/api/v1/ai/anomalies/{id}/acknowledge", s.handleAcknowledgeAnomaly) // Acknowledge
+		r.Post("/api/v1/ai/anomalies/{id}/resolve", s.handleResolveAnomaly)         // Resolve
+		r.Get("/api/v1/ai/anomalies/stats", s.handleAnomalyStats)                   // Stats
+	}
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────

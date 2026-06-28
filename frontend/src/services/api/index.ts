@@ -50,6 +50,13 @@ export type {
   VendorReliability, SLAMetrics, ReliabilityData, ParsedLog,
 } from './analytics';
 
+// P2-AI.4: Anomaly Detection
+export { anomaliesApi } from './anomalies';
+export type {
+  AnomalyResult, AnomalyListResponse, AnomalyStats,
+  FeedMetricRequest, FeedMetricResponse,
+} from './anomalies';
+
 // Services Settings
 export { servicesApi } from './services';
 export type {
@@ -86,6 +93,7 @@ import { sitesApi, ticketsApi } from './sites';
 import { reportsApi, notificationsApi, auditLogApi } from './reports';
 import { webhooksApi, p2pApi, atlasApi, cameraModelsApi } from './integrations';
 import { predictionsApi, costApi, reliabilityApi, slaApi, logsApi } from './analytics';
+import { anomaliesApi } from './anomalies';
 import { servicesApi } from './services';
 import { rcaApi } from './rca';
 
@@ -240,4 +248,11 @@ export const api = {
   getCameraSpecs: cameraModelsApi.getSpecs.bind(cameraModelsApi),
   importCameraSpecs: cameraModelsApi.importSpecs.bind(cameraModelsApi),
   seedCameraSpecs: cameraModelsApi.seedSpecs.bind(cameraModelsApi),
+
+  // P2-AI.4: Anomaly Detection
+  getAnomalies: anomaliesApi.getAnomalies.bind(anomaliesApi),
+  feedMetric: anomaliesApi.feedMetric.bind(anomaliesApi),
+  acknowledgeAnomaly: anomaliesApi.acknowledgeAnomaly.bind(anomaliesApi),
+  resolveAnomaly: anomaliesApi.resolveAnomaly.bind(anomaliesApi),
+  getAnomalyStats: anomaliesApi.getStats.bind(anomaliesApi),
 };

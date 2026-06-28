@@ -26,6 +26,7 @@ export * from './Notifications';
 export * from './WorkOrderDetail';
 export { ComplianceShield } from './ComplianceShield';
 export { PredictiveMaintenance } from './PredictiveMaintenance';
+export { AnomalyDetection } from './AnomalyDetection';
 export { Tutorials } from './Tutorials';
 export { BlackBox } from './BlackBox';
 export { TechnicianWeek } from './TechnicianWeek';

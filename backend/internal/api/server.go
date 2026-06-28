@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/nats-io/nats.go"
 
+	"gb-telemetry-collector/internal/ai"
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/blackbox"
@@ -61,6 +62,9 @@ type Server struct {
 	sipHandler   *sip.SIPHandler
 	wsHub        *ws.Hub
 	telegramBot  *telegram.Bot
+
+	// P2-AI.4: Anomaly Detection Service
+	anomalyService *ai.AnomalyService
 
 	// CMMS adapter — абстракция над Internal/Atlas CMMS
 	cmmsRouter *cmms.CMMSRouter
@@ -224,6 +228,26 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		recaptchaValidator: recaptchaValidator,
 		serverStart:        time.Now(),
 	}
+
+	// ── P2-AI.4: Anomaly Detection Service ─────────────────────────
+	{
+		anomalyCfg := ai.DefaultAnomalyConfig()
+		var anomalyBroadcaster ai.Broadcaster
+		if s.wsHub != nil {
+			anomalyBroadcaster = s.wsHub
+		}
+		anomalyService, err := ai.NewAnomalyService(anomalyCfg, s.natsConn, anomalyBroadcaster, logger)
+		if err != nil {
+			logger.Warn("anomaly service init warning", "error", err)
+		} else {
+			s.anomalyService = anomalyService
+			logger.Info("anomaly detection service initialized",
+				"z_score_threshold", anomalyCfg.ZScoreThreshold,
+				"ma_window", anomalyCfg.MovingAverageWindow,
+			)
+		}
+	}
+
 	// ── Device Service ────────────────────────────────────────────────
 	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
 
