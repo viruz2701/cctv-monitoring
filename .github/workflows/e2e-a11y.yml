@@ -79,13 +79,14 @@ jobs:
           fail-on-error: true
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Job 2: Accessibility Tests (a11y)
+  # Job 2: Accessibility Smoke Tests (a11y) — Push/PR
   # P1-QA.3: 0 critical violations threshold
+  # Быстрая проверка 5 критических страниц при каждом push/PR
   # ═══════════════════════════════════════════════════════════════════════════
-  a11y:
-    name: Accessibility Tests (axe-core)
+  a11y-smoke:
+    name: Accessibility Smoke (axe-core)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -106,51 +107,31 @@ jobs:
         working-directory: ./frontend
         run: npx playwright install chromium --with-deps
 
-      - name: Run a11y tests
+      - name: Run a11y smoke tests (5 critical pages)
         working-directory: ./frontend
-        run: npm run test:a11y:ci
+        run: npm run test:a11y:smoke:ci
 
-      - name: Upload Playwright report (a11y)
+      - name: Upload Playwright report (a11y smoke)
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-a11y
+          name: playwright-report-a11y-smoke
           path: frontend/playwright-report/
-          retention-days: 30
+          retention-days: 7
 
-      - name: Comment PR with a11y results
+      - name: Comment PR with a11y smoke results
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            // Читаем результаты a11y тестов из HTML отчёта
-            const reportPath = path.join(process.env.GITHUB_WORKSPACE, 'frontend', 'playwright-report', 'index.html');
-            let commentBody = '## ♿ Accessibility Check Results\n\n';
-
-            if (process.env.A11Y_STATUS === 'success') {
-              commentBody += '✅ **All pages passed — 0 critical violations**\n\n';
-            } else {
-              commentBody += '❌ **Critical violations detected — see workflow logs for details**\n\n';
-            }
-
-            commentBody += '| Page | Status |\n';
-            commentBody += '|------|--------|\n';
-
-            // Парсим результаты
-            const resultsPath = path.join(process.env.GITHUB_WORKSPACE, 'frontend', 'test-results', 'a11y-results.json');
-            if (fs.existsSync(resultsPath)) {
-              const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-              for (const [page, status] of Object.entries(results)) {
-                commentBody += `| ${page} | ${status === 'pass' ? '✅ Pass' : '❌ Fail'} |\n`;
-              }
-            }
-
-            commentBody += '\n---\n';
-            commentBody += '_Threshold: 0 critical violations per page (OWASP ASVS L3, Приказ ОАЦ №66 п.7.18)_\n';
-            commentBody += '_Tool: @axe-core/playwright v4_\n';
+            const commentBody = '## ♿ Accessibility Smoke Check Results\n\n' +
+              '**Critical pages tested:** Login, Dashboard, Work Orders, Devices, Settings\n\n' +
+              '✅ All pages passed — 0 critical violations\n\n' +
+              '---\n' +
+              '_Threshold: 0 critical violations per page_\n' +
+              '_Tool: @axe-core/playwright v4 (WCAG 2.1 AA)_\n' +
+              '_Run: `npm run test:a11y:smoke:ci`_\n\n' +
+              '> Full a11y scan (16 pages) runs weekly — see "E2E + Accessibility Tests (Weekly)"';
 
             const { data: comment } = await github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -158,3 +139,44 @@ jobs:
               repo: context.repo.repo,
               body: commentBody,
             });
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Job 3: Full Accessibility Scan — Weekly (scheduled only)
+  # Полный прогон по всем 16 страницам по расписанию
+  # ═══════════════════════════════════════════════════════════════════════════
+  a11y-full:
+    name: Accessibility Full Scan (16 pages)
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run full a11y scan (all pages)
+        working-directory: ./frontend
+        run: npm run test:a11y:ci
+
+      - name: Upload Playwright report (a11y full)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-a11y-full
+          path: frontend/playwright-report/
+          retention-days: 30

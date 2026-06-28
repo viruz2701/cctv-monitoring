@@ -39,7 +39,7 @@ export default defineConfig({
     {
       name: 'a11y',
       testDir: '../tests/a11y',
-      testMatch: 'all-pages.spec.ts',
+      testMatch: '*.spec.ts',
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
