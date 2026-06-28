@@ -1,3 +1,12 @@
+// ═══════════════════════════════════════════════════════════════════════
+// ScheduleXWrapper — Lazy-loaded Schedule-X calendar wrapper
+// P1-PERF-BUNDLE.1: Schedule-X (~80KB) replaces FullCalendar (~328KB)
+//
+// Schedule-X загружается лениво (dynamic import) при первом рендере.
+// Поддержка: month view, week view, resource events, drag & drop.
+// Print-friendly CSS, dark mode (CSS variables).
+// ═══════════════════════════════════════════════════════════════════════
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { MaintenanceSchedule } from '../../services/maintenanceApi';
 
@@ -11,14 +20,32 @@ interface Resource {
   eventColor?: string;
 }
 
-interface FullCalendarWrapperProps {
-  /** Массив событий в формате FullCalendar */
-  events: Record<string, unknown>[];
-  /** Ресурсы для resourceTimeline (опционально) */
+export interface ScheduleXEvent {
+  id: string;
+  start: string;
+  end?: string;
+  title?: string;
+  calendarId?: string;
+  /** Custom data passed through extended props */
+  [key: string]: unknown;
+}
+
+interface CalendarColors {
+  colorName: string;
+  lightColors: { main: string; container: string; onContainer: string };
+  darkColors: { main: string; container: string; onContainer: string };
+}
+
+interface ScheduleXWrapperProps {
+  /** Массив событий в формате Schedule-X */
+  events: ScheduleXEvent[];
+  /** Ресурсы для color-coded calendars (опционально) */
   resources?: Resource[];
+  /** Map resource.id → calendar config for color coding */
+  calendars?: Record<string, CalendarColors>;
   onEventClick: (schedule: MaintenanceSchedule) => void;
   onEventDrop: (schedule: MaintenanceSchedule, newDate: string) => Promise<void>;
-  /** Включить resourceTimeline views */
+  /** Включить resource views */
   enableResourceView?: boolean;
   className?: string;
 }
@@ -27,7 +54,7 @@ interface FullCalendarWrapperProps {
 // Print styles
 // ═══════════════════════════════════════════════════════════════════════
 
-const PRINT_STYLE_ID = 'fc-wrapper-print-styles';
+const PRINT_STYLE_ID = 'sx-wrapper-print-styles';
 
 function injectPrintStyles(): void {
   if (typeof document === 'undefined' || document.getElementById(PRINT_STYLE_ID)) return;
@@ -35,7 +62,7 @@ function injectPrintStyles(): void {
   style.id = PRINT_STYLE_ID;
   style.textContent = `
 @media print {
-  .fc-wrapper-print-header {
+  .sx-wrapper-print-header {
     display: block !important;
     text-align: center;
     font-size: 16pt;
@@ -43,23 +70,17 @@ function injectPrintStyles(): void {
     margin-bottom: 16px;
     color: #1e293b;
   }
-  .fc-wrapper .fc-header-toolbar .fc-button {
+  .sx-wrapper .sx__calendar-header .sx__button {
     display: none !important;
   }
-  .fc-wrapper .fc-header-toolbar .fc-toolbar-title {
+  .sx-wrapper .sx__calendar-header .sx__title {
     font-size: 14pt !important;
     font-weight: 700 !important;
   }
-  .fc-wrapper .fc {
+  .sx-wrapper .sx__calendar {
     font-size: 9pt !important;
   }
-  .fc-wrapper .fc-view-harness {
-    page-break-inside: avoid;
-  }
-  .fc-wrapper .fc-scrollgrid {
-    page-break-inside: avoid;
-  }
-  .fc-wrapper > :not(.fc-wrapper-print-header):not(.fc) {
+  .sx-wrapper > :not(.sx-wrapper-print-header):not(.sx__calendar) {
     display: none !important;
   }
 }
@@ -68,103 +89,160 @@ function injectPrintStyles(): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Component
+// Build calendars config from resources
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * P1-PERF.1: Lazy-loaded FullCalendar wrapper.
- * FullCalendar (~500KB) загружается только когда пользователь переключается
- * на календарный режим просмотра.
- *
- * P2-2.3: Поддержка resourceTimeline с drag между ресурсами.
- */
-const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
+function buildCalendarsFromResources(resources: Resource[]): Record<string, CalendarColors> {
+  const calendars: Record<string, CalendarColors> = {};
+  const palette: CalendarColors[] = [
+    { colorName: 'blue', lightColors: { main: '#3B82F6', container: '#DBEAFE', onContainer: '#1E40AF' }, darkColors: { main: '#60A5FA', container: '#1E3A5F', onContainer: '#BFDBFE' } },
+    { colorName: 'green', lightColors: { main: '#22C55E', container: '#DCFCE7', onContainer: '#166534' }, darkColors: { main: '#4ADE80', container: '#14532D', onContainer: '#BBF7D0' } },
+    { colorName: 'orange', lightColors: { main: '#F97316', container: '#FED7AA', onContainer: '#9A3412' }, darkColors: { main: '#FB923C', container: '#7C2D12', onContainer: '#FED7AA' } },
+    { colorName: 'purple', lightColors: { main: '#A855F7', container: '#F3E8FF', onContainer: '#6B21A8' }, darkColors: { main: '#C084FC', container: '#4C1D95', onContainer: '#E9D5FF' } },
+    { colorName: 'red', lightColors: { main: '#EF4444', container: '#FEE2E2', onContainer: '#991B1B' }, darkColors: { main: '#F87171', container: '#7F1D1D', onContainer: '#FECACA' } },
+    { colorName: 'teal', lightColors: { main: '#14B8A6', container: '#CCFBF1', onContainer: '#115E59' }, darkColors: { main: '#2DD4BF', container: '#134E4A', onContainer: '#CCFBF1' } },
+    { colorName: 'pink', lightColors: { main: '#EC4899', container: '#FCE7F3', onContainer: '#9D174D' }, darkColors: { main: '#F472B6', container: '#831843', onContainer: '#FBCFE8' } },
+    { colorName: 'yellow', lightColors: { main: '#EAB308', container: '#FEF9C3', onContainer: '#854D0E' }, darkColors: { main: '#FACC15', container: '#713F12', onContainer: '#FEF08A' } },
+  ];
+
+  resources.forEach((r, i) => {
+    calendars[r.id] = palette[i % palette.length];
+  });
+
+  return calendars;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ScheduleXCalendarApp — renders the actual calendar using hooks
+// ═══════════════════════════════════════════════════════════════════════
+
+interface CalendarAppProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sxModules: any;
+  events: ScheduleXEvent[];
+  calendars: Record<string, CalendarColors>;
+  onEventClick: (schedule: MaintenanceSchedule) => void;
+  onEventDrop: (schedule: MaintenanceSchedule, newDate: string) => Promise<void>;
+  enableResourceView: boolean;
+}
+
+const ScheduleXCalendarApp: React.FC<CalendarAppProps> = ({
+  sxModules,
+  events,
+  calendars,
+  onEventClick,
+  onEventDrop,
+  enableResourceView,
+}) => {
+  const { useCalendarApp, ScheduleXCalendar, viewMonthGrid, viewWeek, viewDay } = sxModules;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dndPlugin = (sxModules as any).dndPlugin;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const timePlugin = (sxModules as any).timePlugin;
+
+  // Convert events to match Schedule-X format
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendarEvents = useMemo<any[]>(() => {
+    return events.map(evt => {
+      // Copy only custom props, not the reserved ones
+      const { id, title, start, end, calendarId, ...customProps } = evt;
+      return {
+        id,
+        title: title || '',
+        start,
+        end: end || start,
+        calendarId,
+        ...customProps,
+      };
+    });
+  }, [events]);
+
+  // Determine dark mode
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendar = (useCalendarApp as any)({
+    views: enableResourceView ? [viewMonthGrid, viewWeek, viewDay] : [viewMonthGrid, viewWeek],
+    defaultView: enableResourceView ? 'week' : 'month-grid',
+    events: calendarEvents,
+    calendars,
+    plugins: [dndPlugin, timePlugin].filter(Boolean),
+    isDark,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    callbacks: {
+      onEventClick: (event: any) => {
+        const schedule = event.schedule as MaintenanceSchedule | undefined;
+        if (schedule) onEventClick(schedule);
+      },
+      onEventUpdate: (event: any) => {
+        const schedule = event.schedule as MaintenanceSchedule | undefined;
+        if (schedule && event.start) {
+          const newDate = typeof event.start === 'string' ? event.start : event.start.toString();
+          onEventDrop(schedule, newDate);
+        }
+      },
+    },
+    firstDayOfWeek: 1,
+  });
+
+  return <ScheduleXCalendar calendarApp={calendar} />;
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ScheduleXWrapper — main component
+// ═══════════════════════════════════════════════════════════════════════
+
+const ScheduleXWrapper: React.FC<ScheduleXWrapperProps> = ({
   events,
   resources,
+  calendars: calendarsProp,
   onEventClick,
   onEventDrop,
   enableResourceView = false,
   className = '',
 }) => {
-  const [FCModule, setFCModule] = useState<{
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    default: any;
-    dayGridPlugin: any;
-    interactionPlugin: any;
-    resourceTimelinePlugin?: any;
-  } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [sxModules, setSxModules] = useState<any>(null);
 
   // Inject print styles once
   useEffect(() => {
     injectPrintStyles();
   }, []);
 
-  // Lazy-load plugins based on whether resource view is enabled
+  // Lazy-load Schedule-X modules
   useEffect(() => {
-    const imports = [
-      import('@fullcalendar/react'),
-      import('@fullcalendar/daygrid'),
-      import('@fullcalendar/interaction'),
-    ];
-
-    if (enableResourceView) {
-      imports.push(import('@fullcalendar/resource-timeline'));
-    }
-
-    Promise.all(imports).then(([fc, dayGrid, interaction, resourceTimeline]) => {
-      setFCModule({
-        default: fc.default,
-        dayGridPlugin: dayGrid.default,
-        interactionPlugin: interaction.default,
-        resourceTimelinePlugin: resourceTimeline?.default,
+    Promise.all([
+      import('@schedule-x/react'),
+      import('@schedule-x/calendar'),
+      import('@schedule-x/drag-and-drop'),
+      import('@schedule-x/current-time'),
+    ]).then(([sxReact, sxCalendar, sxDnD, sxTime]) => {
+      setSxModules({
+        useCalendarApp: sxReact.useCalendarApp,
+        ScheduleXCalendar: sxReact.ScheduleXCalendar,
+        viewMonthGrid: sxCalendar.viewMonthGrid,
+        viewWeek: sxCalendar.viewWeek,
+        viewDay: sxCalendar.viewDay,
+        dndPlugin: sxDnD.createDragAndDropPlugin(),
+        timePlugin: sxTime.createCurrentTimePlugin(),
       });
     });
-  }, [enableResourceView]);
+  }, []);
 
-  // Build plugins array based on what's loaded
-  const plugins = useMemo(() => {
-    if (!FCModule) return [];
-    const list = [FCModule.dayGridPlugin, FCModule.interactionPlugin];
-    if (FCModule.resourceTimelinePlugin) {
-      list.push(FCModule.resourceTimelinePlugin);
-    }
-    return list;
-  }, [FCModule]);
-
-  // Build views config
-  const views = useMemo(() => {
-    if (!enableResourceView) return undefined;
+  // Build calendars config
+  const calendars = useMemo(() => {
+    if (calendarsProp) return calendarsProp;
+    if (resources && enableResourceView) return buildCalendarsFromResources(resources);
     return {
-      resourceTimelineWeek: {
-        type: 'resourceTimeline' as const,
-        duration: { weeks: 1 },
-        buttonText: 'Week',
-      },
-      resourceTimelineDay: {
-        type: 'resourceTimeline' as const,
-        duration: { days: 1 },
-        buttonText: 'Day',
+      default: {
+        colorName: 'blue' as const,
+        lightColors: { main: '#3B82F6', container: '#DBEAFE', onContainer: '#1E40AF' },
+        darkColors: { main: '#60A5FA', container: '#1E3A5F', onContainer: '#BFDBFE' },
       },
     };
-  }, [enableResourceView]);
+  }, [calendarsProp, resources, enableResourceView]);
 
-  // Build header toolbar
-  const headerToolbar = useMemo(() => {
-    if (enableResourceView) {
-      return {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,dayGridWeek,resourceTimelineWeek,resourceTimelineDay',
-      };
-    }
-    return {
-      left: 'prev,next today',
-      center: 'title',
-      right: 'dayGridMonth,dayGridWeek',
-    };
-  }, [enableResourceView]);
-
-  if (!FCModule) {
+  if (!sxModules) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
@@ -175,60 +253,23 @@ const FullCalendarWrapper: React.FC<FullCalendarWrapperProps> = ({
     );
   }
 
-  const { default: FullCalendar } = FCModule;
-
   return (
-    <div className={`fc-wrapper ${className}`}>
+    <div className={`sx-wrapper ${className}`}>
       {/* Print header — hidden on screen, visible in print */}
-      <div className="fc-wrapper-print-header hidden print:block">
+      <div className="sx-wrapper-print-header hidden print:block">
         CCTV Health Monitor — Maintenance Schedule
       </div>
 
-      <FullCalendar
-        plugins={plugins}
-        initialView={enableResourceView ? 'resourceTimelineWeek' : 'dayGridMonth'}
-        resources={resources}
+      <ScheduleXCalendarApp
+        sxModules={sxModules}
         events={events}
-        views={views}
-        headerToolbar={headerToolbar}
-        editable={true}
-        droppable={enableResourceView}
-        eventClick={(info: any) => {
-          const schedule = info.event.extendedProps.schedule as MaintenanceSchedule;
-          onEventClick(schedule);
-        }}
-        eventDrop={async (info: any) => {
-          const schedule = info.event.extendedProps.schedule as MaintenanceSchedule;
-          const newDate = info.event.startStr;
-
-          // If resource changed (inter-resource drag), update assignment
-          if (enableResourceView && info.newResource) {
-            // Additional logic for resource change can be added here
-            // For now, pass through to the standard handler
-          }
-
-          try {
-            await onEventDrop(schedule, newDate);
-            info.el.style.opacity = '1';
-          } catch {
-            info.revert();
-          }
-        }}
-        eventReceive={enableResourceView ? async (info: any) => {
-          // Handle external drop onto resource
-          const schedule = info.event.extendedProps?.schedule as MaintenanceSchedule;
-          if (schedule && info.event.startStr) {
-            try {
-              await onEventDrop(schedule, info.event.startStr);
-            } catch {
-              info.revert();
-            }
-          }
-        } : undefined}
-        height="auto"
+        calendars={calendars}
+        onEventClick={onEventClick}
+        onEventDrop={onEventDrop}
+        enableResourceView={enableResourceView}
       />
     </div>
   );
 };
 
-export default FullCalendarWrapper;
+export default ScheduleXWrapper;

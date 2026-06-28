@@ -18,8 +18,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { workOrdersApi } from '../services/workOrdersApi';
 import { queryKeys } from './useApiQuery';
-import type { EventDropArg } from '@fullcalendar/core';
-import type { EventImpl } from '@fullcalendar/core/internal';
 import type { WorkOrder } from '../services/workOrdersApi';
 import type { User } from '../services/api';
 
@@ -66,7 +64,8 @@ export interface TechnicianSchedule {
   dayLoads: Map<string, DayLoad[]>;   // techId → day loads
   isLoading: boolean;
   error: Error | null;
-  handleEventDrop: (info: EventDropArg) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleEventDrop: (info: any) => Promise<void>;
   refetch: () => void;
 }
 
@@ -265,25 +264,23 @@ export function useTechnicianSchedule(): TechnicianSchedule {
   );
 
   // ── Drag & drop handler ─────────────────────────────────────────
-  const handleEventDrop = useCallback(async (info: EventDropArg) => {
-    const woId = info.event.extendedProps?.workOrderId as string | undefined;
-    if (!woId) { info.revert(); return; }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleEventDrop = useCallback(async (info: any) => {
+    const woId = info.event?.extendedProps?.workOrderId as string | undefined;
+    if (!woId) { info.revert?.(); return; }
 
     // Extract new resource ID from the dropped event.
-    // FullCalendar resource-timeline attaches resourceIds to the event after drop.
-    // Using type assertion for resource plugin properties.
-    const event = info.event as EventImpl & { getResources?: () => Array<{ id: string }> };
-    const drop = info as EventDropArg & { newResource?: { id: string } };
-    const newTechId = event.getResources?.()?.[0]?.id ?? drop.newResource?.id;
+    // Schedule-X uses calendarId on the event for resource assignment.
+    const newTechId = info.event?.calendarId as string | undefined;
 
-    if (!newTechId) { info.revert(); return; }
+    if (!newTechId) { info.revert?.(); return; }
 
     try {
       await workOrdersApi.assignWorkOrder(woId, newTechId);
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: queryKeys.workOrders.all });
     } catch {
-      info.revert();
+      info.revert?.();
     }
   }, [queryClient]);
 

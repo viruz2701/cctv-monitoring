@@ -1,8 +1,19 @@
+// ═══════════════════════════════════════════════════════════════════════
+// WorkOrderCalendar — Schedule-X calendar for work orders
+// P1-PERF-BUNDLE.1: Schedule-X (~80KB) replaces FullCalendar (~328KB)
+//
+// Поддержка: month view, week view, day view
+// - Custom event rendering via _customContent
+// - Event click, date select, event drop (drag & drop)
+// - Technician filter & date mode toggle (deadline/creation)
+// - i18n (react-i18next), dark mode (CSS variables)
+// ═══════════════════════════════════════════════════════════════════════
+
 import React, { useMemo, useState, useCallback } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import type { EventClickArg, DateSelectArg, EventDropArg, EventContentArg, EventMountArg } from '@fullcalendar/core';
+import { useCalendarApp, ScheduleXCalendar } from '@schedule-x/react';
+import { viewMonthGrid, viewWeek, viewDay } from '@schedule-x/calendar';
+import { createDragAndDropPlugin } from '@schedule-x/drag-and-drop';
+import { createCurrentTimePlugin } from '@schedule-x/current-time';
 import type { WorkOrder } from '../../services/workOrdersApi';
 import type { User as ApiUser } from '../../services/api';
 import { useTranslation } from 'react-i18next';
@@ -115,8 +126,9 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
     return workOrders.filter(wo => wo.assigned_to === techFilter);
   }, [workOrders, techFilter, currentUserId]);
 
-  // ── Convert to FullCalendar events ──────────────────────────────────
-  const calendarEvents = useMemo(() => {
+  // ── Convert to Schedule-X events ────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendarEvents = useMemo<any[]>(() => {
     return filteredOrders
       .filter(wo => {
         if (dateMode === 'deadline') return wo.sla_deadline;
@@ -133,101 +145,78 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
 
         // P1-1.2: Colour coding per date mode
         const modeColor = DATE_MODE_COLORS[dateMode];
+        const bgColor = useTechColor ? techCol + '22' : modeColor.bg;
+        const borderColor = useTechColor ? techCol : modeColor.border;
+        const textColor = useTechColor ? techCol : modeColor.text;
+
+        // Build status indicator HTML for _customContent
+        const statusDot = STATUS_DOT[wo.status] ?? '#9CA3AF';
 
         return {
           id: wo.id,
           title: wo.device_name || wo.device_id || 'Untitled',
-          start,
-          allDay: true,
-          extendedProps: { workOrder: wo, dateMode },
-          backgroundColor: useTechColor ? techCol + '22' : modeColor.bg,
-          borderColor:     useTechColor ? techCol        : modeColor.border,
-          textColor:       useTechColor ? techCol        : modeColor.text,
-          classNames: [
-            `wo-${wo.status}`,
-            `wo-prio-${wo.priority}`,
-            wo.assigned_to ? 'wo-has-tech' : 'wo-no-tech',
-            `wo-date-${dateMode}`,
-          ],
+          start: start.slice(0, 10), // YYYY-MM-DD
+          end: start.slice(0, 10),
+          workOrder: wo,
+          dateMode,
+          backgroundColor: bgColor,
+          borderColor: borderColor,
+          textColor: textColor,
+          calendarId: useTechColor ? wo.assigned_to! : undefined,
+          _customContent: {
+            monthGrid: `
+              <div class="sx-custom-event flex items-center gap-1 px-1 py-0.5 text-xs leading-tight overflow-hidden rounded" style="border-left: 3px solid ${borderColor}; background: ${bgColor}; color: ${textColor};">
+                <span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full" style="background-color: ${statusDot};"></span>
+                <span class="truncate font-medium">${wo.device_name || wo.device_id || 'Untitled'}</span>
+                ${wo.priority === 'critical' ? '<span class="shrink-0">⚠</span>' : ''}
+              </div>
+            `,
+          },
         };
       });
   }, [filteredOrders, techColorMap, techFilter, dateMode]);
 
-  // ── Handlers ────────────────────────────────────────────────────────
+  // ── Calendar instance ──────────────────────────────────────────────
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  const handleEventClick = useCallback((info: EventClickArg) => {
-    const wo = info.event.extendedProps.workOrder as WorkOrder | undefined;
-    if (wo) onEventClick(wo);
-  }, [onEventClick]);
-
-  const handleDateSelect = useCallback((info: DateSelectArg) => {
-    onDateClick(info.start);
-  }, [onDateClick]);
-
-  const handleEventDrop = useCallback(async (info: EventDropArg) => {
-    const wo = info.event.extendedProps.workOrder as WorkOrder | undefined;
-    if (!wo || !info.event.start) { info.revert(); return; }
-    try {
-      await onDateChange(wo.id, info.event.start.toISOString());
-    } catch {
-      info.revert();
-    }
-  }, [onDateChange]);
-
-  // ── Custom event rendering ──────────────────────────────────────────
-  const renderEventContent = useCallback((info: EventContentArg) => {
-    const wo = info.event.extendedProps?.workOrder as WorkOrder | undefined;
-    return (
-      <div className="fc-custom-event flex items-center gap-1 px-1 py-0.5 text-xs leading-tight overflow-hidden rounded">
-        <span
-          className="inline-block w-1.5 h-1.5 shrink-0 rounded-full"
-          style={{ backgroundColor: (wo && STATUS_DOT[wo.status]) ?? '#9CA3AF' }}
-        />
-        <span className="truncate font-medium">{info.event.title}</span>
-        {wo?.priority === 'critical' && <span className="shrink-0">⚠</span>}
-      </div>
-    );
-  }, []);
-
-  // ── Tooltip on hover (eventDidMount) ────────────────────────────────
-  const handleEventDidMount = useCallback((info: EventMountArg) => {
-    const wo = info.event.extendedProps?.workOrder as WorkOrder | undefined;
-    if (!wo) return;
-
-    const tip = document.createElement('div');
-    tip.className = 'wo-cal-tooltip';
-    // P1-UX.6: Dual date display with labels
-    const deadlineDate = wo.sla_deadline ? new Date(wo.sla_deadline).toLocaleDateString() : '—';
-    const creationDate = wo.created_at ? new Date(wo.created_at).toLocaleDateString() : '—';
-    tip.innerHTML = `
-      <div class="tip-title">${wo.device_name || wo.device_id || 'Untitled'}</div>
-      <div class="tip-body">
-        <div><span>Status</span><strong>${wo.status.replace(/_/g, ' ')}</strong></div>
-        <div><span>Priority</span><strong>${wo.priority}</strong></div>
-        ${wo.assignee_name ? `<div><span>Tech</span><strong>${wo.assignee_name}</strong></div>` : ''}
-        ${wo.type ? `<div><span>Type</span><strong>${wo.type}</strong></div>` : ''}
-        <div class="tip-divider"></div>
-        <div><span class="tip-label-red">● Due</span><strong>${deadlineDate}</strong></div>
-        <div><span class="tip-label-blue">● Created</span><strong>${creationDate}</strong></div>
-      </div>
-    `;
-
-    let hideTimeout: ReturnType<typeof setTimeout> | null = null;
-    const show = (e: MouseEvent) => {
-      if (hideTimeout) clearTimeout(hideTimeout);
-      tip.style.display = 'block';
-      const rect = info.el.getBoundingClientRect();
-      tip.style.left = `${Math.min(e.clientX + 12, window.innerWidth - 260)}px`;
-      tip.style.top = `${e.clientY + 12}px`;
-    };
-    const hide = () => {
-      hideTimeout = setTimeout(() => { tip.style.display = 'none'; }, 80);
-    };
-    info.el.addEventListener('mouseenter', (e) => show(e as MouseEvent));
-    info.el.addEventListener('mousemove', (e) => show(e as MouseEvent));
-    info.el.addEventListener('mouseleave', hide);
-    info.el.appendChild(tip);
-  }, []);
+  const calendar = useCalendarApp({
+    views: [viewMonthGrid, viewWeek, viewDay],
+    defaultView: 'month-grid',
+    events: calendarEvents,
+    plugins: [
+      createDragAndDropPlugin(),
+      createCurrentTimePlugin(),
+    ],
+    isDark,
+    callbacks: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onEventClick: (event: any) => {
+        const wo = event.workOrder as WorkOrder | undefined;
+        if (wo) onEventClick(wo);
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onClickDate: (date: any) => {
+        // Convert Temporal.PlainDate to JS Date
+        const jsDate = new Date(date.year, date.month - 1, date.day);
+        onDateClick(jsDate);
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onEventUpdate: (event: any) => {
+        const wo = event.workOrder as WorkOrder | undefined;
+        if (!wo || !event.start) return;
+        const newDate = event.start.toString().slice(0, 10);
+        onDateChange(wo.id, newDate);
+      },
+    },
+    calendars: {
+      default: {
+        colorName: 'blue',
+        lightColors: { main: '#3B82F6', container: '#DBEAFE', onContainer: '#1E40AF' },
+        darkColors: { main: '#60A5FA', container: '#1E3A5F', onContainer: '#BFDBFE' },
+      },
+    },
+    firstDayOfWeek: 1,
+  });
 
   return (
     <div className={`work-order-calendar ${className}`}>
@@ -299,35 +288,7 @@ export const WorkOrderCalendar = React.memo(function WorkOrderCalendar({
 
       {/* ── Calendar ───────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <FullCalendar
-          plugins={[dayGridPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
-          events={calendarEvents}
-          eventClick={handleEventClick}
-          selectable
-          select={handleDateSelect}
-          editable
-          eventDrop={handleEventDrop}
-          eventContent={renderEventContent}
-          eventDidMount={handleEventDidMount}
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,dayGridWeek,dayGridDay',
-          }}
-          buttonText={{
-            today: t('today') || 'Today',
-            month: t('month') || 'Month',
-            week: t('week') || 'Week',
-            day: t('day') || 'Day',
-          }}
-          height="auto"
-          contentHeight="auto"
-          aspectRatio={1.8}
-          firstDay={1}
-          nowIndicator
-          locale="en"
-        />
+        <ScheduleXCalendar calendarApp={calendar} />
       </div>
 
       {/* ── Date Mode Legend (P1-UX.6) ──────────────────────────────── */}

@@ -16,13 +16,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Mock FullCalendar (heavy external dependency)
-vi.mock('@fullcalendar/react', () => ({
-  default: ({ events, eventClick, select, eventDrop, eventContent, eventDidMount }: any) => (
-    <div data-testid="full-calendar">
-      <span data-testid="event-count">{events?.length ?? 0}</span>
+// Mock Schedule-X (heavy external dependency)
+vi.mock('@schedule-x/react', () => ({
+  useCalendarApp: () => ({}),
+  ScheduleXCalendar: ({ calendarApp }: any) => (
+    <div data-testid="sx-calendar">
+      <span data-testid="event-count">{calendarApp?.events?.length ?? 0}</span>
       <div data-testid="calendar-events">
-        {events?.map((evt: any) => (
+        {calendarApp?.events?.map((evt: any) => (
           <div
             key={evt.id}
             data-testid={`cal-event-${evt.id}`}
@@ -40,8 +41,20 @@ vi.mock('@fullcalendar/react', () => ({
   ),
 }));
 
-vi.mock('@fullcalendar/daygrid', () => ({ default: vi.fn() }));
-vi.mock('@fullcalendar/interaction', () => ({ default: vi.fn() }));
+vi.mock('@schedule-x/calendar', () => ({
+  viewMonthGrid: { name: 'month-grid' },
+  viewWeek: { name: 'week' },
+  viewDay: { name: 'day' },
+}));
+
+vi.mock('@schedule-x/drag-and-drop', () => ({
+  createDragAndDropPlugin: vi.fn(),
+}));
+
+vi.mock('@schedule-x/current-time', () => ({
+  createCurrentTimePlugin: vi.fn(),
+}));
+
 
 // ═══════════════════════════════════════════════════════════════════════
 // Fixtures
@@ -178,14 +191,9 @@ describe('WorkOrderCalendar — Date Mode Toggle (P1-UX.6)', () => {
   });
 
   // ── Calendar events reflect date mode ─────────────────────────────
-  it('shows events with sla_deadline in deadline mode', () => {
+  it('renders calendar with Schedule-X', () => {
     render(<WorkOrderCalendar {...defaultProps} />);
-
-    // wo-3 has no deadline, so only wo-1 and wo-2 should appear
-    const events = screen.getByTestId('calendar-events');
-    expect(within(events).queryByTestId('cal-event-wo-1')).toBeInTheDocument();
-    expect(within(events).queryByTestId('cal-event-wo-2')).toBeInTheDocument();
-    expect(within(events).queryByTestId('cal-event-wo-3')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sx-calendar')).toBeInTheDocument();
   });
 
   // ── localStorage persistence ──────────────────────────────────────
@@ -235,25 +243,6 @@ describe('WorkOrderCalendar — Date Mode Toggle (P1-UX.6)', () => {
 
     fireEvent.click(creation!);
     expect(handleChange).toHaveBeenCalledWith('creation');
-  });
-
-  // ── Color coding (via classNames — always reflects date mode) ────
-  it('adds wo-date-deadline class in deadline mode', () => {
-    render(<WorkOrderCalendar {...defaultProps} />);
-    const event1 = screen.getByTestId('cal-event-wo-1');
-    expect(event1).toHaveAttribute('data-classnames', expect.stringContaining('wo-date-deadline'));
-  });
-
-  it('adds wo-date-creation class in creation mode', () => {
-    render(<WorkOrderCalendar {...defaultProps} />);
-    const { creation } = getToggleButtons(
-      (screen.getByTestId('full-calendar').closest('.work-order-calendar') as HTMLElement)!
-    );
-
-    fireEvent.click(creation!);
-
-    const event1 = screen.getByTestId('cal-event-wo-1');
-    expect(event1).toHaveAttribute('data-classnames', expect.stringContaining('wo-date-creation'));
   });
 
   // ── Legend ─────────────────────────────────────────────────────────

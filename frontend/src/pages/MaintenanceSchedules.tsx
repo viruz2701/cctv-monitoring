@@ -16,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
 import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
-import FullCalendarWrapper from '../components/planning/FullCalendarWrapper';
+import ScheduleXWrapper from '../components/planning/FullCalendarWrapper';
 
 type ViewMode = 'table' | 'calendar';
 
@@ -236,7 +236,7 @@ export const MaintenanceSchedules: React.FC = () => {
             ) : filteredSchedules.length === 0 ? (
               <div className="flex items-center justify-center h-96 text-slate-400">{t('no_events')}</div>
             ) : (
-              <FullCalendarWrapper
+              <ScheduleXWrapper
                 events={calendarEvents}
                 onEventClick={handleEventClick}
                 onEventDrop={handleEventDrop}

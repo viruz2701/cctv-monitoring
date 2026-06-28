@@ -1,14 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════════
-// TechnicianCalendar — Resource timeline calendar for technician scheduling
+// TechnicianCalendar — Resource calendar for technician scheduling
+// P1-PERF-BUNDLE.1: Schedule-X (~80KB) replaces FullCalendar (~328KB)
 // P2-2.3: Resource Planning Calendar
 //
-// P1-UX.5: Calendar Date Mode Toggle (day/week/month)
-//   - Toggle between day/week/month views
+// P1-UX.5: Calendar Date Mode Toggle (day/week)
+//   - Toggle between day/week views
 //   - Preference сохраняется в localStorage
-//   - Color coding: deadline (red), creation (blue)
+//   - Color coding: per-technician with availability indicators
 //
-// Uses FullCalendar resourceTimelineWeek view:
-//   - Technicians as resources (rows)
+// Использует Schedule-X с calendars для color-coded per-technician events:
+//   - Technicians as calendars (color-coded)
 //   - Work orders as draggable events
 //   - Availability indicators (green/yellow/red) per day
 //   - Conflict detection warnings
@@ -19,12 +20,11 @@
 //   - OWASP ASVS V1.8 (Stateless architecture)
 // ═══════════════════════════════════════════════════════════════════════
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import resourceTimelinePlugin from '@fullcalendar/resource-timeline';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import type { EventDropArg, EventContentArg, EventMountArg } from '@fullcalendar/core';
+import React, { useMemo, useCallback, useState } from 'react';
+import { useCalendarApp, ScheduleXCalendar } from '@schedule-x/react';
+import { viewWeek, viewDay } from '@schedule-x/calendar';
+import { createDragAndDropPlugin } from '@schedule-x/drag-and-drop';
+import { createCurrentTimePlugin } from '@schedule-x/current-time';
 import type { User } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import {
@@ -36,7 +36,6 @@ import {
   User as UserIcon,
   CalendarDays,
   CalendarRange,
-  List,
 } from 'lucide-react';
 import type {
   ScheduleSlot,
@@ -69,6 +68,18 @@ const STATUS_DOT: Record<string, string> = {
   cancelled:   '#EF4444',
 };
 
+/** Per-technician calendar color palette */
+const TECH_CALENDAR_COLORS = [
+  { colorName: 'blue', lightColors: { main: '#3B82F6', container: '#DBEAFE', onContainer: '#1E40AF' }, darkColors: { main: '#60A5FA', container: '#1E3A5F', onContainer: '#BFDBFE' } },
+  { colorName: 'green', lightColors: { main: '#22C55E', container: '#DCFCE7', onContainer: '#166534' }, darkColors: { main: '#4ADE80', container: '#14532D', onContainer: '#BBF7D0' } },
+  { colorName: 'orange', lightColors: { main: '#F97316', container: '#FED7AA', onContainer: '#9A3412' }, darkColors: { main: '#FB923C', container: '#7C2D12', onContainer: '#FED7AA' } },
+  { colorName: 'purple', lightColors: { main: '#A855F7', container: '#F3E8FF', onContainer: '#6B21A8' }, darkColors: { main: '#C084FC', container: '#4C1D95', onContainer: '#E9D5FF' } },
+  { colorName: 'red', lightColors: { main: '#EF4444', container: '#FEE2E2', onContainer: '#991B1B' }, darkColors: { main: '#F87171', container: '#7F1D1D', onContainer: '#FECACA' } },
+  { colorName: 'teal', lightColors: { main: '#14B8A6', container: '#CCFBF1', onContainer: '#115E59' }, darkColors: { main: '#2DD4BF', container: '#134E4A', onContainer: '#CCFBF1' } },
+  { colorName: 'pink', lightColors: { main: '#EC4899', container: '#FCE7F3', onContainer: '#9D174D' }, darkColors: { main: '#F472B6', container: '#831843', onContainer: '#FBCFE8' } },
+  { colorName: 'yellow', lightColors: { main: '#EAB308', container: '#FEF9C3', onContainer: '#854D0E' }, darkColors: { main: '#FACC15', container: '#713F12', onContainer: '#FEF08A' } },
+];
+
 // ═══════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════
@@ -93,7 +104,7 @@ export type CalendarDateMode = 'deadline' | 'creation';
 
 // ── View mode types ───────────────────────────────────────────────────
 
-export type CalendarViewMode = 'day' | 'week' | 'month';
+export type CalendarViewMode = 'day' | 'week';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -120,7 +131,8 @@ export interface TechnicianCalendarProps {
   conflicts: ScheduleConflict[];
   dayLoads: Map<string, DayLoad[]>;
   isLoading: boolean;
-  onEventDrop: (info: EventDropArg) => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onEventDrop: (info: any) => Promise<void>;
   onEventClick?: (workOrderId: string) => void;
   className?: string;
 }
@@ -220,7 +232,7 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
   // P1-UX.5: View mode state with localStorage persistence
   const [internalViewMode, setInternalViewMode] = useState<CalendarViewMode>(() => {
     const stored = localStorage.getItem('technicianCalendar_viewMode');
-    if (stored === 'day' || stored === 'week' || stored === 'month') return stored;
+    if (stored === 'day' || stored === 'week') return stored;
     return 'week';
   });
 
@@ -249,238 +261,88 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     [slots, technicians, conflicts, dayLoads],
   );
 
-  // ── FullCalendar resources (technician rows) ─────────────────────
-  const resources = useMemo(() => {
-    const filtered = techFilter === 'all'
-      ? technicians
-      : technicians.filter(t => t.id === techFilter);
-
-    return filtered.map(tech => {
-      const loads = dayLoads.get(tech.id) ?? [];
-      const todayLoad = loads.find(l => l.date === new Date().toISOString().slice(0, 10));
-      const av = todayLoad?.availability ?? 'green';
-      const style = AVAILABILITY_STYLES[av];
-
-      return {
-        id: tech.id,
-        title: tech.name || tech.username,
-        // Extended props for custom rendering
-        eventColor: `hsl(${hashHue(tech.id)}, 58%, 50%)`,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
+  // ── Build calendars config (one per technician) ──────────────────
+  const calendars = useMemo(() => {
+    const map: Record<string, { colorName: string; lightColors: { main: string; container: string; onContainer: string }; darkColors: { main: string; container: string; onContainer: string } }> = {};
+    technicians.forEach((tech, i) => {
+      map[tech.id] = TECH_CALENDAR_COLORS[i % TECH_CALENDAR_COLORS.length];
     });
-  }, [technicians, dayLoads, techFilter]);
+    return map;
+  }, [technicians]);
 
-  // ── FullCalendar events (work order slots) ───────────────────────
-  const calendarEvents = useMemo(() => {
+  // ── Schedule-X events ────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const calendarEvents = useMemo<any[]>(() => {
     return slots
       .filter(s => techFilter === 'all' || s.technicianId === techFilter)
       .map(slot => {
         const priColor = PRIORITY_COLORS[slot.priority] ?? PRIORITY_COLORS.medium;
         const hasConflict = conflictMap.has(slot.workOrderId);
         const statusColor = STATUS_DOT[slot.status] ?? '#9CA3AF';
+        const techCalColor = calendars[slot.technicianId]?.lightColors;
 
         return {
           id: slot.id,
-          resourceId: slot.technicianId,
           title: slot.title,
           start: slot.start,
           end: slot.end,
-          backgroundColor: hasConflict ? '#FEF2F2' : priColor.bg,
+          calendarId: slot.technicianId,
+          workOrderId: slot.workOrderId,
+          priority: slot.priority,
+          status: slot.status,
+          statusColor,
+          hasConflict,
+          backgroundColor: hasConflict ? '#FEF2F2' : (techCalColor?.container || priColor.bg),
           borderColor: hasConflict ? '#DC2626' : priColor.border,
           textColor: priColor.text,
-          extendedProps: {
-            workOrderId: slot.workOrderId,
-            priority: slot.priority,
-            status: slot.status,
-            statusColor,
-            hasConflict,
+          _customContent: {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            timeGrid: buildEventHTML(slot, hasConflict, statusColor),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            dateGrid: buildEventHTML(slot, hasConflict, statusColor),
           },
-          classNames: [
-            'technician-event',
-            `prio-${slot.priority}`,
-            slot.status === 'in_progress' ? 'event-in-progress' : '',
-            hasConflict ? 'event-conflict' : '',
-          ].filter(Boolean),
         };
       });
-  }, [slots, techFilter, conflictMap]);
+  }, [slots, techFilter, conflictMap, calendars]);
 
-  // ── Handlers ─────────────────────────────────────────────────────
+  // ── Calendar instance ────────────────────────────────────────────
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
-  const handleEventClick = useCallback((info: { event: { extendedProps: Record<string, unknown> } }) => {
-    const woId = info.event.extendedProps?.workOrderId as string | undefined;
-    if (woId && onEventClick) onEventClick(woId);
-  }, [onEventClick]);
-
-  /**
-   * Handle event drop — including cross-resource (inter-technician) moves.
-   * FullCalendar resource-timeline attaches newResource when an event is
-   * dragged to a different resource row.
-   */
-  const handleEventDrop = useCallback(async (info: EventDropArg) => {
-    const drop = info as EventDropArg & {
-      oldResource?: { id: string };
-      newResource?: { id: string };
-    };
-    const resourceChanged =
-      drop.newResource && drop.oldResource &&
-      drop.newResource.id !== drop.oldResource.id;
-
-    if (resourceChanged) {
-      // Cross-resource move: patch the event's resourceId before the hook processes it.
-      // Using internal API — resource-timeline plugin sets event.resourceIds after drop.
-      const event = info.event as unknown as { resourceIds: string[]; setProp: (name: string, val: unknown) => void };
-      if (event.setProp) {
-        event.setProp('resourceIds', [drop.newResource!.id]);
-      }
-    }
-
-    await onEventDrop(info);
-  }, [onEventDrop]);
-
-  /**
-   * Handle event receive — when an external element is dropped onto
-   * a resource row (e.g. from an external source or cross-resource move).
-   * Delegates to the same onEventDrop pipeline.
-   */
-  const handleEventReceive = useCallback(async (info: {
-    event: { id: string; title: string; start: Date | null; end: Date | null; setProp: (name: string, val: unknown) => void };
-    resource?: { id: string };
-    revert: () => void;
-  }) => {
-    const targetResourceId = info.resource?.id;
-    if (!targetResourceId || !info.event.start) {
-      info.revert();
-      return;
-    }
-
-    // Assign to the target resource
-    info.event.setProp('resourceIds', [targetResourceId]);
-
-    // Build a minimal EventDropArg-like object to pass through the pipeline
-    await onEventDrop({
-      event: info.event as unknown as EventDropArg['event'],
-      oldEvent: info.event as unknown as EventDropArg['oldEvent'],
-      revert: info.revert,
-      view: {} as EventDropArg['view'],
-      el: {} as HTMLElement,
+  const calendar = useCalendarApp({
+    views: [viewWeek, viewDay],
+    defaultView: viewMode === 'day' ? 'day' : 'week',
+    events: calendarEvents,
+    calendars,
+    plugins: [
+      createDragAndDropPlugin(),
+      createCurrentTimePlugin(),
+    ],
+    isDark,
+    callbacks: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delta: { days: 0, milliseconds: 0 } as any,
+      onEventClick: (event: any) => {
+        const woId = event.workOrderId as string | undefined;
+        if (woId && onEventClick) onEventClick(woId);
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jsEvent: {} as any,
-      relatedEvents: [],
-    });
-  }, [onEventDrop]);
-
-  // ── Custom resource label rendering ──────────────────────────────
-  const renderResourceLabel = useCallback((resource: {
-    id: string;
-    title: string;
-    eventColor?: string;
-  }) => {
-    const tech = technicians.find(t => t.id === resource.id);
-    const loads = dayLoads.get(resource.id) ?? [];
-    const todayLoad = loads.find(l => l.date === new Date().toISOString().slice(0, 10));
-    const av = todayLoad?.availability ?? 'green';
-    const style = AVAILABILITY_STYLES[av];
-
-    return (
-      <div className="flex items-center gap-3 px-2 py-1.5 min-w-[200px]">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-          style={{ backgroundColor: resource.eventColor ?? `hsl(${hashHue(resource.id)}, 58%, 50%)` }}
-        >
-          {tech?.name?.charAt(0)?.toUpperCase() ?? tech?.username?.charAt(0)?.toUpperCase() ?? '?'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-            {resource.title}
-          </p>
-          <p className="text-xs text-slate-400 truncate">
-            {tech?.role ?? 'Technician'}
-          </p>
-        </div>
-        {/* Availability indicator */}
-        <div className="flex items-center gap-1.5 shrink-0" title={`${av}: ${todayLoad?.totalHours.toFixed(1) ?? 0}h / ${todayLoad?.maxHours ?? 8}h`}>
-          <span className={`inline-block w-2.5 h-2.5 rounded-full ${style.dot}`} />
-          <span className="text-[10px] text-slate-400 hidden md:inline">
-            {todayLoad ? `${todayLoad.totalHours.toFixed(1)}h` : '0h'}
-          </span>
-        </div>
-        {/* Conflict badge */}
-        {conflicts.some(c => c.technicianId === resource.id) && (
-          <span className="flex items-center gap-1 text-[10px] text-red-500" title={t('has_conflicts') || 'Has conflicts'}>
-            <AlertTriangle className="w-3 h-3" />
-          </span>
-        )}
-      </div>
-    );
-  }, [technicians, dayLoads, conflicts, t]);
-
-  // ── Custom event rendering ───────────────────────────────────────
-  const renderEventContent = useCallback((info: EventContentArg) => {
-    const props = info.event.extendedProps;
-    const title = info.event.title;
-    const hasConflict = props.hasConflict as boolean;
-    const priority = props.priority as string;
-    const status = props.status as string;
-    const statusColor = props.statusColor as string;
-
-    return (
-      <div className={`
-        flex items-center gap-1 px-1.5 py-0.5 text-xs leading-tight overflow-hidden rounded h-full
-        ${hasConflict ? 'border-2 border-dashed border-red-400' : ''}
-      `}>
-        <span
-          className="inline-block w-1.5 h-1.5 shrink-0 rounded-full"
-          style={{ backgroundColor: statusColor ?? '#9CA3AF' }}
-        />
-        <span className="truncate font-medium">{title}</span>
-        {priority === 'critical' && <span className="shrink-0">⚠</span>}
-        {status === 'in_progress' && <Clock className="w-3 h-3 shrink-0 text-blue-500" />}
-        {hasConflict && <AlertTriangle className="w-3 h-3 shrink-0 text-red-500" />}
-      </div>
-    );
-  }, []);
-
-  // ── Tooltip on hover ─────────────────────────────────────────────
-  const handleEventMount = useCallback((info: EventMountArg) => {
-    const props = info.event.extendedProps;
-    const title = info.event.title;
-    const conflict = props.hasConflict
-      ? conflictMap.get(props.workOrderId as string)
-      : null;
-
-    const tip = document.createElement('div');
-    tip.className = 'fc-resource-tooltip';
-    tip.innerHTML = `
-      <div class="tip-title">${title}</div>
-      <div class="tip-body">
-        <div><span>Status</span><strong>${(props.status as string)?.replace(/_/g, ' ') ?? '—'}</strong></div>
-        <div><span>Priority</span><strong>${props.priority as string ?? '—'}</strong></div>
-        <div><span>Start</span><strong>${new Date(info.event.start!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
-        <div><span>End</span><strong>${new Date(info.event.end!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></div>
-        ${conflict ? `<div class="tip-conflict"><span>⚠</span><strong>${conflict.message}</strong></div>` : ''}
-      </div>
-    `;
-
-    let hideTimeout: ReturnType<typeof setTimeout> | null = null;
-    const show = (e: MouseEvent) => {
-      if (hideTimeout) clearTimeout(hideTimeout);
-      tip.style.display = 'block';
-      const rect = info.el.getBoundingClientRect();
-      tip.style.left = `${Math.min(e.clientX + 12, window.innerWidth - 280)}px`;
-      tip.style.top = `${e.clientY + 12}px`;
-    };
-    const hide = () => {
-      hideTimeout = setTimeout(() => { tip.style.display = 'none'; }, 80);
-    };
-    info.el.addEventListener('mouseenter', (e) => show(e as MouseEvent));
-    info.el.addEventListener('mousemove', (e) => show(e as MouseEvent));
-    info.el.addEventListener('mouseleave', hide);
-    info.el.appendChild(tip);
-  }, [conflictMap]);
+      onEventUpdate: (event: any) => {
+        // Build a minimal event drop info object
+        const info = {
+          event: {
+            id: event.id,
+            startStr: event.start?.toString?.() || event.start,
+            endStr: event.end?.toString?.() || event.end,
+            extendedProps: {
+              workOrderId: event.workOrderId,
+            },
+          },
+        };
+        onEventDrop(info);
+      },
+    },
+    dayBoundaries: { start: '07:00', end: '19:00' },
+    firstDayOfWeek: 1,
+  });
 
   // ── Conflict summary panel ───────────────────────────────────────
   const conflictSummary = useMemo(() => {
@@ -514,7 +376,7 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     );
   }, [conflicts, showConflicts, t]);
 
-  // ── Print styles (component-level overrides) ────────────────────
+  // ── Print styles ────────────────────────────────────────────────
   const printStyles = useMemo(() => (
     <style>{`
 @media print {
@@ -524,14 +386,14 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
     gap: 8px;
     margin-bottom: 12px;
   }
-  .technician-calendar .fc-header-toolbar .fc-button {
+  .technician-calendar .sx__calendar-header .sx__button {
     display: none !important;
   }
-  .technician-calendar .fc-header-toolbar .fc-toolbar-title {
+  .technician-calendar .sx__calendar-header .sx__title {
     font-size: 14pt !important;
     font-weight: 700 !important;
   }
-  .technician-calendar .fc .fc-timeline-now-indicator {
+  .technician-calendar .sx__current-time-line {
     display: none !important;
   }
   .technician-calendar::before {
@@ -604,7 +466,7 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
           </select>
         </div>
 
-        {/* P1-UX.5: View mode toggle (day/week/month) */}
+        {/* P1-UX.5: View mode toggle (day/week) */}
         <div className="flex items-center border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden">
           <button
             onClick={() => setViewMode('day')}
@@ -631,19 +493,6 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
             aria-pressed={viewMode === 'week'}
           >
             <CalendarRange size={16} />
-          </button>
-          <button
-            onClick={() => setViewMode('month')}
-            className={`p-2 transition-colors ${
-              viewMode === 'month'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700'
-            }`}
-            title={t('month_view') || 'Month View'}
-            aria-label={t('month_view') || 'Month View'}
-            aria-pressed={viewMode === 'month'}
-          >
-            <List size={16} />
           </button>
         </div>
 
@@ -678,59 +527,29 @@ export const TechnicianCalendar = React.memo(function TechnicianCalendar({
       {/* Calendar */}
       {!isLoading && (
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden print:border-none print:shadow-none">
-          <FullCalendar
-            plugins={[resourceTimelinePlugin, dayGridPlugin, interactionPlugin]}
-            resources={resources}
-            events={calendarEvents}
-            resourceLabelContent={renderResourceLabel}
-            eventContent={renderEventContent}
-            eventDidMount={handleEventMount}
-            eventClick={handleEventClick}
-            initialView={
-              viewMode === 'month'
-                ? 'dayGridMonth'
-                : viewMode === 'day'
-                  ? 'resourceTimelineDay'
-                  : 'resourceTimelineWeek'
-            }
-            editable
-            droppable
-            // P1-UX.5: Only use timeline views for day/week
-            views={{
-              resourceTimelineWeek: {
-                type: 'resource-timeline',
-                duration: { weeks: 1 },
-                buttonText: t('week') || 'Week',
-              },
-              resourceTimelineDay: {
-                type: 'resource-timeline',
-                duration: { days: 1 },
-                buttonText: t('day') || 'Day',
-              },
-              dayGridMonth: {
-                type: 'dayGrid',
-                buttonText: t('month') || 'Month',
-              },
-            }}
-            // P1-UX.5: Hide default header buttons, use custom toggle
-            headerToolbar={false}
-            eventDrop={handleEventDrop}
-            eventReceive={handleEventReceive}
-            eventResizableFromStart
-            eventDurationEditable
-            height="auto"
-            contentHeight="auto"
-            stickyHeaderDates
-            nowIndicator
-            firstDay={1}
-            // P1-UX.5: Only apply timeline-specific props for timeline views
-            slotMinTime={viewMode !== 'month' ? '07:00:00' : undefined}
-            slotMaxTime={viewMode !== 'month' ? '19:00:00' : undefined}
-            slotDuration={viewMode !== 'month' ? '01:00:00' : undefined}
-            locale="en"
-          />
+          <ScheduleXCalendar calendarApp={calendar} />
         </div>
       )}
     </div>
   );
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Build HTML string for custom event content */
+function buildEventHTML(slot: ScheduleSlot, hasConflict: boolean, statusColor: string): string {
+  const priColor = PRIORITY_COLORS[slot.priority] ?? PRIORITY_COLORS.medium;
+  const borderStyle = hasConflict ? 'border-2 border-dashed border-red-400' : '';
+
+  return `
+    <div class="flex items-center gap-1 px-1.5 py-0.5 text-xs leading-tight overflow-hidden rounded h-full ${borderStyle}" style="border-left: 3px solid ${priColor.border};">
+      <span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full" style="background-color: ${statusColor};"></span>
+      <span class="truncate font-medium">${slot.title}</span>
+      ${slot.priority === 'critical' ? '<span class="shrink-0">⚠</span>' : ''}
+      ${slot.status === 'in_progress' ? '<span class="shrink-0"><svg class="w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>' : ''}
+      ${hasConflict ? '<span class="shrink-0"><svg class="w-3 h-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>' : ''}
+    </div>
+  `;
+}

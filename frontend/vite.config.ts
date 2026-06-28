@@ -135,9 +135,9 @@ export default defineConfig({
           if (id.includes('node_modules/i18next')) {
             return 'vendor-i18n';
           }
-          // Calendar (FullCalendar — 6 пакетов, ~500KB combined)
-          if (id.includes('node_modules/@fullcalendar')) {
-            return 'vendor-calendar';
+          // Calendar (Schedule-X — ~80KB, replaces FullCalendar ~328KB)
+          if (id.includes('node_modules/@schedule-x')) {
+            return 'vendor-schedule-x';
           }
           // Excel
           if (id.includes('node_modules/xlsx') || id.includes('node_modules/sheetjs')) {
