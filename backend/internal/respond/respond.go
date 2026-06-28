@@ -25,10 +25,11 @@ import (
 
 // APIError — типизированная ошибка API с HTTP-статусом и кодом.
 type APIError struct {
-	Status  int    `json:"-"`
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Err     error  `json:"-"`
+	Status  int         `json:"-"`
+	Code    string      `json:"code"`
+	Message string      `json:"message"`
+	Details interface{} `json:"details,omitempty"`
+	Err     error       `json:"-"`
 }
 
 func (e *APIError) Error() string {
@@ -110,11 +111,17 @@ func RespondError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	traceID := trace.FromContext(r.Context())
+
+	errorBody := map[string]interface{}{
+		"code":    apiErr.Code,
+		"message": apiErr.Message,
+	}
+	if apiErr.Details != nil {
+		errorBody["details"] = apiErr.Details
+	}
+
 	resp := map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    apiErr.Code,
-			"message": apiErr.Message,
-		},
+		"error":     errorBody,
 		"trace_id":  traceID,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
