@@ -131,9 +131,9 @@ P1-QA.5: Load Testing k6 ✅ DONE
 P1-BACKEND.1: ActionExecutor Unit Tests ✅ DONE
 P1-BACKEND.2: PlaybookRegistry Versioning ✅ DONE
 P1-BACKEND.3: RCA Graph Auto-Update ✅ DONE
-P1-ARCH.1: Context Migration to Zustand ✅ DONE (удалены 3 bridge-контекста)
-P1-ARCH.2: API Routes Organization — ❌ не выполнена (3d)
-P1-ARCH.3: OpenAPI TypeScript Generation ✅ DONE (oapi-codegen, type-safe клиент)
+P1-ARCH.1: Context Migration to Zustand ✅ DONE
+P1-ARCH.2: API Routes Organization ✅ DONE (router.go + middleware package)
+P1-ARCH.3: OpenAPI TypeScript Generation ✅ DONE
 🟢 P2 — ENTERPRISE FEATURES (Q1 2027, до 2027-03-31)
 P2-MARKET: Regional Expansion ⭐ NEW
 Стратегия: Использовать 15 языков i18n + ComplianceProfile для быстрого входа на рынки
@@ -202,15 +202,10 @@ TAM: $20M
 Effort: 2w
 Status: [ ]
 P2-REG: Advanced Maintenance Templates ⭐ NEW
-P2-REG.8: Templates для TR, VN, ID, BR, ZA
-Решение:
-TR: KVKK + TS EN 62676 (CCTV specific)
-VN: TCVN 11930:2017 + Camera Standard 2025
-ID: SNI 27001 + UU PDP
-BR: ABNT NBR + LGPD
-ZA: SANS + POPIA
-Effort: 6d
-Status: [ ]
+P2-REG.8: Regional Templates ✅ DONE
+- TR, VN, ID, BR, ZA (041_regional_templates — 11 регламентов, 95 чек-листов)
+- СНГ (042_cis_templates — BY, RU, KZ, UZ, KG, 20 регламентов)
+- Хелпер-функции: get_cis_regulations(), get_regulation_by_doc()
 P2-CR: Compliance Features — ✅ ALL DONE
 P2-CR.1: Regional Retention Policies ✅ (retention/policy.go, 600 строк, 5 регионов)
 P2-CR.2: Regional Compliance Reports ✅ (compliance/reports.go)
@@ -407,6 +402,10 @@ Regional Compliance: docs/compliance/regional-profiles.md (создать)
 Maintenance Regulations: docs/compliance/maintenance-regulations.md (создать)
 Security Policy: docs/iso27001/security-policy.md
 📝 История изменений
+2026-06-28 — CIS Templates + API Routes
+✅ P1-ARCH.2: API Routes Organization (router.go, middleware package)
+✅ P2-REG.8: Regional Templates (041 — TR/VN/ID/BR/ZA, 042 — BY/RU/KZ/UZ/KG)
+✅ CIS: 20 регламентов для 5 стран СНГ
 2026-06-28 — Финальное обновление: все P0-P3 задачи завершены
 ✅ P0: 12/12 DONE
 ✅ P1: 27/27 DONE
