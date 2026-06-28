@@ -298,6 +298,51 @@ P3-NICE: Nice-to-Have
 P3-NICE.1: Real-time Collaboration ✅ DONE (WebSocket Presence Hub)
 P3-NICE.2: White-label Theming ✅ DONE (в themeStore, код реализован)
 P3-NICE.3: Edge Agent SL-4 Security ⛔ ПРОПУЩЕН — отдельный проект (neolink)
+## 🧹 POLISH — Code Review Roadmap (2026-07)
+
+### Phase 1: Critical Fixes (2 дня)
+| # | Задача | Файл | Статус |
+|---|--------|------|--------|
+| 1 | Header.tsx — убрать useDevices/useSites | Header.tsx | [ ] |
+| 2 | Modal.tsx — aria-modal, role="dialog" | Modal.tsx | [ ] |
+| 3 | Toast.tsx — role="alert", aria-live | Toast.tsx | [ ] |
+| 4 | Dropdown.tsx — aria-expanded | Dropdown.tsx | [ ] |
+| 5 | CSP connect-src в config | vite.config.ts | [ ] |
+| 6 | EmptyState.tsx — role="status" | EmptyState.tsx | [ ] |
+
+### Phase 2: Accessibility (3 дня)
+| # | Задача | Файл | Статус |
+|---|--------|------|--------|
+| 7 | DataGrid.tsx — aria-sort | DataGrid.tsx | [ ] |
+| 8 | Button.tsx — aria-disabled, aria-busy | Button.tsx | [ ] |
+| 9 | Header.tsx — aria-label на icons | Header.tsx | [ ] |
+| 10 | prefers-contrast-more media query | index.css | [ ] |
+| 11 | AssetTree keyboard navigation | AssetTree.tsx | [ ] |
+| 12 | Skip link для main content | Layout.tsx | [ ] |
+
+### Phase 3: Performance (3 дня)
+| # | Задача | Файл | Статус |
+|---|--------|------|--------|
+| 13 | WorkOrderDetail.tsx <500 строк | WorkOrderDetail.tsx | [ ] |
+| 14 | useApiQuery.ts разбить по доменам | hooks/ | [ ] |
+| 15 | index.css разбить на модули | CSS modules | [ ] |
+| 16 | React.memo для DataGrid, AssetTree, Sidebar | 3 компонента | [ ] |
+| 17 | SRI в Vite config | vite.config.ts | [ ] |
+
+### Phase 4: Security (2 дня)
+| # | Задача | Файл | Статус |
+|---|--------|------|--------|
+| 18 | X-Content-Type-Options + Referrer-Policy | backend/ | [ ] |
+| 19 | Storybook a11y CI | CI workflow | [ ] |
+| 20 | Unit test expansion (10→30) | __tests__/ | [ ] |
+
+### Phase 5: DX (3 дня)
+| # | Задача | Файл | Статус |
+|---|--------|------|--------|
+| 21 | Barrel export для lazy pages | App.tsx | [ ] |
+| 22 | Error boundaries per route | Layout.tsx | [ ] |
+| 23 | ESLint exhaustive-deps rule | .eslintrc | [ ] |
+
 📊 Success Metrics (обновлено 2026-06-28)
 Метрика
 Текущее
