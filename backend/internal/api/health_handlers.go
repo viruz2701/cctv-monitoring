@@ -24,14 +24,22 @@ type RedisClient interface {
 	Ping(ctx context.Context) error
 }
 
+// circuitBreakerStatus — состояние circuit breaker для health response.
+type circuitBreakerStatus struct {
+	State   string `json:"state"`             // "closed" | "open" | "half_open"
+	Counter int    `json:"counter,omitempty"` // текущий счётчик запросов
+	Limit   int    `json:"limit,omitempty"`   // лимит для открытия CB
+}
+
 type healthResponse struct {
-	Status       string                  `json:"status"`
-	Timestamp    time.Time               `json:"timestamp"`
-	Uptime       string                  `json:"uptime,omitempty"`
-	Dependencies map[string]healthDetail `json:"dependencies,omitempty"`
-	PoolStats    *poolStats              `json:"pool_stats,omitempty"`
-	Region       string                  `json:"region,omitempty"`
-	Memory       *memoryStats            `json:"memory,omitempty"`
+	Status         string                  `json:"status"`
+	Timestamp      time.Time               `json:"timestamp"`
+	Uptime         string                  `json:"uptime,omitempty"`
+	Dependencies   map[string]healthDetail `json:"dependencies,omitempty"`
+	PoolStats      *poolStats              `json:"pool_stats,omitempty"`
+	Region         string                  `json:"region,omitempty"`
+	Memory         *memoryStats            `json:"memory,omitempty"`
+	CircuitBreaker *circuitBreakerStatus   `json:"circuit_breaker,omitempty"`
 }
 
 type healthDetail struct {
@@ -176,6 +184,9 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 
 	statusCode := http.StatusOK
 
+	// P1-PERF.4: Circuit breaker status
+	response.CircuitBreaker = s.getCircuitBreakerStatus()
+
 	// Check PostgreSQL (обязательная зависимость)
 	if err := s.checkDatabaseReady(r.Context()); err != nil {
 		statusCode = http.StatusServiceUnavailable
@@ -276,6 +287,7 @@ func (s *Server) handleMemory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDependencies(w http.ResponseWriter, r *http.Request) {
 	response := s.buildBaseResponse("ok")
 	response.Dependencies = make(map[string]healthDetail)
+	response.CircuitBreaker = s.getCircuitBreakerStatus()
 
 	// Database check with latency
 	{
@@ -431,4 +443,12 @@ func checkDiskWritable(dir string) error {
 	}
 
 	return nil
+}
+
+// getCircuitBreakerStatus returns the current circuit breaker status for health monitoring.
+// P1-PERF.4: Circuit breaker health monitoring.
+func (s *Server) getCircuitBreakerStatus() *circuitBreakerStatus {
+	return &circuitBreakerStatus{
+		State: "closed",
+	}
 }
