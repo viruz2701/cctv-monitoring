@@ -1,4 +1,4 @@
-// Package api — CORS middleware with OWASP ASVS L3 compliance.
+// Package middleware — API middleware with OWASP ASVS L3 compliance.
 //
 // ═══════════════════════════════════════════════════════════════════════════
 // P0-SEC.2: CORS Wildcard Fix
@@ -13,7 +13,7 @@
 //  4. Production: только явно указанные origins из конфига
 //
 // ═══════════════════════════════════════════════════════════════════════════
-package api
+package middleware
 
 import (
 	"fmt"
@@ -67,8 +67,8 @@ var DefaultAllowedOrigins = []string{
 	"http://127.0.0.1:8080",
 }
 
-// isLocalhostOrigin проверяет, является ли origin localhost/127.0.0.1 адресом.
-func isLocalhostOrigin(origin string) bool {
+// IsLocalhostOrigin проверяет, является ли origin localhost/127.0.0.1 адресом.
+func IsLocalhostOrigin(origin string) bool {
 	return strings.HasPrefix(origin, "http://localhost") ||
 		strings.HasPrefix(origin, "https://localhost") ||
 		strings.HasPrefix(origin, "http://127.0.0.1") ||

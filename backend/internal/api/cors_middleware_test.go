@@ -13,12 +13,14 @@ package api
 
 import (
 	"testing"
+
+	apimw "gb-telemetry-collector/internal/api/middleware"
 )
 
 func TestValidateCORSOrigins_RejectsWildcard(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateCORSOrigins([]string{"*"}, false)
+	err := apimw.ValidateCORSOrigins([]string{"*"}, false)
 	if err == nil {
 		t.Fatal("expected error for wildcard origin, got nil")
 	}
@@ -30,7 +32,7 @@ func TestValidateCORSOrigins_RejectsWildcard(t *testing.T) {
 func TestValidateCORSOrigins_RejectsWildcardInList(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateCORSOrigins([]string{"https://example.com", "*", "http://localhost:3000"}, false)
+	err := apimw.ValidateCORSOrigins([]string{"https://example.com", "*", "http://localhost:3000"}, false)
 	if err == nil {
 		t.Fatal("expected error when wildcard is in the list")
 	}
@@ -39,7 +41,7 @@ func TestValidateCORSOrigins_RejectsWildcardInList(t *testing.T) {
 func TestValidateCORSOrigins_RejectsEmptyProduction(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateCORSOrigins([]string{}, false)
+	err := apimw.ValidateCORSOrigins([]string{}, false)
 	if err == nil {
 		t.Fatal("expected error for empty origins in production")
 	}
@@ -51,7 +53,7 @@ func TestValidateCORSOrigins_RejectsEmptyProduction(t *testing.T) {
 func TestValidateCORSOrigins_AllowsEmptyDebug(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateCORSOrigins([]string{}, true)
+	err := apimw.ValidateCORSOrigins([]string{}, true)
 	if err != nil {
 		t.Fatalf("expected no error for empty origins in debug mode: %v", err)
 	}
@@ -73,7 +75,7 @@ func TestValidateCORSOrigins_AllowsValidOrigins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCORSOrigins(tt.origins, false)
+			err := apimw.ValidateCORSOrigins(tt.origins, false)
 			if err != nil {
 				t.Fatalf("unexpected error for valid origins %v: %v", tt.origins, err)
 			}
@@ -84,7 +86,7 @@ func TestValidateCORSOrigins_AllowsValidOrigins(t *testing.T) {
 func TestValidateCORSOrigins_RejectsWildcardInMixedList(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateCORSOrigins([]string{"https://valid.com", "*", "https://other.com"}, true)
+	err := apimw.ValidateCORSOrigins([]string{"https://valid.com", "*", "https://other.com"}, true)
 	if err == nil {
 		t.Fatal("expected error even in debug mode for wildcard")
 	}
@@ -93,7 +95,7 @@ func TestValidateCORSOrigins_RejectsWildcardInMixedList(t *testing.T) {
 func TestNewCORSHandler_ProductionWithExplicitOrigins(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://app.example.com"}, false)
+	opts, err := apimw.NewCORSHandler([]string{"https://app.example.com"}, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestNewCORSHandler_ProductionWithExplicitOrigins(t *testing.T) {
 func TestNewCORSHandler_ProductionFailsOnEmpty(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewCORSHandler([]string{}, false)
+	_, err := apimw.NewCORSHandler([]string{}, false)
 	if err == nil {
 		t.Fatal("expected error for production with empty origins")
 	}
@@ -118,7 +120,7 @@ func TestNewCORSHandler_ProductionFailsOnEmpty(t *testing.T) {
 func TestNewCORSHandler_ProductionFailsOnWildcard(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewCORSHandler([]string{"*"}, false)
+	_, err := apimw.NewCORSHandler([]string{"*"}, false)
 	if err == nil {
 		t.Fatal("expected error for production with wildcard")
 	}
@@ -127,7 +129,7 @@ func TestNewCORSHandler_ProductionFailsOnWildcard(t *testing.T) {
 func TestNewCORSHandler_DebugWithEmptyOrigins(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{}, true)
+	opts, err := apimw.NewCORSHandler([]string{}, true)
 	if err != nil {
 		t.Fatalf("unexpected error in debug mode: %v", err)
 	}
@@ -138,7 +140,7 @@ func TestNewCORSHandler_DebugWithEmptyOrigins(t *testing.T) {
 
 	// Проверяем, что все дефолтные origins — localhost
 	for _, origin := range opts.AllowedOrigins {
-		if !isLocalhostOrigin(origin) {
+		if !apimw.IsLocalhostOrigin(origin) {
 			t.Fatalf("expected localhost origin, got %s", origin)
 		}
 	}
@@ -147,7 +149,7 @@ func TestNewCORSHandler_DebugWithEmptyOrigins(t *testing.T) {
 func TestNewCORSHandler_DebugWithCustomOrigins(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://dev.example.com"}, true)
+	opts, err := apimw.NewCORSHandler([]string{"https://dev.example.com"}, true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,9 +183,9 @@ func TestIsLocalhostOrigin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.origin, func(t *testing.T) {
-			result := isLocalhostOrigin(tt.origin)
+			result := apimw.IsLocalhostOrigin(tt.origin)
 			if result != tt.expected {
-				t.Fatalf("isLocalhostOrigin(%q) = %v, want %v", tt.origin, result, tt.expected)
+				t.Fatalf("IsLocalhostOrigin(%q) = %v, want %v", tt.origin, result, tt.expected)
 			}
 		})
 	}
@@ -192,7 +194,7 @@ func TestIsLocalhostOrigin(t *testing.T) {
 func TestNewCORSHandler_AllowCredentials(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://app.example.com"}, false)
+	opts, err := apimw.NewCORSHandler([]string{"https://app.example.com"}, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -205,7 +207,7 @@ func TestNewCORSHandler_AllowCredentials(t *testing.T) {
 func TestNewCORSHandler_AllowedMethods(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://app.example.com"}, false)
+	opts, err := apimw.NewCORSHandler([]string{"https://app.example.com"}, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -221,7 +223,7 @@ func TestNewCORSHandler_AllowedMethods(t *testing.T) {
 func TestNewCORSHandler_CSRFHeaderAllowed(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://app.example.com"}, false)
+	opts, err := apimw.NewCORSHandler([]string{"https://app.example.com"}, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,7 +243,7 @@ func TestNewCORSHandler_CSRFHeaderAllowed(t *testing.T) {
 func TestNewCORSHandler_MaxAge(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewCORSHandler([]string{"https://app.example.com"}, false)
+	opts, err := apimw.NewCORSHandler([]string{"https://app.example.com"}, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

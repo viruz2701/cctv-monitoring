@@ -8,18 +8,20 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	apimw "gb-telemetry-collector/internal/api/middleware"
 )
 
 func init() {
 	// Подавляем логи CSP в тестах
-	SetCSPLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	apimw.SetCSPLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 // ── Nonce Generation Tests (OWASP ASVS V5.3.3) ──────────────────────────
 
 // TestGenerateNonceLength проверяет длину nonce (16 байт → 24 символа base64).
 func TestGenerateNonceLength(t *testing.T) {
-	nonce := generateNonce()
+	nonce := apimw.GenerateNonce()
 	if nonce == "" {
 		t.Fatal("expected non-empty nonce")
 	}
@@ -30,7 +32,7 @@ func TestGenerateNonceLength(t *testing.T) {
 
 // TestGenerateNonceBase64 проверяет что nonce — валидный base64.
 func TestGenerateNonceBase64(t *testing.T) {
-	nonce := generateNonce()
+	nonce := apimw.GenerateNonce()
 	if nonce == "" {
 		t.Fatal("expected non-empty nonce")
 	}
@@ -47,7 +49,7 @@ func TestGenerateNonceBase64(t *testing.T) {
 func TestGenerateNonceUniqueness(t *testing.T) {
 	nonces := make(map[string]bool)
 	for i := 0; i < 100; i++ {
-		nonce := generateNonce()
+		nonce := apimw.GenerateNonce()
 		if nonce == "" {
 			t.Fatal("unexpected empty nonce")
 		}
@@ -60,7 +62,7 @@ func TestGenerateNonceUniqueness(t *testing.T) {
 
 // TestGenerateNonceCSPFormat проверяет что nonce пригоден для CSP.
 func TestGenerateNonceCSPFormat(t *testing.T) {
-	nonce := generateNonce()
+	nonce := apimw.GenerateNonce()
 	if nonce == "" {
 		t.Fatal("expected non-empty nonce")
 	}
@@ -76,8 +78,8 @@ func TestGenerateNonceCSPFormat(t *testing.T) {
 
 // TestCSPNonceMiddleware проверяет, что middleware устанавливает заголовок.
 func TestCSPNonceMiddleware(t *testing.T) {
-	handler := CSPNonceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nonce := NonceFromContext(r.Context())
+	handler := apimw.CSPNonceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonce := apimw.NonceFromContext(r.Context())
 		if nonce == "" {
 			t.Error("nonce not found in context")
 		}
@@ -104,8 +106,8 @@ func TestCSPNonceMiddleware(t *testing.T) {
 func TestCSPNonceMiddlewarePerRequest(t *testing.T) {
 	var nonce1, nonce2 string
 
-	handler := CSPNonceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := NonceFromContext(r.Context())
+	handler := apimw.CSPNonceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := apimw.NonceFromContext(r.Context())
 		if nonce1 == "" {
 			nonce1 = n
 		} else {
@@ -125,7 +127,7 @@ func TestCSPNonceMiddlewarePerRequest(t *testing.T) {
 
 // TestSecurityHeadersCSP проверяет, что CSP header присутствует и содержит nonce.
 func TestSecurityHeadersCSP(t *testing.T) {
-	handler := CSPNonceMiddleware(securityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := apimw.CSPNonceMiddleware(securityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 

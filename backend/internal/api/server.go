@@ -1,3 +1,26 @@
+// Package api — централизованная обработка HTTP-запросов.
+//
+// ═══════════════════════════════════════════════════════════════════════════
+// P1-ARCH.2: API Routes Organization
+//
+// server.go      — Server struct, конструктор, Start/Stop, вспомогательные
+// router.go      — MountRoutes() — единый роутер с chi Router Groups
+// response.go    — общие типы ответов (traceID, APIError, RespondError)
+// middleware/    — standalone middleware (CORS, CSP, rate limiter, validation)
+//
+// Доменные роуты вынесены в *_routes.go файлы:
+//
+//	auth_routes.go, device_routes.go, cmms_routes.go, agent_routes.go,
+//	integration_routes.go, compliance_routes.go, blackbox_routes.go,
+//	camera_routes.go, storage_routes.go, featureflag_routes.go,
+//	ai_routes.go, admin_handlers.go, tenant_compliance_routes.go
+//
+// Соответствует:
+//   - OWASP ASVS L3 V1-V17
+//   - ISO 27001 A.5-A.18
+//   - IEC 62443-3-3 SR 1.1 (Defense in depth)
+//
+// ═══════════════════════════════════════════════════════════════════════════
 package api
 
 import (
@@ -16,8 +39,8 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"gb-telemetry-collector/internal/ai"
+	apimw "gb-telemetry-collector/internal/api/middleware"
 	"gb-telemetry-collector/internal/audit"
-	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/blackbox"
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/cmms/factory"
@@ -29,7 +52,6 @@ import (
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/service"
-	"gb-telemetry-collector/internal/setup"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
 	"gb-telemetry-collector/internal/storage"
@@ -143,7 +165,7 @@ type Server struct {
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Получаем nonce из контекста (устанавливается CSPNonceMiddleware)
-		nonce := NonceFromContext(r.Context())
+		nonce := apimw.NonceFromContext(r.Context())
 
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -172,7 +194,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 }
 
 // NewServer создаёт новый экземпляр HTTP-сервера с настроенным роутером.
-// Роуты разбиты на доменные файлы: auth_routes, cmms_routes, device_routes, agent_routes, integration_routes.
+// Роуты монтируются через MountRoutes() с chi Router Groups.
 func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logger, database *db.DB, imagesDir string, cfg *config.Config, sipHandler *sip.SIPHandler, syncEng *syncengine.SyncEngine) *Server {
 	r := chi.NewRouter()
 
@@ -180,14 +202,14 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 	r.Use(TraceIDMiddleware)
 
 	// CSP nonce generation (for HTML pages)
-	r.Use(CSPNonceMiddleware)
+	r.Use(apimw.CSPNonceMiddleware)
 
 	// Security headers
 	r.Use(securityHeadersMiddleware)
 
 	// CORS middleware (P0-SEC.2: OWASP ASVS L3 V9.1 compliance)
 	// ISO 27001 A.13.2: только явно указанные origins, без wildcard.
-	corsOpts, err := NewCORSHandler(cfg.CORSAllowedOrigins, cfg.Debug)
+	corsOpts, err := apimw.NewCORSHandler(cfg.CORSAllowedOrigins, cfg.Debug)
 	if err != nil {
 		logger.Error("CORS configuration rejected — startup failed",
 			"error", err,
@@ -229,241 +251,14 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		serverStart:        time.Now(),
 	}
 
-	// ── P2-AI.4: Anomaly Detection Service ─────────────────────────
-	{
-		anomalyCfg := ai.DefaultAnomalyConfig()
-		var anomalyBroadcaster ai.Broadcaster
-		if s.wsHub != nil {
-			anomalyBroadcaster = s.wsHub
-		}
-		anomalyService, err := ai.NewAnomalyService(anomalyCfg, s.natsConn, anomalyBroadcaster, logger)
-		if err != nil {
-			logger.Warn("anomaly service init warning", "error", err)
-		} else {
-			s.anomalyService = anomalyService
-			logger.Info("anomaly detection service initialized",
-				"z_score_threshold", anomalyCfg.ZScoreThreshold,
-				"ma_window", anomalyCfg.MovingAverageWindow,
-			)
-		}
-	}
+	// Инициализация сервисов
+	s.initServices()
 
-	// ── Device Service ────────────────────────────────────────────────
-	s.deviceService = service.NewDeviceService(database, s.auditSigner, logger)
-
-	// ── Compliance Engine (KF-15.1.1) ─────────────────────────────────
-	s.complianceEngine = compliance.NewEngine(nil, logger, nil)
-
-	// ── P2-RU.2: 152-ФЗ Personal Data Manager ─────────────────────────
-	pdStore := compliance.NewMemoryPersonalDataStore(logger)
-	s.personalDataManager = compliance.NewPersonalDataManager(pdStore, logger)
-
-	// ── P2-EU.1: GDPR Manager ─────────────────────────────────────────
-	gdprStore := compliance.NewMemoryGDPRStore(logger)
-	s.gdprManager = compliance.NewGDPRManager(gdprStore, logger)
-
-	// ── Black Box Incident Recorder (KF-15.2.4) ───────────────────────
-	bbRepo := blackbox.NewDBRepository(database.Pool, logger)
-	s.blackboxRecorder = blackbox.NewRecorder(bbRepo, database, nil, logger)
-
-	// ── Auto-dispatcher Service (P1-6) ────────────────────────────────
-	// WorkOrderProvider инициализируется nil, так как требуется адаптация
-	// к существующему CMMSAdapter. Будет подключён через SetWorkOrderProvider
-	// при инициализации CMMS адаптера.
-	s.autoDispatcher = cmms.NewAutoDispatcher(
-		nil, // TechnicianProvider — будет подключён при инициализации workforce
-		nil, // WorkOrderProvider — будет подключён при инициализации CMMS
-		nil, // SLAStatusChecker — будет подключён при инициализации SLA
-		cmms.DispatcherAuditLoggerFunc(func(ctx context.Context, entry *cmms.DispatchAuditEntry) error {
-			userID := "system"
-			s.logAudit(userID, entry.Action, "dispatch", entry.WorkOrderID, nil, entry)
-			return nil
-		}),
-		cmms.DefaultAutoDispatcherConfig,
-		logger,
-	)
-
-	// ── Dispatch Rules Engine (P1-6) ──────────────────────────────────
-	s.ruleEngine = cmms.NewRuleEngine(logger)
-
-	// ── P2-3.3: Webhook Delivery Worker ─────────────────────────────
-	if database != nil && database.Pool != nil {
-		s.webhookStore = webhook.NewPGDeliveryStore(database.Pool)
-		s.deliveryWorker = webhook.NewDeliveryWorker(
-			s.webhookStore, logger,
-			webhook.DeliveryWorkerConfig{
-				PollInterval:  5 * time.Second,
-				MaxConcurrent: 5,
-			},
-		)
-		go s.deliveryWorker.Start(context.Background())
-	}
-
-	// ── P3-1: Multi-Region Geo-Redundancy ──────────────────────────
-	if database != nil && database.Pool != nil {
-		s.regionStore = multiregion.NewPGTenantRegionStore(database.Pool)
-		s.failoverService = multiregion.NewFailoverService(
-			s.regionStore, s.natsConn,
-			multiregion.FailoverConfig{
-				NATSMirrorDomain: cfg.DeploymentRegion + "-dr.example.com",
-			},
-			logger,
-		)
-	}
-
+	// WebSocket hub
 	go s.wsHub.Run()
 
-	// ── Публичные маршруты (без JWT) ─────────────────────────────────
-	s.mountHealthRoutes(r)
-	s.mountAuthRoutes(r)
-
-	// ═════════════════════════════════════════════════════════════════
-	// P3-DX.5: OpenAPI 3.1 + Swagger UI (без JWT)
-	//   GET /api/v1/openapi.json — OpenAPI spec (JSON)
-	//   GET /api/v1/docs         — Swagger UI (HTML)
-	// ═════════════════════════════════════════════════════════════════
-	r.Get("/api/v1/openapi.json", s.handleOpenAPIJSON)
-	r.Get("/api/v1/docs", s.handleSwaggerUI)
-
-	// Публичный endpoint для подачи заявок (WO-4.1.1)
-	// Rate limit: 10 req/min/IP
-	r.Group(func(r chi.Router) {
-		r.Use(s.workRequestRateLimiter)
-		r.Post("/api/v1/public/work-requests", s.submitWorkRequest)
-	})
-
-	// External alarm routes (P2P alarm with API key, etc.)
-	s.mountExternalAlarmRoutes(r)
-
-	// WebSocket для alarm (JWT в query-параметре, НЕ в Authorization header)
-	// Браузерный WebSocket API не поддерживает кастомные заголовки,
-	// поэтому маршрут НЕ может быть под AuthMiddleware.
-	// handleWebSocket сам валидирует JWT из ?token=...
-	r.Get("/api/v1/ws/alarms", s.handleWebSocket)
-
-	// Legacy XML/Vigi alarm endpoints
-	if cfg.HTTPXMLEnabled {
-		r.Post("/api/v1/external/alarm/xml", s.handleExternalAlarmXML)
-	}
-	if cfg.VigiEnabled {
-		r.Post("/api/v1/external/alarm/vigi", s.handleExternalAlarmVigi)
-	}
-
-	// ── Setup Wizard (P0-CE.4: On-Premise, без JWT) ──────────────────
-	// Публичные endpoint'ы для первоначальной настройки:
-	//   - Статус мастера (GET /api/v1/setup/status)
-	//   - Список регионов (GET /api/v1/setup/regions)
-	//   - Все шаги мастера (POST /api/v1/setup/*)
-	// Доступны только до завершения setup. После — регион locked.
-	{
-		// Создаём compliance registry с BY, RU, EU, INTL профилями
-		registry := compliance.NewProfileRegistry(
-			compliance.WithRequiredRegions(compliance.RegionINTL),
-			compliance.WithProfile(compliance.NewBYProfile()),
-			compliance.WithProfile(compliance.NewRUProfile()),
-			compliance.WithProfile(compliance.NewEUProfile()),
-			compliance.WithProfile(compliance.NewINTLProfile()),
-		)
-		wizard := setup.NewSetupWizard(registry,
-			setup.WithLogger(s.logger.With("component", "setup.wizard")),
-			setup.WithSetupCompleteHandler(func(cfg *setup.SetupConfig) error {
-				s.logger.Info("setup wizard completed",
-					"region", cfg.Region,
-					"admin", cfg.AdminUsername,
-				)
-				return nil
-			}),
-		)
-		setup.RegisterRoutes(r, wizard)
-
-		// P0-CE.5: Tenant Compliance Profile — registry shared with API
-		s.complianceRegistry = registry
-	}
-
-	// P0-CE.5: Tenant Compliance Profile
-	if database != nil && database.Pool != nil && s.complianceRegistry != nil {
-		s.tenantComplianceStore = tenant.NewTenantComplianceStore(database.Pool, s.complianceRegistry)
-	}
-
-	// ── Защищённые маршруты (JWT) ────────────────────────────────────
-	// P1-SEC.1: CookieAuthMiddleware + AuthMiddleware для поддержки
-	// HttpOnly cookies (веб) и Authorization header (API/mobile).
-	// CSRFMiddleware для защиты state-changing методов.
-	r.Group(func(r chi.Router) {
-		r.Use(auth.CookieAuthMiddleware)
-		r.Use(auth.AuthMiddleware)
-		r.Use(auth.CSRFMiddleware)
-		r.Use(auth.TenantMiddleware)
-
-		// P0-CE.5: Tenant Compliance Middleware (injects compliance profile into context)
-		if s.tenantComplianceStore != nil {
-			r.Use(s.tenantComplianceStore.Middleware)
-		}
-
-		// Auth domain (users, sessions, 2FA, Telegram, API keys, settings)
-		s.mountProtectedAuthRoutes(r)
-
-		// Device domain (devices, images, analytics, logs, audit)
-		s.mountDeviceRoutes(r)
-
-		// Audit domain (P3-2: compliance, chain verification, reporting)
-		r.Get("/api/v1/audit/log", s.handleListAuditLog)
-		r.Get("/api/v1/audit/verify", s.handleAuditVerify)
-		r.Get("/api/v1/audit/compliance", s.handleAuditCompliance)
-		r.Post("/api/v1/audit/archive", s.handleAuditArchive)
-
-		// Agent domain (P2P, GB28181, WebSocket, external alarms)
-		s.mountAgentRoutes(r)
-		r.Post("/api/v1/external/alarm", s.handleExternalAlarm)
-
-		// Integration domain (Atlas CMMS)
-		s.mountIntegrationRoutes(r)
-
-		// CMMS domain (maintenance, work orders, spare parts, SLA, mobile)
-		s.mountCMMSRoutes(r)
-
-		// Feature Flag domain (F-0.2.4)
-		s.mountFeatureFlagRoutes(r)
-
-		// P3-1: Admin routes (multi-region DR)
-		s.mountAdminRoutes(r)
-
-		// P0-CE.5: Tenant Compliance Profile (admin routes)
-		if s.tenantComplianceStore != nil {
-			s.mountTenantComplianceRoutes(r)
-		}
-
-		// P0-CE.6: Data Residency Enforcement
-		s.mountStorageRoutes(r)
-
-		// Camera Specs Database (P0-9)
-		s.mountCameraModelRoutes(r)
-
-		// Workspace Dashboard Multi-Device Sync (P1-1.4)
-		r.Get("/api/v1/workspace/layout", s.handleGetLayout)
-		r.Post("/api/v1/workspace/layout", s.handleSaveLayout)
-
-		// AI Assistant Chat (P2-1.2)
-		s.mountAIRoutes(r)
-
-		// Compliance & Fines Shield (KF-15.1.1)
-		s.mountComplianceRoutes(r)
-
-		// Black Box Incident Recorder (KF-15.2.4)
-		s.mountBlackBoxRoutes(r)
-
-		// GraphQL read-only endpoint (INT-13.2.4)
-		s.mountGraphQLRoute(r)
-	})
-
-	// ── External API key auth ────────────────────────────────────────
-	r.Group(func(r chi.Router) {
-		r.Use(s.APIKeyMiddleware)
-		r.Post("/api/v1/external/alarm", s.handleExternalAlarm)
-	})
-
-	// ── ITSM Webhooks (HMAC, rate-limited) ───────────────────────────
-	s.mountWebhookRoutes(r)
+	// Монтирование всех маршрутов
+	s.MountRoutes(r)
 
 	// Таймауты HTTP-сервера — предотвращают зависание соединений
 	// при медленных запросах к БД или атаках slowloris.
@@ -539,7 +334,7 @@ func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
 // handleSwaggerUI serves the Swagger UI HTML page.
 // Endpoint: GET /api/v1/docs
 func (s *Server) handleSwaggerUI(w http.ResponseWriter, r *http.Request) {
-	nonce := NonceFromContext(r.Context())
+	nonce := apimw.NonceFromContext(r.Context())
 	ServeSwaggerUI(w, r, nonce)
 }
 
