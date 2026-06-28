@@ -146,7 +146,8 @@ func (c *RegistryConfig) validate() {
 	if c.WatchInterval <= 0 {
 		c.WatchInterval = DefaultRegistryConfig.WatchInterval
 	}
-	if c.MaxVersionHistory <= 0 {
+	// 0 = без ограничения (unlimited), отрицательные = default
+	if c.MaxVersionHistory < 0 {
 		c.MaxVersionHistory = DefaultRegistryConfig.MaxVersionHistory
 	}
 }
@@ -172,6 +173,13 @@ type PlaybookRegistry struct {
 	cfg      RegistryConfig
 	logger   *slog.Logger
 	stopCh   chan struct{}
+
+	// activeTimeline — хронологический порядок уникальных версий.
+	// Используется для RollbackLatest: каждый вызов LoadFile с новой
+	// версией добавляет её в timeline; Rollback не модифицирует timeline.
+	// RollbackLatest откатывается к предыдущей версии в timeline и
+	// удаляет текущую.
+	activeTimeline map[string][]string // name → [v1, v2, v3, ...]
 }
 
 // NewPlaybookRegistry создаёт новый PlaybookRegistry.
@@ -182,13 +190,14 @@ func NewPlaybookRegistry(cfg RegistryConfig) *PlaybookRegistry {
 	}
 
 	return &PlaybookRegistry{
-		schemas:  make(map[string]*PlaybookSchema),
-		versions: make(map[string][]VersionEntry),
-		tags:     make(map[string][]VersionTag),
-		files:    make(map[string]string),
-		cfg:      cfg,
-		logger:   cfg.Logger.With("component", "playbook-registry"),
-		stopCh:   make(chan struct{}),
+		schemas:        make(map[string]*PlaybookSchema),
+		versions:       make(map[string][]VersionEntry),
+		tags:           make(map[string][]VersionTag),
+		files:          make(map[string]string),
+		cfg:            cfg,
+		logger:         cfg.Logger.With("component", "playbook-registry"),
+		stopCh:         make(chan struct{}),
+		activeTimeline: make(map[string][]string),
 	}
 }
 
@@ -249,11 +258,18 @@ func (r *PlaybookRegistry) LoadDir(dir string) error {
 	return nil
 }
 
-// LoadFile загружает один playbook-файл.
+// LoadFile загружает один playbook-файл и записывает версию в timeline.
 //
 // Если плейбук с таким именем уже существует — сохраняет предыдущую
 // версию в истории и активирует новую.
 func (r *PlaybookRegistry) LoadFile(path string) error {
+	return r.loadFile(path, true)
+}
+
+// loadFile — внутренняя загрузка с контролем записи в activeTimeline.
+// Параметр recordTimeline=true используется для обычных загрузок (новые версии),
+// false — для rollback (чтобы не дублировать timeline).
+func (r *PlaybookRegistry) loadFile(path string, recordTimeline bool) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
@@ -294,6 +310,11 @@ func (r *PlaybookRegistry) LoadFile(path string) error {
 	r.schemas[schema.Name] = &schema
 	r.files[path] = schema.Name
 	r.addVersionLockedWithSHA(schema.Name, schema.Version, path, sha256Hex, true)
+
+	// Добавляем в activeTimeline (только для обычных загрузок, не для rollback)
+	if recordTimeline {
+		r.recordActiveTimeline(schema.Name, schema.Version)
+	}
 
 	r.logger.Info("playbook loaded/updated",
 		"name", schema.Name,
@@ -436,58 +457,86 @@ func (r *PlaybookRegistry) checkForChanges(lastMod map[string]time.Time, errCh c
 
 // Rollback восстанавливает указанную версию плейбука из истории.
 //
+// Загружает файл из VersionEntry.FilePath через LoadFile, который:
+//   - Сохраняет текущую активную версию в историю (как неактивную)
+//   - Активирует версию из файла
+//   - Добавляет запись в историю с Active=true
+//
+// LoadFile сам управляет блокировкой, поэтому Rollback не удерживает
+// mutex на время вызова.
+//
 // Возвращает:
 //   - true + nil — rollback successful
 //   - false + nil — версия не найдена (не ошибка)
 //   - false + error — ошибка при rollback
 func (r *PlaybookRegistry) Rollback(name, version string) (bool, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
+	r.mu.RLock()
 	history, ok := r.versions[name]
 	if !ok {
+		r.mu.RUnlock()
 		return false, nil
 	}
 
 	// Ищем указанную версию
 	var target *VersionEntry
-	for i, entry := range history {
-		if entry.Version == version {
+	for i := range history {
+		if history[i].Version == version {
 			target = &history[i]
 			break
 		}
 	}
 	if target == nil {
+		r.mu.RUnlock()
 		return false, nil
 	}
 
-	// Сохраняем текущую версию в историю перед rollback
+	// Проверяем, что целевая версия не совпадает с текущей активной
+	currentVersion := ""
 	if current, ok := r.schemas[name]; ok {
-		r.addVersionLocked(current.Name, current.Version, target.FilePath, false)
+		currentVersion = current.Version
+	}
+	r.mu.RUnlock()
+
+	if currentVersion == version {
+		r.logger.Debug("rollback skipped: already at target version",
+			"name", name,
+			"version", version,
+		)
+		return true, nil
 	}
 
-	// Без файла не можем восстановить полную схему
 	if target.FilePath == "" {
 		return false, fmt.Errorf("rollback %s@%s: no file path in version entry", name, version)
 	}
 
-	// Загружаем из файла — LoadFile полностью восстановит схему
-	r.mu.Unlock()
-	err := r.LoadFile(target.FilePath)
-	r.mu.Lock()
+	// loadFile без записи в timeline — rollback не создаёт новую запись в
+	// хронологической последовательности, только восстанавливает старую.
+	err := r.loadFile(target.FilePath, false)
 	if err != nil {
 		return false, fmt.Errorf("rollback %s@%s: %w", name, version, err)
 	}
 
-	// Помечаем в истории как rollback
-	history = r.versions[name]
-	for i := range history {
-		if history[i].Version == version {
-			history[i].Active = true
-		} else {
-			history[i].Active = false
+	// Помечаем в истории: только ПОСЛЕДНЯЯ запись целевой версии — активна.
+	// Старые записи той же версии становятся неактивными (предотвращает
+	// дублирование Active), но Active-флаги других версий сохраняются,
+	// чтобы RollbackLatest мог корректно найти предыдущую активную версию.
+	r.mu.Lock()
+	updatedHistory := r.versions[name]
+	// Сбрасываем Active только для записей целевой версии
+	for i := range updatedHistory {
+		if updatedHistory[i].Version == version {
+			updatedHistory[i].Active = false
 		}
 	}
+	// Активируем последнее вхождение целевой версии
+	for i := len(updatedHistory) - 1; i >= 0; i-- {
+		if updatedHistory[i].Version == version {
+			updatedHistory[i].Active = true
+			break
+		}
+	}
+	r.versions[name] = updatedHistory
+	r.mu.Unlock()
 
 	r.logger.Warn("playbook rollback performed",
 		"name", name,
@@ -498,27 +547,30 @@ func (r *PlaybookRegistry) Rollback(name, version string) (bool, error) {
 }
 
 // RollbackLatest откатывает последнее изменение плейбука.
+//
+// Использует activeTimeline для нахождения предыдущей версии в
+// хронологической последовательности. При каждом RollbackLatest
+// текущая версия удаляется из timeline, и реестр откатывается к
+// предыдущей.
+//
+// Возвращает false без ошибки, если timeline содержит < 2 записей.
 func (r *PlaybookRegistry) RollbackLatest(name string) (bool, error) {
-	r.mu.RLock()
-	history, ok := r.versions[name]
-	r.mu.RUnlock()
+	r.mu.Lock()
 
-	if !ok || len(history) < 2 {
+	timeline, ok := r.activeTimeline[name]
+	if !ok || len(timeline) < 2 {
+		r.mu.Unlock()
 		return false, nil
 	}
 
-	// Ищем предыдущую активную версию
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Active && history[i].Version != r.GetVersion(name) {
-			return r.Rollback(name, history[i].Version)
-		}
-		// Первая не-active версия перед последней активной
-		if !history[i].Active && i > 0 && history[i-1].Active {
-			return r.Rollback(name, history[i-1].Version)
-		}
-	}
+	// Предыдущая версия — предпоследняя в timeline
+	prevVersion := timeline[len(timeline)-2]
 
-	return false, nil
+	// Удаляем текущую версию из timeline
+	r.activeTimeline[name] = timeline[:len(timeline)-1]
+	r.mu.Unlock()
+
+	return r.Rollback(name, prevVersion)
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -799,6 +851,23 @@ func (r *PlaybookRegistry) ListActive() []*PlaybookSchema {
 
 // GetHistory возвращает историю версий для плейбука.
 func (r *PlaybookRegistry) GetHistory(name string) []VersionEntry {
+	return r.GetVersionHistory(name)
+}
+
+// GetVersionHistory возвращает историю версий для плейбука.
+//
+// Является основным методом для получения версионной истории.
+// GetHistory — алиас для обратной совместимости.
+//
+// Возвращает срез VersionEntry, отсортированный от старых к новым.
+// Каждая запись содержит:
+//   - Version: semver версия
+//   - FilePath: путь к файлу
+//   - SHA256: хеш файла (для audit trail)
+//   - LoadedAt: время загрузки
+//   - Active: является ли эта версия текущей активной
+//   - RollbackOf: если это rollback — версия, с которой выполнен откат
+func (r *PlaybookRegistry) GetVersionHistory(name string) []VersionEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	history, ok := r.versions[name]
@@ -837,6 +906,21 @@ func (r *PlaybookRegistry) Count() int {
 // ═══════════════════════════════════════════════════════════════════════
 // Internal
 // ═══════════════════════════════════════════════════════════════════════
+
+// recordActiveTimeline добавляет версию в хронологическую последовательность
+// активных версий (activeTimeline). Вызывается только при обычных загрузках
+// через LoadFile, НЕ при rollback (loadFile с recordTimeline=false).
+//
+// Если версия уже является последней в timeline — не дублирует запись.
+// Это гарантирует, что timeline содержит строгую последовательность
+// уникальных версий без дубликатов при повторных загрузках того же файла.
+func (r *PlaybookRegistry) recordActiveTimeline(name, version string) {
+	timeline := r.activeTimeline[name]
+	if len(timeline) > 0 && timeline[len(timeline)-1] == version {
+		return // уже последняя, не дублируем
+	}
+	r.activeTimeline[name] = append(timeline, version)
+}
 
 func (r *PlaybookRegistry) addVersionLocked(name, version, filePath string, active bool) {
 	r.addVersionLockedWithSHA(name, version, filePath, "", active)
