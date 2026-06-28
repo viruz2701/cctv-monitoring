@@ -62,7 +62,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             links.push(
                 ...Array.from(navListRef.current.querySelectorAll<HTMLElement>('[data-sidebar-link]'))
             );
-        }
+        });
         return links;
     }, []);
 

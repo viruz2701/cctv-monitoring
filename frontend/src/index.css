@@ -1,200 +1,12 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/animations.css";
+@import "./styles/a11y.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════
-   P1-UX.3: Unified Animations — CSS Custom Properties
-   Единые duration и easing для всех анимаций и переходов.
-   Управляются через CSS variables — меняй в :root, применяется везде.
+   Global Styles — base, scrollbar, FullCalendar, print, utilities
    ═══════════════════════════════════════════════════════════════════════ */
-
-@theme {
-  --animate-fadeIn: fadeIn var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-  --animate-slideIn: slideIn var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-  --animate-slideDown: slideDown var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-  --animate-ripple: ripple 600ms linear;
-  --animate-scaleIn: scaleIn var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-
-  /* ═══ P3-UI.1: Extended Custom Tokens ═══ */
-  --color-surface: var(--color-bg);
-  --color-surface-card: var(--color-bg-card);
-  --color-surface-elevated: var(--color-bg-elevated);
-  --color-surface-muted: var(--color-bg-muted);
-  --color-surface-hover: var(--color-bg-hover);
-  --color-border-default: var(--color-border);
-  --color-border-light: var(--color-border-light);
-  --color-border-hover: var(--color-border-hover);
-  --color-content: var(--color-text);
-  --color-content-secondary: var(--color-text-secondary);
-  --color-content-muted: var(--color-text-muted);
-  --color-content-inverse: var(--color-text-inverse);
-  --color-primary: #2563eb;
-  --color-accent: #6366f1;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #06b6d4;
-
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes ripple {
-  to { transform: scale(4); opacity: 0; }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   UX-14.3.4: Theming Engine — CSS Custom Properties
-   
-   Управляются через themeStore.applyTheme():
-     --color-primary: основной цвет (кнопки, ссылки, активные элементы)
-     --color-accent: акцентный цвет (бейджи, выделения)
-     --radius: border-radius для карточек, кнопок, инпутов
-   
-   Theme presets (классы на <html>):
-     .theme-ocean  → сине-голубая схема
-     .theme-forest → зелёная схема
-     .theme-sunset → оранжевая схема
-   ═══════════════════════════════════════════════════════════════════════ */
-
-:root {
-  --color-primary: #2563eb;
-  --color-accent: #6366f1;
-  --radius: 0.5rem;
-
-  /* P1-UX.3: Unified Animation Tokens */
-  --animation-duration: 200ms;
-  --animation-easing: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ═══ P3-UI.1: Design Tokens — Spacing Scale ═══ */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-  --space-20: 5rem;
-  --space-24: 6rem;
-
-  /* ═══ P3-UI.1: Design Tokens — Typography ═══ */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.625;
-
-  /* ═══ P3-UI.1: Design Tokens — Shadows ═══ */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
-  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-
-  /* ═══ P3-UI.1: Design Tokens — Colors (Light) ═══ */
-  --color-bg: #f8fafc;
-  --color-bg-card: #ffffff;
-  --color-bg-elevated: #ffffff;
-  --color-bg-muted: #f1f5f9;
-  --color-bg-hover: #f8fafc;
-  --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  --color-border-hover: #cbd5e1;
-  --color-text: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-text-inverse: #ffffff;
-
-  /* ═══ P3-UI.1: Design Tokens — Ripple ═══ */
-  --ripple-color: rgba(255, 255, 255, 0.35);
-
-  /* Legacy variables (backward compatibility) */
-  --color-primary-light: #1e293b;
-  --color-accent-hover: #2563eb;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #06b6d4;
-}
-
-/* ═══ P3-UI.1: Dark Mode Tokens ═══ */
-:root.dark {
-  --color-bg: #0f172a;
-  --color-bg-card: #1e293b;
-  --color-bg-elevated: #1e293b;
-  --color-bg-muted: #1e293b;
-  --color-bg-hover: #334155;
-  --color-border: #334155;
-  --color-border-light: #1e293b;
-  --color-border-hover: #475569;
-  --color-text: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-text-inverse: #0f172a;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.2), 0 1px 2px -1px rgb(0 0 0 / 0.2);
-  --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2);
-  --ripple-color: rgba(255, 255, 255, 0.2);
-}
-
-/* ── Theme Presets ───────────────────────────────────────────────────── */
-
-.theme-ocean {
-  --color-primary: #0891b2;
-  --color-accent: #06b6d4;
-}
-
-.theme-forest {
-  --color-primary: #059669;
-  --color-accent: #10b981;
-}
-
-.theme-sunset {
-  --color-primary: #d97706;
-  --color-accent: #f59e0b;
-}
 
 /* Tailwind includes preflight reset, no need for manual reset */
 
@@ -230,22 +42,6 @@ body {
   background: #94a3b8;
 }
 
-/* Focus States */
-*:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-/* Toast progress bar animation */
-@keyframes toast-progress {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
-  }
-}
-
 /* Utility: apply CSS vars to common elements */
 button,
 .button,
@@ -263,59 +59,6 @@ textarea,
 .card,
 .card-container {
   border-radius: calc(var(--radius) + 0.25rem);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   P3-UI.2: Ripple эффект для кнопок
-   ═══════════════════════════════════════════════════════════════════════ */
-
-.ripple-container {
-  position: relative;
-  overflow: hidden;
-  transform: translate3d(0, 0, 0);
-}
-
-.ripple-span {
-  position: absolute;
-  border-radius: 50%;
-  background-color: var(--ripple-color, rgba(255, 255, 255, 0.35));
-  width: 100px;
-  height: 100px;
-  margin-top: -50px;
-  margin-left: -50px;
-  pointer-events: none;
-  transform: scale(0);
-  animation: ripple 600ms linear;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   P3-UI.2: Card hover эффекты
-   ═══════════════════════════════════════════════════════════════════════ */
-
-.card-hover {
-  transition: box-shadow var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1)),
-              transform var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-}
-
-.card-hover:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   P3-UI.2: Smooth transitions — универсальные классы
-   ═══════════════════════════════════════════════════════════════════════ */
-
-.transition-fast {
-  transition: all var(--animation-duration, 150ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-}
-
-.transition-normal {
-  transition: all var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
-}
-
-.transition-slow {
-  transition: all 300ms var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -580,11 +323,6 @@ textarea,
   opacity: 0.85;
 }
 
-@keyframes pulse-border {
-  0%, 100% { border-color: #DC2626; }
-  50% { border-color: #FCA5A5; }
-}
-
 /* ── Resource label in timeline ────────────────────────────────────── */
 .fc .fc-timeline-lane-frame {
   min-height: 48px;
@@ -669,34 +407,5 @@ textarea,
   .fc .fc-timeline-header-row th,
   .fc .fc-timeline-lane td {
     border-color: #ccc !important;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   WCAG 2.1 SC 2.3.3 — prefers-reduced-motion
-   Отключает все анимации/переходы для пользователей с vestibular disorders
-   ═══════════════════════════════════════════════════════════════════════ */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   WCAG 2.1 SC 1.4.6 — prefers-contrast: more
-   Усиливает контраст для пользователей с нарушениями зрения
-   ═══════════════════════════════════════════════════════════════════════ */
-@media (prefers-contrast: more) {
-  :root {
-    --color-primary: #1d4ed8;
-    --color-border: #000000;
-    --shadow-sm: none;
-    --shadow-md: none;
-  }
-  .card-hover:hover {
-    transform: none;
   }
 }

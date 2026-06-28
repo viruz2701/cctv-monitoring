@@ -7,7 +7,6 @@ export { Table, Pagination } from './Table';
 export { Modal, ConfirmModal } from './Modal';
 export { Input, SearchInput, Select, Textarea } from './Input';
 export { ToastProvider, useToast } from './Toast';
-export { DataGrid } from './DataGrid';
 export { VirtualTable } from './VirtualTable';
 export { PartCard } from './PartCard';
 export { Gauge } from './Gauge';
@@ -58,3 +57,8 @@ export { InfoTooltip } from './InfoTooltip';
 export { Dropdown } from './Dropdown';
 export type { DropdownItem } from './Dropdown';
 export { LazyImage } from './LazyImage';
+
+// ── React.memo — оптимизация тяжёлых компонентов ─────────────────────
+import React from 'react';
+import { DataGrid as DataGridBase } from './DataGrid';
+export const DataGrid = React.memo(DataGridBase) as typeof DataGridBase;

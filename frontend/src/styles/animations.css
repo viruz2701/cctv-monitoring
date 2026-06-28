@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   P3-UI.2: Unified Animations & Transitions
+   Вынесены из index.css для модульности.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ────────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes toast-progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #DC2626; }
+  50% { border-color: #FCA5A5; }
+}
+
+/* ── Ripple Effect ─────────────────────────────────────────────────────── */
+
+.ripple-container {
+  position: relative;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.ripple-span {
+  position: absolute;
+  border-radius: 50%;
+  background-color: var(--ripple-color, rgba(255, 255, 255, 0.35));
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple 600ms linear;
+}
+
+/* ── Card Hover Effects ────────────────────────────────────────────────── */
+
+.card-hover {
+  transition: box-shadow var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1)),
+              transform var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.card-hover:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+/* ── Smooth Transitions — универсальные классы ─────────────────────────── */
+
+.transition-fast {
+  transition: all var(--animation-duration, 150ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.transition-normal {
+  transition: all var(--animation-duration, 200ms) var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.transition-slow {
+  transition: all 300ms var(--animation-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}

@@ -1,4 +1,6 @@
-export { Sidebar } from './Sidebar';
+import React from 'react';
+import { Sidebar as SidebarBase } from './Sidebar';
+export const Sidebar = React.memo(SidebarBase);
 export { Header } from './Header';
 export { Layout } from './Layout';
 export { PageSuspense } from './PageSuspense';

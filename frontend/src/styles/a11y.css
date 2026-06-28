@@ -1,0 +1,50 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   WCAG 2.1 — Accessibility Styles
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══ SC 2.3.3: prefers-reduced-motion ═══
+   Отключает все анимации/переходы для пользователей с vestibular disorders */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══ SC 1.4.6: prefers-contrast: more ═══
+   Усиливает контраст для пользователей с нарушениями зрения */
+@media (prefers-contrast: more) {
+  :root {
+    --color-primary: #1d4ed8;
+    --color-border: #000000;
+    --shadow-sm: none;
+    --shadow-md: none;
+  }
+  .card-hover:hover {
+    transform: none;
+  }
+}
+
+/* ═══ SC 1.4.6: prefers-contrast: less ═══
+   Снижает контраст для пользователей с чувствительностью */
+@media (prefers-contrast: less) {
+  :root {
+    --color-border: #e2e8f0;
+  }
+}
+
+/* ═══ Focus States (SC 2.4.7: Focus Visible) ═══ */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ═══ SC 1.4.12: Text Spacing ═══
+   Поддержка переопределения межстрочного интервала для пользователей с дислексией */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    text-rendering: optimizeLegibility;
+  }
+}

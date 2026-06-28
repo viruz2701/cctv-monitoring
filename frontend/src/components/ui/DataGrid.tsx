@@ -873,7 +873,7 @@ export function DataGrid<T>({
         </div>
       </div>
     );
-  }
+  });
 
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
 
