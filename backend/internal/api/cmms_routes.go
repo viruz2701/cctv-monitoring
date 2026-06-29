@@ -109,6 +109,8 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Get("/api/v1/reports/maintenance/pdf", s.getMaintenanceReportPDF)
 	r.Get("/api/v1/reports/sla-compliance/pdf", s.getSLAComplianceReportPDF)
 	r.Get("/api/v1/reports/verify", s.verifyReportHandler)
+	// P0-PDF.3: Async report generation via NATS JetStream queue
+	r.Post("/api/v1/reports/generate", s.requestReport)
 
 	// Auto-dispatcher (P1-6)
 	r.Post("/api/v1/dispatcher/auto-assign/{workOrderId}", s.handleAutoAssign)

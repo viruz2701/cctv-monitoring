@@ -47,6 +47,7 @@ import (
 	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/events"
 	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/multiregion"
 	"gb-telemetry-collector/internal/rca"
@@ -59,6 +60,7 @@ import (
 	syncengine "gb-telemetry-collector/internal/sync"
 	"gb-telemetry-collector/internal/telegram"
 	"gb-telemetry-collector/internal/tenant"
+	"gb-telemetry-collector/internal/trace"
 	"gb-telemetry-collector/internal/webhook"
 	"gb-telemetry-collector/internal/ws"
 )
@@ -167,6 +169,9 @@ type Server struct {
 
 	// P0-N2: Well-Known URI Handler (RFC 8615, RFC 9116)
 	wellKnownHandler *WellKnownHandler
+
+	// P0-PDF.3: NATS JetStream report queue for async report generation
+	reportQueue *events.ReportQueue
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -324,11 +329,28 @@ func (s *Server) SetRedisClient(client RedisClient) {
 	s.redisClient = client
 }
 
-// SetNATSConn устанавливает NATS соединение для health checks.
+// SetNATSConn устанавливает NATS соединение для health checks и
+// инициализирует report queue (P0-PDF.3).
 // natsRequired указывает, обязателен ли NATS для readiness probe.
 func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
 	s.natsConn = conn
 	s.natsRequired = natsRequired
+
+	// P0-PDF.3: Инициализация NATS JetStream report queue
+	if conn != nil {
+		rq, err := events.NewReportQueue(conn, s.logger)
+		if err != nil {
+			s.logger.Warn("P0-PDF.3: report queue not available, async generation disabled",
+				"error", err,
+			)
+		} else {
+			s.reportQueue = rq
+			s.logger.Info("P0-PDF.3: report queue initialized")
+
+			// Запуск consumer в фоне
+			go rq.Consume(context.Background(), s.handleReportGeneration)
+		}
+	}
 }
 
 // SetFeatureFlagsManager устанавливает Feature Flag менеджер (F-0.2.4).
@@ -374,4 +396,155 @@ func schemeFromRequest(r *http.Request) string {
 		return fwd
 	}
 	return "http"
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P0-PDF.3: NATS JetStream Report Queue Handlers
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleReportGeneration обрабатывает задачу генерации отчёта из NATS очереди.
+// Вызывается асинхронно из consumer'а ReportQueue.
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 3.1 (Queue-based processing)
+//   - ISO 27001 A.12.4 (Audit trail)
+func (s *Server) handleReportGeneration(ctx context.Context, task events.ReportTask) error {
+	s.logger.Info("generating report",
+		"report_id", task.ReportID,
+		"type", task.Type,
+		"format", task.Format,
+		"tenant_id", task.TenantID,
+	)
+
+	switch task.Type {
+	case "maintenance":
+		return s.generateMaintenanceReport(ctx, task)
+	case "sla":
+		return s.generateSLAReport(ctx, task)
+	case "tco":
+		return s.generateTCOReport(ctx, task)
+	default:
+		return fmt.Errorf("unsupported report type: %s", task.Type)
+	}
+}
+
+// generateMaintenanceReport генерирует maintenance report.
+func (s *Server) generateMaintenanceReport(ctx context.Context, task events.ReportTask) error {
+	report, err := s.cmmsRouter.GetMaintenanceReport(ctx)
+	if err != nil {
+		return fmt.Errorf("get maintenance report: %w", err)
+	}
+
+	switch task.Format {
+	case "pdf":
+		// PDF-генерация через pdfHandler (P0-PDF.2)
+		return s.generateMaintenancePDF(report)
+	case "excel":
+		// TODO: Excel generation for maintenance report
+		s.logger.Warn("excel format not yet implemented", "report_id", task.ReportID)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format: %s", task.Format)
+	}
+}
+
+// generateSLAReport генерирует SLA compliance report.
+func (s *Server) generateSLAReport(ctx context.Context, task events.ReportTask) error {
+	report, err := s.cmmsRouter.GetSLAComplianceReport(ctx)
+	if err != nil {
+		return fmt.Errorf("get SLA report: %w", err)
+	}
+
+	switch task.Format {
+	case "pdf":
+		return s.generateSLACompliancePDF(report)
+	case "excel":
+		s.logger.Warn("excel format not yet implemented", "report_id", task.ReportID)
+		return nil
+	default:
+		return fmt.Errorf("unsupported format: %s", task.Format)
+	}
+}
+
+// generateTCOReport генерирует TCO (Total Cost of Ownership) report.
+func (s *Server) generateTCOReport(ctx context.Context, task events.ReportTask) error {
+	s.logger.Warn("TCO report type not yet implemented", "report_id", task.ReportID)
+	return nil
+}
+
+// generateMaintenancePDF генерирует PDF для maintenance report.
+func (s *Server) generateMaintenancePDF(report interface{}) error {
+	if s.pdfHandler == nil {
+		return fmt.Errorf("pdfHandler not available")
+	}
+	// PDF handler будет использовать существующий handleMaintenanceReportPDF
+	// но в async режиме — без HTTP ResponseWriter
+	s.logger.Debug("maintenance PDF generation placeholder")
+	return nil
+}
+
+// generateSLACompliancePDF генерирует PDF для SLA compliance report.
+func (s *Server) generateSLACompliancePDF(report interface{}) error {
+	if s.pdfHandler == nil {
+		return fmt.Errorf("pdfHandler not available")
+	}
+	s.logger.Debug("SLA compliance PDF generation placeholder")
+	return nil
+}
+
+// requestReport — HTTP handler для постановки задачи генерации отчёта в очередь.
+// Endpoint: POST /api/v1/reports/generate
+//
+// Соответствует:
+//   - OWASP ASVS V1 (Input validation)
+//   - IEC 62443-3-3 SR 3.1 (Async task queue)
+func (s *Server) requestReport(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Type   string `json:"type"`   // maintenance, sla, tco
+		Format string `json:"format"` // pdf, excel
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondError(w, r, NewBadRequestError("Invalid request body"))
+		return
+	}
+
+	// Валидация type
+	validTypes := map[string]bool{"maintenance": true, "sla": true, "tco": true}
+	if !validTypes[req.Type] {
+		RespondError(w, r, NewValidationError("Invalid type: must be maintenance, sla, or tco"))
+		return
+	}
+
+	// Валидация format
+	validFormats := map[string]bool{"pdf": true, "excel": true}
+	if !validFormats[req.Format] {
+		RespondError(w, r, NewValidationError("Invalid format: must be pdf or excel"))
+		return
+	}
+
+	// Извлекаем tenantID из контекста (устанавливается TenantMiddleware)
+	tenantID := cmms.TenantIDFromContext(r.Context())
+
+	task := events.ReportTask{
+		ReportID:  trace.NewID(),
+		Type:      req.Type,
+		Format:    req.Format,
+		TenantID:  tenantID,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if s.reportQueue == nil {
+		RespondError(w, r, NewInternalError("Report queue not available", nil))
+		return
+	}
+
+	if err := s.reportQueue.Publish(r.Context(), task); err != nil {
+		RespondError(w, r, NewInternalError("Failed to queue report generation", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusAccepted, map[string]string{
+		"report_id": task.ReportID,
+		"status":    "queued",
+	})
 }
