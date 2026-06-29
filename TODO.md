@@ -113,16 +113,13 @@
 
 ## 🔴 P0 — CRITICAL BLOCKERS (Q3 2026, до 2026-09-30)
 
-### P0-PDF: Server-Side PDF Generation (Гибридный подход)
-**Файлы**: `backend/internal/reports/generator.go`, `frontend/src/styles/print.css`
-**Контекст**: Удалить jsPDF/html2canvas с фронта (-280KB), генерировать PDF на Go-сервере
-**Effort**: 8d | **Статус**: [ ]
-
-- [ ] **P0-PDF.1**: CSS `@media print` framework для quick preview
-- [ ] **P0-PDF.2**: Server-side generation с HMAC signatures + QR verification
-- [ ] **P0-PDF.3**: Report Generation Queue (NATS + async jobs)
-- [ ] **P0-PDF.4**: Удалить jspdf/html2canvas из bundle
-- [ ] **P0-PDF.5**: Regional templates (ОАЦ, ФСТЭК, МЧС РК, KVKK)
+### P0-PDF: Server-Side PDF Generation ✅ ALL DONE
+- **P0-PDF.1**: CSS `@media print` framework ✅ (frontend/src/styles/print.css, 231 строк)
+- **P0-PDF.2**: Server-side Go PDF Generator + HMAC + QR ✅ (pdf_handler.go, 3 endpoints)
+- **P0-PDF.3**: NATS JetStream Report Queue ✅ (report_queue.go, async consumer)
+- **P0-PDF.4**: jsPDF удалён из bundle ✅ (-557KB, npm uninstall, vite.config.ts очищен)
+- **P0-PDF.5**: Regional templates ✅ (ОАЦ, ФСТЭК, МЧС РК, KVKK — 4 шаблона)
+- **Итого**: 5/5 подзадач, -557KB из бандла, Go backend + NATS + HMAC
 
 ### P0-SBOM: Supply Chain Security (EU CRA blocker)
 **Файлы**: `.github/workflows/sbom.yml`, `backend/sbom.json`
@@ -179,7 +176,6 @@
 | `vendor-schedule-x` | 167.78 KB | 41.92 KB | ✅ Schedule-X |
 | `vendor-nivo` | 386.89 KB | 122.76 KB | ✅ Nivo |
 | `vendor-excel` (ExcelJS) | 929.91 KB | 256.48 KB | ✅ MIT license |
-| `vendor-pdf` (jsPDF) | 558.06 KB | 162.75 KB | ✅ lazy-loaded |
 | `vendor-other` | 397.58 KB | 130.44 KB | ⚠️ |
 | `index` (main) | 612.19 KB | 161.69 KB | ⚠️ |
 | **Precache total** | **5015.31 KB** | — | **Target: <2MB** |
