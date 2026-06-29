@@ -8,22 +8,26 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import ViewShot from 'react-native-view-shot';
 import * as FileSystem from 'expo-file-system';
 import { workOrdersApi } from '../api/workOrders';
 
-// ──────────────────────────────────────────────────
-// Types
-// ──────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────
 
-export type AnnotationTool = 'arrow' | 'text' | 'highlight' | 'freehand' | 'none';
+export type AnnotationTool =
+  | 'arrow'
+  | 'freehand'
+  | 'text'
+  | 'highlight'
+  | 'circle'
+  | 'blur'
+  | 'measurement';
 
 export interface AnnotationResult {
-  /** URI аннотированного изображения */
   annotatedUri: string;
-  /** Метаданные аннотации (для воспроизведения) */
   metadata: AnnotationMetadata;
 }
 
@@ -31,60 +35,52 @@ export interface AnnotationMetadata {
   tool: AnnotationTool;
   color: string;
   strokeWidth: number;
-  /** JSON-строка с данными о нарисованных элементах */
   elements: string;
-  /** Размеры оригинального изображения */
   imageWidth: number;
   imageHeight: number;
 }
 
 interface PhotoAnnotationProps {
-  /** URI исходного фото */
   photoUri: string;
-  /** ID work order для интеграции */
   workOrderId?: string;
-  /** Callback после сохранения */
   onSave?: (result: AnnotationResult) => void;
-  /** Callback при закрытии без сохранения */
   onClose?: () => void;
-  /** Цвета инструментов по умолчанию */
   colors?: string[];
 }
 
-// ──────────────────────────────────────────────────
-// Constants
-// ──────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────
 
-const DEFAULT_COLORS = ['#ef4444', '#2563eb', '#22c55e', '#f59e0b', '#8b5cf6', '#000000', '#ffffff'];
+const DEFAULT_COLORS = [
+  '#ef4444', '#2563eb', '#22c55e', '#f59e0b',
+  '#8b5cf6', '#000000', '#ffffff',
+];
+
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CANVAS_HEIGHT = SCREEN_WIDTH * 0.75; // 4:3 aspect ratio
+const CANVAS_HEIGHT = SCREEN_WIDTH * 0.75;
 
-// HTML-шаблон для WebView с HTML5 Canvas
-const ANNOTATION_HTML = `
+const HTML_TEMPLATE = `
 <!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { 
-    background: #1e293b; 
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
-    height: 100vh; 
+  body {
+    background: #1e293b;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
     overflow: hidden;
     font-family: -apple-system, sans-serif;
   }
   .container { position: relative; max-width: 100%; max-height: 100%; }
   img { display: block; max-width: 100%; max-height: 80vh; }
-  canvas { 
-    position: absolute; 
-    top: 0; 
-    left: 0; 
-    width: 100%; 
-    height: 100%; 
-    cursor: crosshair; 
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    cursor: crosshair;
     touch-action: none;
   }
   .text-input {
@@ -110,17 +106,17 @@ const ANNOTATION_HTML = `
 </div>
 
 <script>
-// ── Состояние ────────────────────────────────────
+// ── State ──────────────────────────────────────
 let currentTool = 'arrow';
 let currentColor = '#ef4444';
 let strokeWidth = 3;
 let isDrawing = false;
 let elements = [];
+let redoStack = [];
 let startX = 0, startY = 0;
 let imageLoaded = false;
 let imageWidth = 0, imageHeight = 0;
 let scaleX = 1, scaleY = 1;
-let currentText = '';
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -128,34 +124,47 @@ const img = document.getElementById('sourceImage');
 const textInput = document.getElementById('textInput');
 const container = document.querySelector('.container');
 
-// ── Загрузка изображения ─────────────────────────
+// ── Helpers ────────────────────────────────────
+function distance(x1, y1, x2, y2) {
+  return Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+}
+
+function drawArrowhead(ctx, fromX, fromY, toX, toY, size) {
+  const angle = Math.atan2(toY - fromY, toX - fromX);
+  ctx.beginPath();
+  ctx.moveTo(toX, toY);
+  ctx.lineTo(toX - size * Math.cos(angle - Math.PI/6), toY - size * Math.sin(angle - Math.PI/6));
+  ctx.lineTo(toX - size * Math.cos(angle + Math.PI/6), toY - size * Math.sin(angle + Math.PI/6));
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── Image loading ──────────────────────────────
 function loadImage(uri) {
   img.onload = function() {
     imageWidth = img.naturalWidth;
     imageHeight = img.naturalHeight;
-
-    // Рассчитываем масштаб
     const maxWidth = container.clientWidth;
     const maxHeight = window.innerHeight * 0.8;
     const scale = Math.min(maxWidth / imageWidth, maxHeight / imageHeight, 1);
-
     canvas.width = imageWidth * scale;
     canvas.height = imageHeight * scale;
     canvas.style.width = canvas.width + 'px';
     canvas.style.height = canvas.height + 'px';
-
     scaleX = canvas.width / imageWidth;
     scaleY = canvas.height / imageHeight;
-
     imageLoaded = true;
     redraw();
   };
   img.src = uri;
 }
 
-// ── Отрисовка ────────────────────────────────────
+// ── Rendering ──────────────────────────────────
 function redraw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Draw image first if available
+  if (imageLoaded) {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
   for (const el of elements) {
     ctx.save();
     ctx.strokeStyle = el.color;
@@ -163,36 +172,48 @@ function redraw() {
     ctx.lineWidth = el.strokeWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.font = el.strokeWidth * 5 + 'px sans-serif';
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
 
     switch (el.type) {
       case 'arrow': {
-        const angle = Math.atan2(el.ey - el.sy, el.ex - el.sx);
-        const headLen = 15;
         ctx.beginPath();
         ctx.moveTo(el.sx, el.sy);
         ctx.lineTo(el.ex, el.ey);
         ctx.stroke();
-        // Наконечник стрелки
+        drawArrowhead(ctx, el.sx, el.sy, el.ex, el.ey, 15);
+        break;
+      }
+      case 'text': {
+        ctx.font = 'bold ' + (el.fontSize || 18) + 'px sans-serif';
+        const metrics = ctx.measureText(el.text);
+        const pad = 6;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        roundRect(ctx, el.x, el.y - (el.fontSize || 18) - pad, metrics.width + pad*2, (el.fontSize || 18) + pad*2, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(el.text, el.x + pad, el.y - pad);
+        break;
+      }
+      case 'highlight': {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = el.color;
+        const hx = Math.min(el.sx, el.ex);
+        const hy = Math.min(el.sy, el.ey);
+        ctx.fillRect(hx, hy, Math.abs(el.ex - el.sx), Math.abs(el.ey - el.sy));
+        break;
+      }
+      case 'circle': {
+        const r = distance(el.sx, el.sy, el.ex, el.ey);
         ctx.beginPath();
-        ctx.moveTo(el.ex, el.ey);
-        ctx.lineTo(el.ex - headLen * Math.cos(angle - Math.PI / 6), el.ey - headLen * Math.sin(angle - Math.PI / 6));
-        ctx.lineTo(el.ex - headLen * Math.cos(angle + Math.PI / 6), el.ey - headLen * Math.sin(angle + Math.PI / 6));
-        ctx.closePath();
+        ctx.arc(el.sx, el.sy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.2;
         ctx.fill();
         break;
       }
-      case 'text':
-        ctx.fillStyle = el.color;
-        ctx.font = 'bold ' + el.strokeWidth * 5 + 'px sans-serif';
-        ctx.fillText(el.text || '', el.x, el.y);
-        break;
-      case 'highlight':
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = el.color;
-        ctx.fillRect(el.sx, el.sy, el.ex - el.sx, el.ey - el.sy);
-        break;
-      case 'freehand':
+      case 'freehand': {
         if (el.points && el.points.length > 1) {
           ctx.beginPath();
           ctx.moveTo(el.points[0].x, el.points[0].y);
@@ -202,12 +223,83 @@ function redraw() {
           ctx.stroke();
         }
         break;
+      }
+      case 'blur': {
+        const bx = Math.min(el.sx, el.ex);
+        const by = Math.min(el.sy, el.ey);
+        const bw = Math.abs(el.ex - el.sx);
+        const bh = Math.abs(el.ey - el.sy);
+        // Apply blur using pixel manipulation
+        const imageData = ctx.getImageData(bx, by, bw, bh);
+        ctx.filter = 'blur(' + Math.max(6, el.strokeWidth * 3) + 'px)';
+        ctx.fillStyle = '#000';
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.filter = 'none';
+        // Dashed border
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.setLineDash([]);
+        // Label
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('\\u2B22 redacted', bx + 4, by + 14);
+        break;
+      }
+      case 'measurement': {
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = el.strokeWidth;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(el.sx, el.sy);
+        ctx.lineTo(el.ex, el.ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Endpoints
+        ctx.fillStyle = '#22d3ee';
+        ctx.beginPath();
+        ctx.arc(el.sx, el.sy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(el.ex, el.ey, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // Label
+        const midX = (el.sx + el.ex) / 2;
+        const midY = (el.sy + el.ey) / 2;
+        const dist = distance(el.sx, el.sy, el.ex, el.ey);
+        const mm = ((dist / 96) * 25.4).toFixed(1);
+        const label = dist.toFixed(0) + 'px (' + mm + 'mm)';
+        ctx.font = 'bold 12px sans-serif';
+        const mw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        roundRect(ctx, midX - mw/2 - 6, midY - 12, mw + 12, 24, 4);
+        ctx.fill();
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillText(label, midX - mw/2, midY + 4);
+        break;
+      }
     }
     ctx.restore();
   }
 }
 
-// ── Конвертация координат ────────────────────────
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ── Coordinates ────────────────────────────────
 function getPos(e) {
   const rect = canvas.getBoundingClientRect();
   const touch = e.touches ? e.touches[0] : e;
@@ -217,7 +309,7 @@ function getPos(e) {
   };
 }
 
-// ── События мыши/тач ────────────────────────────
+// ── Events ─────────────────────────────────────
 function onPointerDown(e) {
   if (!imageLoaded) return;
   const pos = getPos(e);
@@ -226,7 +318,6 @@ function onPointerDown(e) {
   startY = pos.y;
 
   if (currentTool === 'text') {
-    // Показываем текстовый инпут
     textInput.style.display = 'block';
     textInput.style.left = pos.x + 'px';
     textInput.style.top = pos.y + 'px';
@@ -259,31 +350,55 @@ function onPointerMove(e) {
     return;
   }
 
-  // Preview для arrow и highlight
+  // Preview
   redraw();
   ctx.save();
   ctx.strokeStyle = currentColor;
   ctx.fillStyle = currentColor;
   ctx.lineWidth = strokeWidth;
   ctx.lineCap = 'round';
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.7;
 
   if (currentTool === 'arrow') {
-    const angle = Math.atan2(pos.y - startY, pos.x - startX);
-    const headLen = 15;
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-    ctx.lineTo(pos.x - headLen * Math.cos(angle - Math.PI / 6), pos.y - headLen * Math.sin(angle - Math.PI / 6));
-    ctx.lineTo(pos.x - headLen * Math.cos(angle + Math.PI / 6), pos.y - headLen * Math.sin(angle + Math.PI / 6));
-    ctx.closePath();
-    ctx.fill();
+    drawArrowhead(ctx, startX, startY, pos.x, pos.y, 12);
   } else if (currentTool === 'highlight') {
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = currentColor;
-    ctx.fillRect(startX, startY, pos.x - startX, pos.y - startY);
+    ctx.globalAlpha = 0.25;
+    const hx = Math.min(startX, pos.x);
+    const hy = Math.min(startY, pos.y);
+    ctx.fillRect(hx, hy, Math.abs(pos.x - startX), Math.abs(pos.y - startY));
+  } else if (currentTool === 'circle') {
+    const r = distance(startX, startY, pos.x, pos.y);
+    ctx.beginPath();
+    ctx.arc(startX, startY, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.15;
+    ctx.fill();
+  } else if (currentTool === 'blur') {
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#000';
+    const bx = Math.min(startX, pos.x);
+    const by = Math.min(startY, pos.y);
+    ctx.fillRect(bx, by, Math.abs(pos.x - startX), Math.abs(pos.y - startY));
+  } else if (currentTool === 'measurement') {
+    ctx.strokeStyle = '#22d3ee';
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#22d3ee';
+    ctx.beginPath();
+    ctx.arc(startX, startY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -292,68 +407,85 @@ function onPointerUp(e) {
   if (!isDrawing || !imageLoaded) return;
   isDrawing = false;
   const pos = getPos(e);
+  const dist = distance(startX, startY, pos.x, pos.y);
 
-  if (currentTool === 'arrow') {
-    elements.push({
-      type: 'arrow',
-      color: currentColor,
-      strokeWidth,
-      sx: startX, sy: startY,
-      ex: pos.x, ey: pos.y,
-    });
+  if (dist < 3 && currentTool !== 'freehand') {
     redraw();
-  } else if (currentTool === 'highlight') {
-    elements.push({
-      type: 'highlight',
-      color: currentColor,
-      strokeWidth,
-      sx: startX, sy: startY,
-      ex: pos.x, ey: pos.y,
-    });
-    redraw();
+    return;
   }
+
+  const el = { color: currentColor, strokeWidth };
+  let shouldAdd = false;
+
+  switch (currentTool) {
+    case 'arrow':
+      el.type = 'arrow'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
+      shouldAdd = true;
+      break;
+    case 'highlight':
+      el.type = 'highlight'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
+      shouldAdd = true;
+      break;
+    case 'circle':
+      el.type = 'circle'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
+      shouldAdd = true;
+      break;
+    case 'blur':
+      el.type = 'blur'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
+      shouldAdd = true;
+      break;
+    case 'measurement':
+      el.type = 'measurement'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
+      shouldAdd = true;
+      break;
+  }
+
+  if (shouldAdd) {
+    redoStack = [];
+    elements.push(el);
+  }
+
+  redraw();
 }
 
-// ── Текстовый ввод ───────────────────────────────
+// ── Text input ─────────────────────────────────
 textInput.addEventListener('blur', function() {
   if (this.value.trim()) {
     elements.push({
       type: 'text',
       color: currentColor,
       strokeWidth,
+      fontSize: 18,
       x: parseFloat(this.style.left),
       y: parseFloat(this.style.top),
       text: this.value,
     });
+    redoStack = [];
     redraw();
   }
   this.style.display = 'none';
 });
 
 textInput.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') {
-    this.blur();
-  }
+  if (e.key === 'Enter') this.blur();
 });
 
-// ── Touch/Mouse события ──────────────────────────
+// ── DOM events ─────────────────────────────────
 canvas.addEventListener('mousedown', onPointerDown);
 canvas.addEventListener('mousemove', onPointerMove);
 canvas.addEventListener('mouseup', onPointerUp);
-canvas.addEventListener('mouseleave', () => { isDrawing = false; });
+canvas.addEventListener('mouseleave', function() { isDrawing = false; });
 
-canvas.addEventListener('touchstart', (e) => { e.preventDefault(); onPointerDown(e); });
-canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onPointerMove(e); });
-canvas.addEventListener('touchend', (e) => { e.preventDefault(); onPointerUp(e); });
+canvas.addEventListener('touchstart', function(e) { e.preventDefault(); onPointerDown(e); });
+canvas.addEventListener('touchmove', function(e) { e.preventDefault(); onPointerMove(e); });
+canvas.addEventListener('touchend', function(e) { e.preventDefault(); onPointerUp(e); });
 
-// ── API для React Native ─────────────────────────
+// ── API for RN ─────────────────────────────────
 window.addEventListener('message', function(event) {
   const data = JSON.parse(event.data);
-
   switch (data.type) {
     case 'setTool':
       currentTool = data.tool;
-      currentText = '';
       textInput.style.display = 'none';
       break;
     case 'setColor':
@@ -366,37 +498,48 @@ window.addEventListener('message', function(event) {
       loadImage(data.uri);
       break;
     case 'getElements':
-      // Отправляем данные об элементах обратно
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'elements',
         elements: JSON.stringify(elements),
         imageWidth: imageWidth,
         imageHeight: imageHeight,
-        scaleX: scaleX,
-        scaleY: scaleY,
       }));
       break;
     case 'clearAll':
+      redoStack.push([...elements]);
       elements = [];
       redraw();
       break;
     case 'undo':
-      elements.pop();
-      redraw();
+      if (elements.length > 0) {
+        redoStack.push([elements.pop()]);
+        redraw();
+      }
+      break;
+    case 'redo':
+      if (redoStack.length > 0) {
+        const redoEl = redoStack.pop();
+        elements.push(...redoEl);
+        redraw();
+      }
+      break;
+    case 'getElementCount':
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'elementCount',
+        count: elements.length,
+        redoCount: redoStack.length,
+      }));
       break;
   }
 });
 
-// Сообщаем о готовности
 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
 </script>
 </body>
 </html>
 `;
 
-// ──────────────────────────────────────────────────
-// Component
-// ──────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────
 
 export default function PhotoAnnotation({
   photoUri,
@@ -412,43 +555,63 @@ export default function PhotoAnnotation({
   const [isReady, setIsReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [strokeWidth, setStrokeWidth] = useState(3);
+  const [elementCount, setElementCount] = useState(0);
+  const [redoCount, setRedoCount] = useState(0);
 
-  // ── Инициализация WebView ───────────────────────
+  // ── WebView messaging ─────────────────────────
 
-  const handleWebViewMessage = useCallback((event: WebViewMessageEvent) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'ready') {
-        setIsReady(true);
-        // Загружаем изображение после готовности
-        webViewRef.current?.postMessage(JSON.stringify({
-          type: 'loadImage',
-          uri: photoUri,
-        }));
+  const handleWebViewMessage = useCallback(
+    (event: WebViewMessageEvent) => {
+      try {
+        const data = JSON.parse(event.nativeEvent.data);
+        if (data.type === 'ready') {
+          setIsReady(true);
+          webViewRef.current?.postMessage(
+            JSON.stringify({ type: 'loadImage', uri: photoUri }),
+          );
+        } else if (data.type === 'elementCount') {
+          setElementCount(data.count);
+          setRedoCount(data.redoCount);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-  }, [photoUri]);
+    },
+    [photoUri],
+  );
 
-  // ── Отправка команд в WebView ────────────────────
+  const sendCommand = useCallback(
+    (command: Record<string, unknown>) => {
+      webViewRef.current?.postMessage(JSON.stringify(command));
+    },
+    [],
+  );
 
-  const sendCommand = useCallback((command: Record<string, unknown>) => {
-    webViewRef.current?.postMessage(JSON.stringify(command));
-  }, []);
+  const handleToolChange = useCallback(
+    (tool: AnnotationTool) => {
+      setCurrentTool(tool);
+      sendCommand({ type: 'setTool', tool });
+    },
+    [sendCommand],
+  );
 
-  const handleToolChange = useCallback((tool: AnnotationTool) => {
-    setCurrentTool(tool);
-    sendCommand({ type: 'setTool', tool });
-  }, [sendCommand]);
-
-  const handleColorChange = useCallback((color: string) => {
-    setCurrentColor(color);
-    sendCommand({ type: 'setColor', color });
-  }, [sendCommand]);
+  const handleColorChange = useCallback(
+    (color: string) => {
+      setCurrentColor(color);
+      sendCommand({ type: 'setColor', color });
+    },
+    [sendCommand],
+  );
 
   const handleUndo = useCallback(() => {
     sendCommand({ type: 'undo' });
+    // Refresh count after a tick
+    setTimeout(() => sendCommand({ type: 'getElementCount' }), 50);
+  }, [sendCommand]);
+
+  const handleRedo = useCallback(() => {
+    sendCommand({ type: 'redo' });
+    setTimeout(() => sendCommand({ type: 'getElementCount' }), 50);
   }, [sendCommand]);
 
   const handleClear = useCallback(() => {
@@ -457,26 +620,24 @@ export default function PhotoAnnotation({
       {
         text: 'Очистить',
         style: 'destructive',
-        onPress: () => sendCommand({ type: 'clearAll' }),
+        onPress: () => {
+          sendCommand({ type: 'clearAll' });
+          setTimeout(() => sendCommand({ type: 'getElementCount' }), 50);
+        },
       },
     ]);
   }, [sendCommand]);
 
-  // ── Сохранение аннотированного фото ────────────
+  // ── Save ──────────────────────────────────────
 
   const handleSave = useCallback(async () => {
     if (!viewShotRef.current || isSaving) return;
-
     setIsSaving(true);
+
     try {
-      // Захватываем WebView через ViewShot
       const uri = await (viewShotRef.current as any).capture?.();
+      if (!uri) throw new Error('Failed to capture annotated image');
 
-      if (!uri) {
-        throw new Error('Failed to capture annotated image');
-      }
-
-      // Копируем в постоянное хранилище
       const fileName = `annotated_${Date.now()}.jpg`;
       const dest = `${FileSystem.documentDirectory}annotations/${fileName}`;
 
@@ -485,12 +646,8 @@ export default function PhotoAnnotation({
         { intermediates: true },
       );
 
-      await FileSystem.copyAsync({
-        from: uri,
-        to: dest,
-      });
+      await FileSystem.copyAsync({ from: uri, to: dest });
 
-      // Загружаем на сервер, если есть workOrderId
       let uploadedUrl: string | undefined;
       if (workOrderId) {
         try {
@@ -498,7 +655,6 @@ export default function PhotoAnnotation({
           uploadedUrl = result.url;
         } catch (uploadError) {
           console.error('[PhotoAnnotation] Upload failed:', uploadError);
-          // Сохраняем локально даже если upload не удался
         }
       }
 
@@ -524,16 +680,25 @@ export default function PhotoAnnotation({
     }
   }, [isSaving, workOrderId, currentTool, currentColor, strokeWidth, onSave]);
 
-  // ── Инструменты ─────────────────────────────────
+  // ── Tools ─────────────────────────────────────
 
-  const tools: { key: AnnotationTool; icon: string; label: string }[] = [
+  interface ToolDef {
+    key: AnnotationTool;
+    icon: string;
+    label: string;
+  }
+
+  const tools: ToolDef[] = [
     { key: 'arrow', icon: '➡️', label: 'Стрелка' },
     { key: 'text', icon: 'Aa', label: 'Текст' },
     { key: 'highlight', icon: '🖍️', label: 'Выделение' },
+    { key: 'circle', icon: '⭕', label: 'Круг' },
     { key: 'freehand', icon: '✏️', label: 'Рисование' },
+    { key: 'blur', icon: '🌫️', label: 'Размытие' },
+    { key: 'measurement', icon: '📏', label: 'Линейка' },
   ];
 
-  // ── Render ──────────────────────────────────────
+  // ── Render ────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -568,7 +733,7 @@ export default function PhotoAnnotation({
       >
         <WebView
           ref={webViewRef}
-          source={{ html: ANNOTATION_HTML }}
+          source={{ html: HTML_TEMPLATE }}
           style={styles.webView}
           onMessage={handleWebViewMessage}
           scrollEnabled={false}
@@ -582,78 +747,82 @@ export default function PhotoAnnotation({
 
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        {/* Tools */}
-        <View style={styles.toolsRow}>
-          {tools.map((tool) => (
-            <TouchableOpacity
-              key={tool.key}
-              style={[
-                styles.toolBtn,
-                currentTool === tool.key && styles.toolBtnActive,
-              ]}
-              onPress={() => handleToolChange(tool.key)}
-            >
-              {tool.key === 'text' ? (
-                <Text
-                  style={[
-                    styles.toolIcon,
-                    { fontSize: 14, fontWeight: 'bold' },
-                  ]}
-                >
-                  {tool.icon}
-                </Text>
-              ) : (
-                <Text style={styles.toolIcon}>{tool.icon}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Stroke width */}
-        <View style={styles.strokeRow}>
-          <Text style={styles.strokeLabel}>Толщина:</Text>
-          {[2, 4, 6].map((w) => (
-            <TouchableOpacity
-              key={w}
-              style={[
-                styles.strokeBtn,
-                strokeWidth === w && styles.strokeBtnActive,
-              ]}
-              onPress={() => {
-                setStrokeWidth(w);
-                sendCommand({ type: 'setStrokeWidth', width: w });
-              }}
-            >
-              <View
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {/* Tools */}
+          <View style={styles.toolsRow}>
+            {tools.map((tool) => (
+              <TouchableOpacity
+                key={tool.key}
                 style={[
-                  styles.strokeDot,
-                  { width: w * 2, height: w * 2, borderRadius: w },
+                  styles.toolBtn,
+                  currentTool === tool.key && styles.toolBtnActive,
                 ]}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+                onPress={() => handleToolChange(tool.key)}
+              >
+                <Text style={styles.toolIcon}>{tool.icon}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Colors */}
-        <View style={styles.colorsRow}>
-          {colors.map((color) => (
-            <TouchableOpacity
-              key={color}
-              style={[
-                styles.colorBtn,
-                { backgroundColor: color },
-                currentColor === color && styles.colorBtnActive,
-              ]}
-              onPress={() => handleColorChange(color)}
-            />
-          ))}
-        </View>
+          {/* Stroke width */}
+          <View style={styles.strokeRow}>
+            <Text style={styles.strokeLabel}>Толщина:</Text>
+            {[2, 4, 6].map((w) => (
+              <TouchableOpacity
+                key={w}
+                style={[
+                  styles.strokeBtn,
+                  strokeWidth === w && styles.strokeBtnActive,
+                ]}
+                onPress={() => {
+                  setStrokeWidth(w);
+                  sendCommand({ type: 'setStrokeWidth', width: w });
+                }}
+              >
+                <View
+                  style={[
+                    styles.strokeDot,
+                    { width: w * 2, height: w * 2, borderRadius: w },
+                  ]}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Colors */}
+          <View style={styles.colorsRow}>
+            {colors.map((color) => (
+              <TouchableOpacity
+                key={color}
+                style={[
+                  styles.colorBtn,
+                  { backgroundColor: color },
+                  currentColor === color && styles.colorBtnActive,
+                ]}
+                onPress={() => handleColorChange(color)}
+              />
+            ))}
+          </View>
+        </ScrollView>
 
         {/* Actions */}
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleUndo}>
+          <TouchableOpacity
+            style={[styles.actionBtn, elementCount === 0 && styles.actionBtnDisabled]}
+            onPress={handleUndo}
+            disabled={elementCount === 0}
+          >
             <Text style={styles.actionBtnText}>↩ Отменить</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, redoCount === 0 && styles.actionBtnDisabled]}
+            onPress={handleRedo}
+            disabled={redoCount === 0}
+          >
+            <Text style={styles.actionBtnText}>↪ Повторить</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.actionBtn, styles.clearBtn]}
             onPress={handleClear}
@@ -662,15 +831,17 @@ export default function PhotoAnnotation({
               ✕ Очистить
             </Text>
           </TouchableOpacity>
+
+          <Text style={styles.countText}>
+            {elementCount} сл.
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-// ──────────────────────────────────────────────────
-// Styles
-// ──────────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -727,10 +898,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#334155',
     paddingBottom: Platform.OS === 'ios' ? 20 : 8,
   },
-  // ── Tools ──────────────────────────────────────
   toolsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -752,11 +921,9 @@ const styles = StyleSheet.create({
   toolIcon: {
     fontSize: 18,
   },
-  // ── Stroke width ───────────────────────────────
   strokeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 12,
     paddingVertical: 6,
     paddingHorizontal: 16,
@@ -783,10 +950,8 @@ const styles = StyleSheet.create({
   strokeDot: {
     backgroundColor: '#e2e8f0',
   },
-  // ── Colors ─────────────────────────────────────
   colorsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -804,10 +969,10 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     transform: [{ scale: 1.2 }],
   },
-  // ── Actions ────────────────────────────────────
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -818,6 +983,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#334155',
   },
+  actionBtnDisabled: {
+    opacity: 0.35,
+  },
   clearBtn: {
     backgroundColor: '#450a0a',
   },
@@ -825,5 +993,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#cbd5e1',
     fontWeight: '600',
+  },
+  countText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
   },
 });
