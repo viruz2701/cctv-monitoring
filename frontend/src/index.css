@@ -2,6 +2,7 @@
 @import "./styles/tokens.css";
 @import "./styles/animations.css";
 @import "./styles/a11y.css";
+@import "./styles/print.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -328,84 +329,3 @@ textarea,
   min-height: 48px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   Print-friendly styles (P2-2.3)
-   ═══════════════════════════════════════════════════════════════════════ */
-
-@media print {
-  /* Hide everything except the calendar */
-  body * {
-    visibility: hidden;
-  }
-
-  .technician-calendar,
-  .technician-calendar *,
-  .technician-week-page,
-  .technician-week-page * {
-    visibility: visible;
-  }
-
-  .technician-calendar,
-  .technician-week-page {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* Hide FullCalendar toolbar buttons (nav, view switcher) */
-  .fc .fc-header-toolbar .fc-button {
-    display: none !important;
-  }
-
-  .fc .fc-header-toolbar .fc-toolbar-title {
-    font-size: 16pt;
-    font-weight: 700;
-  }
-
-  /* Hide filter bar, conflict panel, legend */
-  .technician-calendar > div:first-child,
-  .technician-week-page > div:first-child {
-    display: none !important;
-  }
-
-  /* FullCalendar print adjustments */
-  .fc {
-    font-size: 9pt !important;
-  }
-
-  .fc .fc-timeline-header {
-    font-size: 8pt;
-  }
-
-  .fc .fc-timeline-body {
-    page-break-inside: avoid;
-  }
-
-  .fc .fc-timeline-lane {
-    page-break-inside: avoid;
-    min-height: 36px;
-  }
-
-  .fc-resource-tooltip {
-    display: none !important;
-  }
-
-  /* Reduce colors for print — keep contrast */
-  .technician-event {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .fc .fc-timeline-now-indicator {
-    display: none !important;
-  }
-
-  /* Make table borders sharper for print */
-  .fc .fc-timeline-header-row th,
-  .fc .fc-timeline-lane td {
-    border-color: #ccc !important;
-  }
-}

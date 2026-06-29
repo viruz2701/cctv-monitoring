@@ -1,0 +1,230 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   print.css — P0-PDF.1: CSS @media print framework
+   Используется для быстрого preview печати и как основа server-side PDF
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  /* ═══════════════════════════════════════════════════════════════════════
+     Global: скрыть UI элементы
+     ═══════════════════════════════════════════════════════════════════════ */
+  nav, header, .sidebar, footer, .no-print,
+  button, .btn, [role="tab"], .tabs,
+  .fc-header-toolbar, .fc-button {
+    display: none !important;
+  }
+
+  /* ═══ Скрыть скроллбары и оверлеи ═══ */
+  ::-webkit-scrollbar { display: none; }
+  .modal, [role="dialog"], .dropdown, .popover { display: none !important; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Основной контент на всю страницу
+     ═══════════════════════════════════════════════════════════════════════ */
+  body {
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #000;
+    background: #fff;
+  }
+
+  main, .main-content {
+    margin: 0 !important;
+    padding: 0.5in !important;
+    max-width: 100% !important;
+  }
+
+  aside, .lg\:ml-64, .lg\:ml-20 {
+    margin-left: 0 !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Разрывы страниц
+     ═══════════════════════════════════════════════════════════════════════ */
+  .print-section {
+    page-break-inside: avoid;
+  }
+
+  .print-page-break {
+    page-break-before: always;
+  }
+
+  h1, h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  table {
+    page-break-inside: avoid;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Таблицы
+     ═══════════════════════════════════════════════════════════════════════ */
+  table, .data-grid, .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+
+  th {
+    background: #1e3a5f !important;
+    color: white !important;
+    padding: 6px 8px;
+    text-align: left;
+  }
+
+  td {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+  }
+
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Карточки
+     ═══════════════════════════════════════════════════════════════════════ */
+  .card, [class*="Card"], [class*="card"] {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    margin-bottom: 12px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Статистика и метрики
+     ═══════════════════════════════════════════════════════════════════════ */
+  .stats-grid, [class*="stats"], [class*="Stats"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .stat-value, [class*="statValue"] {
+    font-size: 14pt;
+    font-weight: 700;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Чарты (Nivo) — скрыть SVG, показать data table
+     ═══════════════════════════════════════════════════════════════════════ */
+  svg[class*="nivo"], [class*="nivo"] svg {
+    max-width: 100%;
+    height: auto !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Header отчёта
+     ═══════════════════════════════════════════════════════════════════════ */
+  .report-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #1e3a5f;
+    padding-bottom: 12px;
+  }
+
+  .report-header h1 {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #1e3a5f;
+  }
+
+  .report-header .report-meta {
+    font-size: 8pt;
+    color: #666;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Footer с HMAC подписью
+     ═══════════════════════════════════════════════════════════════════════ */
+  .report-footer {
+    display: block !important;
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #ccc;
+    font-size: 7pt;
+    color: #999;
+    text-align: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     Technician Calendar (P2-2.3) — print styles
+     ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Hide everything except the calendar */
+  body * {
+    visibility: hidden;
+  }
+
+  .technician-calendar,
+  .technician-calendar *,
+  .technician-week-page,
+  .technician-week-page * {
+    visibility: visible;
+  }
+
+  .technician-calendar,
+  .technician-week-page {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide FullCalendar toolbar buttons (nav, view switcher) */
+  .fc .fc-header-toolbar .fc-button {
+    display: none !important;
+  }
+
+  .fc .fc-header-toolbar .fc-toolbar-title {
+    font-size: 16pt;
+    font-weight: 700;
+  }
+
+  /* Hide filter bar, conflict panel, legend */
+  .technician-calendar > div:first-child,
+  .technician-week-page > div:first-child {
+    display: none !important;
+  }
+
+  /* FullCalendar print adjustments */
+  .fc {
+    font-size: 9pt !important;
+  }
+
+  .fc .fc-timeline-header {
+    font-size: 8pt;
+  }
+
+  .fc .fc-timeline-body {
+    page-break-inside: avoid;
+  }
+
+  .fc .fc-timeline-lane {
+    page-break-inside: avoid;
+    min-height: 36px;
+  }
+
+  .fc-resource-tooltip {
+    display: none !important;
+  }
+
+  /* Reduce colors for print — keep contrast */
+  .technician-event {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .fc .fc-timeline-now-indicator {
+    display: none !important;
+  }
+
+  /* Make table borders sharper for print */
+  .fc .fc-timeline-header-row th,
+  .fc .fc-timeline-lane td {
+    border-color: #ccc !important;
+  }
+}
