@@ -114,13 +114,14 @@ export default defineConfig({
     }),
   ].filter(Boolean),
   build: {
+    target: 'es2020', // P2-OPT.3: современные браузеры — меньше полифиллов
     rollupOptions: {
       output: {
         // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
         // P1-2.1: Bundle size reduction — выделение тяжёлых библиотек в отдельные чанки
         manualChunks(id: string) {
-          // Core React
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router') || id.includes('node_modules/react-hook-form')) {
+          // Core React + scheduler (часть React)
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router') || id.includes('node_modules/react-hook-form') || id.includes('node_modules/scheduler')) {
             return 'vendor-react';
           }
           // Charts & visualization (Nivo — tree-shakeable, ~180KB)
@@ -163,8 +164,8 @@ export default defineConfig({
           if (id.includes('node_modules/react-datepicker')) {
             return 'vendor-datepicker';
           }
-          // Query & state management
-          if (id.includes('node_modules/@tanstack/react-query') || id.includes('node_modules/zustand')) {
+          // Query & state management (@tanstack/react-query, query-core, react-virtual, zustand)
+          if (id.includes('node_modules/@tanstack') || id.includes('node_modules/zustand')) {
             return 'vendor-state';
           }
           // Form handling (hookform + zod)
@@ -174,6 +175,10 @@ export default defineConfig({
           // Sentry
           if (id.includes('node_modules/@sentry')) {
             return 'vendor-sentry';
+          }
+          // Icons (lucide-react — tree-shakeable, ~30KB shared)
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
           }
           // Everything else from node_modules
           if (id.includes('node_modules')) {
