@@ -196,6 +196,11 @@ func (s *Server) MountRoutes(r chi.Router) {
 		// Black Box Incident Recorder (KF-15.2.4)
 		s.mountBlackBoxRoutes(r)
 
+		// P1-REPLAY: NATS JetStream Event Replay UI
+		if s.eventReplay != nil {
+			s.mountEventReplayRoutes(r)
+		}
+
 		// GraphQL read-only endpoint (INT-13.2.4)
 		s.mountGraphQLRoute(r)
 

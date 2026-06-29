@@ -117,6 +117,7 @@ function App() {
                     <Route path="/audit-log" element={<PageSuspense><Pages.AuditLog /></PageSuspense>} />
                     <Route path="/blackbox" element={<PageSuspense><Pages.BlackBox /></PageSuspense>} />
                     <Route path="/advanced-analytics" element={<PageSuspense><Pages.AdvancedAnalytics /></PageSuspense>} />
+                    <Route path="/events" element={<PageSuspense><Pages.EventReplay /></PageSuspense>} />
                   </Route>
 
                   {/* Admin Only Routes */}

@@ -12,6 +12,7 @@ export const ComplianceShield = lazy(() => import('./ComplianceShield').then((m)
 export const DashboardHub = lazy(() => import('./DashboardHub').then((m) => ({ default: m.DashboardHub })));
 export const DeviceDetail = lazy(() => import('./DeviceDetail').then((m) => ({ default: m.DeviceDetail })));
 export const Devices = lazy(() => import('./Devices').then((m) => ({ default: m.Devices })));
+export const EventReplay = lazy(() => import('./EventReplay').then((m) => ({ default: m.EventReplay })));
 export const ForgotPassword = lazy(() => import('./ForgotPassword').then((m) => ({ default: m.ForgotPassword })));
 export const Glossary = lazy(() => import('./Glossary').then((m) => ({ default: m.Glossary })));
 export const LocationTree = lazy(() => import('./LocationTree').then((m) => ({ default: m.LocationTree })));

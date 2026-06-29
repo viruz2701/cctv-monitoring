@@ -179,6 +179,9 @@ type Server struct {
 	// P0-PDF.3: NATS JetStream report queue for async report generation
 	reportQueue *events.ReportQueue
 
+	// P1-REPLAY: NATS JetStream Event Replay service
+	eventReplay *events.EventReplay
+
 	// P1-QUOTA: Tenant Quota Manager (Redis-based)
 	tenantQuotaManager *tenant.QuotaManager
 }
@@ -344,27 +347,40 @@ func (s *Server) SetRateLimitRedis(client *redis.Client) {
 	s.rateLimitRedis = client
 }
 
-// SetNATSConn устанавливает NATS соединение для health checks и
-// инициализирует report queue (P0-PDF.3).
+// SetNATSConn устанавливает NATS соединение для health checks,
+// инициализирует report queue (P0-PDF.3) и event replay (P1-REPLAY).
 // natsRequired указывает, обязателен ли NATS для readiness probe.
 func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
 	s.natsConn = conn
 	s.natsRequired = natsRequired
 
-	// P0-PDF.3: Инициализация NATS JetStream report queue
-	if conn != nil {
-		rq, err := events.NewReportQueue(conn, s.logger)
-		if err != nil {
-			s.logger.Warn("P0-PDF.3: report queue not available, async generation disabled",
-				"error", err,
-			)
-		} else {
-			s.reportQueue = rq
-			s.logger.Info("P0-PDF.3: report queue initialized")
+	if conn == nil {
+		return
+	}
 
-			// Запуск consumer в фоне
-			go rq.Consume(context.Background(), s.handleReportGeneration)
-		}
+	// P0-PDF.3: Инициализация NATS JetStream report queue
+	rq, err := events.NewReportQueue(conn, s.logger)
+	if err != nil {
+		s.logger.Warn("P0-PDF.3: report queue not available, async generation disabled",
+			"error", err,
+		)
+	} else {
+		s.reportQueue = rq
+		s.logger.Info("P0-PDF.3: report queue initialized")
+
+		// Запуск consumer в фоне
+		go rq.Consume(context.Background(), s.handleReportGeneration)
+	}
+
+	// P1-REPLAY: Инициализация NATS JetStream Event Replay
+	er, err := events.NewEventReplay(conn, s.logger)
+	if err != nil {
+		s.logger.Warn("P1-REPLAY: event replay not available",
+			"error", err,
+		)
+	} else {
+		s.eventReplay = er
+		s.logger.Info("P1-REPLAY: event replay initialized")
 	}
 }
 
