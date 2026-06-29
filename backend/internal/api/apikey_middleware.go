@@ -1,37 +1,40 @@
 package api
 
 import (
-	"sync"
-
-	"gb-telemetry-collector/internal/db"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	apimw "gb-telemetry-collector/internal/api/middleware"
+	"gb-telemetry-collector/internal/db"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-// API key rate limiter (INT-13.2.3)
-var apiKeyRateLimiters sync.Map // map[string]*rateLimiter (key_id → limiter)
-
+// API key rate limiter (INT-13.2.3, P1-RATE)
+// Redis-based rate limiter, инициализируется в APIKeyMiddleware.
+// Лимит: 100 req/min per API key.
 const (
-	apiKeyRateLimit    = 100  // 100 requests
-	apiKeyRateWindow   = 1 * time.Minute // per minute
+	apiKeyRateLimit  = 100             // 100 requests
+	apiKeyRateWindow = 1 * time.Minute // per minute
 )
 
-// getAPIKeyRateLimiter возвращает rate limiter для API key.
-func getAPIKeyRateLimiter(keyID string) *rateLimiter {
-	if limiter, ok := apiKeyRateLimiters.Load(keyID); ok {
-		return limiter.(*rateLimiter)
-	}
-	limiter := newRateLimiter(apiKeyRateLimit, apiKeyRateWindow)
-	apiKeyRateLimiters.Store(keyID, limiter)
-	return limiter
-}
-
 // APIKeyMiddleware validates API keys from X-API-Key header
-// и применяет rate limiting per key (INT-13.2.3).
+// и применяет Redis-based rate limiting per key (P1-RATE).
+//
+// Соответствует:
+//   - INT-13.2.3: API key rate limiting
+//   - P1-RATE: Redis-based distributed rate limiting
+//   - OWASP ASVS V2.2.1 (Rate limiting)
 func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
+	// P1-RATE: Инициализируем Redis-based rate limiter для API keys
+	// Если Redis недоступен — используем fail-open (пропускаем запросы)
+	var apiKeyLimiter *apimw.RateLimiter
+	if s.rateLimitRedis != nil {
+		apiKeyLimiter = apimw.NewRateLimiter(s.rateLimitRedis, apiKeyRateLimit, apiKeyRateLimit, apiKeyRateWindow)
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.Header.Get("X-API-Key")
 		if apiKey == "" {
@@ -80,11 +83,25 @@ func (s *Server) APIKeyMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// INT-13.2.3: Rate limiting per API key
-		limiter := getAPIKeyRateLimiter(matchedKey.ID)
-		if !limiter.allow(matchedKey.ID) {
-			RespondError(w, r, NewRateLimitError("API key rate limit exceeded (100 req/min)"))
-			return
+		// P1-RATE: Redis-based rate limiting per API key
+		if apiKeyLimiter != nil {
+			allowed, current, limit, err := apiKeyLimiter.Allow(r.Context(), "apikey:"+matchedKey.ID, r.Method)
+			if err != nil {
+				// Fail-open: при ошибке Redis пропускаем запрос
+				s.logger.Warn("API key rate limiter Redis error, allowing request",
+					"key_id", matchedKey.ID,
+					"error", err,
+				)
+			} else if !allowed {
+				RespondError(w, r, NewRateLimitError(
+					"API key rate limit exceeded (100 req/min)"))
+				return
+			} else {
+				// X-RateLimit headers для API key
+				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+				w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(max(0, limit-current)))
+				w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(apiKeyRateWindow).Unix(), 10))
+			}
 		}
 
 		// Update last used timestamp (async to not block request)

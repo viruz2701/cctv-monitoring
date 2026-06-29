@@ -37,6 +37,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 
 	"gb-telemetry-collector/internal/ai"
 	apimw "gb-telemetry-collector/internal/api/middleware"
@@ -160,6 +161,11 @@ type Server struct {
 
 	// Redis client for health checks and caching
 	redisClient RedisClient
+
+	// P1-RATE: Redis client for distributed rate limiting
+	// Хранится отдельно от redisClient, т.к. RedisClient — интерфейс только для Ping,
+	// а rate limiter требует *redis.Client для Lua scripting (ZADD, ZREMRANGEBYSCORE, ZCARD, EXPIRE).
+	rateLimitRedis *redis.Client
 
 	// Server start time for uptime tracking (PERF.4)
 	serverStart time.Time
@@ -327,6 +333,12 @@ func (s *Server) SetTelegramBot(bot *telegram.Bot) {
 // Если установлен, будет проверяться в readiness и dependencies probes.
 func (s *Server) SetRedisClient(client RedisClient) {
 	s.redisClient = client
+}
+
+// SetRateLimitRedis устанавливает Redis клиент для distributed rate limiting.
+// Использует *redis.Client напрямую для Lua scripting (P1-RATE).
+func (s *Server) SetRateLimitRedis(client *redis.Client) {
+	s.rateLimitRedis = client
 }
 
 // SetNATSConn устанавливает NATS соединение для health checks и

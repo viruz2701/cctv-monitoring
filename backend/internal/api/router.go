@@ -38,6 +38,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"gb-telemetry-collector/internal/ai"
+	apimw "gb-telemetry-collector/internal/api/middleware"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/blackbox"
 	"gb-telemetry-collector/internal/cmms"
@@ -120,6 +121,15 @@ func (s *Server) MountRoutes(r chi.Router) {
 		r.Use(auth.AuthMiddleware)
 		r.Use(auth.CSRFMiddleware)
 		r.Use(auth.TenantMiddleware)
+
+		// P1-RATE: Distributed Rate Limiting (Redis-based)
+		// Применяется ко всем защищённым маршрутам после аутентификации.
+		// Лимиты: 100 read/30 write per minute per tenant/user.
+		// Соответствует: OWASP ASVS V2.2.1, ISO 27001 A.12.1.2
+		if s.rateLimitRedis != nil {
+			rateLimiter := apimw.NewRateLimiter(s.rateLimitRedis, 100, 30, time.Minute)
+			r.Use(rateLimiter.Middleware)
+		}
 
 		// P0-CE.5: Tenant Compliance Middleware (injects compliance profile into context)
 		if s.tenantComplianceStore != nil {
