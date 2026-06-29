@@ -2,6 +2,8 @@
 -- P1-MARKET: Playbook Marketplace — Down Migration
 -- ═══════════════════════════════════════════════════════════════════════
 
+-- +migrate Down
+
 DROP TRIGGER IF EXISTS trg_increment_install_count ON playbook_installs;
 DROP FUNCTION IF EXISTS increment_playbook_install_count();
 

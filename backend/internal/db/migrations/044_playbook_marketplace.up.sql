@@ -12,6 +12,8 @@
 --   - OWASP ASVS V6 (Cryptographic storage — UUID PK)
 -- ═══════════════════════════════════════════════════════════════════════
 
+-- +migrate Up
+
 -- ── Каталог плейбуков marketplace ─────────────────────────────────────
 CREATE TABLE playbook_marketplace (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -187,6 +187,9 @@ type Server struct {
 
 	// P1-MARKET: Playbook Marketplace Service
 	playbookMarketplace playbookMarketplaceService
+
+	// P1-CALENDAR: External Calendar Sync
+	calendarHandler *CalendarHandler
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

@@ -149,6 +149,20 @@ type Config struct {
 	// DeepSeek AI API key for AI Assistant Chat (P2-1.2)
 	// Хранится только на сервере, не пробрасывается на клиент.
 	DeepSeekAPIKey string `mapstructure:"deepseek_api_key"`
+
+	// P1-CALENDAR: External Calendar Sync (Google + Outlook)
+	GoogleCalendarClientID     string `mapstructure:"google_calendar_client_id"`
+	GoogleCalendarClientSecret string `mapstructure:"google_calendar_client_secret"`
+	GoogleCalendarRedirectURL  string `mapstructure:"google_calendar_redirect_url"`
+
+	OutlookCalendarClientID     string `mapstructure:"outlook_calendar_client_id"`
+	OutlookCalendarClientSecret string `mapstructure:"outlook_calendar_client_secret"`
+	OutlookCalendarRedirectURL  string `mapstructure:"outlook_calendar_redirect_url"`
+	OutlookCalendarTenantID     string `mapstructure:"outlook_calendar_tenant_id"`
+
+	CalendarSyncInterval     string `mapstructure:"calendar_sync_interval"`
+	CalendarConflictStrategy string `mapstructure:"calendar_conflict_strategy"`
+	CalendarSyncWindow       string `mapstructure:"calendar_sync_window"`
 }
 
 // EventStoreConfig — настройки Event Store (DM-1.2.2: NATS + S3 Cold Storage)

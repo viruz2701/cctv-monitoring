@@ -1,4 +1,5 @@
-// Package api — Integration routes: Atlas CMMS, ITSM webhooks (ServiceNow, Jira, 1C:TOIR).
+// Package api — Integration routes: Atlas CMMS, ITSM webhooks (ServiceNow, Jira, 1C:TOIR),
+// Calendar Sync (Google, Outlook).
 package api
 
 import (
@@ -14,6 +15,27 @@ func (s *Server) mountIntegrationRoutes(r chi.Router) {
 	r.Get("/api/v1/atlas/fallback/status", s.atlasFallbackStatus)
 	r.Post("/api/v1/atlas/fallback/retry", s.atlasRetryFallback)
 	r.Post("/api/v1/atlas/sync-asset/{deviceId}", s.atlasSyncAsset)
+
+	// P1-CALENDAR: External Calendar Sync
+	s.mountCalendarRoutes(r)
+}
+
+// mountCalendarRoutes регистрирует Calendar Sync маршруты.
+func (s *Server) mountCalendarRoutes(r chi.Router) {
+	if s.calendarHandler == nil {
+		return
+	}
+
+	r.Route("/api/v1/integrations/calendar", func(r chi.Router) {
+		r.Get("/providers", s.calendarHandler.handleListProviders)
+		r.Post("/{provider}/connect", s.calendarHandler.handleConnect)
+		r.Post("/{provider}/disconnect", s.calendarHandler.handleDisconnect)
+		r.Get("/{provider}/status", s.calendarHandler.handleStatus)
+		r.Post("/sync", s.calendarHandler.handleSync)
+
+		// OAuth2 callback — без JWT (провайдер редиректит сюда)
+		r.Get("/{provider}/callback", s.calendarHandler.handleCallback)
+	})
 }
 
 // mountGraphQLRoute регистрирует GraphQL read-only endpoint (INT-13.2.4).

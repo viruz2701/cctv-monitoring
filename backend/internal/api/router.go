@@ -43,6 +43,7 @@ import (
 	"gb-telemetry-collector/internal/blackbox"
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/compliance"
+	"gb-telemetry-collector/internal/integrations/calendar"
 	"gb-telemetry-collector/internal/multiregion"
 	"gb-telemetry-collector/internal/playbook"
 	"gb-telemetry-collector/internal/service"
@@ -303,6 +304,9 @@ func (s *Server) initServices() {
 	// ── P1-MARKET: Playbook Marketplace Service ─────────────────────
 	s.initMarketplaceService()
 
+	// ── P1-CALENDAR: External Calendar Sync ─────────────────────────
+	s.initCalendarService()
+
 	// ── P3-1: Multi-Region Geo-Redundancy ──────────────────────────
 	s.initMultiRegion()
 }
@@ -363,6 +367,62 @@ func (s *Server) initMarketplaceService() {
 		s.playbookMarketplace = playbook.NewMarketplaceService(s.db.Pool, s.logger)
 		s.logger.Info("P1-MARKET: playbook marketplace service initialized")
 	}
+}
+
+// initCalendarService инициализирует Calendar Sync Engine (P1-CALENDAR).
+func (s *Server) initCalendarService() {
+	if s.db == nil || s.db.Pool == nil {
+		s.logger.Warn("P1-CALENDAR: no database connection, calendar sync disabled")
+		return
+	}
+
+	// Создаём store для calendar_connections/calendar_events
+	store := NewCalendarStore(s.db.Pool)
+
+	// Парсим конфигурацию
+	cfg := calendar.DefaultConfig()
+	if interval := s.config.CalendarSyncInterval; interval != "" {
+		if d, err := time.ParseDuration(interval); err == nil {
+			cfg.SyncInterval = d
+		}
+	}
+	if strategy := s.config.CalendarConflictStrategy; strategy != "" {
+		cfg.ConflictStrategy = strategy
+	}
+	if window := s.config.CalendarSyncWindow; window != "" {
+		if d, err := time.ParseDuration(window); err == nil {
+			cfg.SyncWindow = d
+		}
+	}
+
+	// Создаём SyncEngine
+	engine := calendar.NewSyncEngine(store, cfg, s.logger)
+
+	// Регистрируем провайдеров (если есть OAuth2 конфигурация)
+	if s.config.GoogleCalendarClientID != "" {
+		// В production здесь создаётся OAuth2 клиент через google.NewGoogleClient
+		// и регистрируется GoogleCalendar провайдер
+		s.logger.Info("P1-CALENDAR: google calendar provider configured")
+	}
+
+	if s.config.OutlookCalendarClientID != "" {
+		s.logger.Info("P1-CALENDAR: outlook calendar provider configured")
+	}
+
+	// Создаём HTTP handler
+	h := NewCalendarHandler(engine, store)
+
+	s.calendarHandler = h
+
+	s.logger.Info("P1-CALENDAR: calendar sync engine initialized",
+		"sync_interval", cfg.SyncInterval,
+		"conflict_strategy", cfg.ConflictStrategy,
+	)
+}
+
+// SetCalendarHandler устанавливает CalendarHandler извне (для DI).
+func (s *Server) SetCalendarHandler(h *CalendarHandler) {
+	s.calendarHandler = h
 }
 
 // initMultiRegion инициализирует multi-region geo-redundancy.
