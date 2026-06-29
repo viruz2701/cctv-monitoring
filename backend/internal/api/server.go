@@ -178,6 +178,9 @@ type Server struct {
 
 	// P0-PDF.3: NATS JetStream report queue for async report generation
 	reportQueue *events.ReportQueue
+
+	// P1-QUOTA: Tenant Quota Manager (Redis-based)
+	tenantQuotaManager *tenant.QuotaManager
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -368,6 +371,11 @@ func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
 // SetFeatureFlagsManager устанавливает Feature Flag менеджер (F-0.2.4).
 func (s *Server) SetFeatureFlagsManager(ff *featureflag.Manager) {
 	s.featureFlags = ff
+}
+
+// SetTenantQuotaManager устанавливает Tenant Quota Manager (P1-QUOTA).
+func (s *Server) SetTenantQuotaManager(qm *tenant.QuotaManager) {
+	s.tenantQuotaManager = qm
 }
 
 // ---------- Вспомогательные ----------

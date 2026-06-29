@@ -136,6 +136,14 @@ func (s *Server) MountRoutes(r chi.Router) {
 			r.Use(s.tenantComplianceStore.Middleware)
 		}
 
+		// P1-QUOTA: Tenant Quota Middleware
+		// Проверяет квоты на мутирующих запросах (POST, PUT, DELETE, PATCH).
+		// Soft limit (80%) → X-Quota-Warning header
+		// Hard limit (100%) → HTTP 429 (если не на grace period)
+		if s.tenantQuotaManager != nil {
+			r.Use(apimw.QuotaMiddleware(s.tenantQuotaManager, ""))
+		}
+
 		// Auth domain (users, sessions, 2FA, Telegram, API keys, settings)
 		s.mountProtectedAuthRoutes(r)
 
@@ -190,6 +198,15 @@ func (s *Server) MountRoutes(r chi.Router) {
 
 		// GraphQL read-only endpoint (INT-13.2.4)
 		s.mountGraphQLRoute(r)
+
+		// P1-QUOTA: Tenant Quota Management
+		//   GET    /api/v1/tenant/quota           — текущее использование
+		//   GET    /api/v1/tenant/quota/history   — история изменений
+		//   PUT    /api/v1/tenant/quota           — обновить лимиты (admin)
+		//   POST   /api/v1/tenant/quota/increase  — запрос на увеличение
+		if s.tenantQuotaManager != nil {
+			s.mountTenantQuotaRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────

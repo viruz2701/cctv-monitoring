@@ -53,6 +53,7 @@ const (
 	ErrCodeInternal        = "INTERNAL_ERROR"
 	ErrCodeBadRequest      = "BAD_REQUEST"
 	ErrCodeExternalService = "EXTERNAL_SERVICE_ERROR"
+	ErrCodeQuotaExceeded   = "QUOTA_EXCEEDED"
 )
 
 // Конструкторы ошибок.
@@ -90,6 +91,10 @@ func NewExternalServiceError(msg string) *APIError {
 
 func NewInternalError(msg string, err error) *APIError {
 	return &APIError{Status: http.StatusInternalServerError, Code: ErrCodeInternal, Message: msg, Err: err}
+}
+
+func NewQuotaExceededError(msg string) *APIError {
+	return &APIError{Status: http.StatusTooManyRequests, Code: ErrCodeQuotaExceeded, Message: msg}
 }
 
 // ── RespondError ───────────────────────────────────────────────────────

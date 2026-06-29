@@ -366,7 +366,7 @@
 
 ## 🔵 P3 — POLISH & DEBT (Q2 2027)
 
-### P3-MONITOR: Observability Stack
+### P3-MONITOR: Observability Stack  - пропускаем
 **Файлы**: `infra/grafana/dashboards/`, `infra/prometheus/rules/`
 **Effort**: 4d | **Статус**: [ ]
 
@@ -392,7 +392,7 @@
 - Pool monitoring (active, idle, wait), slow query detection
 - Query plan analysis, index recommendations
 
-### P3-AR: AR-Assisted Maintenance (R&D)
+### P3-AR: AR-Assisted Maintenance (R&D) -пропускаем
 **Файлы**: `mobile/src/screens/ARMaintenance.tsx`, `mobile/src/components/AROverlay.tsx`
 **Effort**: 12d | **Статус**: [ ]
 

@@ -42,6 +42,7 @@ const (
 	ErrCodeInternal        = respond.ErrCodeInternal
 	ErrCodeBadRequest      = respond.ErrCodeBadRequest
 	ErrCodeExternalService = respond.ErrCodeExternalService
+	ErrCodeQuotaExceeded   = respond.ErrCodeQuotaExceeded
 )
 
 // Конструкторы ошибок.
