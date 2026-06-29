@@ -41,6 +41,7 @@ import (
 
 	"gb-telemetry-collector/internal/ai"
 	apimw "gb-telemetry-collector/internal/api/middleware"
+	syncservice "gb-telemetry-collector/internal/api/sync"
 	"gb-telemetry-collector/internal/audit"
 	"gb-telemetry-collector/internal/blackbox"
 	"gb-telemetry-collector/internal/cmms"
@@ -190,6 +191,9 @@ type Server struct {
 
 	// P1-CALENDAR: External Calendar Sync
 	calendarHandler *CalendarHandler
+
+	// P1-SYNC: Differential Sync for Mobile
+	diffService *syncservice.DiffService
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

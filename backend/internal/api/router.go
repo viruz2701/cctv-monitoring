@@ -198,6 +198,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 		// Black Box Incident Recorder (KF-15.2.4)
 		s.mountBlackBoxRoutes(r)
 
+		// P1-SYNC: Differential Sync for Mobile (delta sync, compression, bandwidth)
+		s.mountSyncRoutes(r)
+
 		// P1-REPLAY: NATS JetStream Event Replay UI
 		if s.eventReplay != nil {
 			s.mountEventReplayRoutes(r)
