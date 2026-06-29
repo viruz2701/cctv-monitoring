@@ -175,8 +175,16 @@ func TestExtractClientIP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = tt.headers
-			_ = tt.remote
+			req := httptest.NewRequest("GET", "/", nil)
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+			req.RemoteAddr = tt.remote
+
+			got := extractClientIP(req)
+			if got != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, got)
+			}
 		})
 	}
 }
@@ -261,5 +269,174 @@ func BenchmarkExtractClientIP(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		extractClientIP(req)
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P1-QA.2: Table-driven Rate Limiter Tests
+// ═══════════════════════════════════════════════════════════════════════
+
+// TestRateLimiter_Allow_TableDriven проверяет логику allow/deny через table-driven тесты.
+//
+// Кейсы:
+//   - Первый запрос всегда разрешён
+//   - В пределах лимита
+//   - Превышение лимита
+//   - Разные IP независимы друг от друга
+//   - Сброс окна (после истечения window запрос снова разрешён)
+//   - Нулевой лимит (0 = всё запрещено)
+//
+// Compliance:
+//   - IEC 62443-3-3 SR 3.1 (Resource management)
+//   - OWASP ASVS V2.2.1 (Rate limiting)
+//   - СТБ 34.101.27 п. 6.1 (Защита от DoS)
+func TestRateLimiter_Allow_TableDriven(t *testing.T) {
+	tests := []struct {
+		name     string
+		limit    int
+		window   time.Duration
+		requests int    // количество последовательных вызовов allow
+		want     []bool // ожидаемые результаты
+	}{
+		{
+			name:     "first request always allowed",
+			limit:    5,
+			window:   time.Minute,
+			requests: 1,
+			want:     []bool{true},
+		},
+		{
+			name:     "within limit",
+			limit:    3,
+			window:   time.Minute,
+			requests: 3,
+			want:     []bool{true, true, true},
+		},
+		{
+			name:     "exceeds limit",
+			limit:    2,
+			window:   time.Minute,
+			requests: 3,
+			want:     []bool{true, true, false},
+		},
+		{
+			name:     "different IPs independent",
+			limit:    1,
+			window:   time.Minute,
+			requests: 2, // будет вызван 2 раза с ipA и 2 раза с ipB
+			want:     []bool{true, true, false, false},
+		},
+		{
+			name:     "window reset",
+			limit:    1,
+			window:   50 * time.Millisecond,
+			requests: 3, // allow, allow (ждём), allow
+			want:     []bool{true, false, true},
+		},
+		{
+			name:     "zero limit blocks all",
+			limit:    0,
+			window:   time.Minute,
+			requests: 2,
+			want:     []bool{false, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rl := newRateLimiter(tt.limit, tt.window)
+			defer rl.stop()
+
+			for i, want := range tt.want {
+				ip := "10.0.0.1"
+
+				// Для кейса "different IPs independent" чередуем IP
+				if tt.name == "different IPs independent" {
+					if i%2 == 0 {
+						ip = "10.0.0.4"
+					} else {
+						ip = "10.0.0.5"
+					}
+				}
+
+				got := rl.allow(ip)
+				if got != want {
+					t.Errorf("step %d: allow(%q) = %v, want %v", i, ip, got, want)
+				}
+
+				// Для кейса "window reset" ждём после второго allow
+				// чтобы окно успело сброситься до третьего
+				if tt.name == "window reset" && i == 1 {
+					time.Sleep(60 * time.Millisecond)
+				}
+			}
+		})
+	}
+}
+
+// TestExtractClientIP_TableDriven проверяет извлечение IP из разных источников.
+//
+// Кейсы:
+//   - X-Forwarded-For single
+//   - X-Forwarded-For multiple (берётся первый)
+//   - X-Real-IP
+//   - RemoteAddr with port
+//   - IPv6 RemoteAddr
+//
+// Compliance:
+//   - OWASP ASVS V2.2.1 (Correct IP extraction for rate limiting)
+//   - ISO 27001 A.12.1.2 (Resource management — logging)
+func TestExtractClientIP_TableDriven(t *testing.T) {
+	tests := []struct {
+		name     string
+		headers  map[string]string
+		remote   string
+		expected string
+	}{
+		{
+			name:     "X-Forwarded-For single",
+			headers:  map[string]string{"X-Forwarded-For": "192.168.1.1"},
+			remote:   "",
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "X-Forwarded-For multiple",
+			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1, 192.168.1.1, 172.16.0.1"},
+			remote:   "",
+			expected: "10.0.0.1",
+		},
+		{
+			name:     "X-Real-IP",
+			headers:  map[string]string{"X-Real-IP": "10.0.0.1"},
+			remote:   "",
+			expected: "10.0.0.1",
+		},
+		{
+			name:     "RemoteAddr with port",
+			headers:  nil,
+			remote:   "192.168.1.1:54321",
+			expected: "192.168.1.1",
+		},
+		{
+			name:     "IPv6 RemoteAddr",
+			headers:  nil,
+			remote:   "[::1]:8080",
+			expected: "[::1]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+			req.RemoteAddr = tt.remote
+
+			got := extractClientIP(req)
+			if got != tt.expected {
+				t.Errorf("extractClientIP() = %q, want %q", got, tt.expected)
+			}
+		})
 	}
 }
