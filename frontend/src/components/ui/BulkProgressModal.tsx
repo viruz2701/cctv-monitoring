@@ -19,7 +19,7 @@ import {
     RotateCcw,
     Square,
     Ban,
-} from 'lucide-react';
+} from './Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

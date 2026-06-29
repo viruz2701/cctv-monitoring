@@ -11,7 +11,7 @@ import {
   Save,
   X,
   Edit2,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { request } from '../services/api';
 import { Card, DataGrid, Badge, StatsCard, Button, useToast } from '../components/ui';
 import { SLAGaugePanel } from '../components/sla/SLAGaugePanel';

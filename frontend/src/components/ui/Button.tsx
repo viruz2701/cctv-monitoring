@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from './Icons';
 import { useRipple } from '../../hooks/useRipple';
 import { useHapticFeedback } from '../../hooks/useHapticFeedback';
 

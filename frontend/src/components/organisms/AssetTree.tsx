@@ -27,7 +27,7 @@ import {
   Globe,
   Home,
   Server,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Card, Badge, Button, StatsCard } from '../ui';
 
 // ── Types ────────────────────────────────────────────────────────────

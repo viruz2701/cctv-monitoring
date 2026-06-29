@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Webhook, Plus, Trash2, Play, RefreshCw,
   CheckCircle, XCircle, Clock, Settings,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, Button, Badge, useToast, EmptyState } from '../components/ui';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { WebhookBuilder } from '../components/webhooks/WebhookBuilder';

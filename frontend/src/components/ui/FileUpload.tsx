@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { Upload, X, File, Image, FileText, Loader2 } from 'lucide-react';
+import { Upload, X, File, Image, FileText, Loader2 } from './Icons';
 
 interface FileUploadProps {
   onUpload: (files: File[]) => Promise<void>;

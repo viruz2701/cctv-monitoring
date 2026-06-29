@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Search,
   CheckSquare, Square, FileDown, Columns,
-} from 'lucide-react';
+} from './Icons';
 
 interface Column<T> {
   key: keyof T | string;

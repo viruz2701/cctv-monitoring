@@ -18,7 +18,7 @@ import {
   Loader2,
   Clock,
   X,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { useWorkflowStore } from '../../store/workflowStore';
 import {
   type WorkflowTestResult,

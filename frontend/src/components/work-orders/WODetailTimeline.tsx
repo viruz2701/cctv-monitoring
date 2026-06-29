@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock } from 'lucide-react';
+import { Clock } from '../ui/Icons';
 import { Card, CardHeader, CardBody, Timeline } from '../ui';
 import { TimelineEvent } from '../ui/Timeline';
 

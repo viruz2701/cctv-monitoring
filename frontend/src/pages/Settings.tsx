@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Bell, Shield, Globe, Settings as SettingsIcon, Lock, Server, Palette, FileText } from 'lucide-react';
+import { Bell, Shield, Globe, Settings as SettingsIcon, Lock, Server, Palette, FileText } from '../components/ui/Icons';
 import { Tabs, useToast } from '../components/ui';
 import { useSettingsStore } from '../store/settingsStore';
 import { useServicesSettings, useServicesStatus, useUpdateServicesSettings } from '../hooks/useApiQuery';

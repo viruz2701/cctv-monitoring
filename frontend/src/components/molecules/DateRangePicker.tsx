@@ -18,7 +18,7 @@ import {
   isSameMonth,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock } from '../ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // DateRangePicker — выбор диапазона дат

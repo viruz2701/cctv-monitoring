@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Sun, Moon, Monitor, Check } from 'lucide-react';
+import { Sun, Moon, Monitor, Check } from './Icons';
 import { useThemeStore } from '../../store';
 import { type Theme, type ThemePreset, type RadiusSize, PRESET_COLORS, RADIUS_MAP } from '../../store/themeStore';
 import { Card, CardContent, CardTitle } from './Card';

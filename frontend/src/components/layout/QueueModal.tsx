@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, RefreshCw, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { X, RefreshCw, Clock, AlertCircle, CheckCircle } from '../ui/Icons';
 
 interface QueuedOperation {
     id: string;

@@ -28,7 +28,7 @@ import {
   Camera,
   Archive,
   X,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

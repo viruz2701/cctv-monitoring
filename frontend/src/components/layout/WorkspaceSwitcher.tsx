@@ -24,7 +24,7 @@ import {
   Settings,
   Users,
   ChevronDown,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { useWorkspaceStore, type Workspace } from '../../store/workspaceStore';
 import { useTranslation } from 'react-i18next';
 

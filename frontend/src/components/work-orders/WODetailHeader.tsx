@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Play, CheckCircle, XCircle, Loader2,
   AlertTriangle, Wrench, HardDrive, User,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Badge, Button, LiveSLATimer } from '../ui';
 import { WorkOrder } from '../../services/workOrdersApi';
 import { CollaborationStatusBar, PresenceAvatars } from './PresenceIndicators';

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Dropdown, type DropdownItem } from './Dropdown';
 import { Button } from './Button';
-import { Settings, User, LogOut, Download, Edit, Trash2, Copy, Share2, ChevronDown, MoreVertical } from 'lucide-react';
+import { Settings, User, LogOut, Download, Edit, Trash2, Copy, Share2, ChevronDown, MoreVertical } from './Icons';
 
 const meta: Meta<typeof Dropdown> = {
   title: 'UI/Dropdown',

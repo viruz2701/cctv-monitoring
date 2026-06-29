@@ -29,7 +29,7 @@ import {
   Plus, Play, CheckCircle, XCircle, Clock, AlertTriangle,
   CheckSquare, Square, UserCheck, Trash2, Tags, ArrowUpDown,
   Loader2, ChevronDown, User, AlertOctagon, LayoutGrid, List, Calendar,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Inline Edit Select Component (WO-4.2.3)

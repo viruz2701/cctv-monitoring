@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Shield, Database, Mail, MessageCircle, Smartphone, Loader, CheckCircle } from 'lucide-react';
+import { Bell, Shield, Database, Mail, MessageCircle, Smartphone, Loader, CheckCircle } from '../components/ui/Icons';
 import { Card, CardHeader, CardBody, Input, Button, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Save, Radio, Server, Network, Wifi, Shield, Lock, Globe, Database, Monitor,
   Loader2, CheckCircle2, AlertCircle, AudioWaveform, Bug, Activity, RefreshCw,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, CardHeader, CardBody, Button, Input, Select, Tabs } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import type { ServicesSettings as ServicesSettingsType, GB28181Settings } from '../../types';

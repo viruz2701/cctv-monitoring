@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo, useId } from 'react';
-import { Check, ChevronsUpDown, Search, Users } from 'lucide-react';
+import { Check, ChevronsUpDown, Search, Users } from '../ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TechnicianSelector — Combobox with avatars

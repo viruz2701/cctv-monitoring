@@ -5,7 +5,7 @@ import { apiKeySchema } from '../lib/validations';
 import { api } from '../services/api';
 import { Button, Modal, Input, Badge, useToast, EmptyState, ConfirmModal } from '../components/ui';
 import { useConfirmAction } from '../hooks/useConfirmAction';
-import { Plus, Trash2, Copy, Key, Calendar, Shield } from 'lucide-react';
+import { Plus, Trash2, Copy, Key, Calendar, Shield } from '../components/ui/Icons';
 
 interface APIKey {
     id: string;

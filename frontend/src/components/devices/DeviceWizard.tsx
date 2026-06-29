@@ -29,7 +29,7 @@ import {
     Camera,
     HelpCircle,
     AlertTriangle,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { api, type DeviceDetectionResult, type CapacityResult, type CameraSpec, type CameraModelSummary } from '../../services/api';
 import { workOrdersApi } from '../../services/workOrdersApi';
 import { useSites } from '../../hooks/useApiQuery';

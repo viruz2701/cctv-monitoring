@@ -5,7 +5,7 @@ import { Card, Badge, Button, StatsCard, DataGrid } from '../components/ui';
 import {
   Building2, TrendingUp, TrendingDown, RefreshCw,
   BarChart3, Star, Truck, Clock, DollarSign,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsivePie } from '@nivo/pie';
 

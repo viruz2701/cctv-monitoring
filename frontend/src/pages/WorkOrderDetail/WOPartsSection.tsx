@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Package, DollarSign } from 'lucide-react';
+import { Package, DollarSign } from '../components/ui/Icons';
 import { Card, CardHeader, CardBody, Badge } from '../../components/ui';
 import type { WorkOrder, SparePart } from '../../hooks/useApiQuery';
 import type { LaborCost } from '../../services/workOrdersApi';

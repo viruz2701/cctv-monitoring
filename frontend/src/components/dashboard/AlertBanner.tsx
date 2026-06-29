@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAlarms } from '../../hooks/useApiQuery';
-import { AlertCircle, X, ChevronRight } from 'lucide-react';
+import { AlertCircle, X, ChevronRight } from '../ui/Icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 

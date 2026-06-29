@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Info, X } from './Icons';
 
 type AlertVariant = 'info' | 'success' | 'warning' | 'error';
 

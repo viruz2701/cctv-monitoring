@@ -21,7 +21,7 @@ import {
     Expand,
     FileDown,
     X,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { api } from '../../services/api';
 import { Card, CardHeader, CardBody, Badge, Modal } from '../ui';
 

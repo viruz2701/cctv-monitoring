@@ -9,7 +9,7 @@
 
 import React, { useId, useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Info } from 'lucide-react';
+import { Info } from './Icons';
 import { Link } from 'react-router-dom';
 
 type TooltipPosition = 'top' | 'bottom' | 'left' | 'right';

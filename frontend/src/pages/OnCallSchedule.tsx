@@ -4,7 +4,7 @@ import { Card, Badge, Button } from '../components/ui';
 import {
   Phone, Calendar, Users, Clock, Plus,
   ChevronLeft, ChevronRight, RefreshCw,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 interface OnCallShift {
   id: string;

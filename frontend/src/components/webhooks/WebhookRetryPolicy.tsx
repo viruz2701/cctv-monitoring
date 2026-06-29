@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, Info } from 'lucide-react';
+import { RefreshCw, Info } from '../ui/Icons';
 import { Card } from '../ui';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
 

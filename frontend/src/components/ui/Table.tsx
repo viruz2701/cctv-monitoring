@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown } from './Icons';
 import { VirtualTable } from './VirtualTable';
 
 interface Column<T> {

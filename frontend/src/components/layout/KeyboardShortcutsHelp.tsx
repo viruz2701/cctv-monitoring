@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Keyboard } from 'lucide-react';
+import { X, Keyboard } from '../ui/Icons';
 import type { ShortcutDef } from '../../hooks/useKeyboardShortcuts';
 
 // ═══════════════════════════════════════════════════════════════════════

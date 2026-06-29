@@ -29,7 +29,7 @@ import {
   Plus, Search, AlertTriangle, RefreshCw, ShoppingCart, Tag,
   Edit, Trash2, Upload, MapPin, Download, FileSpreadsheet,
   History,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import type { SparePart, SparePartCategory } from '../services/sparePartsApi';
 
 // ─── Local Types ─────────────────────────────────────────────────────

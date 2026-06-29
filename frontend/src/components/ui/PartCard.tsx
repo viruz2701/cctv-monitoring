@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardBody } from './Card';
 import { Badge } from './Badge';
-import { Package, AlertTriangle, CheckCircle, Wrench } from 'lucide-react';
+import { Package, AlertTriangle, CheckCircle, Wrench } from './Icons';
 
 interface PartCardProps {
   part: {

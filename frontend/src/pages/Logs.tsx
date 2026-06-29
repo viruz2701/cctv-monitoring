@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardBody, DataGrid, Input, Button, Select, Badge } from '../components/ui';
 import { api, ParsedLog } from '../services/api';
-import { Search } from 'lucide-react';
+import { Search } from '../components/ui/Icons';
 import { useTranslation } from 'react-i18next';
 
 export function Logs() {

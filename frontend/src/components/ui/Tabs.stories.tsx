@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Tabs } from './Tabs';
 import { useState } from 'react';
-import { Camera, Settings, Activity, AlertTriangle } from 'lucide-react';
+import { Camera, Settings, Activity, AlertTriangle } from './Icons';
 
 const meta: Meta<typeof Tabs> = {
   title: 'UI/Tabs',

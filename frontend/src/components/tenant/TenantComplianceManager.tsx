@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { request } from '../../services/api';
-import { Shield, Lock, Unlock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Shield, Lock, Unlock, AlertTriangle, CheckCircle } from '../ui/Icons';
 import { useTranslation } from 'react-i18next';
 
 // ── Types ────────────────────────────────────────────────────────────

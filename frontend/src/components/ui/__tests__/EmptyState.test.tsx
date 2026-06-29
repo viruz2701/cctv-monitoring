@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { EmptyState } from '../EmptyState';
-import { HardDrive } from 'lucide-react';
+import { HardDrive } from './Icons';
 
 describe('EmptyState', () => {
     it('renders with icon, title and description', () => {

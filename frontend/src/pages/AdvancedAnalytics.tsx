@@ -39,7 +39,7 @@ import {
   Clock,
   Shield,
   HardDrive,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { SkeletonAdvancedAnalytics } from '../components/layout';
 
 // ═══════════════════════════════════════════════════════════════════════

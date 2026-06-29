@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from './Modal';
-import { MapPin, ExternalLink } from 'lucide-react';
+import { MapPin, ExternalLink } from './Icons';
 
 interface MapModalProps {
     isOpen: boolean;

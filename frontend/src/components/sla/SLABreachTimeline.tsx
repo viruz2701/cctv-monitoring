@@ -5,7 +5,7 @@ import {
   Clock,
   Filter,
   XCircle,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';

@@ -16,7 +16,7 @@ import {
     Info,
     ChevronDown,
     ChevronRight,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Input } from '../components/ui';
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -22,7 +22,7 @@ import type { WorkOrder } from '../../services/workOrdersApi';
 import {
   Play, CheckCircle, XCircle, UserCheck, Tags, Trash2,
   Download, AlertTriangle, Clock,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { useUpdateWorkOrder } from '../../hooks/useApiQuery';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../hooks/useApiQuery';

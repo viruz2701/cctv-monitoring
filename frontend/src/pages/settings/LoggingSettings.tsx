@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { FileText } from 'lucide-react';
+import { FileText } from '../components/ui/Icons';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader, CardBody, Input, Select } from '../../components/ui';
 

@@ -26,7 +26,7 @@ import {
     Loader2,
     Pencil,
     Settings2,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { DragDropDashboard } from '../components/dashboard/DragDropDashboard';
 import { getWidgetsForTab } from '../components/dashboard/WidgetRegistry';
 import type { DashboardWidget } from '../components/dashboard/DragDropDashboard';

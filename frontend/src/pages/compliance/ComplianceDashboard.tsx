@@ -16,7 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

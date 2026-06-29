@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from 'react';
 import { useAuth } from './useAuth';
-import type { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from '../components/ui/Icons';
 import {
     LayoutDashboard,
     MapPin,
@@ -32,7 +32,7 @@ import {
     Phone,
     Video,
     Archive,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { useTranslation } from 'react-i18next';
 
 // ═══════════════════════════════════════════════════════════════════

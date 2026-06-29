@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   HardDrive, MapPin, User, Calendar, FileText,
   ClipboardList, CheckCircle, Clock,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Card, CardHeader, CardBody, Badge } from '../ui';
 import { WorkOrder } from '../../services/workOrdersApi';
 

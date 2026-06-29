@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
 import { Card, DataGrid } from '../components/ui';
 import { formatCurrency } from '../utils/currency';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3 } from '../components/ui/Icons';
 
 interface MaintenanceReport {
   device_id: string;

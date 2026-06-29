@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Loader2, RefreshCw, AlertCircle, Info, Link } from 'lucide-react';
+import { Globe, Loader2, RefreshCw, AlertCircle, Info, Link } from '../components/ui/Icons';
 import { Button, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 

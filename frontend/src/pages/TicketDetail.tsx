@@ -2,7 +2,7 @@ import { generateUUID } from '../utils/uuid';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardBody, Button, Badge, TicketStatusBadge, PriorityBadge, Textarea, ConfirmModal } from '../components/ui';
-import { Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from 'lucide-react';
+import { Clock, MapPin, HardDrive, User, Send, Trash2, AlertTriangle } from '../components/ui/Icons';
 import { PermissionGuard } from '../components/auth/PermissionGuard';
 import { useAuth } from '../hooks/useAuth';
 import type { Ticket, TicketStatus, TicketComment as UITicketComment } from '../types';

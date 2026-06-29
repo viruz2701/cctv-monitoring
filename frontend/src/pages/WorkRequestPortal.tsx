@@ -6,7 +6,7 @@ import { Card, Button, Input, Badge } from '../components/ui';
 import {
   ClipboardList, Send, Camera, CheckCircle,
   Loader2, AlertTriangle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 export function WorkRequestPortal() {
   const { t } = useTranslation();

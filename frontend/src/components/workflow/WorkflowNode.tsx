@@ -24,7 +24,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-} from 'lucide-react';
+} from '../ui/Icons';
 import type { WorkflowNodeData, WorkflowNodeKind } from '../../types/workflow';
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Clock, AlertTriangle } from 'lucide-react';
+import { Clock, AlertTriangle } from '../ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // SLAProgressBar — цветовая индикация прогресса SLA

@@ -21,7 +21,7 @@ import {
   Power,
   PowerOff,
   RefreshCw,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { MiniStatsCard } from '../ui';
 import { useWebhookStats } from '../../hooks/useWebhooks';
 

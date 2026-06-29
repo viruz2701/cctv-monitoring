@@ -24,7 +24,7 @@ import {
   HardDrive,
   Cpu,
   Camera,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { anomaliesApi, type AnomalyResult, type AnomalyStats } from '../services/api/anomalies';
 
 // ─── Types ──────────────────────────────────────────────────────────

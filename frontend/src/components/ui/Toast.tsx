@@ -20,7 +20,7 @@ import {
   AlertTriangle,
   Info,
   X,
-} from 'lucide-react';
+} from './Icons';
 import {
   useAlertStore,
   type ToastAlert,

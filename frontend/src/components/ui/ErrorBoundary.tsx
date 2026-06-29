@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home } from './Icons';
 import { Link } from 'react-router-dom';
 import { Button } from './Button';
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe } from 'lucide-react';
+import { Globe } from '../components/ui/Icons';
 import { Card, CardHeader, CardBody } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 

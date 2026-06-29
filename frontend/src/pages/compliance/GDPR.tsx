@@ -23,7 +23,7 @@ import {
   Shield,
   Globe,
   Search,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, Command, FileText, HardDrive, MapPin, Ticket, ArrowRight } from 'lucide-react';
+import { Search, Command, FileText, HardDrive, MapPin, Ticket, ArrowRight } from '../ui/Icons';
 import { useNavigation } from '../hooks/useNavigation';
 
 interface SearchResult {

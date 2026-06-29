@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   Timer, Play, Square, XCircle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, CardHeader, CardBody, Button, Badge } from '../../components/ui';
 import type { TimeEntry } from '../../services/workOrdersApi';
 

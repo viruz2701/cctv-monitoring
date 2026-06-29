@@ -50,8 +50,8 @@ import {
   Package,
   User,
   Loader2,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+} from './Icons';
+import type { LucideIcon } from './Icons';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useThemeStore, type Theme } from '../../store/themeStore';
 import { weightedFuzzySearch, getCharMatches } from '../../lib/fuzzySearch';

@@ -5,7 +5,7 @@ import { Card, Badge, Button, StatsCard } from '../components/ui';
 import {
   Users, TrendingUp, TrendingDown, Calendar,
   RefreshCw, BarChart3, Grid3X3, AlertTriangle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { ResponsiveBar } from '@nivo/bar';
 
 interface TechnicianWorkload {

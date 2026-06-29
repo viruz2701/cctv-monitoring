@@ -7,7 +7,7 @@ import {
   Search, Download, Eye, EyeOff, Shield,
   Clock, User, Globe, FileText, XCircle,
   AlertTriangle, CheckCircle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // UI-01: Журнал аудита

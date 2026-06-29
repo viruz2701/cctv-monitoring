@@ -42,7 +42,7 @@ import {
   FileJson,
   Cloud,
   CloudOff,
-} from 'lucide-react';
+} from '../ui/Icons';
 
 import { WorkflowNode } from './WorkflowNode';
 import { WorkflowToolbar } from './WorkflowToolbar';

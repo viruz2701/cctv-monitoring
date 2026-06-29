@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight, X, Download, Columns } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight, X, Download, Columns } from './Icons';
 import { Button } from './Button';
 import { Card, CardHeader, CardBody } from './Card';
 import { Badge } from './Badge';

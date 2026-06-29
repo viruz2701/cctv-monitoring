@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, TrendingUp, Activity, Calendar } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Activity, Calendar } from '../components/ui/Icons';
 
 const kpiCards = [
   {

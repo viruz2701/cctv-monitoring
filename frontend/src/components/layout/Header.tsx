@@ -12,7 +12,7 @@ import {
     Sun,
     Moon,
     Monitor
-} from 'lucide-react';
+} from '../ui/Icons';
 import { useAuth } from '../../hooks/useAuth';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';

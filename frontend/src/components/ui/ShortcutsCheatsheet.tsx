@@ -10,7 +10,7 @@
 
 import React, { useMemo } from 'react';
 import { Modal } from './Modal';
-import { Command } from 'lucide-react';
+import { Command } from './Icons';
 import { useTranslation } from 'react-i18next';
 import type { Shortcut, ShortcutCategory } from '../../hooks/useKeyboardShortcuts';
 

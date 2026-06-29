@@ -6,7 +6,7 @@ import { Card, DataGrid, Badge, StatsCard } from '../components/ui';
 import {
   HardDrive, Monitor, Activity, AlertTriangle,
   TrendingUp, DollarSign, Server, Wifi,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { formatCurrency, formatCurrencyCompact } from '../utils/currency';
 
 // ── Types ────────────────────────────────────────────────────────────

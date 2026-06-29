@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, useToast } from '../ui';
 import { p2pApi } from '../../services/p2pApi';
 import { PTZCommand } from '../../types';
-import { MoveUp, MoveDown, MoveLeft, MoveRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { MoveUp, MoveDown, MoveLeft, MoveRight, ZoomIn, ZoomOut } from '../ui/Icons';
 
 interface PTZControlsProps {
     deviceId: string;

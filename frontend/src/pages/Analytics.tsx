@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsivePie } from '@nivo/pie';
 import { ResponsiveLine } from '@nivo/line';
-import { Activity, Clock, TrendingUp, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Activity, Clock, TrendingUp, Shield, AlertTriangle, CheckCircle } from '../components/ui/Icons';
 
 const mtbfTrendData = [
   { month: 'Янв', mtbf: 720 }, { month: 'Фев', mtbf: 680 },

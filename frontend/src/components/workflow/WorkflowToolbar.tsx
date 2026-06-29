@@ -23,7 +23,7 @@ import {
   FileJson,
   Plus,
   ArrowLeft,
-} from 'lucide-react';
+} from '../ui/Icons';
 import {
   WORKFLOW_PALETTE,
   type PaletteItem,

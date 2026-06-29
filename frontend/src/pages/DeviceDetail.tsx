@@ -33,7 +33,7 @@ import {
     Tag,
     QrCode,
     Shield,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     Card,
     CardHeader,

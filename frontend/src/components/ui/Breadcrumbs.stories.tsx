@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Breadcrumbs } from './Breadcrumbs';
 import { BrowserRouter } from 'react-router-dom';
-import { Home, Settings, Shield, Camera } from 'lucide-react';
+import { Home, Settings, Shield, Camera } from './Icons';
 
 const meta: Meta<typeof Breadcrumbs> = {
   title: 'UI/Breadcrumbs',

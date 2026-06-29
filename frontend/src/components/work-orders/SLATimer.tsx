@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, AlertTriangle, CheckCircle, Hourglass } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle, Hourglass } from '../ui/Icons';
 
 interface SLATimerProps {
   deadline: string;

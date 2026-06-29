@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     Check, Clock, AlertTriangle, Info, AlertCircle, Bell,
     Trash2, CheckSquare, Square
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     useNotifications,
     useMarkNotificationRead,

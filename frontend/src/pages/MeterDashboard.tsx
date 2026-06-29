@@ -8,7 +8,7 @@ import {
   Activity, Thermometer, Wifi, HardDrive, Cpu,
   BarChart3, TrendingUp, TrendingDown, AlertTriangle,
   RefreshCw, Loader2, Zap, Clock,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { ResponsiveLine } from '@nivo/line';
 
 // ── Types ────────────────────────────────────────────────────────────

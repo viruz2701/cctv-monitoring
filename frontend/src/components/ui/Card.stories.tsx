@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Card, CardHeader, CardBody, CardFooter } from './Card';
-import { Settings, Edit3 } from 'lucide-react';
+import { Settings, Edit3 } from './Icons';
 
 const meta: Meta<typeof Card> = {
   title: 'UI/Card',

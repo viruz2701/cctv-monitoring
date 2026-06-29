@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Palette, Image, Type, Code, Eye, EyeOff,
   RotateCcw, Check, Upload, X, Globe,
-} from 'lucide-react';
+} from './Icons';
 import { useThemeStore, type WhiteLabelConfig, DEFAULT_WHITE_LABEL } from '../../store/themeStore';
 import { Card, CardContent, CardTitle } from './Card';
 

@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   AlertTriangle, Wrench, User,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, CardHeader, CardBody, Badge } from '../../components/ui';
 import { SLATimer } from '../../components/work-orders/SLATimer';
 import type { WorkOrder } from '../../hooks/useApiQuery';

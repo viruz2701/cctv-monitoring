@@ -13,7 +13,7 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Filter, Search, Calendar, X } from 'lucide-react';
+import { Filter, Search, Calendar, X } from '../ui/Icons';
 import { Badge } from '../ui';
 import { EVENT_GROUPS } from '../../hooks/useWebhooks';
 import type { WebhookLogEntry } from '../../hooks/useWebhooks';

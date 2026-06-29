@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Calendar, Package, CheckCircle, AlertCircle, Settings, User, Wrench,
   Camera, ChevronDown, ChevronRight, ArrowRight,
-} from 'lucide-react';
+} from './Icons';
 
 // ── Diff Entry ──────────────────────────────────────────────────────────
 

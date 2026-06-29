@@ -13,7 +13,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus } from './Icons';
 
 interface EmptyStateAction {
   label: string;

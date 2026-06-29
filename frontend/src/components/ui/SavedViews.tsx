@@ -14,7 +14,7 @@ import {
   Plus,
   X,
   Save,
-} from 'lucide-react';
+} from './Icons';
 import { useFilterStore, type SavedView } from '../../store/filterStore';
 import { useTranslation } from 'react-i18next';
 

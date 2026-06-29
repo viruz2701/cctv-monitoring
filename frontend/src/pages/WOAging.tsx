@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Clock, AlertTriangle, CheckCircle, Filter,
   BarChart3, PieChart, TrendingUp, Calendar, RefreshCw,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsivePie } from '@nivo/pie';
 

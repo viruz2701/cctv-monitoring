@@ -36,7 +36,7 @@ import {
   HardDrive,
   Thermometer,
   RefreshCw,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

@@ -30,7 +30,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   RefreshCw,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { useAIAssistant, type ChatMessage } from '../../hooks/useAIAssistant';
 
 // ─── Props ────────────────────────────────────────────────────────────

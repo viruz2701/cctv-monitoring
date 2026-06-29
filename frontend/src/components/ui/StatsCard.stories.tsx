@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { StatsCard, MiniStatsCard } from './StatsCard';
-import { Camera, HardDrive, Activity, Users, Wifi } from 'lucide-react';
+import { Camera, HardDrive, Activity, Users, Wifi } from './Icons';
 
 const meta: Meta<typeof StatsCard> = {
   title: 'UI/StatsCard',

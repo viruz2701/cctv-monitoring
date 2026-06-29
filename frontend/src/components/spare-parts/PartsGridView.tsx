@@ -14,7 +14,7 @@ import {
   AlertTriangle,
   Eye,
   ShoppingCart,
-} from 'lucide-react';
+} from '../ui/Icons';
 
 // ── Types ──────────────────────────────────────────────────────────────
 

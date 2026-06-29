@@ -12,7 +12,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield, Copy, Check, Eye, EyeOff, Code } from 'lucide-react';
+import { Shield, Copy, Check, Eye, EyeOff, Code } from '../ui/Icons';
 import { Card, Button, Badge } from '../ui';
 
 // ═══════════════════════════════════════════════════════════════════════

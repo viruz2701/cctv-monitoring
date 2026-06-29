@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { profileSchema } from '../lib/validations';
-import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, X, Edit2, MapPin, Briefcase, Trash2, Clock, Calendar, CheckCircle } from 'lucide-react';
+import { User, Mail, Shield, Smartphone, Moon, Sun, Lock, LogOut, Camera, Save, X, Edit2, MapPin, Briefcase, Trash2, Clock, Calendar, CheckCircle } from '../components/ui/Icons';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardHeader, CardBody, Button, useToast, ConfirmModal, Modal, Input, SkeletonProfileField, SkeletonCard, SkeletonAvatar, LazyImage } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';

@@ -10,7 +10,7 @@ import {
     Bell,
     Check,
     CheckCircle
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, CardBody, DataGrid, Badge, Button, Select, SearchInput, ConfirmModal, SkeletonTable, SkeletonCard } from '../components/ui';
 import { SavedViews } from '../components/ui/SavedViews';
 import { PermissionGuard } from '../components/auth/PermissionGuard';

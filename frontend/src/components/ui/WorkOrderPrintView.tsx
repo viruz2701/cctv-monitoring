@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Printer, X, FileText, FileSpreadsheet, Receipt } from 'lucide-react';
+import { Printer, X, FileText, FileSpreadsheet, Receipt } from './Icons';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import type { WorkOrder, LaborCost, ChecklistItem, PartUsage } from '../../services/workOrdersApi';

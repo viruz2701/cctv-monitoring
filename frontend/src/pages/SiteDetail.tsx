@@ -5,7 +5,7 @@ import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
     Building2, MapPin, ArrowLeft, Camera,
     Wifi, WifiOff, Users, Edit, Activity,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     Card, CardHeader, CardBody, Button, Badge,
     StatusBadge, HealthBadge,

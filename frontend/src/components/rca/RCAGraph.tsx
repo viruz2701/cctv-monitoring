@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Loader2, AlertCircle, Info } from 'lucide-react';
+import { AlertTriangle, Loader2, AlertCircle, Info } from '../ui/Icons';
 
 // ── Types ────────────────────────────────────────────────────────────
 

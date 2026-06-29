@@ -37,7 +37,7 @@ import {
   Play,
   BarChart3,
   Shield,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Button, Input, Badge, Card, useToast } from '../ui';
 import {
   useWebhook,

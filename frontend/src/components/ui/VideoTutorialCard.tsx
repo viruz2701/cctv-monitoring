@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { useState } from 'react';
-import { Play, Clock, Film, X } from 'lucide-react';
+import { Play, Clock, Film, X } from './Icons';
 import { Modal } from './Modal';
 
 export interface TutorialVideo {

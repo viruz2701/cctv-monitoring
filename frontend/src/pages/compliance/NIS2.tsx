@@ -30,7 +30,7 @@ import {
   Camera,
   Wifi,
   UserX,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

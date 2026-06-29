@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Timer, Play, Pause, Square, Trash2, DollarSign,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Card, CardHeader, CardBody, Badge, Button } from '../ui';
 import { TimeEntry, LaborCost } from '../../services/workOrdersApi';
 

@@ -27,7 +27,7 @@ import {
     Trash2,
     Cloud,
     Zap,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     Card,
     CardHeader,

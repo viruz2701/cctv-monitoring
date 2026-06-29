@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Lock } from 'lucide-react';
+import { ArrowLeft, Mail, Lock } from '../components/ui/Icons';
 import { Button } from '../components/ui';
 import { useTranslation } from 'react-i18next';
 

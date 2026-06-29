@@ -20,7 +20,7 @@ import {
     X,
     TreePine,
     Table2,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     Card,
     CardBody,

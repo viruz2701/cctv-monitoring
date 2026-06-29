@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Filter, Save, Trash2, Check, Download, Upload, Share2,
   ChevronDown, Plus, X, Star,
-} from 'lucide-react';
+} from './Icons';
 import { useFilterStore, type SavedView } from '../../store/filterStore';
 import { useAuth } from '../../hooks/useAuth';
 

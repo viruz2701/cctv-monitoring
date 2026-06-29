@@ -5,7 +5,7 @@ import {
   Draggable,
   type DropResult,
 } from '@hello-pangea/dnd';
-import { Clock, AlertTriangle, User } from 'lucide-react';
+import { Clock, AlertTriangle, User } from '../ui/Icons';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import type { WorkOrder } from '../../services/workOrdersApi';

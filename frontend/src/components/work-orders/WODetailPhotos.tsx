@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Camera } from 'lucide-react';
+import { Camera } from '../ui/Icons';
 import { Card, CardHeader, CardBody } from '../ui';
 import { WorkOrder } from '../../services/workOrdersApi';
 import { PhotoAnnotation } from './PhotoAnnotation';

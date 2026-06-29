@@ -25,7 +25,7 @@ import {
   ChevronRight,
   Bug,
   Users,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ── Types ────────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Package, Plus, AlertTriangle, X, DollarSign,
-} from 'lucide-react';
+} from '../ui/Icons';
 import { Card, CardHeader, CardBody, Badge, Button, PartCard } from '../ui';
 import { WorkOrder, PartUsage } from '../../services/workOrdersApi';
 import { SparePart } from '../../services/sparePartsApi';

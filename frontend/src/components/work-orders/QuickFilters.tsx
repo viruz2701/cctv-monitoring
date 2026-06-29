@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { User, Clock, AlertOctagon, Users, List } from 'lucide-react';
+import { User, Clock, AlertOctagon, Users, List } from '../ui/Icons';
 import { WorkOrder } from '../../services/workOrdersApi';
 
 // ═══════════════════════════════════════════════════════════════════════

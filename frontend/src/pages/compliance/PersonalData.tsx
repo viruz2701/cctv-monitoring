@@ -23,7 +23,7 @@ import {
   Shield,
   Database,
   FileSpreadsheet,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

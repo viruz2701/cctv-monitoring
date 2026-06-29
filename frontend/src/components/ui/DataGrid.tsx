@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Maximize2, Minus, Type,
   Settings2, RotateCcw, Filter, X, Bookmark, Save,
   Upload, Share2, Star,
-} from 'lucide-react';
+} from './Icons';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
 import { useFilterStore, ROLE_DEFAULT_FILTERS, encodeFilterState, decodeFilterState } from '../../store/filterStore';
 import { useAuth } from '../../hooks/useAuth';

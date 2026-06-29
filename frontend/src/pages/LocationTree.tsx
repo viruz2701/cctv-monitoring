@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronDown, Building2, MapPin,
   HardDrive, Camera, Server, Monitor, Wifi,
   Search, RefreshCw, Layers, Home, Expand,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ── Types ────────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { WifiOff, Wifi } from 'lucide-react';
+import { WifiOff, Wifi } from '../ui/Icons';
 
 interface OfflineBannerProps {
     queueCount?: number;

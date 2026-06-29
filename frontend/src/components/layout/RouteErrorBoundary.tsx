@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home } from '../ui/Icons';
 import { Link } from 'react-router-dom';
 
 interface RouteErrorBoundaryProps {

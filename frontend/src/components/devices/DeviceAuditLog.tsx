@@ -5,7 +5,7 @@ import { Timeline, TimelineEvent, DiffEntry } from '../ui/Timeline';
 import { Card, CardHeader, CardBody, Badge, Button } from '../ui';
 import {
   Clock, Download, Filter, X, Loader2, AlertTriangle, Wrench,
-} from 'lucide-react';
+} from '../ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Chips for event type filter

@@ -36,7 +36,7 @@ import {
   User as UserIcon,
   CalendarDays,
   CalendarRange,
-} from 'lucide-react';
+} from '../ui/Icons';
 import type {
   ScheduleSlot,
   ScheduleConflict,

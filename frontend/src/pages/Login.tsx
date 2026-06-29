@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Camera, Eye, EyeOff, Lock, Mail, Shield } from 'lucide-react';
+import { Camera, Eye, EyeOff, Lock, Mail, Shield } from '../components/ui/Icons';
 import { Button } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useSettingsStore } from '../store/settingsStore';

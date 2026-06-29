@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   XCircle, CheckCircle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Modal, Button, FileUpload } from '../../components/ui';
 import type { SparePart } from '../../services/sparePartsApi';
 import type { PartUsage } from '../../services/workOrdersApi';

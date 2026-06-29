@@ -17,7 +17,7 @@ import { createCurrentTimePlugin } from '@schedule-x/current-time';
 import type { WorkOrder } from '../../services/workOrdersApi';
 import type { User as ApiUser } from '../../services/api';
 import { useTranslation } from 'react-i18next';
-import { CalendarDays, CalendarClock, Info } from 'lucide-react';
+import { CalendarDays, CalendarClock, Info } from '../ui/Icons';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { Search } from './Icons';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;

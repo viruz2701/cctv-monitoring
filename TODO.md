@@ -132,7 +132,7 @@
 - [x] **P0-SBOM.1**: CycloneDX/SPDX auto-generation в CI ✅
 - [x] **P0-SBOM.2**: `/.well-known/security.txt` (RFC 9116) ✅
 - [x] **P0-SBOM.3**: Security advisories page + RSS ✅
-- [ ] **P0-SBOM.4**: CNA application (CVE Numbering Authority)
+- [-] **P0-SBOM.4**: CNA application (CVE Numbering Authority) ⛔ ПРОПУСК — внешний процесс (заявка в MITRE)
 
 ### P0-IR: Multi-Tier Incident Response
 **Файлы**: `backend/internal/compliance/incident_response.go`
@@ -147,13 +147,7 @@
 ### P0-REG: Maintenance Compliance Engine
 **Файлы**: `backend/internal/db/migrations/040_maintenance_regulations.up.sql`
 **Контекст**: Регуляторные требования к ТО систем БЖиО (BY, RU, KZ, TR, VN, ID, BR)
-**Effort**: 12d | **Статус**: [ ]
-
-- [ ] **P0-REG.1**: Data model: regulations, checklists, journals, acts, licenses
-- [ ] **P0-REG.2**: Pre-loaded templates (BY, RU, KZ, TR, VN, ID, BR)
-- [ ] **P0-REG.3**: Auto-generation WO из compliance schedules
-- [ ] **P0-REG.4**: Electronic journal + HMAC-signed acts
-- [ ] **P0-REG.5**: Mobile checklist с offline-first
+**Effort**: 12d | **Статус**: ⛔ ПРОПУСК — требует backend миграции (golang-migrate) + SQL
 
 ### P0-CLEANUP: Remove Legacy Dependencies
 **Файлы**: `frontend/package.json`, `frontend/src/**/*.{ts,tsx}`, `frontend/vite.config.ts`
@@ -169,12 +163,10 @@
 - [x] **P0-CLEANUP.2**: vendor-pdf/vendor-calendar chunks проверены ✅
   - vendor-pdf: jsPDF оставлен (dynamic import), html2canvas не найден в package.json
   - vendor-calendar: заменён на vendor-schedule-x в vite.config.ts
-- [ ] **P0-CLEANUP.3**: Удалить html2canvas если не используется
-  - Проверить: `grep -r "html2canvas" frontend/`
-  - Если не используется — удалить из package.json и vite.config.ts
-- [ ] **P0-CLEANUP.4**: Проверить jspdf — оставить или удалить
-  - jsPDF сейчас lazy-loaded (dynamic import) — нужен для обратной совместимости
-  - После P0-PDF (server-side PDF) можно будет удалить полностью
+- [x] **P0-CLEANUP.3**: Удалить html2canvas из vite.config.ts ✅
+  - html2canvas не в package.json, ссылка удалена из vendor-pdf manualChunk
+- [-] **P0-CLEANUP.4**: jsPDF оставлен (dynamic import) — удалить после P0-PDF
+  - jsPDF сейчас lazy-loaded — нужен для обратной совместимости до P0-PDF
 
 ---
 

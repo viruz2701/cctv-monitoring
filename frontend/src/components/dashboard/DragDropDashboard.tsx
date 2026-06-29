@@ -12,7 +12,7 @@
 import React from 'react';
 import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout';
 import type { LayoutItem, ResponsiveLayouts } from 'react-grid-layout';
-import { GripVertical, RotateCcw } from 'lucide-react';
+import { GripVertical, RotateCcw } from '../ui/Icons';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 

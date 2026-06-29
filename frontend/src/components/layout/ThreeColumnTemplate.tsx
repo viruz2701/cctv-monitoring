@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp } from '../ui/Icons';
 
 interface ThreeColumnTemplateProps {
   /** Sticky header (e.g. WODetailHeader) */

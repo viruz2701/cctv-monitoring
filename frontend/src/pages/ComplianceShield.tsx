@@ -10,7 +10,7 @@ import {
   RefreshCw,
   PieChart,
   Activity,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

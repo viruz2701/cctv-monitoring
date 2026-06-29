@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo } from 'react';
-import { Search, BookOpen, Monitor, HardDrive, FileText, Smartphone, Wrench, LayoutDashboard } from 'lucide-react';
+import { Search, BookOpen, Monitor, HardDrive, FileText, Smartphone, Wrench, LayoutDashboard } from '../components/ui/Icons';
 import { VideoTutorialCard } from '../components/ui/VideoTutorialCard';
 import type { TutorialVideo } from '../components/ui/VideoTutorialCard';
 import { useTranslation } from 'react-i18next';

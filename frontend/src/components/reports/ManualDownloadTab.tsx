@@ -1,6 +1,6 @@
 import React, { useState, useMemo, Suspense } from 'react';
 import { Card, CardHeader, CardBody, CardFooter, Button, Select, Input, Badge, Modal, Table } from '../ui';
-import { FileText, Download, Calendar, Search, Filter, X } from 'lucide-react';
+import { FileText, Download, Calendar, Search, Filter, X } from '../ui/Icons';
 import { useToast } from '../ui';
 import { generateExcelReport, triggerBlobDownload } from '../../utils/reportGenerator';
 import { useDevices, useSites, useTickets } from '../../hooks/useApiQuery';

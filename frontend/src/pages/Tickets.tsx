@@ -10,7 +10,7 @@ import {
     Filter,
     Plus,
     Trash2
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import {
     Card,
     CardBody,

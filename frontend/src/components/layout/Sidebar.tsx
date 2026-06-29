@@ -9,7 +9,7 @@ import {
     ChevronDown,
     Star,
     X,
-} from 'lucide-react';
+} from '../ui/Icons';
 
 interface SidebarProps {
     collapsed: boolean;

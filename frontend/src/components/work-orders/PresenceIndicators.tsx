@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, Edit3, Eye, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Users, Edit3, Eye, AlertTriangle, Wifi, WifiOff } from '../ui/Icons';
 import type { PresenceInfo, CursorInfo } from '../../services/collaboration';
 
 // ═══ Avatar color palette ═══════════════════════════════════════════════

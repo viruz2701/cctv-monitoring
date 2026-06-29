@@ -16,7 +16,7 @@ import {
   MapPin,
   DollarSign,
   Truck,
-} from 'lucide-react';
+} from '../ui/Icons';
 
 // ── Types ──────────────────────────────────────────────────────────────
 

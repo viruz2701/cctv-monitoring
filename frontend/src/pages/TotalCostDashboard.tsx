@@ -5,7 +5,7 @@ import { Card, DataGrid, Badge, StatsCard, Button } from '../components/ui';
 import {
   DollarSign, Briefcase, Wrench, Truck, TrendingUp,
   PieChart, BarChart3, Clock, Download, AlertTriangle,
-} from 'lucide-react';
+} from '../components/ui/Icons';
 
 // ── Types ────────────────────────────────────────────────────────────
 

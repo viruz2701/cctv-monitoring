@@ -16,7 +16,7 @@ import {
     AlertTriangle,
     CheckCircle,
     Server
-} from 'lucide-react';
+} from '../components/ui/Icons';
 import { Card, CardBody, Button, Select } from '../components/ui';
 import { ManualDownloadTab, ScheduledReportsTab, ReportHistoryTab } from '../components/reports';
 import { useTranslation } from 'react-i18next';

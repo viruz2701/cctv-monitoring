@@ -15,7 +15,7 @@ import { useWorkOrders } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
-import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from 'lucide-react';
+import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from '../components/ui/Icons';
 import ScheduleXWrapper from '../components/planning/FullCalendarWrapper';
 
 type ViewMode = 'table' | 'calendar';
