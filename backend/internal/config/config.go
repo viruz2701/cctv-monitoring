@@ -90,6 +90,11 @@ type Config struct {
 	// Audit log HMAC signing key (ISO 27001 MT-3)
 	AuditHMACKey string `mapstructure:"audit_hmac_key"`
 
+	// PublicBaseURL — публичный URL сервера для QR кодов в PDF отчётах (P0-PDF.2).
+	// Используется для формирования URL верификации в QR коде.
+	// Пример: https://cms.example.com
+	PublicBaseURL string `mapstructure:"public_base_url"`
+
 	// Новые настройки для HTTP-приёма событий
 	HTTPXMLEnabled  bool `mapstructure:"http_xml_enabled"`
 	VigiEnabled     bool `mapstructure:"vigi_enabled"`
@@ -503,6 +508,9 @@ func Load() *Config {
 	bindEnv("itsm_sync_interval", "GB_ITSM_SYNC_INTERVAL")
 	bindEnv("audit_hmac_key", "GB_AUDIT_HMAC_KEY")
 
+	// PDF Reports (P0-PDF.2)
+	bindEnv("public_base_url", "GB_PUBLIC_BASE_URL")
+
 	// Telegram
 	// Event Store env bindings
 	bindEnv("event_store.enabled", "GB_EVENT_STORE_ENABLED")
@@ -658,6 +666,7 @@ func Load() *Config {
 		ITSMSyncInterval:        viper.GetString("itsm_sync_interval"),
 		CORSAllowedOrigins:      viper.GetStringSlice("cors_allowed_origins"),
 		AuditHMACKey:            viper.GetString("audit_hmac_key"),
+		PublicBaseURL:           viper.GetString("public_base_url"),
 		EventStore: EventStoreConfig{
 			Enabled:            viper.GetBool("event_store.enabled"),
 			NATSURL:            viper.GetString("event_store.nats_url"),

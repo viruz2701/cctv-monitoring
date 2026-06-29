@@ -106,6 +106,9 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Put("/api/v1/sla/config/{priority}", s.updateSLAConfig)
 	r.Get("/api/v1/reports/maintenance", s.getMaintenanceReport)
 	r.Get("/api/v1/reports/sla-compliance", s.getSLAComplianceReport)
+	r.Get("/api/v1/reports/maintenance/pdf", s.getMaintenanceReportPDF)
+	r.Get("/api/v1/reports/sla-compliance/pdf", s.getSLAComplianceReportPDF)
+	r.Get("/api/v1/reports/verify", s.verifyReportHandler)
 
 	// Auto-dispatcher (P1-6)
 	r.Post("/api/v1/dispatcher/auto-assign/{workOrderId}", s.handleAutoAssign)

@@ -51,6 +51,7 @@ import (
 	"gb-telemetry-collector/internal/multiregion"
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
+	"gb-telemetry-collector/internal/reports"
 	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/sip"
 	"gb-telemetry-collector/internal/state"
@@ -87,9 +88,11 @@ type Server struct {
 
 	// P2-AI.4: Anomaly Detection Service
 	anomalyService *ai.AnomalyService
-
 	// CMMS adapter — абстракция над Internal/Atlas CMMS
 	cmmsRouter *cmms.CMMSRouter
+
+	// P0-PDF.2: PDF handler with HMAC signing + QR verification
+	pdfHandler *reports.PDFHandler
 
 	// Bi-directional ITSM sync engine
 	syncEngine *syncengine.SyncEngine
@@ -266,6 +269,13 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 		sbomProvider:       sbomProvider,
 		wellKnownHandler:   wellKnownHandler,
 		serverStart:        time.Now(),
+
+		// P0-PDF.2: PDF handler with HMAC signing + QR
+		pdfHandler: reports.NewPDFHandler(
+			reports.New("CCTV Monitoring Platform"),
+			mustNewAuditSigner(cfg.AuditHMACKey, logger),
+			cfg.PublicBaseURL,
+		),
 	}
 
 	// Инициализация сервисов

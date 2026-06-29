@@ -1021,6 +1021,41 @@ func (s *Server) getSLAComplianceReport(w http.ResponseWriter, r *http.Request) 
 	jsonResponse(w, http.StatusOK, report)
 }
 
+// getMaintenanceReportPDF возвращает PDF отчёт по обслуживанию с HMAC+QR.
+func (s *Server) getMaintenanceReportPDF(w http.ResponseWriter, r *http.Request) {
+	report, err := s.cmmsRouter.GetMaintenanceReport(r.Context())
+	if err != nil {
+		s.logger.Error("Failed to get maintenance report", "error", err)
+		RespondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	if report == nil {
+		report = []models.MaintenanceReport{}
+	}
+
+	s.pdfHandler.HandleMaintenancePDF(w, r, report)
+}
+
+// getSLAComplianceReportPDF возвращает PDF отчёт по SLA с HMAC+QR.
+func (s *Server) getSLAComplianceReportPDF(w http.ResponseWriter, r *http.Request) {
+	report, err := s.cmmsRouter.GetSLAComplianceReport(r.Context())
+	if err != nil {
+		s.logger.Error("Failed to get SLA compliance report", "error", err)
+		RespondError(w, r, NewInternalError("operation failed", err))
+		return
+	}
+	if report == nil {
+		report = []models.SLAComplianceReport{}
+	}
+
+	s.pdfHandler.HandleSLACompliancePDF(w, r, report)
+}
+
+// verifyReportHandler проверяет HMAC подпись PDF отчёта.
+func (s *Server) verifyReportHandler(w http.ResponseWriter, r *http.Request) {
+	s.pdfHandler.VerifyHandler(w, r)
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Technician Site Assignments Handlers
 // ═══════════════════════════════════════════════════════════════════════
