@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Gauge } from '../ui/Icons';
+import { Gauge } from '../../ui/Icons';
 
 export default function PerformanceTab() {
     return (

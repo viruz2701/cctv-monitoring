@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   Users, FileText, ClipboardList, HardDrive, Calendar,
   CheckCircle, ArrowLeft,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 import { Breadcrumbs } from '../../components/ui/Breadcrumbs';
 import {
   Button, useToast, Card, CardHeader, CardBody,

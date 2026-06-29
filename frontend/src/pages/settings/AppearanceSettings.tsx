@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Palette } from '../components/ui/Icons';
+import { Palette } from '../../components/ui/Icons';
 import { useTranslation } from 'react-i18next';
 import { Card, CardHeader, CardBody, Button } from '../../components/ui';
 import { useThemeStore, PRESET_COLORS, type ThemePreset } from '../../store/themeStore';

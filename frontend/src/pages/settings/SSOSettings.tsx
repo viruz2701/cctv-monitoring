@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Server, Key, Globe, CheckCircle, AlertTriangle } from '../components/ui/Icons';
+import { Shield, Server, Key, Globe, CheckCircle, AlertTriangle } from '../../components/ui/Icons';
 import { Card, Button, Badge, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 

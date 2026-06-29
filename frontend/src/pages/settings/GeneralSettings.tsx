@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Settings as SettingsIcon, Zap, Key, Plus, Trash2, Copy, Shield, Calendar, DollarSign } from '../components/ui/Icons';
+import { Save, Settings as SettingsIcon, Zap, Key, Plus, Trash2, Copy, Shield, Calendar, DollarSign } from '../../components/ui/Icons';
 import { Card, CardHeader, CardBody, CardFooter, Button, Input, Select, Modal, Badge, useToast } from '../../components/ui';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';

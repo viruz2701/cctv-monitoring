@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ShieldCheck } from '../ui/Icons';
+import { ShieldCheck } from '../../ui/Icons';
 
 export default function SLAComplianceTab() {
     const { t } = useTranslation();

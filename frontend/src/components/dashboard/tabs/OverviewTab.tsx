@@ -22,7 +22,7 @@ import {
     CheckCircle,
     Server,
     Pencil,
-} from '../ui/Icons';
+} from '../../ui/Icons';
 import { getArrayData } from '../../../utils/helpers';
 import { StatsCard, Card, CardHeader, CardBody, Badge, Button, Select, SkeletonStatsCard, SkeletonCard, SkeletonChart } from '../../ui';
 import { useTickets, useAlarms, useDevices, useSites } from '../../../hooks/useApiQuery';

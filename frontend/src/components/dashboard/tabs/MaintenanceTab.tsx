@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { Wrench } from '../ui/Icons';
+import { Wrench } from '../../ui/Icons';
 
 export default function MaintenanceTab() {
     return (
