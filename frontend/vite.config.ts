@@ -127,10 +127,6 @@ export default defineConfig({
           if (id.includes('node_modules/@nivo') || id.includes('node_modules/chart')) {
             return 'vendor-nivo';
           }
-          // PDF generation (jsPDF lazy-loaded via dynamic import)
-          if (id.includes('node_modules/jspdf')) {
-            return 'vendor-pdf';
-          }
           // i18n
           if (id.includes('node_modules/i18next')) {
             return 'vendor-i18n';

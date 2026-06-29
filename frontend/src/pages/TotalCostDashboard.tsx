@@ -84,73 +84,12 @@ export const TotalCostDashboard: React.FC = () => {
     }
   };
 
-  // ── PDF Export (BIZ-01) — jsPDF lazy-loaded ────────────────────
+  // ── PDF Export — server-side PDF via API (P0-PDF.4) ────────────
 
   const exportPDF = useCallback(async () => {
-    const jsPDF = (await import('jspdf')).default;
-    await import('jspdf-autotable');
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // Title
-    doc.setFontSize(18);
-    doc.text('TCO & Downtime Cost Report', pageWidth / 2, 20, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString('ru-RU')}`, pageWidth / 2, 28, { align: 'center' });
-
-    // Work Order Costs Summary
-    if (data?.summary) {
-      doc.setFontSize(14);
-      doc.text('Work Order Cost Summary', 14, 42);
-      doc.setFontSize(10);
-      const summaryLines = [
-        [`Total Cost:`, `$${data.summary.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`],
-        [`Labor Cost:`, `$${data.summary.total_labor_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`],
-        [`Parts Cost:`, `$${data.summary.total_parts_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`],
-        [`Additional Cost:`, `$${data.summary.total_additional_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`],
-        [`Total Work Orders:`, `${data.summary.total_work_orders}`],
-        [`Avg Cost/Order:`, `$${data.summary.avg_cost_per_order.toLocaleString('en-US', { minimumFractionDigits: 2 })}`],
-      ];
-      (doc as any).autoTable({
-        startY: 46,
-        head: [['Metric', 'Value']],
-        body: summaryLines,
-        theme: 'striped',
-        styles: { fontSize: 9 },
-      });
-    }
-
-    // TCO by Device
-    if (tcoData.length > 0) {
-      const yPos = (doc as any).lastAutoTable?.finalY || 80;
-      doc.setFontSize(14);
-      doc.text('TCO by Device (Top 20)', 14, yPos + 14);
-      const tcoRows = tcoData.slice(0, 20).map((d) => [
-        d.device_name,
-        d.device_type,
-        `$${d.total_downtime_cost.toFixed(2)}`,
-        `$${d.tco.toFixed(2)}`,
-        `${d.total_downtime_events}`,
-      ]);
-      (doc as any).autoTable({
-        startY: yPos + 18,
-        head: [['Device', 'Type', 'Downtime Cost', 'TCO', 'Events']],
-        body: tcoRows,
-        theme: 'striped',
-        styles: { fontSize: 8 },
-      });
-    }
-
-    // Summary
-    const finalY = (doc as any).lastAutoTable?.finalY || 100;
-    const totalDowntimeCost = tcoData.reduce((sum, d) => sum + d.total_downtime_cost, 0);
-    const totalTCO = tcoData.reduce((sum, d) => sum + d.tco, 0);
-    doc.setFontSize(10);
-    doc.text(`Total Downtime Cost: $${totalDowntimeCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, finalY + 10);
-    doc.text(`Total TCO (all devices): $${totalTCO.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, finalY + 18);
-
-    doc.save('tco-downtime-report.pdf');
-  }, [data, tcoData]);
+    // Direct download from server-side PDF endpoint
+    window.open('/api/v1/reports/tco/pdf', '_blank');
+  }, []);
 
   const summary = data?.summary;
   const breakdown = data?.breakdown || [];

@@ -11,7 +11,7 @@ import { parseISO, format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { Device } from '../../types';
 
-// Lazy-loaded: react-datepicker (~100KB), jsPDF (~557KB)
+// Lazy-loaded: react-datepicker (~100KB)
 const LazyDatePicker = React.lazy(() => import('react-datepicker'));
 
 const StatCard: React.FC<{ label: string; value: number }> = ({ label, value }) => (
@@ -94,61 +94,38 @@ export function ManualDownloadTab() {
     ];
 
     const handleExportPDF = async () => {
-        const jsPDF = (await import('jspdf')).default;
-        await import('jspdf-autotable');
-        const doc = new jsPDF();
-
-        // Title
-        doc.setFontSize(16);
-        doc.text(`Report: ${reportType}`, 14, 20);
-
-        // Date range
-        doc.setFontSize(10);
-        const dateStr = duration === 'custom' ? `${startDate} to ${endDate}` : duration;
-        doc.text(`Period: ${dateStr}`, 14, 30);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
-
-        // Filter info
-        doc.setFontSize(9);
-        doc.text(`Site: ${filteredSites === 'all' ? 'All' : filteredSites}`, 14, 44);
-        doc.text(`Device Type: ${deviceType === 'all' ? 'All' : deviceType}`, 14, 50);
-        doc.text(`Status: ${statusFilter === 'all' ? 'All' : statusFilter}`, 14, 56);
-
-        // Summary table
-        const summaryData = [
-            ['Total Devices', String(devices.length)],
-            ['Online Devices', String(devices.filter(d => d.status === 'online').length)],
-            ['Offline Devices', String(devices.filter(d => d.status === 'offline').length)],
-            ['Total Sites', String(sites.length)],
-        ];
-
-        (doc as any).autoTable({
-            startY: 64,
-            head: [['Metric', 'Value']],
-            body: summaryData,
-            theme: 'striped',
-            headStyles: { fillColor: [59, 130, 246] },
-        });
-
-        // Device list
-        const deviceData = devices
-            .filter(d => filteredSites === 'all' || d.siteId === filteredSites)
-            .filter(d => deviceType === 'all' || d.type === deviceType)
-            .filter(d => statusFilter === 'all' || d.status === statusFilter)
-            .map(d => [d.name, d.type, d.status, d.siteName]);
-
-        if (deviceData.length > 0) {
-            (doc as any).autoTable({
-                startY: (doc as any).lastAutoTable.finalY + 10,
-                head: [['Device', 'Type', 'Status', 'Site']],
-                body: deviceData,
-                theme: 'grid',
-                headStyles: { fillColor: [59, 130, 246] },
+        try {
+            setIsGenerating(true);
+            const response = await fetch('/api/v1/reports/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: reportType,
+                    format: 'pdf',
+                    filters: {
+                        duration,
+                        startDate: duration === 'custom' ? startDate : undefined,
+                        endDate: duration === 'custom' ? endDate : undefined,
+                        site: filteredSites,
+                        deviceType,
+                        status: statusFilter,
+                        issueType: issueTypeFilter,
+                        deviceId: selectedDeviceId,
+                    },
+                }),
             });
-        }
+            if (!response.ok) throw new Error('Failed to generate PDF');
 
-        doc.save(`report-${reportType}-${Date.now()}.pdf`);
-        toast.success('PDF report downloaded');
+            const result = await response.json();
+            // Redirect to download
+            window.open(`/api/v1/reports/${result.report_id}/download`, '_blank');
+            toast.success('PDF report generated');
+        } catch (err) {
+            console.error('PDF export failed:', err);
+            toast.error('Failed to generate PDF report');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleGenerate = async () => {
