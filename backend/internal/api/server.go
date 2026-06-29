@@ -194,6 +194,9 @@ type Server struct {
 
 	// P1-SYNC: Differential Sync for Mobile
 	diffService *syncservice.DiffService
+
+	// P0-REG.3-5: Maintenance Compliance Engine
+	complianceJournal *compliance.ElectronicJournal
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

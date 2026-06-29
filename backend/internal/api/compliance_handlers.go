@@ -7,15 +7,26 @@
 //   - ISO 27019 PCC.A.13 (ICS asset risk assessment)
 //   - СТБ 34.101.27 п. 6.3 (Оценка рисков)
 //   - Приказ ОАЦ № 66 п. 7.18 (Идентификация устройств)
+//
+// P0-REG.3-5: Maintenance Compliance Engine
+//   - GET    /api/v1/compliance/regulations — список регламентов
+//   - POST   /api/v1/compliance/regulations/{id}/generate-wo — ручная генерация WO
+//   - GET    /api/v1/compliance/journal — журнал compliance
+//   - POST   /api/v1/compliance/journal/{id}/sign — подписать акт HMAC
+//   - GET    /api/v1/compliance/journal/{id}/verify — верификация HMAC
 package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/db"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // ── Compliance Checklist (OWASP ASVS L3) ───────────────────────────────
@@ -355,6 +366,395 @@ func (s *Server) handleComplianceCalculate(w http.ResponseWriter, r *http.Reques
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// P0-REG.3-5: Maintenance Compliance Engine Handlers
+// ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+// GET /api/v1/compliance/regulations
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleComplianceRegulations возвращает список регламентов ТО.
+//
+// Query params:
+//   - region (optional): фильтр по региону (BY, RU, TR, VN, ID, BR, ZA)
+//
+// Access: admin, manager, owner
+func (s *Server) handleComplianceRegulations(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+	if !isComplianceRole(claims.Role) {
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin, manager, or owner role required"))
+		return
+	}
+
+	region := r.URL.Query().Get("region")
+
+	query := `SELECT id, region_code, regulation_code, name, regulation_type,
+		interval_months, estimated_minutes, total_items,
+		compliance_standards, license_requirements, docs_required,
+		is_active, created_at, updated_at
+		FROM maintenance_regulations WHERE 1=1`
+
+	args := make([]interface{}, 0)
+	argIdx := 1
+
+	if region != "" {
+		query += fmt.Sprintf(" AND region_code = $%d", argIdx)
+		args = append(args, region)
+		argIdx++
+	}
+
+	query += " ORDER BY region_code, regulation_type"
+
+	rows, err := s.db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		s.logger.Error("failed to query regulations", "error", err)
+		RespondError(w, r, NewInternalError("failed to query regulations", err))
+		return
+	}
+	defer rows.Close()
+
+	type regulationResponse struct {
+		ID                  string   `json:"id"`
+		RegionCode          string   `json:"region_code"`
+		RegulationCode      string   `json:"regulation_code"`
+		Name                string   `json:"name"`
+		RegulationType      string   `json:"regulation_type"`
+		IntervalMonths      int      `json:"interval_months"`
+		EstimatedMinutes    int      `json:"estimated_minutes"`
+		TotalItems          int      `json:"total_items"`
+		ComplianceStandards []string `json:"compliance_standards"`
+		LicenseRequirements *string  `json:"license_requirements,omitempty"`
+		IsActive            bool     `json:"is_active"`
+		CreatedAt           string   `json:"created_at"`
+		UpdatedAt           string   `json:"updated_at"`
+	}
+
+	regulations := make([]regulationResponse, 0)
+	for rows.Next() {
+		var reg regulationResponse
+		var licenseReq *string
+
+		if err := rows.Scan(
+			&reg.ID, &reg.RegionCode, &reg.RegulationCode, &reg.Name,
+			&reg.RegulationType, &reg.IntervalMonths, &reg.EstimatedMinutes,
+			&reg.TotalItems, &reg.ComplianceStandards, &licenseReq,
+			&reg.IsActive, &reg.CreatedAt, &reg.UpdatedAt,
+		); err != nil {
+			s.logger.Error("failed to scan regulation", "error", err)
+			RespondError(w, r, NewInternalError("failed to scan regulation", err))
+			return
+		}
+
+		regulations = append(regulations, reg)
+	}
+
+	if err := rows.Err(); err != nil {
+		s.logger.Error("rows iteration error", "error", err)
+		RespondError(w, r, NewInternalError("rows iteration error", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"regulations": regulations,
+		"total":       len(regulations),
+	})
+
+	s.logger.Info("compliance regulations listed",
+		"trace_id", TraceIDFromContext(r.Context()),
+		"user_id", claims.UserID,
+		"region", region,
+		"count", len(regulations),
+	)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// POST /api/v1/compliance/regulations/{id}/generate-wo
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleGenerateWOFromRegulation создаёт WO для указанного регламента вручную.
+//
+// Access: admin, manager
+func (s *Server) handleGenerateWOFromRegulation(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+	if claims.Role != "admin" && claims.Role != "manager" {
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin or manager role required"))
+		return
+	}
+
+	regulationID := chi.URLParam(r, "id")
+	if regulationID == "" {
+		RespondError(w, r, NewBadRequestError("regulation id is required"))
+		return
+	}
+
+	// Получаем регламент
+	var reg compliance.DueRegulation
+	var licenseReq *string
+	var docsReq []byte
+
+	err := s.db.Pool.QueryRow(r.Context(), `
+		SELECT id, region_code, regulation_code, name, regulation_type,
+			interval_months, estimated_minutes, total_items,
+			compliance_standards, license_requirements, docs_required,
+			created_at
+		FROM maintenance_regulations
+		WHERE id = $1 AND is_active = true
+	`, regulationID).Scan(
+		&reg.ID, &reg.RegionCode, &reg.RegulationCode, &reg.Name,
+		&reg.RegulationType, &reg.IntervalMonths, &reg.EstimatedMinutes,
+		&reg.TotalItems, &reg.ComplianceStandards, &licenseReq,
+		&docsReq, &reg.LastMaintenanceDate,
+	)
+	if err != nil {
+		s.logger.Error("failed to get regulation", "error", err)
+		RespondError(w, r, NewNotFoundError("regulation not found"))
+		return
+	}
+
+	reg.LicenseRequirements = licenseReq
+	reg.DocsRequired = docsReq
+
+	// Создаём WO через DefaultWOProvider
+	woProvider := compliance.NewDefaultWOProvider(s.db.Pool, s.logger)
+	woID, err := woProvider.CreateWO(r.Context(), &reg)
+	if err != nil {
+		s.logger.Error("failed to create WO from regulation", "error", err)
+		RespondError(w, r, NewInternalError("failed to create work order", err))
+		return
+	}
+
+	// Логируем в compliance_journal
+	if s.complianceJournal != nil {
+		actData := &compliance.ActData{
+			Action:         "manual_generate_wo",
+			EntryType:      compliance.JournalEntryWOGenerated,
+			RegulationCode: reg.RegulationCode,
+			RegulationName: reg.Name,
+			TraceID:        TraceIDFromContext(r.Context()),
+			Extra: map[string]interface{}{
+				"triggered_by": claims.UserID,
+				"region":       reg.RegionCode,
+			},
+		}
+
+		_, err := s.complianceJournal.CreateEntry(r.Context(), reg.ID, woID, reg.RegionCode, actData)
+		if err != nil {
+			s.logger.Error("failed to log journal entry", "error", err)
+		}
+	}
+
+	jsonResponse(w, http.StatusCreated, map[string]string{
+		"work_order_id": woID,
+		"status":        "created",
+	})
+
+	s.logger.Info("WO generated from regulation",
+		"trace_id", TraceIDFromContext(r.Context()),
+		"user_id", claims.UserID,
+		"regulation_id", regulationID,
+		"wo_id", woID,
+	)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GET /api/v1/compliance/journal
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleComplianceJournal возвращает записи compliance журнала.
+//
+// Query params:
+//   - region (optional): фильтр по региону
+//   - from (optional): начальная дата (RFC3339)
+//   - to (optional): конечная дата (RFC3339)
+//   - limit (optional): лимит записей (default 50)
+//   - offset (optional): смещение
+//
+// Access: admin, manager, owner
+func (s *Server) handleComplianceJournal(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+	if !isComplianceRole(claims.Role) {
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
+		return
+	}
+
+	region := r.URL.Query().Get("region")
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	limit := parseIntQuery(r.URL.Query().Get("limit"), 50)
+	offset := parseIntQuery(r.URL.Query().Get("offset"), 0)
+
+	var from, to *time.Time
+	if fromStr != "" {
+		t, err := time.Parse(time.RFC3339, fromStr)
+		if err != nil {
+			// Пробуем формат YYYY-MM-DD
+			t, err = time.Parse("2006-01-02", fromStr)
+			if err != nil {
+				RespondError(w, r, NewBadRequestError("invalid from date format, use RFC3339 or YYYY-MM-DD"))
+				return
+			}
+		}
+		from = &t
+	}
+	if toStr != "" {
+		t, err := time.Parse(time.RFC3339, toStr)
+		if err != nil {
+			t, err = time.Parse("2006-01-02", toStr)
+			if err != nil {
+				RespondError(w, r, NewBadRequestError("invalid to date format, use RFC3339 or YYYY-MM-DD"))
+				return
+			}
+		}
+		to = &t
+	}
+
+	entries, total, err := s.complianceJournal.ListEntries(r.Context(), region, from, to, limit, offset)
+	if err != nil {
+		s.logger.Error("failed to list journal entries", "error", err)
+		RespondError(w, r, NewInternalError("failed to list journal entries", err))
+		return
+	}
+
+	// Формируем ответ
+	type journalEntryResponse struct {
+		ID           string     `json:"id"`
+		RegulationID *string    `json:"regulation_id,omitempty"`
+		WoID         *string    `json:"wo_id,omitempty"`
+		RegionCode   string     `json:"region_code"`
+		HasSignature bool       `json:"has_signature"`
+		HMACSignedAt *time.Time `json:"hmac_signed_at,omitempty"`
+		CreatedAt    time.Time  `json:"created_at"`
+	}
+
+	resp := make([]journalEntryResponse, 0, len(entries))
+	for _, e := range entries {
+		resp = append(resp, journalEntryResponse{
+			ID:           e.ID,
+			RegulationID: e.RegulationID,
+			WoID:         e.WoID,
+			RegionCode:   e.RegionCode,
+			HasSignature: e.HMACSignature != nil,
+			HMACSignedAt: e.HMACSignedAt,
+			CreatedAt:    e.CreatedAt,
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"entries": resp,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+
+	s.logger.Info("compliance journal listed",
+		"trace_id", TraceIDFromContext(r.Context()),
+		"user_id", claims.UserID,
+		"region", region,
+		"count", len(resp),
+	)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// POST /api/v1/compliance/journal/{id}/sign
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleSignJournalEntry подписывает запись журнала HMAC.
+//
+// Access: admin, manager
+func (s *Server) handleSignJournalEntry(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+	if claims.Role != "admin" && claims.Role != "manager" {
+		RespondError(w, r, NewForbiddenError("insufficient permissions: admin or manager role required"))
+		return
+	}
+
+	entryID := chi.URLParam(r, "id")
+	if entryID == "" {
+		RespondError(w, r, NewBadRequestError("entry id is required"))
+		return
+	}
+
+	signature, err := s.complianceJournal.SignAct(r.Context(), entryID)
+	if err != nil {
+		s.logger.Error("failed to sign journal entry", "error", err)
+		RespondError(w, r, NewInternalError("failed to sign journal entry", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"entry_id":  entryID,
+		"signature": signature,
+		"status":    "signed",
+	})
+
+	s.logger.Info("journal entry signed",
+		"trace_id", TraceIDFromContext(r.Context()),
+		"user_id", claims.UserID,
+		"entry_id", entryID,
+	)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GET /api/v1/compliance/journal/{id}/verify
+// ═══════════════════════════════════════════════════════════════════════
+
+// handleVerifyJournalEntry верифицирует HMAC подпись записи журнала.
+//
+// Access: admin, manager, owner
+func (s *Server) handleVerifyJournalEntry(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r)
+	if claims == nil {
+		RespondError(w, r, NewUnauthorizedError("authentication required"))
+		return
+	}
+	if !isComplianceRole(claims.Role) {
+		RespondError(w, r, NewForbiddenError("insufficient permissions"))
+		return
+	}
+
+	entryID := chi.URLParam(r, "id")
+	if entryID == "" {
+		RespondError(w, r, NewBadRequestError("entry id is required"))
+		return
+	}
+
+	valid, err := s.complianceJournal.VerifyAct(r.Context(), entryID)
+	if err != nil {
+		s.logger.Error("failed to verify journal entry", "error", err)
+		RespondError(w, r, NewInternalError("failed to verify journal entry", err))
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"entry_id": entryID,
+		"valid":    valid,
+	})
+
+	s.logger.Info("journal entry verified",
+		"trace_id", TraceIDFromContext(r.Context()),
+		"user_id", claims.UserID,
+		"entry_id", entryID,
+		"valid", valid,
+	)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -366,4 +766,19 @@ func isComplianceRole(role string) bool {
 	default:
 		return false
 	}
+}
+
+// parseIntQuery парсит целое число из строки query параметра.
+func parseIntQuery(s string, defaultVal int) int {
+	if s == "" {
+		return defaultVal
+	}
+	var n int
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+		return defaultVal
+	}
+	if n < 0 {
+		return defaultVal
+	}
+	return n
 }

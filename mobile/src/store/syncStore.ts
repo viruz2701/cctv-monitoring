@@ -6,11 +6,30 @@ import { ConflictData, ConflictResolutionAction } from '../components/ConflictRe
 import { captureError } from '../lib/sentry';
 import { syncService } from '../services/syncService';
 
+interface ChecklistUpdatePayload {
+  itemOrder: number;
+  status: 'passed' | 'failed' | 'skipped';
+  timestamp: number;
+}
+
+interface ChecklistCompletePayload {
+  workOrderId: string;
+  regulationId: string;
+  regionCode: string;
+  items: unknown[];
+  completedAt: string;
+  passedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  totalCount: number;
+  synced: boolean;
+}
+
 interface SyncAction {
   id: string;
-  type: 'complete_work_order' | 'start_work_order';
+  type: 'complete_work_order' | 'start_work_order' | 'checklist_update' | 'checklist_complete';
   workOrderId: string;
-  payload?: CompleteWorkOrderPayload;
+  payload?: CompleteWorkOrderPayload | ChecklistUpdatePayload | ChecklistCompletePayload;
   timestamp: number;
   retryCount: number;
 }
@@ -76,9 +95,14 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
       try {
         if (action.type === 'complete_work_order' && action.payload) {
-          await workOrdersApi.completeWorkOrder(action.workOrderId, action.payload);
+          const woPayload = action.payload as CompleteWorkOrderPayload;
+          await workOrdersApi.completeWorkOrder(action.workOrderId, woPayload);
         } else if (action.type === 'start_work_order') {
           await workOrdersApi.startWorkOrder(action.workOrderId);
+        } else if (action.type === 'checklist_update' || action.type === 'checklist_complete') {
+          // Checklist actions handled locally via AsyncStorage (offline-first)
+          // Server sync will occur on work order completion
+          console.log(`Checklist action ${action.type} for WO ${action.workOrderId} recorded locally`);
         }
 
         updatedQueue.splice(i, 1);

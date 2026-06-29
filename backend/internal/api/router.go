@@ -312,6 +312,9 @@ func (s *Server) initServices() {
 
 	// ── P3-1: Multi-Region Geo-Redundancy ──────────────────────────
 	s.initMultiRegion()
+
+	// ── P0-REG.3-5: Maintenance Compliance Engine ─────────────────
+	s.initComplianceJournal()
 }
 
 // initAnomalyService инициализирует сервис обнаружения аномалий.
@@ -439,5 +442,19 @@ func (s *Server) initMultiRegion() {
 			},
 			s.logger,
 		)
+	}
+}
+
+// initComplianceJournal инициализирует Electronic Journal (P0-REG.4).
+func (s *Server) initComplianceJournal() {
+	if s.db != nil && s.db.Pool != nil && s.auditSigner != nil {
+		s.complianceJournal = compliance.NewElectronicJournal(
+			s.db.Pool,
+			s.auditSigner,
+			s.logger,
+		)
+		s.logger.Info("P0-REG.4: compliance electronic journal initialized")
+	} else {
+		s.logger.Warn("P0-REG.4: compliance journal not available (missing db or signer)")
 	}
 }

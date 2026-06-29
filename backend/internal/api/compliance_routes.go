@@ -7,6 +7,13 @@
 //   - OWASP ASVS V4 (RBAC — admin/manager/owner)
 //   - ISO 27001 A.9.2 (Access control — role-based)
 //   - IEC 62443-3-3 SR 2.1 (Account management)
+//
+// P0-REG.3-5: Maintenance Compliance Engine
+//   - GET    /api/v1/compliance/regulations — список регламентов
+//   - POST   /api/v1/compliance/regulations/{id}/generate-wo — ручная генерация WO
+//   - GET    /api/v1/compliance/journal — журнал compliance
+//   - POST   /api/v1/compliance/journal/{id}/sign — подписать акт HMAC
+//   - GET    /api/v1/compliance/journal/{id}/verify — верификация HMAC
 package api
 
 import "github.com/go-chi/chi/v5"
@@ -32,6 +39,22 @@ func (s *Server) mountComplianceRoutes(r chi.Router) {
 
 		// POST /api/v1/compliance/calculate — вычисление риска по параметрам
 		r.Post("/calculate", s.handleComplianceCalculate)
+
+		// ── P0-REG.3-5: Maintenance Compliance Engine ───────────────
+		// GET  /api/v1/compliance/regulations — список регламентов
+		r.Get("/regulations", s.handleComplianceRegulations)
+
+		// POST /api/v1/compliance/regulations/{id}/generate-wo — генерация WO
+		r.Post("/regulations/{id}/generate-wo", s.handleGenerateWOFromRegulation)
+
+		// GET  /api/v1/compliance/journal — журнал compliance
+		r.Get("/journal", s.handleComplianceJournal)
+
+		// POST /api/v1/compliance/journal/{id}/sign — подписать акт HMAC
+		r.Post("/journal/{id}/sign", s.handleSignJournalEntry)
+
+		// GET  /api/v1/compliance/journal/{id}/verify — верификация HMAC
+		r.Get("/journal/{id}/verify", s.handleVerifyJournalEntry)
 
 		// ── P2-RU.2: 152-ФЗ Personal Data Features ───────────────────
 		// Consent management
