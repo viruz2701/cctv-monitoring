@@ -91,6 +91,8 @@ export {
   Shield,
   ShieldCheck,
   Smartphone,
+  Star,
+  Store,
   Sun,
   Table2,
   Ticket,

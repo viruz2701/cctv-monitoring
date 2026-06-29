@@ -160,6 +160,7 @@ function App() {
                     <Route path="/on-call" element={<PageSuspense><Pages.OnCallSchedule /></PageSuspense>} />
                     <Route path="/compliance-shield" element={<PageSuspense><Pages.ComplianceShield /></PageSuspense>} />
                     <Route path="/predictive-maintenance" element={<PageSuspense><Pages.PredictiveMaintenance /></PageSuspense>} />
+                    <Route path="/playbook-marketplace" element={<PageSuspense><Pages.PlaybookMarketplace /></PageSuspense>} />
                   </Route>
 
                   {/* Tutorials — all roles */}

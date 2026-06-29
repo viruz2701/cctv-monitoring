@@ -44,5 +44,6 @@ export const WOAging = lazy(() => import('./WOAging').then((m) => ({ default: m.
 export const WorkloadAnalytics = lazy(() => import('./WorkloadAnalytics').then((m) => ({ default: m.WorkloadAnalytics })));
 export const WorkOrderDetail = lazy(() => import('./WorkOrderDetail').then((m) => ({ default: m.WorkOrderDetail })));
 export const SecurityAdvisories = lazy(() => import('./SecurityAdvisories').then((m) => ({ default: m.SecurityAdvisories })));
+export const PlaybookMarketplace = lazy(() => import('./PlaybookMarketplace').then((m) => ({ default: m.PlaybookMarketplace })));
 export const WorkOrders = lazy(() => import('./WorkOrders').then((m) => ({ default: m.WorkOrders })));
 export const WorkRequestPortal = lazy(() => import('./WorkRequestPortal').then((m) => ({ default: m.WorkRequestPortal })));

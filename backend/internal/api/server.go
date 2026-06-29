@@ -184,6 +184,9 @@ type Server struct {
 
 	// P1-QUOTA: Tenant Quota Manager (Redis-based)
 	tenantQuotaManager *tenant.QuotaManager
+
+	// P1-MARKET: Playbook Marketplace Service
+	playbookMarketplace playbookMarketplaceService
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

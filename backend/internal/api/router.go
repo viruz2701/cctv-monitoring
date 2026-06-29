@@ -44,6 +44,7 @@ import (
 	"gb-telemetry-collector/internal/cmms"
 	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/multiregion"
+	"gb-telemetry-collector/internal/playbook"
 	"gb-telemetry-collector/internal/service"
 	"gb-telemetry-collector/internal/setup"
 	"gb-telemetry-collector/internal/tenant"
@@ -212,6 +213,11 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.tenantQuotaManager != nil {
 			s.mountTenantQuotaRoutes(r)
 		}
+
+		// P1-MARKET: Playbook Marketplace
+		if s.playbookMarketplace != nil {
+			s.mountPlaybookMarketplaceRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────
@@ -294,6 +300,9 @@ func (s *Server) initServices() {
 	// ── P2-3.3: Webhook Delivery Worker ─────────────────────────────
 	s.initWebhookWorker()
 
+	// ── P1-MARKET: Playbook Marketplace Service ─────────────────────
+	s.initMarketplaceService()
+
 	// ── P3-1: Multi-Region Geo-Redundancy ──────────────────────────
 	s.initMultiRegion()
 }
@@ -345,6 +354,14 @@ func (s *Server) initWebhookWorker() {
 			},
 		)
 		go s.deliveryWorker.Start(context.Background())
+	}
+}
+
+// initMarketplaceService инициализирует Playbook Marketplace сервис.
+func (s *Server) initMarketplaceService() {
+	if s.db != nil && s.db.Pool != nil {
+		s.playbookMarketplace = playbook.NewMarketplaceService(s.db.Pool, s.logger)
+		s.logger.Info("P1-MARKET: playbook marketplace service initialized")
 	}
 }
 

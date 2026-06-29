@@ -82,6 +82,10 @@ export {
 } from './workflows';
 export type { WorkflowDefinition, WorkflowNode, WorkflowEdge, WorkflowListResponse } from './workflows';
 
+// P1-MARKET: Playbook Marketplace
+export { playbookMarketplaceApi } from './playbookMarketplace';
+export type { MarketplacePlaybook, MarketplaceListResponse, MarketplaceFilter } from './playbookMarketplace';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Комбинированный объект `api` для backward compat
 // ═══════════════════════════════════════════════════════════════════════
