@@ -23,28 +23,64 @@ export interface CustomTheme {
   radius: RadiusSize;
 }
 
-// ═══ White-label types (P3-NICE.2) ═════════════════════════════════════
+// ═══ White-label types (P3-WL: White-Label Theming) ═══════════════════
 
 export interface WhiteLabelConfig {
   tenantName: string;
+  companyName: string;
   logoUrl: string;
   faviconUrl: string;
+
+  // Color scheme
   primaryColor: string;
+  secondaryColor: string;
   accentColor: string;
+
+  // Font & CSS
   fontFamily: string;
   customCSS: string;
+
+  // Custom domain (CNAME)
+  customDomain: string;
+  cnameVerified: boolean;
+
+  // Email branding
+  emailHeaderLogoUrl: string;
+  emailFooterText: string;
+  emailPrimaryColor: string;
+
+  // PDF branding
+  pdfLogoUrl: string;
+  pdfPrimaryColor: string;
+  pdfSecondaryColor: string;
+  pdfFooterText: string;
+
+  // State
   isActive: boolean;
+  isDefault: boolean;
 }
 
 export const DEFAULT_WHITE_LABEL: WhiteLabelConfig = {
   tenantName: 'CCTV Health Monitor',
+  companyName: '',
   logoUrl: '',
   faviconUrl: '',
   primaryColor: '#2563eb',
-  accentColor: '#6366f1',
+  secondaryColor: '#6366f1',
+  accentColor: '#06b6d4',
   fontFamily: 'Inter, system-ui, sans-serif',
   customCSS: '',
+  customDomain: '',
+  cnameVerified: false,
+  emailHeaderLogoUrl: '',
+  emailFooterText: '',
+  emailPrimaryColor: '#2563eb',
+  pdfLogoUrl: '',
+  pdfPrimaryColor: '#2563eb',
+  pdfSecondaryColor: '#6366f1',
+  pdfFooterText: '',
   isActive: false,
+  isDefault: true,
 };
 
 interface ThemeState {
@@ -213,9 +249,15 @@ const applyWhiteLabel = (config: WhiteLabelConfig): void => {
   // Brand colors override theme colors
   if (config.primaryColor) {
     root.style.setProperty('--color-primary', config.primaryColor);
+    root.style.setProperty('--wl-primary', config.primaryColor);
+  }
+  if (config.secondaryColor) {
+    root.style.setProperty('--color-secondary', config.secondaryColor);
+    root.style.setProperty('--wl-secondary', config.secondaryColor);
   }
   if (config.accentColor) {
     root.style.setProperty('--color-accent', config.accentColor);
+    root.style.setProperty('--wl-accent', config.accentColor);
   }
 
   // Font
@@ -233,7 +275,7 @@ const applyWhiteLabel = (config: WhiteLabelConfig): void => {
   }
 
   // Document title
-  document.title = config.tenantName || 'CCTV Health Monitor';
+  document.title = config.tenantName || config.companyName || 'CCTV Health Monitor';
 
   // Custom CSS injection
   if (config.customCSS) {

@@ -217,6 +217,9 @@ type Server struct {
 	// P3-DB: Database Optimization — PoolManager + Slow Query Detector
 	poolManager       *db.PoolManager
 	slowQueryDetector *db.SlowQueryDetector
+
+	// P3-WL: White-Label Theming — Tenant Branding Store
+	brandingStore *tenant.BrandingStore
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

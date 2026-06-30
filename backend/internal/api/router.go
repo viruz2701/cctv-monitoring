@@ -245,6 +245,11 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.poolManager != nil || s.slowQueryDetector != nil {
 			s.mountDBRoutes(r)
 		}
+
+		// P3-WL: White-Label Theming — per-tenant branding
+		if s.brandingStore != nil {
+			s.mountWhiteLabelRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────
@@ -344,6 +349,9 @@ func (s *Server) initServices() {
 
 	// ── P2-BI: Self-Service Analytics Query Builder ────────────────
 	s.initQueryBuilder()
+
+	// ── P3-WL: White-Label Theming (Branding Store) ─────────────
+	s.initBrandingStore()
 
 	// ── P3-DR: Disaster Recovery Automation ──────────────────────
 	s.initDR()
