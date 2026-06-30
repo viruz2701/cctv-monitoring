@@ -87,6 +87,7 @@ var DefaultCookieConfig = CookieConfig{
 
 // SetAuthCookies устанавливает HttpOnly cookies для access и refresh токенов.
 // Также устанавливает CSRF токен (не HttpOnly).
+// secureMode: true для HTTPS (production), false для HTTP (development).
 func SetAuthCookies(w http.ResponseWriter, accessToken, refreshToken string, cfg *CookieConfig) {
 	if cfg == nil {
 		cfg = &DefaultCookieConfig

@@ -4,11 +4,28 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/pquerna/otp/totp"
 
 	"gb-telemetry-collector/internal/auth"
 )
+
+// cookieConfigForRequest возвращает конфиг cookie, адаптированный под протокол.
+// На HTTP (dev) — Secure=false, чтобы браузер принимал cookies.
+// На HTTPS (production) — Secure=true (OWASP ASVS V3.1).
+func cookieConfigForRequest(r *http.Request) *auth.CookieConfig {
+	if r.TLS != nil {
+		return nil // production: DefaultCookieConfig (Secure=true)
+	}
+	return &auth.CookieConfig{
+		Secure:          false,
+		Path:            "/",
+		SameSite:        http.SameSiteStrictMode,
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 7 * 24 * time.Hour,
+	}
+}
 
 // P1-SEC.1: Определяет, является ли клиент мобильным (токены в body) или веб (только cookies).
 func isMobileClient(r *http.Request) bool {
@@ -70,8 +87,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// P1-SEC.1: HttpOnly cookies (Secure, SameSite=Strict) — для всех клиентов
-	auth.SetAuthCookies(w, token, refreshToken, nil)
+	// P1-SEC.1: HttpOnly cookies (Secure=auto, SameSite=Strict) — для всех клиентов
+	auth.SetAuthCookies(w, token, refreshToken, cookieConfigForRequest(r))
 
 	user.PasswordHash = ""
 
@@ -131,8 +148,8 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// P1-SEC.1: HttpOnly cookies для всех клиентов
-	auth.SetAuthCookies(w, token, refreshToken, nil)
+	// P1-SEC.1: HttpOnly cookies (Secure=auto, SameSite=Strict) для всех клиентов
+	auth.SetAuthCookies(w, token, refreshToken, cookieConfigForRequest(r))
 
 	user.PasswordHash = ""
 	user.TOTPSecret = ""
@@ -344,8 +361,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// P1-SEC.1: Устанавливаем новые HttpOnly cookies (для веб-клиентов)
-	auth.SetAuthCookies(w, newToken, newRefreshToken, nil)
+	// P1-SEC.1: Устанавливаем новые HttpOnly cookies (Secure=auto, SameSite=Strict)
+	auth.SetAuthCookies(w, newToken, newRefreshToken, cookieConfigForRequest(r))
 
 	user.PasswordHash = ""
 	user.TOTPSecret = ""
