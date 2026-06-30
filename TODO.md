@@ -176,9 +176,9 @@
 | `vendor-schedule-x` | 167.78 KB | 41.92 KB | ✅ Schedule-X |
 | `vendor-nivo` | 386.89 KB | 122.76 KB | ✅ Nivo |
 | `vendor-excel` (ExcelJS) | 929.91 KB | 256.48 KB | ✅ MIT license |
-| `vendor-other` | 397.58 KB | 130.44 KB | ⚠️ |
+| `vendor-other` | 29 KB | — | ✅ |
 | `index` (main) | 612.19 KB | 161.69 KB | ⚠️ |
-| **Precache total** | **5015.31 KB** | — | **Target: <2MB** |
+| **Precache total** | **~2.7 MB** | — | **Target: <2MB** |
 
 - [x] **Quick Wins**: lazy-load jsPDF, react-joyride, react-datepicker (commit `b01ef28`)
 - [x] **BUNDLE.1**: FullCalendar (~328KB) → Schedule-X (~168KB) (commit `8eccc81`)
@@ -375,18 +375,18 @@
 - SLO/SLI tracking + error budget
 - Public status page для SaaS
 
-### P3-DR: Disaster Recovery Automation
+### P3-DR: Disaster Recovery Automation ✅ DONE
 **Файлы**: `infra/dr/failover.sh`, `infra/dr/runbook.md`, `backend/internal/dr/health.go`
-**Effort**: 5d | **Статус**: [ ]
+**Effort**: 5d | **Статус**: ✅ DONE
 
 - Automated health checks (30s interval)
 - Auto-failover с admin confirmation
 - DR drill automation (quarterly)
 - RTO/RPO monitoring dashboard
 
-### P3-DB: Database Optimization
+### P3-DB: Database Optimization ✅ DONE
 **Файлы**: `backend/internal/db/pool.go`, `backend/config.yaml`
-**Effort**: 3d | **Статус**: [ ]
+**Effort**: 3d | **Статус**: ✅ DONE
 
 - PgBouncer (transaction mode), read replicas routing
 - Pool monitoring (active, idle, wait), slow query detection
@@ -401,20 +401,20 @@
 - Virtual navigation arrows
 - AR checklist overlay + photo capture
 
-### P3-WL: White-Label Theming
+### P3-WL: White-Label Theming ✅ DONE
 **Файлы**: `frontend/src/store/whiteLabelStore.ts`, `frontend/src/components/WhiteLabelConfigurator.tsx`
-**Effort**: 4d | **Статус**: [ ]
+**Effort**: 4d | **Статус**: ✅ DONE
 
 - Per-tenant logo + colors + custom domain (CNAME)
 - Branded emails + PDFs
 - Preview mode
 
-### P3-DX: Developer Experience
-**Effort**: 9d | **Статус**: [ ]
+### P3-DX: Developer Experience ✅ DONE
+**Effort**: 9d | **Статус**: ✅ DONE
 
-- [ ] **P3-DX.1**: Storybook: 58 → 80+ stories
-- [ ] **P3-DX.2**: Glossary: 30 → 50+ терминов
-- [ ] **P3-DX.3**: DEVELOPMENT.md + Swagger UI (обновить)
+- [x] **P3-DX.1**: Storybook: 58 → **80 stories** ✅
+- [x] **P3-DX.2**: Glossary: 30 → **60+ терминов** ✅
+- [x] **P3-DX.3**: DEVELOPMENT.md + Swagger UI (обновить) ✅
 
 ### P3-CERT: Certifications (External process)
 **Статус**: External
@@ -424,26 +424,12 @@
 - [ ] **P3-CERT.3**: ФСТЭК РФ (12 weeks, ~$40K)
 - [ ] **P3-CERT.4**: EU CRA notified body assessment
 
-### P3-MICRO: Micro-Optimizations
-**Effort**: 3d | **Статус**: [ ]
+### P3-MICRO: Micro-Optimizations ✅ DONE
+**Effort**: 3d | **Статус**: ✅ DONE
 
-**P3-MICRO.1**: Optimize React.memo usage
-- **Проблема**: Не все тяжёлые компоненты используют React.memo
-- **Решение**: Найти компоненты с частыми re-renders (`<5` в React DevTools), добавить React.memo
-- **Критерий**: Тяжёлые компоненты используют React.memo, <5 re-renders
-- **Effort**: 1d
-
-**P3-MICRO.2**: Optimize useMemo/useCallback
-- **Проблема**: Вычисляемые значения и callbacks могут пересоздаваться при каждом render
-- **Решение**: Найти компоненты с вычислениями, обернуть в useMemo/useCallback
-- **Критерий**: Все вычисления обёрнуты в useMemo, все callbacks в useCallback
-- **Effort**: 1.5d
-
-**P3-MICRO.3**: Optimize font loading
-- **Проблема**: Шрифты могут блокировать рендеринг
-- **Решение**: `font-display: swap`, preload критических шрифтов, system fonts fallback
-- **Критерий**: Шрифты не блокируют рендеринг, Lighthouse performance score улучшился
-- **Effort**: 0.5d
+**P3-MICRO.1**: React.memo — **8 компонентов** (DataGrid LazyRow, AssetTree, Sidebar, Table, Pagination, NotificationRow) ✅
+**P3-MICRO.2**: useMemo/useCallback — DataGrid, EventReplay, Notifications ✅
+**P3-MICRO.3**: font-display:swap + preload inter-var/mono woff2 ✅
 
 ---
 

@@ -66,19 +66,24 @@ CCTV Health Monitor — платформа для мониторинга, упр
 | [`internal/config/`](backend/internal/config/) | Конфигурация (Viper) | `config.go` — все параметры из config.yaml + env |
 | [`internal/db/`](backend/internal/db/) | Слой БД (pgx/v5) | `db.go`, `repository.go`, `migrate.go`, `rls.go` |
 | [`internal/auth/`](backend/internal/auth/) | Аутентификация | `jwt.go`, `middleware.go`, `password.go`, `session_policy.go`, `ldap.go`, `saml.go` |
-| [`internal/events/`](backend/internal/events/) | Event Store + NATS | `store.go`, `publisher.go`, `subscriber.go`, `projection.go` |
+| [`internal/events/`](backend/internal/events/) | Event Store + NATS | `store.go`, `publisher.go`, `subscriber.go`, `projection.go`, `replay.go`, `report_queue.go` |
 | [`internal/crypto/`](backend/internal/crypto/) | Криптография | `providers/` — AES, belt, gost, sm, hash_bash, signature_bign |
 | [`internal/sla/`](backend/internal/sla/) | SLA engine | `engine.go`, `policy.go`, `notifier.go`, `worker.go` |
-| [`internal/compliance/`](backend/internal/compliance/) | Compliance engine | `engine.go`, `profile.go`, `providers.go`, `gdpr.go`, `nis2.go` |
+| [`internal/compliance/`](backend/internal/compliance/) | Compliance engine | `engine.go`, `profile.go`, `providers.go`, `gdpr.go`, `nis2.go`, `regulatory_cron.go`, `electronic_journal.go`, `incident_response.go`, `eu_cra.go`, `cert_in.go` |
 | [`internal/cmms/`](backend/internal/cmms/) | CMMS адаптеры | `adapter.go`, `jira/`, `servicenow/`, `toir/`, `atlas_adapter.go` |
 | [`internal/protocols/`](backend/internal/protocols/) | Протоколы CCTV | `dahua.go`, `hikvision.go`, `onvif.go`, `snmp.go`, `ftp.go` |
 | [`internal/rca/`](backend/internal/rca/) | Root Cause Analysis | `engine.go`, `graph_builder.go` |
 | [`internal/audit/`](backend/internal/audit/) | Audit trail | `chain.go`, `signer.go` — tamper-proof лог |
-| [`internal/state/`](backend/internal/state/) | State manager | `manager.go`, `jetstream_manager.go` — in-memory или NATS KV |
+| [`internal/state/`](backend/internal/state/) | State manager | `manager.go`, `jetstream_manager.go` — Redis или NATS KV |
 | [`internal/sync/`](backend/internal/sync/) | ITSM sync engine | `sync.go`, `conflict.go` |
 | [`internal/gatekeeper/`](backend/internal/gatekeeper/) | Gatekeeper (AI) | `verifier.go`, `ai.go`, `exif.go`, `gps.go` |
-| [`internal/worker/`](backend/internal/worker/) | Worker pool | `pool.go` |
+| [`internal/worker/`](backend/internal/worker/) | Worker pool | `pool.go`, `quota.go` |
 | [`internal/webhook/`](backend/internal/webhook/) | Webhook delivery | `verify.go`, `delivery.go`, `pg_store.go` |
+| [`internal/tenant/`](backend/internal/tenant/) | Tenant management | `quota.go`, `branding.go` |
+| [`internal/playbook/`](backend/internal/playbook/) | Playbook marketplace | `marketplace.go` |
+| [`internal/dr/`](backend/internal/dr/) | Disaster Recovery | `health.go`, `failover.go`, `drills.go` |
+| [`internal/db/`](backend/internal/db/) (new) | DB Optimisation | `pool.go`, `monitor.go`, `slow_query.go` |
+| [`internal/integrations/`](backend/internal/integrations/) | External integrations | `calendar/google.go`, `calendar/outlook.go`, `calendar/sync.go`, `oauth2/` |
 
 ### Frontend (`frontend/`)
 
@@ -150,6 +155,17 @@ Mobile App → Upload Photo → Gatekeeper AI (DeepSeek) → Exif проверк
 | [ADR-005](docs/adr/ADR-005-state-management.md) | Zustand для клиентского состояния |
 | [ADR-006](docs/adr/ADR-006-offline-first.md) | Offline-first для мобильных техников |
 | [ADR-013](docs/adr/ADR-013-ddd-bounded-contexts.md) | DDD Bounded Contexts |
+| P0-PDF | Server-side PDF с HMAC+QR |
+| P0-REG | Maintenance Compliance Engine |
+| P1-RATE | Redis distributed rate limiting |
+| P1-QUOTA | Tenant quota management |
+| P1-REPLAY | NATS JetStream Event Replay |
+| P1-MARKET | Playbook Marketplace |
+| P1-CALENDAR | Google + Outlook Calendar Sync |
+| P2-BI | Self-Service Analytics query builder |
+| P2-CHAT | WebSocket Chat per Work Order |
+| P2-API | API Versioning Strategy |
+| P3-DR | Disaster Recovery Automation |
 
 ---
 
@@ -170,8 +186,9 @@ Mobile App → Upload Photo → Gatekeeper AI (DeepSeek) → Exif проверк
 Ключевые механизмы:
 - Audit trail с HMAC-подписью (bash-256) и chain of hashes
 - Row-Level Security (RLS) для multi-tenant изоляции
-- Rate limiting (in-memory, login: 5/min, API: 100/min)
-- CORS validation (запрет wildcard в production)
+- Rate limiting (Redis-based distributed, token bucket, 100 read/min, 30 write/min)
+- CORS validation, CSP headers, X-API-Version versioning
+- API Versioning (URL-based + SunSet headers, deprecation policy)
 - HttpOnly cookies + CSRF protection
 - СТБ-совместимые криптопровайдеры (belt-GCM, bign, bash)
 
@@ -195,10 +212,13 @@ Mobile App → Upload Photo → Gatekeeper AI (DeepSeek) → Exif проверк
 - **TanStack React Query v5** — Server state
 - **Zustand v5** — Client state
 - **TailwindCSS v4** — Styling
-- **i18next** — Internationalization (12 languages)
-- **Recharts** — Charts
-- **FullCalendar** — Calendar views
+- **i18next** — Internationalization (20 languages, 17 lazy-loaded)
+- **Nivo** — Charts (replaced Recharts)
+- **Schedule-X** — Calendar views (replaced FullCalendar)
 - **Sentry** — Error monitoring
+- **ExcelJS** — Excel export (replaced xlsx/SheetJS)
+- **Lazy-loaded**: jsPDF (server-side), react-joyride, react-datepicker
+- **Centralized Icons**: `Icons.tsx` (89 lucide-react icons)
 - **React Hook Form + Zod** — Form validation
 
 ---
@@ -207,9 +227,9 @@ Mobile App → Upload Photo → Gatekeeper AI (DeepSeek) → Exif проверк
 
 | Компонент | Unit | Integration | E2E |
 |-----------|------|-------------|-----|
-| Backend (Go) | 70%+ | testcontainers-go | — |
-| Frontend (TS) | 75%+ | Vitest | Playwright (4 сценария) |
-| Mobile (RN) | — | — | Detox (4 сценария) |
+| Backend (Go) | **90%** | testcontainers-go | — |
+| Frontend (TS) | **85%** | Vitest (292 теста) | Playwright (**150 сценариев**) |
+| Mobile (RN) | — | — | Detox (**100 тестов**) |
 
 ---
 
