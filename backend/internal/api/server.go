@@ -228,6 +228,12 @@ type Server struct {
 	// Compliance: ISO 27001 A.10.1, OWASP ASVS V2.5, Приказ ОАЦ №66 п. 7.18.3
 	credentialManager crypto.CredentialManager
 
+	// CRED-05: Automatic Credential Rotation — ротация паролей устройств
+	// Использует DevicePasswordChanger для смены пароля на устройстве
+	// и VaultClient для хранения master keys.
+	// Compliance: IEC 62443-3-3 SR 2.2, ISO 27001 A.9.2.3
+	credentialRotator *crypto.CredentialRotator
+
 	// P0-EDGE.6: Device Settings Provider — получение/обновление настроек устройств
 	// Использует VendorDevice.GetSettings() / SetSettings() через DeviceFactory
 	// Compliance: IEC 62443-3-3 SL-3, OWASP ASVS V5.1
@@ -246,6 +252,16 @@ type Server struct {
 	// PROTO-03: Protocol Descriptor Registry — JSON-дескрипторы протоколов
 	// Используется Edge-агентами для динамической загрузки протоколов
 	descriptorRegistry *descriptor.DescriptorRegistry
+
+	// P1-PHOTO: Work Order Photo Annotation Store
+	// Хранит элементы аннотации (JSONB) для каждого фото в work order.
+	// Compliance: OWASP ASVS V5.1, ISO 27001 A.12.4, IEC 62443 SL-3
+	annotationStore AnnotationStore
+
+	// PROTO-07: Community Protocol Registry — публичный реестр дескрипторов
+	// Community может публиковать и оценивать дескрипторы для вендоров CCTV.
+	// Compliance: OWASP ASVS V5, ISO 27001 A.12.4, IEC 62443-3-3 SL-3
+	communityRegistry communityRegistryService
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -482,6 +498,18 @@ func (s *Server) SetNATSConn(conn *nats.Conn, natsRequired bool) {
 		s.eventReplay = er
 		s.logger.Info("P1-REPLAY: event replay initialized")
 	}
+}
+
+// SetCredentialRotator устанавливает ротатор credentials (CRED-05).
+// Используется для автоматической ротации паролей устройств.
+// Должен быть вызван перед стартом сервера, если требуется ротация.
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 2.2: Password management
+//   - ISO 27001 A.9.2.3: Password management policy
+func (s *Server) SetCredentialRotator(rotator *crypto.CredentialRotator) {
+	s.credentialRotator = rotator
+	s.logger.Info("CRED-05: credential rotator configured on server")
 }
 
 // SetFeatureFlagsManager устанавливает Feature Flag менеджер (F-0.2.4).

@@ -2,12 +2,19 @@
 //
 // ═══════════════════════════════════════════════════════════════════════════
 // CRED-03: API Endpoints для управления credentials
+// CRED-05: Automatic Credential Rotation endpoints
 //
 // Endpoints:
-//   POST   /api/v1/devices/{id}/credentials  — сохранить credentials (admin only)
-//   GET    /api/v1/devices/{id}/credentials  — получить credentials (admin only, маскировать password)
-//   PUT    /api/v1/devices/{id}/credentials  — обновить credentials (admin only)
-//   DELETE /api/v1/devices/{id}/credentials  — удалить credentials (admin only)
+//
+//	POST   /api/v1/devices/{id}/credentials            — сохранить credentials (admin only)
+//	GET    /api/v1/devices/{id}/credentials            — получить credentials (admin only, маскировать password)
+//	PUT    /api/v1/devices/{id}/credentials            — обновить credentials (admin only)
+//	DELETE /api/v1/devices/{id}/credentials            — удалить credentials (admin only)
+//
+// CRED-05 (Rotation):
+//
+//	POST   /api/v1/devices/{id}/credentials/rotate     — принудительная ротация (admin only)
+//	GET    /api/v1/credentials/expiring                — список истекающих credentials (admin only)
 //
 // Compliance:
 //   - OWASP ASVS V2.1: Verify credentials are stored using approved crypto
@@ -16,6 +23,7 @@
 //   - OWASP ASVS V7.1: Error handling (no information leakage)
 //   - ISO 27001 A.9.2.3: Management of privileged access rights
 //   - ISO 27001 A.12.4.1: Event logging
+//   - IEC 62443-3-3 SR 2.2: Password management (rotation)
 //
 // ═══════════════════════════════════════════════════════════════════════════
 package api
@@ -28,6 +36,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"gb-telemetry-collector/internal/auth"
+	"gb-telemetry-collector/internal/crypto"
 	"gb-telemetry-collector/internal/respond"
 )
 
@@ -227,5 +236,112 @@ func (s *Server) handleDeleteCredentials(w http.ResponseWriter, r *http.Request)
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"status":    "deleted",
 		"device_id": deviceID,
+	})
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// CRED-05: Credential Rotation Handlers
+// ────────────────────────────────────────────────────────────────────────────
+
+// handleRotateDeviceCredentials выполняет принудительную ротацию пароля
+// на устройстве (POST /api/v1/devices/{id}/credentials/rotate).
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 2.2: Password management (rotation on demand)
+//   - ISO 27001 A.9.2.3: Privileged access management
+//   - OWASP ASVS V3.3: RBAC (admin only)
+func (s *Server) handleRotateDeviceCredentials(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "id")
+	if deviceID == "" {
+		respond.RespondError(w, r, respond.NewBadRequestError("device_id is required"))
+		return
+	}
+
+	if !isAdmin(r) {
+		respond.RespondError(w, r, respond.NewForbiddenError("only admin can rotate credentials"))
+		return
+	}
+
+	if s.credentialRotator == nil {
+		respond.RespondError(w, r, respond.NewInternalError("credential rotator not available", nil))
+		return
+	}
+
+	if err := s.credentialRotator.RotateCredentials(r.Context(), deviceID); err != nil {
+		s.logAudit(getClaimsRole(r), "CREDENTIAL_ROTATE_FAILED", "credentials", deviceID, nil, map[string]string{
+			"device_id": deviceID,
+			"error":     err.Error(),
+		})
+		respond.RespondError(w, r, respond.NewInternalError("credential rotation failed: "+err.Error(), err))
+		return
+	}
+
+	s.logAudit(getClaimsRole(r), "CREDENTIAL_ROTATE", "credentials", deviceID, nil, map[string]string{
+		"device_id": deviceID,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"status":    "rotated",
+		"device_id": deviceID,
+		"message":   "credentials rotated successfully",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// handleListExpiringCredentials возвращает список credentials с истекающим
+// сроком действия (GET /api/v1/credentials/expiring).
+//
+// Query параметры:
+//   - threshold: период до истечения (default: "336h" = 14 дней)
+//
+// Response:
+//
+//	{
+//	  "credentials": [
+//	    {
+//	      "device_id": "...",
+//	      "username": "...",
+//	      "expires_at": "...",
+//	      "days_left": 7
+//	    }
+//	  ],
+//	  "total": 0
+//	}
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 2.2: Password expiry notification
+//   - ISO 27001 A.9.2.3: Password management review
+func (s *Server) handleListExpiringCredentials(w http.ResponseWriter, r *http.Request) {
+	if !isAdmin(r) {
+		respond.RespondError(w, r, respond.NewForbiddenError("only admin can list expiring credentials"))
+		return
+	}
+
+	threshold := crypto.DefaultExpiryThreshold
+	if thresholdStr := r.URL.Query().Get("threshold"); thresholdStr != "" {
+		if d, err := time.ParseDuration(thresholdStr); err == nil && d > 0 {
+			threshold = d
+		}
+	}
+
+	var expiringList []crypto.ExpiringCredential
+
+	if s.credentialRotator != nil {
+		list, err := s.credentialRotator.NotifyExpiry(r.Context(), threshold)
+		if err != nil {
+			s.logger.Error("CRED-05: failed to check expiring credentials", "error", err)
+			respond.RespondError(w, r, respond.NewInternalError("failed to check expiring credentials", err))
+			return
+		}
+		expiringList = list
+	}
+
+	if expiringList == nil {
+		expiringList = []crypto.ExpiringCredential{}
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"credentials": expiringList,
+		"total":       len(expiringList),
 	})
 }

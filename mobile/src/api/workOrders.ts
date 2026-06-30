@@ -1,6 +1,26 @@
 import { apiClient } from './client';
 import { WorkOrder, CompleteWorkOrderPayload } from '../types';
 
+// ── Annotation types ──────────────────────────────────────────────────
+
+export interface AnnotationElement {
+  id: string;
+  type: 'arrow' | 'freehand' | 'text' | 'highlight' | 'circle' | 'blur' | 'measurement';
+  color: string;
+  strokeWidth: number;
+  [key: string]: unknown;
+}
+
+export interface AnnotationResponse {
+  id: string;
+  work_order_id: string;
+  photo_url: string;
+  elements: AnnotationElement[];
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const workOrdersApi = {
   getMyWorkOrders: async (): Promise<WorkOrder[]> => {
     const response = await apiClient.get<WorkOrder[]>('/mobile/work-orders');
@@ -56,6 +76,32 @@ export const workOrdersApi = {
 
   getTechnicianStats: async () => {
     const response = await apiClient.get('/mobile/technician/stats');
+    return response.data;
+  },
+
+  // ── Annotations (P1-PHOTO) ────────────────────────────────────────
+
+  getAnnotations: async (
+    workOrderId: string,
+    photoUrl: string,
+  ): Promise<AnnotationResponse> => {
+    const encodedPhoto = encodeURIComponent(photoUrl);
+    const response = await apiClient.get<AnnotationResponse>(
+      `/work-orders/${workOrderId}/photos/${encodedPhoto}/annotations`,
+    );
+    return response.data;
+  },
+
+  saveAnnotations: async (
+    workOrderId: string,
+    photoUrl: string,
+    elements: AnnotationElement[],
+  ): Promise<AnnotationResponse> => {
+    const encodedPhoto = encodeURIComponent(photoUrl);
+    const response = await apiClient.post<AnnotationResponse>(
+      `/work-orders/${workOrderId}/photos/${encodedPhoto}/annotations`,
+      { elements },
+    );
     return response.data;
   },
 };

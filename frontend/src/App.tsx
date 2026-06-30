@@ -134,6 +134,11 @@ function App() {
                   	<Route path="/workload-analytics" element={<PageSuspense><Pages.WorkloadAnalytics /></PageSuspense>} />
                   	<Route path="/api-versioning" element={<PageSuspense><Pages.APIVersioning /></PageSuspense>} />
                   	<Route path="/executive-dashboard" element={<Navigate to="/dashboard" replace />} />
+
+                  	{/* PROTO-06: Protocol Descriptor Editor */}
+                  	<Route path="/admin/descriptors" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
+                  	<Route path="/admin/descriptors/new" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
+                  	<Route path="/admin/descriptors/:vendor/edit" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
                   </Route>
 
                   {/* Admin Only Routes - Settings */}

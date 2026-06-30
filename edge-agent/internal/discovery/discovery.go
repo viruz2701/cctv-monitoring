@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,48 @@ const (
 	DeviceTypeGateway DeviceType = "gateway"
 	DeviceTypeUnknown DeviceType = "unknown"
 )
+
+// ServiceType represents the protocol type of a discovered service.
+type ServiceType string
+
+const (
+	ServiceTypeONVIF  ServiceType = "onvif"
+	ServiceTypeHTTP   ServiceType = "http"
+	ServiceTypeRTSP   ServiceType = "rtsp"
+	ServiceTypeSSDP   ServiceType = "ssdp"
+	ServiceTypeMDNS   ServiceType = "mdns"
+	ServiceTypeCustom ServiceType = "custom"
+)
+
+// DiscoveredService represents a service discovered via mDNS or SSDP.
+//
+// Compliance: Приказ ОАЦ №66 п. 7.18.1 — уникальная идентификация устройств
+type DiscoveredService struct {
+	// ID is the unique service identifier (mDNS instance name or USN).
+	ID string
+	// Type is the service type (e.g., "_onvif._tcp.local" or "urn:...:MediaServer:1").
+	Type string
+	// ServiceType is the protocol classification.
+	ServiceType ServiceType
+	// IP address of the device.
+	IP net.IP
+	// Port of the service.
+	Port int
+	// Hostname from SRV record or reverse DNS.
+	Hostname string
+	// Manufacturer extracted from TXT records or SERVER header.
+	Manufacturer string
+	// Model extracted from TXT records.
+	Model string
+	// FirmwareVersion extracted from TXT records.
+	FirmwareVersion string
+	// Location URL (SSDP LOCATION header).
+	Location string
+	// Server header string (SSDP).
+	Server string
+	// TXTRecords is a map of key-value pairs from mDNS TXT records.
+	TXTRecords map[string]string
+}
 
 // Device represents a discovered network device.
 //
@@ -65,7 +108,7 @@ type Orchestrator struct {
 }
 
 // NewOrchestrator creates a new discovery orchestrator.
-// It initializes all available scanners (ARP, ONVIF, SNMP).
+// It initializes all available scanners (ARP, ONVIF, SNMP, mDNS, SSDP).
 func NewOrchestrator(subnet, ifaceName string, logger *slog.Logger) *Orchestrator {
 	return &Orchestrator{
 		subnet:    subnet,
@@ -74,6 +117,8 @@ func NewOrchestrator(subnet, ifaceName string, logger *slog.Logger) *Orchestrato
 			&ARPScanner{},
 			&ONVIFScanner{},
 			&SNMPScanner{},
+			NewMDNSDiscovery(logger),
+			NewSSDPDiscovery(logger),
 		},
 		logger: logger,
 	}
@@ -258,4 +303,85 @@ func lookupOUI(mac net.HardwareAddr) string {
 	}
 
 	return vendors[oui]
+}
+
+// --- Shared Helpers for mDNS/SSDP Discovery ---
+
+// flattenServices converts a map of services to a slice.
+func flattenServices(m map[string]*DiscoveredService) []DiscoveredService {
+	result := make([]DiscoveredService, 0, len(m))
+	for _, svc := range m {
+		result = append(result, *svc)
+	}
+	return result
+}
+
+// mergeService merges fields from src into dst (non-empty fields only).
+func mergeService(dst *DiscoveredService, src DiscoveredService) {
+	if dst.IP == nil && src.IP != nil {
+		dst.IP = src.IP
+	}
+	if dst.Port == 0 && src.Port != 0 {
+		dst.Port = src.Port
+	}
+	if dst.Hostname == "" && src.Hostname != "" {
+		dst.Hostname = src.Hostname
+	}
+	if dst.Manufacturer == "" && src.Manufacturer != "" {
+		dst.Manufacturer = src.Manufacturer
+	}
+	if dst.Model == "" && src.Model != "" {
+		dst.Model = src.Model
+	}
+	if dst.FirmwareVersion == "" && src.FirmwareVersion != "" {
+		dst.FirmwareVersion = src.FirmwareVersion
+	}
+	if dst.Location == "" && src.Location != "" {
+		dst.Location = src.Location
+	}
+	if dst.Server == "" && src.Server != "" {
+		dst.Server = src.Server
+	}
+	if dst.TXTRecords == nil && src.TXTRecords != nil {
+		dst.TXTRecords = src.TXTRecords
+	}
+}
+
+// serviceToDevice converts a DiscoveredService to a Device for
+// integration with the existing Orchestrator.
+func serviceToDevice(svc DiscoveredService) Device {
+	device := Device{
+		IP:         svc.IP,
+		LastSeen:   time.Now(),
+		DeviceType: DeviceTypeUnknown,
+	}
+	if svc.Port > 0 {
+		device.Ports = append(device.Ports, svc.Port)
+	}
+	if svc.Hostname != "" {
+		device.Hostname = svc.Hostname
+	}
+	if svc.Manufacturer != "" {
+		device.Vendor = svc.Manufacturer
+	}
+	// Classify device type based on service type
+	switch {
+	case strings.Contains(svc.Type, "_onvif."):
+		device.DeviceType = DeviceTypeCamera
+	case strings.Contains(svc.Type, "_rtsp."):
+		device.DeviceType = DeviceTypeCamera
+	case strings.Contains(svc.Type, "_http."):
+		device.DeviceType = DeviceTypeUnknown
+	}
+	// Add ONVIF scopes if TXT records are available
+	if len(svc.TXTRecords) > 0 {
+		for k, v := range svc.TXTRecords {
+			device.ONVIFScopes = append(device.ONVIFScopes, k+"="+v)
+		}
+	}
+	// Classify via SSDP classifier as fallback
+	if dt := classifySSDPDevice(svc); dt != DeviceTypeUnknown {
+		device.DeviceType = dt
+	}
+	return device
 }

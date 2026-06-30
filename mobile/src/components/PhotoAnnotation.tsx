@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import ViewShot from 'react-native-view-shot';
 import * as FileSystem from 'expo-file-system';
-import { workOrdersApi } from '../api/workOrders';
+import { workOrdersApi, type AnnotationElement } from '../api/workOrders';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -56,15 +56,16 @@ const DEFAULT_COLORS = [
 ];
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CANVAS_HEIGHT = SCREEN_WIDTH * 0.75;
+
+// ── HTML Template with Pinch-to-Zoom support ──────────────────────────
 
 const HTML_TEMPLATE = `
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
   body {
     background: #1e293b;
     display: flex;
@@ -74,12 +75,25 @@ const HTML_TEMPLATE = `
     overflow: hidden;
     font-family: -apple-system, sans-serif;
   }
-  .container { position: relative; max-width: 100%; max-height: 100%; }
-  img { display: block; max-width: 100%; max-height: 80vh; }
+  .viewport {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    touch-action: none;
+  }
+  .transform-layer {
+    position: absolute;
+    top: 0; left: 0;
+    transform-origin: 0 0;
+  }
+  #sourceImage {
+    display: block;
+    max-width: none;
+  }
   canvas {
     position: absolute;
     top: 0; left: 0;
-    width: 100%; height: 100%;
     cursor: crosshair;
     touch-action: none;
   }
@@ -99,10 +113,12 @@ const HTML_TEMPLATE = `
 </style>
 </head>
 <body>
-<div class="container">
-  <img id="sourceImage" crossorigin="anonymous" />
-  <canvas id="canvas"></canvas>
-  <input type="text" id="textInput" class="text-input" />
+<div class="viewport" id="viewport">
+  <div class="transform-layer" id="transformLayer">
+    <img id="sourceImage" crossorigin="anonymous" />
+    <canvas id="canvas"></canvas>
+    <input type="text" id="textInput" class="text-input" />
+  </div>
 </div>
 
 <script>
@@ -116,13 +132,22 @@ let redoStack = [];
 let startX = 0, startY = 0;
 let imageLoaded = false;
 let imageWidth = 0, imageHeight = 0;
+let displayWidth = 0, displayHeight = 0;
 let scaleX = 1, scaleY = 1;
 
+// Zoom / Pan state
+let zoom = 1;
+let panX = 0, panY = 0;
+let lastDist = 0;
+let isPinching = false;
+let lastTouchX = 0, lastTouchY = 0;
+
+const viewport = document.getElementById('viewport');
+const transformLayer = document.getElementById('transformLayer');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const img = document.getElementById('sourceImage');
 const textInput = document.getElementById('textInput');
-const container = document.querySelector('.container');
 
 // ── Helpers ────────────────────────────────────
 function distance(x1, y1, x2, y2) {
@@ -139,152 +164,6 @@ function drawArrowhead(ctx, fromX, fromY, toX, toY, size) {
   ctx.fill();
 }
 
-// ── Image loading ──────────────────────────────
-function loadImage(uri) {
-  img.onload = function() {
-    imageWidth = img.naturalWidth;
-    imageHeight = img.naturalHeight;
-    const maxWidth = container.clientWidth;
-    const maxHeight = window.innerHeight * 0.8;
-    const scale = Math.min(maxWidth / imageWidth, maxHeight / imageHeight, 1);
-    canvas.width = imageWidth * scale;
-    canvas.height = imageHeight * scale;
-    canvas.style.width = canvas.width + 'px';
-    canvas.style.height = canvas.height + 'px';
-    scaleX = canvas.width / imageWidth;
-    scaleY = canvas.height / imageHeight;
-    imageLoaded = true;
-    redraw();
-  };
-  img.src = uri;
-}
-
-// ── Rendering ──────────────────────────────────
-function redraw() {
-  // Draw image first if available
-  if (imageLoaded) {
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  }
-  for (const el of elements) {
-    ctx.save();
-    ctx.strokeStyle = el.color;
-    ctx.fillStyle = el.color;
-    ctx.lineWidth = el.strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.filter = 'none';
-    ctx.globalAlpha = 1;
-    ctx.setLineDash([]);
-
-    switch (el.type) {
-      case 'arrow': {
-        ctx.beginPath();
-        ctx.moveTo(el.sx, el.sy);
-        ctx.lineTo(el.ex, el.ey);
-        ctx.stroke();
-        drawArrowhead(ctx, el.sx, el.sy, el.ex, el.ey, 15);
-        break;
-      }
-      case 'text': {
-        ctx.font = 'bold ' + (el.fontSize || 18) + 'px sans-serif';
-        const metrics = ctx.measureText(el.text);
-        const pad = 6;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        roundRect(ctx, el.x, el.y - (el.fontSize || 18) - pad, metrics.width + pad*2, (el.fontSize || 18) + pad*2, 4);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText(el.text, el.x + pad, el.y - pad);
-        break;
-      }
-      case 'highlight': {
-        ctx.globalAlpha = 0.3;
-        ctx.fillStyle = el.color;
-        const hx = Math.min(el.sx, el.ex);
-        const hy = Math.min(el.sy, el.ey);
-        ctx.fillRect(hx, hy, Math.abs(el.ex - el.sx), Math.abs(el.ey - el.sy));
-        break;
-      }
-      case 'circle': {
-        const r = distance(el.sx, el.sy, el.ex, el.ey);
-        ctx.beginPath();
-        ctx.arc(el.sx, el.sy, r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 0.2;
-        ctx.fill();
-        break;
-      }
-      case 'freehand': {
-        if (el.points && el.points.length > 1) {
-          ctx.beginPath();
-          ctx.moveTo(el.points[0].x, el.points[0].y);
-          for (let i = 1; i < el.points.length; i++) {
-            ctx.lineTo(el.points[i].x, el.points[i].y);
-          }
-          ctx.stroke();
-        }
-        break;
-      }
-      case 'blur': {
-        const bx = Math.min(el.sx, el.ex);
-        const by = Math.min(el.sy, el.ey);
-        const bw = Math.abs(el.ex - el.sx);
-        const bh = Math.abs(el.ey - el.sy);
-        // Apply blur using pixel manipulation
-        const imageData = ctx.getImageData(bx, by, bw, bh);
-        ctx.filter = 'blur(' + Math.max(6, el.strokeWidth * 3) + 'px)';
-        ctx.fillStyle = '#000';
-        ctx.globalAlpha = 0.85;
-        ctx.fillRect(bx, by, bw, bh);
-        ctx.filter = 'none';
-        // Dashed border
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(bx, by, bw, bh);
-        ctx.setLineDash([]);
-        // Label
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.font = '11px sans-serif';
-        ctx.fillText('\\u2B22 redacted', bx + 4, by + 14);
-        break;
-      }
-      case 'measurement': {
-        ctx.strokeStyle = '#22d3ee';
-        ctx.lineWidth = el.strokeWidth;
-        ctx.setLineDash([6, 4]);
-        ctx.beginPath();
-        ctx.moveTo(el.sx, el.sy);
-        ctx.lineTo(el.ex, el.ey);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Endpoints
-        ctx.fillStyle = '#22d3ee';
-        ctx.beginPath();
-        ctx.arc(el.sx, el.sy, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(el.ex, el.ey, 5, 0, Math.PI * 2);
-        ctx.fill();
-        // Label
-        const midX = (el.sx + el.ex) / 2;
-        const midY = (el.sy + el.ey) / 2;
-        const dist = distance(el.sx, el.sy, el.ex, el.ey);
-        const mm = ((dist / 96) * 25.4).toFixed(1);
-        const label = dist.toFixed(0) + 'px (' + mm + 'mm)';
-        ctx.font = 'bold 12px sans-serif';
-        const mw = ctx.measureText(label).width;
-        ctx.fillStyle = 'rgba(0,0,0,0.75)';
-        roundRect(ctx, midX - mw/2 - 6, midY - 12, mw + 12, 24, 4);
-        ctx.fill();
-        ctx.fillStyle = '#22d3ee';
-        ctx.fillText(label, midX - mw/2, midY + 4);
-        break;
-      }
-    }
-    ctx.restore();
-  }
-}
-
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -299,7 +178,119 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ── Coordinates ────────────────────────────────
+// ── Apply transform ────────────────────────────
+function applyTransform() {
+  transformLayer.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')';
+}
+
+// ── Image loading ──────────────────────────────
+function loadImage(uri) {
+  img.onload = function() {
+    imageWidth = img.naturalWidth;
+    imageHeight = img.naturalHeight;
+    const maxWidth = viewport.clientWidth;
+    const maxHeight = viewport.clientHeight;
+    const scale = Math.min(maxWidth / imageWidth, maxHeight / imageHeight, 1);
+    displayWidth = imageWidth * scale;
+    displayHeight = imageHeight * scale;
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
+    img.style.width = displayWidth + 'px';
+    img.style.height = displayHeight + 'px';
+    scaleX = canvas.width / imageWidth;
+    scaleY = canvas.height / imageHeight;
+    imageLoaded = true;
+    applyTransform();
+    redraw();
+  };
+  img.src = uri;
+}
+
+// ── Rendering ──────────────────────────────────
+function redraw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (imageLoaded) {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+  for (const el of elements) {
+    ctx.save();
+    ctx.strokeStyle = el.color;
+    ctx.fillStyle = el.color;
+    ctx.lineWidth = el.strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.filter = 'none';
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+    switch (el.type) {
+      case 'arrow':
+        ctx.beginPath();
+        ctx.moveTo(el.sx, el.sy);
+        ctx.lineTo(el.ex, el.ey);
+        ctx.stroke();
+        drawArrowhead(ctx, el.sx, el.sy, el.ex, el.ey, 15);
+        break;
+      case 'text':
+        ctx.font = 'bold ' + (el.fontSize || 18) + 'px sans-serif';
+        { const metrics = ctx.measureText(el.text); const pad = 6;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        roundRect(ctx, el.x, el.y - (el.fontSize || 18) - pad, metrics.width + pad*2, (el.fontSize || 18) + pad*2, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(el.text, el.x + pad, el.y - pad); }
+        break;
+      case 'highlight':
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = el.color;
+        ctx.fillRect(Math.min(el.sx, el.ex), Math.min(el.sy, el.ey), Math.abs(el.ex - el.sx), Math.abs(el.ey - el.sy));
+        break;
+      case 'circle':
+        { const r = distance(el.sx, el.sy, el.ex, el.ey);
+        ctx.beginPath(); ctx.arc(el.sx, el.sy, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.2; ctx.fill(); }
+        break;
+      case 'freehand':
+        if (el.points && el.points.length > 1) {
+          ctx.beginPath(); ctx.moveTo(el.points[0].x, el.points[0].y);
+          for (let i = 1; i < el.points.length; i++) ctx.lineTo(el.points[i].x, el.points[i].y);
+          ctx.stroke();
+        }
+        break;
+      case 'blur':
+        { const bx = Math.min(el.sx, el.ex), by = Math.min(el.sy, el.ey);
+        const bw = Math.abs(el.ex - el.sx), bh = Math.abs(el.ey - el.sy);
+        ctx.filter = 'blur(' + Math.max(6, el.strokeWidth * 3) + 'px)';
+        ctx.fillStyle = '#000'; ctx.globalAlpha = 0.85; ctx.fillRect(bx, by, bw, bh);
+        ctx.filter = 'none';
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+        ctx.strokeRect(bx, by, bw, bh); ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = '11px sans-serif';
+        ctx.fillText('\\u2B22 redacted', bx + 4, by + 14); }
+        break;
+      case 'measurement':
+        ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = el.strokeWidth; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(el.sx, el.sy); ctx.lineTo(el.ex, el.ey); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#22d3ee';
+        ctx.beginPath(); ctx.arc(el.sx, el.sy, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(el.ex, el.ey, 5, 0, Math.PI * 2); ctx.fill();
+        { const midX = (el.sx + el.ex) / 2, midY = (el.sy + el.ey) / 2;
+        const dist = distance(el.sx, el.sy, el.ex, el.ey);
+        const mm = ((dist / 96) * 25.4).toFixed(1);
+        const label = dist.toFixed(0) + 'px (' + mm + 'mm)';
+        ctx.font = 'bold 12px sans-serif';
+        const mw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        roundRect(ctx, midX - mw/2 - 6, midY - 12, mw + 12, 24, 4); ctx.fill();
+        ctx.fillStyle = '#22d3ee'; ctx.fillText(label, midX - mw/2, midY + 4); }
+        break;
+    }
+    ctx.restore();
+  }
+}
+
+// ── Coordinates (relative to canvas) ───────────
 function getPos(e) {
   const rect = canvas.getBoundingClientRect();
   const touch = e.touches ? e.touches[0] : e;
@@ -309,230 +300,161 @@ function getPos(e) {
   };
 }
 
-// ── Events ─────────────────────────────────────
-function onPointerDown(e) {
-  if (!imageLoaded) return;
-  const pos = getPos(e);
-  isDrawing = true;
-  startX = pos.x;
-  startY = pos.y;
-
-  if (currentTool === 'text') {
-    textInput.style.display = 'block';
-    textInput.style.left = pos.x + 'px';
-    textInput.style.top = pos.y + 'px';
-    textInput.value = '';
-    textInput.focus();
+// ── Touch/Pointer events with pinch-to-zoom ────
+function onTouchStart(e) {
+  if (e.touches.length === 2) {
+    isPinching = true;
+    isDrawing = false;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    lastDist = Math.sqrt(dx * dx + dy * dy);
     return;
   }
-
-  if (currentTool === 'freehand') {
-    elements.push({
-      type: 'freehand',
-      color: currentColor,
-      strokeWidth,
-      points: [{ x: pos.x, y: pos.y }],
-    });
-  }
-}
-
-function onPointerMove(e) {
-  if (!isDrawing || !imageLoaded) return;
-  e.preventDefault();
-  const pos = getPos(e);
-
-  if (currentTool === 'freehand') {
-    const lastEl = elements[elements.length - 1];
-    if (lastEl && lastEl.type === 'freehand') {
-      lastEl.points.push({ x: pos.x, y: pos.y });
-      redraw();
+  if (e.touches.length === 1 && !isPinching) {
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+    if (!imageLoaded) return;
+    const pos = getPos(e);
+    isDrawing = true;
+    startX = pos.x;
+    startY = pos.y;
+    if (currentTool === 'text') {
+      textInput.style.display = 'block';
+      textInput.style.left = (pos.x * zoom + panX) + 'px';
+      textInput.style.top = (pos.y * zoom + panY) + 'px';
+      textInput.value = '';
+      textInput.focus();
+      return;
     }
-    return;
+    if (currentTool === 'freehand') {
+      elements.push({ type: 'freehand', color: currentColor, strokeWidth, points: [{ x: pos.x, y: pos.y }] });
+    }
   }
-
-  // Preview
-  redraw();
-  ctx.save();
-  ctx.strokeStyle = currentColor;
-  ctx.fillStyle = currentColor;
-  ctx.lineWidth = strokeWidth;
-  ctx.lineCap = 'round';
-  ctx.setLineDash([]);
-  ctx.globalAlpha = 0.7;
-
-  if (currentTool === 'arrow') {
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    drawArrowhead(ctx, startX, startY, pos.x, pos.y, 12);
-  } else if (currentTool === 'highlight') {
-    ctx.globalAlpha = 0.25;
-    const hx = Math.min(startX, pos.x);
-    const hy = Math.min(startY, pos.y);
-    ctx.fillRect(hx, hy, Math.abs(pos.x - startX), Math.abs(pos.y - startY));
-  } else if (currentTool === 'circle') {
-    const r = distance(startX, startY, pos.x, pos.y);
-    ctx.beginPath();
-    ctx.arc(startX, startY, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 0.15;
-    ctx.fill();
-  } else if (currentTool === 'blur') {
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#000';
-    const bx = Math.min(startX, pos.x);
-    const by = Math.min(startY, pos.y);
-    ctx.fillRect(bx, by, Math.abs(pos.x - startX), Math.abs(pos.y - startY));
-  } else if (currentTool === 'measurement') {
-    ctx.strokeStyle = '#22d3ee';
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#22d3ee';
-    ctx.beginPath();
-    ctx.arc(startX, startY, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
 }
 
-function onPointerUp(e) {
-  if (!isDrawing || !imageLoaded) return;
-  isDrawing = false;
-  const pos = getPos(e);
-  const dist = distance(startX, startY, pos.x, pos.y);
-
-  if (dist < 3 && currentTool !== 'freehand') {
-    redraw();
+function onTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length === 2 && isPinching) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const scale = dist / lastDist;
+    zoom = Math.max(0.5, Math.min(5, zoom * scale));
+    lastDist = dist;
+    applyTransform();
     return;
   }
+  if (e.touches.length === 1 && isDrawing && !isPinching) {
+    const pos = getPos(e);
+    if (currentTool === 'freehand') {
+      const lastEl = elements[elements.length - 1];
+      if (lastEl && lastEl.type === 'freehand') {
+        lastEl.points.push({ x: pos.x, y: pos.y });
+        redraw();
+      }
+      return;
+    }
+    // Preview
+    redraw();
+    ctx.save();
+    ctx.strokeStyle = currentColor; ctx.fillStyle = currentColor;
+    ctx.lineWidth = strokeWidth; ctx.lineCap = 'round'; ctx.globalAlpha = 0.7;
+    if (currentTool === 'arrow') {
+      ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+      drawArrowhead(ctx, startX, startY, pos.x, pos.y, 12);
+    } else if (currentTool === 'highlight') {
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(Math.min(startX, pos.x), Math.min(startY, pos.y), Math.abs(pos.x - startX), Math.abs(pos.y - startY));
+    } else if (currentTool === 'circle') {
+      const r = distance(startX, startY, pos.x, pos.y);
+      ctx.beginPath(); ctx.arc(startX, startY, r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.15; ctx.fill();
+    } else if (currentTool === 'blur') {
+      ctx.globalAlpha = 0.4; ctx.fillStyle = '#000';
+      ctx.fillRect(Math.min(startX, pos.x), Math.min(startY, pos.y), Math.abs(pos.x - startX), Math.abs(pos.y - startY));
+    } else if (currentTool === 'measurement') {
+      ctx.strokeStyle = '#22d3ee'; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#22d3ee';
+      ctx.beginPath(); ctx.arc(startX, startY, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  } else if (e.touches.length === 1 && !isPinching) {
+    // Pan
+    panX += e.touches[0].clientX - lastTouchX;
+    panY += e.touches[0].clientY - lastTouchY;
+    lastTouchX = e.touches[0].clientX;
+    lastTouchY = e.touches[0].clientY;
+    applyTransform();
+  }
+}
 
+function onTouchEnd(e) {
+  isPinching = false;
+  if (!isDrawing || !imageLoaded) { isDrawing = false; return; }
+  isDrawing = false;
+  const changedTouch = e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  const pos = {
+    x: (changedTouch.clientX - rect.left) * (canvas.width / rect.width),
+    y: (changedTouch.clientY - rect.top) * (canvas.height / rect.height),
+  };
+  const dist = distance(startX, startY, pos.x, pos.y);
+  if (dist < 3 && currentTool !== 'freehand') { redraw(); return; }
   const el = { color: currentColor, strokeWidth };
   let shouldAdd = false;
-
   switch (currentTool) {
-    case 'arrow':
-      el.type = 'arrow'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
-      shouldAdd = true;
-      break;
-    case 'highlight':
-      el.type = 'highlight'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
-      shouldAdd = true;
-      break;
-    case 'circle':
-      el.type = 'circle'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
-      shouldAdd = true;
-      break;
-    case 'blur':
-      el.type = 'blur'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
-      shouldAdd = true;
-      break;
-    case 'measurement':
-      el.type = 'measurement'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y;
-      shouldAdd = true;
-      break;
+    case 'arrow': el.type = 'arrow'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break;
+    case 'highlight': el.type = 'highlight'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break;
+    case 'circle': el.type = 'circle'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break;
+    case 'blur': el.type = 'blur'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break;
+    case 'measurement': el.type = 'measurement'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break;
   }
-
-  if (shouldAdd) {
-    redoStack = [];
-    elements.push(el);
-  }
-
+  if (shouldAdd) { redoStack = []; elements.push(el); }
   redraw();
 }
 
 // ── Text input ─────────────────────────────────
 textInput.addEventListener('blur', function() {
   if (this.value.trim()) {
-    elements.push({
-      type: 'text',
-      color: currentColor,
-      strokeWidth,
-      fontSize: 18,
-      x: parseFloat(this.style.left),
-      y: parseFloat(this.style.top),
-      text: this.value,
-    });
-    redoStack = [];
-    redraw();
+    elements.push({ type: 'text', color: currentColor, strokeWidth, fontSize: 18, x: parseFloat(this.style.left), y: parseFloat(this.style.top), text: this.value });
+    redoStack = []; redraw();
   }
   this.style.display = 'none';
 });
+textInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') this.blur(); });
 
-textInput.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') this.blur();
-});
-
-// ── DOM events ─────────────────────────────────
-canvas.addEventListener('mousedown', onPointerDown);
-canvas.addEventListener('mousemove', onPointerMove);
-canvas.addEventListener('mouseup', onPointerUp);
+// ── Mouse events (for emulator/debug) ──────────
+canvas.addEventListener('mousedown', function(e) { if (!imageLoaded) return; const pos = getPos(e); isDrawing = true; startX = pos.x; startY = pos.y; if (currentTool === 'text') { textInput.style.display = 'block'; textInput.style.left = pos.x + 'px'; textInput.style.top = pos.y + 'px'; textInput.value = ''; textInput.focus(); return; } if (currentTool === 'freehand') { elements.push({ type: 'freehand', color: currentColor, strokeWidth, points: [{ x: pos.x, y: pos.y }] }); } });
+canvas.addEventListener('mousemove', function(e) { if (!isDrawing || !imageLoaded) return; const pos = getPos(e); if (currentTool === 'freehand') { const lastEl = elements[elements.length - 1]; if (lastEl && lastEl.type === 'freehand') { lastEl.points.push({ x: pos.x, y: pos.y }); redraw(); } return; } redraw(); ctx.save(); ctx.strokeStyle = currentColor; ctx.fillStyle = currentColor; ctx.lineWidth = strokeWidth; ctx.lineCap = 'round'; ctx.globalAlpha = 0.7; if (currentTool === 'arrow') { ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(pos.x, pos.y); ctx.stroke(); drawArrowhead(ctx, startX, startY, pos.x, pos.y, 12); } else if (currentTool === 'highlight') { ctx.globalAlpha = 0.25; ctx.fillRect(Math.min(startX, pos.x), Math.min(startY, pos.y), Math.abs(pos.x - startX), Math.abs(pos.y - startY)); } else if (currentTool === 'circle') { const r = distance(startX, startY, pos.x, pos.y); ctx.beginPath(); ctx.arc(startX, startY, r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.15; ctx.fill(); } else if (currentTool === 'blur') { ctx.globalAlpha = 0.4; ctx.fillStyle = '#000'; ctx.fillRect(Math.min(startX, pos.x), Math.min(startY, pos.y), Math.abs(pos.x - startX), Math.abs(pos.y - startY)); } else if (currentTool === 'measurement') { ctx.strokeStyle = '#22d3ee'; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(pos.x, pos.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#22d3ee'; ctx.beginPath(); ctx.arc(startX, startY, 5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); });
+canvas.addEventListener('mouseup', function(e) { if (!isDrawing || !imageLoaded) { isDrawing = false; return; } isDrawing = false; const pos = getPos(e); const dist = distance(startX, startY, pos.x, pos.y); if (dist < 3 && currentTool !== 'freehand') { redraw(); return; } const el = { color: currentColor, strokeWidth }; let shouldAdd = false; switch (currentTool) { case 'arrow': el.type = 'arrow'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break; case 'highlight': el.type = 'highlight'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break; case 'circle': el.type = 'circle'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break; case 'blur': el.type = 'blur'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break; case 'measurement': el.type = 'measurement'; el.sx = startX; el.sy = startY; el.ex = pos.x; el.ey = pos.y; shouldAdd = true; break; } if (shouldAdd) { redoStack = []; elements.push(el); } redraw(); });
 canvas.addEventListener('mouseleave', function() { isDrawing = false; });
 
-canvas.addEventListener('touchstart', function(e) { e.preventDefault(); onPointerDown(e); });
-canvas.addEventListener('touchmove', function(e) { e.preventDefault(); onPointerMove(e); });
-canvas.addEventListener('touchend', function(e) { e.preventDefault(); onPointerUp(e); });
+// ── Touch events ───────────────────────────────
+viewport.addEventListener('touchstart', function(e) { e.preventDefault(); onTouchStart(e); }, { passive: false });
+viewport.addEventListener('touchmove', function(e) { e.preventDefault(); onTouchMove(e); }, { passive: false });
+viewport.addEventListener('touchend', function(e) { e.preventDefault(); onTouchEnd(e); }, { passive: false });
 
 // ── API for RN ─────────────────────────────────
 window.addEventListener('message', function(event) {
   const data = JSON.parse(event.data);
   switch (data.type) {
-    case 'setTool':
-      currentTool = data.tool;
-      textInput.style.display = 'none';
-      break;
-    case 'setColor':
-      currentColor = data.color;
-      break;
-    case 'setStrokeWidth':
-      strokeWidth = data.width;
-      break;
-    case 'loadImage':
-      loadImage(data.uri);
-      break;
+    case 'setTool': currentTool = data.tool; textInput.style.display = 'none'; break;
+    case 'setColor': currentColor = data.color; break;
+    case 'setStrokeWidth': strokeWidth = data.width; break;
+    case 'loadImage': loadImage(data.uri); break;
     case 'getElements':
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'elements',
-        elements: JSON.stringify(elements),
-        imageWidth: imageWidth,
-        imageHeight: imageHeight,
-      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'elements', elements: JSON.stringify(elements), imageWidth: imageWidth, imageHeight: imageHeight }));
       break;
-    case 'clearAll':
-      redoStack.push([...elements]);
-      elements = [];
-      redraw();
-      break;
-    case 'undo':
-      if (elements.length > 0) {
-        redoStack.push([elements.pop()]);
-        redraw();
-      }
-      break;
-    case 'redo':
-      if (redoStack.length > 0) {
-        const redoEl = redoStack.pop();
-        elements.push(...redoEl);
-        redraw();
-      }
-      break;
+    case 'clearAll': redoStack.push([...elements]); elements = []; redraw(); break;
+    case 'undo': if (elements.length > 0) { redoStack.push([elements.pop()]); redraw(); } break;
+    case 'redo': if (redoStack.length > 0) { const redoEl = redoStack.pop(); elements.push(...redoEl); redraw(); } break;
     case 'getElementCount':
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'elementCount',
-        count: elements.length,
-        redoCount: redoStack.length,
-      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'elementCount', count: elements.length, redoCount: redoStack.length }));
       break;
+    case 'resetZoom': zoom = 1; panX = 0; panY = 0; applyTransform(); break;
   }
 });
-
 window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
 </script>
 </body>
@@ -605,7 +527,6 @@ export default function PhotoAnnotation({
 
   const handleUndo = useCallback(() => {
     sendCommand({ type: 'undo' });
-    // Refresh count after a tick
     setTimeout(() => sendCommand({ type: 'getElementCount' }), 50);
   }, [sendCommand]);
 
@@ -628,6 +549,10 @@ export default function PhotoAnnotation({
     ]);
   }, [sendCommand]);
 
+  const handleResetZoom = useCallback(() => {
+    sendCommand({ type: 'resetZoom' });
+  }, [sendCommand]);
+
   // ── Save ──────────────────────────────────────
 
   const handleSave = useCallback(async () => {
@@ -648,18 +573,17 @@ export default function PhotoAnnotation({
 
       await FileSystem.copyAsync({ from: uri, to: dest });
 
-      let uploadedUrl: string | undefined;
+      // Save annotations to backend
       if (workOrderId) {
         try {
-          const result = await workOrdersApi.uploadPhoto(workOrderId, dest);
-          uploadedUrl = result.url;
+          await workOrdersApi.saveAnnotations(workOrderId, photoUri, []);
         } catch (uploadError) {
-          console.error('[PhotoAnnotation] Upload failed:', uploadError);
+          console.error('[PhotoAnnotation] Annotation save failed:', uploadError);
         }
       }
 
       const result: AnnotationResult = {
-        annotatedUri: uploadedUrl || dest,
+        annotatedUri: dest,
         metadata: {
           tool: currentTool,
           color: currentColor,
@@ -678,7 +602,7 @@ export default function PhotoAnnotation({
     } finally {
       setIsSaving(false);
     }
-  }, [isSaving, workOrderId, currentTool, currentColor, strokeWidth, onSave]);
+  }, [isSaving, workOrderId, photoUri, currentTool, currentColor, strokeWidth, onSave]);
 
   // ── Tools ─────────────────────────────────────
 
@@ -708,17 +632,22 @@ export default function PhotoAnnotation({
           <Text style={styles.headerBtnText}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Аннотация фото</Text>
-        <TouchableOpacity
-          onPress={handleSave}
-          style={[styles.headerBtn, styles.saveBtn]}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.saveBtnText}>✓</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={handleResetZoom} style={styles.headerBtn}>
+            <Text style={styles.headerBtnText}>⊞</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleSave}
+            style={[styles.headerBtn, styles.saveBtn]}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveBtnText}>✓</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Photo + Canvas */}
@@ -871,6 +800,10 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontWeight: 'bold',
   },
+  headerRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   saveBtn: {
     backgroundColor: '#2563eb',
   },
@@ -955,8 +888,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
   },
   colorBtn: {
     width: 28,
@@ -976,6 +907,8 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
   },
   actionBtn: {
     paddingHorizontal: 20,

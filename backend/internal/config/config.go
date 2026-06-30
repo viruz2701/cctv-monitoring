@@ -163,6 +163,26 @@ type Config struct {
 	CalendarSyncInterval     string `mapstructure:"calendar_sync_interval"`
 	CalendarConflictStrategy string `mapstructure:"calendar_conflict_strategy"`
 	CalendarSyncWindow       string `mapstructure:"calendar_sync_window"`
+
+	// CRED-05: HashiCorp Vault configuration for master key storage
+	// Соответствует: IEC 62443-3-3 SR 4.2, ISO 27001 A.10.1.1
+	Vault VaultConfig `mapstructure:"vault"`
+}
+
+// VaultConfig — конфигурация подключения к HashiCorp Vault для хранения master keys.
+//
+// CRED-05: Используется CredentialRotator для хранения/получения ключей шифрования.
+// В production (КИИ РБ) Vault ДОЛЖЕН быть включён.
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 4.2: Centralized key management
+//   - ISO 27001 A.10.1.1: Cryptographic key management
+//   - СТБ 34.101.27 п. 5.1: Контроль доступа к ключевой информации
+type VaultConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	Address   string `mapstructure:"address"`
+	Token     string `mapstructure:"token"`
+	MountPath string `mapstructure:"mount_path"`
 }
 
 // EventStoreConfig — настройки Event Store (DM-1.2.2: NATS + S3 Cold Storage)
@@ -397,6 +417,12 @@ func Load() *Config {
 	viper.SetDefault("gb28181.max_sub_channels", 64)
 	viper.SetDefault("gb28181.log_sip_messages", false)
 
+	// CRED-05: HashiCorp Vault defaults
+	viper.SetDefault("vault.enabled", false)
+	viper.SetDefault("vault.address", "http://localhost:8200")
+	viper.SetDefault("vault.token", "")
+	viper.SetDefault("vault.mount_path", "secret")
+
 	// Event Store defaults (DM-1.2.2)
 	viper.SetDefault("event_store.enabled", false)
 	viper.SetDefault("event_store.nats_url", "nats://localhost:4222")
@@ -542,6 +568,12 @@ func Load() *Config {
 
 	bindEnv("telegram.enabled", "GB_TELEGRAM_ENABLED")
 	bindEnv("telegram.token", "GB_TELEGRAM_TOKEN")
+
+	// Vault (CRED-05)
+	bindEnv("vault.enabled", "VAULT_ENABLED")
+	bindEnv("vault.address", "VAULT_ADDR")
+	bindEnv("vault.token", "VAULT_TOKEN")
+	bindEnv("vault.mount_path", "VAULT_MOUNT_PATH")
 
 	// reCAPTCHA (WO-4.1.1)
 	bindEnv("recaptcha_secret_key", "GB_RECAPTCHA_SECRET_KEY")
@@ -708,6 +740,14 @@ func Load() *Config {
 		RecaptchaSiteKey:   viper.GetString("recaptcha_site_key"),
 		RecaptchaEnabled:   viper.GetBool("recaptcha_enabled"),
 		DeepSeekAPIKey:     viper.GetString("deepseek_api_key"),
+
+		// CRED-05: HashiCorp Vault
+		Vault: VaultConfig{
+			Enabled:   viper.GetBool("vault.enabled"),
+			Address:   viper.GetString("vault.address"),
+			Token:     viper.GetString("vault.token"),
+			MountPath: viper.GetString("vault.mount_path"),
+		},
 	}
 
 	if cfg.Hikvision.Enabled {

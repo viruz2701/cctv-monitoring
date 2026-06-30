@@ -59,6 +59,11 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Post("/api/v1/work-orders/{id}/complete", s.completeWorkOrder)
 	r.Post("/api/v1/work-orders/{id}/cancel", s.cancelWorkOrder)
 	r.Post("/api/v1/work-orders/{id}/photos", s.uploadWorkOrderPhotos)
+
+	// P1-PHOTO: Work Order Photo Annotations
+	r.Get("/api/v1/work-orders/{id}/photos/{photoId}/annotations", s.handleGetAnnotations)
+	r.Post("/api/v1/work-orders/{id}/photos/{photoId}/annotations", s.handleSaveAnnotations)
+	r.Put("/api/v1/work-orders/{id}/photos/{photoId}/annotations", s.handleUpdateAnnotations)
 	r.Post("/api/v1/work-orders/{id}/parts", s.addWorkOrderParts)
 
 	// WorkOrder ↔ Alert (DM-1.3.1)

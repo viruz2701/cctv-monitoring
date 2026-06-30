@@ -70,7 +70,10 @@ export type { RCAGraphResponse, RCAGraphNode, RCAGraphEdge } from './rca';
 
 // Work Orders
 export { workOrdersApi } from './workOrders';
-export type { WorkOrder, ChecklistItem, PartUsage, CreateWorkOrderRequest, TimeEntry } from './workOrders';
+export type {
+  WorkOrder, ChecklistItem, PartUsage, CreateWorkOrderRequest, TimeEntry,
+  AnnotationSaveRequest, AnnotationResponse,
+} from './workOrders';
 
 // Workflows
 export {
@@ -106,6 +109,19 @@ export type {
 
 // Agents — EDGE-11
 export { agentsApi } from './agents';
+
+// PROTO-06: Protocol Descriptors
+export { descriptorsApi } from './descriptors';
+
+// PROTO-07: Community Protocol Registry
+export { communityRegistryApi } from './communityRegistry';
+export type {
+  CommunityDescriptorSummary,
+  CommunityDescriptor,
+  CommunityDescriptorListResponse,
+  CommunityDescriptorFilter,
+  PublishDescriptorRequest,
+} from './communityRegistry';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Комбинированный объект `api` для backward compat

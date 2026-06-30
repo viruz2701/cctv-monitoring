@@ -52,3 +52,9 @@ export const APIVersioning = lazy(() => import('./APIVersioning').then((m) => ({
 // EDGE-11: Agent Monitoring Dashboard
 export const AgentDashboard = lazy(() => import('./AgentDashboard').then((m) => ({ default: m.AgentDashboard })));
 export const AgentDetail = lazy(() => import('./AgentDetail').then((m) => ({ default: m.AgentDetail })));
+
+// PROTO-06: Protocol Descriptor Editor
+export const DescriptorEditor = lazy(() => import('./DescriptorEditor').then((m) => ({ default: m.DescriptorEditor })));
+
+// PROTO-07: Community Protocol Registry
+export const CommunityRegistry = lazy(() => import('./CommunityRegistry').then((m) => ({ default: m.CommunityRegistry })));

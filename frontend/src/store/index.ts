@@ -42,3 +42,28 @@ export {
   type NotificationType,
   type NotificationFilter,
 } from './notificationStore';
+
+// ── PROTO-06: Descriptor Editor State ──────────────────────────────
+export {
+  useDescriptorStore,
+  useDescriptorMode,
+  useDescriptorTab,
+  useDescriptorList,
+  useCurrentDescriptor,
+  useDescriptorLoading,
+  useDescriptorError,
+  useDescriptorDirty,
+  createEmptyDescriptor,
+} from './descriptorStore';
+export type { EditorMode, DescriptorViewTab } from '../types/descriptor';
+
+// ── PROTO-07: Community Protocol Registry ─────────────────────────
+export {
+  useCommunityRegistryStore,
+  useCommunityDescriptors,
+  useCommunityDescriptorDetail,
+  useCommunityRegistryLoading,
+  useCommunityRegistryError,
+  useCommunityRegistryPagination,
+  useCommunityRegistryFilter,
+} from './communityRegistryStore';

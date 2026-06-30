@@ -86,6 +86,14 @@ func (s *Server) MountRoutes(r chi.Router) {
 	s.mountWellKnownRoutes(r)
 
 	// ═════════════════════════════════════════════════════════════════
+	// PROTO-07: Community Protocol Registry — public read-only routes
+	//   GET /api/v1/community/descriptors              — список
+	//   GET /api/v1/community/descriptors/{vendor}      — детали
+	//   GET /api/v1/community/descriptors/{vendor}/download — скачать
+	// ═════════════════════════════════════════════════════════════════
+	s.mountPublicCommunityRegistryRoutes(r)
+
+	// ═════════════════════════════════════════════════════════════════
 	// P3-DX.5: OpenAPI 3.1 + Swagger UI (без JWT)
 	//   GET /api/v1/openapi.json — OpenAPI spec (JSON)
 	//   GET /api/v1/docs         — Swagger UI (HTML)
@@ -274,6 +282,13 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.brandingStore != nil {
 			s.mountWhiteLabelRoutes(r)
 		}
+
+		// PROTO-07: Community Protocol Registry — protected mutations
+		//   POST /api/v1/community/descriptors              — публикация
+		//   POST /api/v1/community/descriptors/{vendor}/rate — оценка
+		if s.communityRegistry != nil {
+			s.mountProtectedCommunityRegistryRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────
@@ -376,6 +391,9 @@ func (s *Server) initServices() {
 
 	// ── P3-WL: White-Label Theming (Branding Store) ─────────────
 	s.initBrandingStore()
+
+	// ── PROTO-07: Community Protocol Registry ───────────────────
+	s.initCommunityRegistry()
 
 	// ── P3-DR: Disaster Recovery Automation ──────────────────────
 	s.initDR()
