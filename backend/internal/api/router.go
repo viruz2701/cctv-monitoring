@@ -183,6 +183,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 		// P3-1: Admin routes (multi-region DR, users, settings, audit)
 		s.mountAdminRoutes(r)
 
+		// P3-DR: Disaster Recovery Automation
+		s.mountDRRoutes(r)
+
 		// P0-CE.5: Tenant Compliance Profile (admin routes)
 		if s.tenantComplianceStore != nil {
 			s.mountTenantComplianceRoutes(r)
@@ -336,6 +339,9 @@ func (s *Server) initServices() {
 
 	// ── P2-BI: Self-Service Analytics Query Builder ────────────────
 	s.initQueryBuilder()
+
+	// ── P3-DR: Disaster Recovery Automation ──────────────────────
+	s.initDR()
 }
 
 // initAnomalyService инициализирует сервис обнаружения аномалий.

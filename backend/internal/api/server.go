@@ -50,6 +50,7 @@ import (
 	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/db"
+	"gb-telemetry-collector/internal/dr"
 	"gb-telemetry-collector/internal/events"
 	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/multiregion"
@@ -81,6 +82,11 @@ func mustNewAuditSigner(key string, logger *slog.Logger) *audit.Signer {
 
 // Server объединяет все зависимости HTTP-сервера.
 type Server struct {
+	// P3-DR: Disaster Recovery Automation
+	drHealthMonitor   *dr.HealthMonitor
+	drFailoverManager *dr.FailoverManager
+	drDrillRunner     *dr.DrillRunner
+
 	stateManager state.DeviceStateManager
 	logger       *slog.Logger
 	db           *db.DB
@@ -626,4 +632,75 @@ func (s *Server) requestReport(w http.ResponseWriter, r *http.Request) {
 		"report_id": task.ReportID,
 		"status":    "queued",
 	})
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P3-DR: Disaster Recovery Automation
+// ═══════════════════════════════════════════════════════════════════════
+
+// initDR инициализирует компоненты Disaster Recovery.
+//
+// Compliance:
+//   - ISO 27001 A.17.1 (Business continuity — DR)
+//   - IEC 62443-3-3 SR 7.1 (Resource availability)
+func (s *Server) initDR() {
+	if s.db == nil || s.db.Pool == nil {
+		s.logger.Warn("P3-DR: no database connection, DR module disabled")
+		return
+	}
+
+	// HealthMonitor конфигурация.
+	healthCfg := dr.DefaultHealthConfig()
+	healthCfg.Region = s.config.DeploymentRegion
+	if healthCfg.Region == "" {
+		healthCfg.Region = dr.RegionPrimary
+	}
+
+	// Создаём HealthMonitor (Redis передаётся как *redis.Client или nil).
+	// В production Redis client передаётся через SetRedisClient.
+	hm := dr.NewHealthMonitor(
+		s.db.Pool,
+		s.natsConn,
+		nil, // Redis будет подключён отдельно
+		healthCfg,
+		s.logger,
+	)
+
+	// FailoverManager.
+	failoverCfg := dr.DefaultFailoverConfig()
+	failoverCfg.Region = healthCfg.Region
+	failoverCfg.DRRegion = dr.RegionSecondary
+
+	fm := dr.NewFailoverManager(
+		s.natsConn,
+		hm,
+		nil, // store — будет подключён при наличии DB store
+		failoverCfg,
+		s.logger,
+	)
+
+	// DrillRunner.
+	drillCfg := dr.DefaultDrillConfig()
+	drillCfg.Region = healthCfg.Region
+	drillCfg.DRRegion = dr.RegionSecondary
+
+	drr := dr.NewDrillRunner(
+		hm,
+		fm,
+		nil, // store — будет подключён при наличии DB store
+		drillCfg,
+		s.logger,
+	)
+
+	s.drHealthMonitor = hm
+	s.drFailoverManager = fm
+	s.drDrillRunner = drr
+
+	// Запускаем health monitor в фоне.
+	go hm.Start(context.Background())
+
+	s.logger.Info("P3-DR: disaster recovery automation initialized",
+		"region", healthCfg.Region,
+		"interval", healthCfg.CheckInterval,
+	)
 }
