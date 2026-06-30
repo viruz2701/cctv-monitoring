@@ -73,6 +73,8 @@ export function useSites() {
     queryFn: () => api.getSites(),
     staleTime: CACHE.REF_STALE,
     gcTime: CACHE.REF_GC,
+    retryOnMount: true,
+    refetchOnMount: true,
   });
 }
 
