@@ -25,8 +25,9 @@ interface SidebarProps {
  * P0-2.2: Role-based filtering через useNavigation()
  * P0-2.3: Quick access bar (3-4 pinned items сверху)
  * P1-UX.4: aria-current="page" на активных ссылках + keyboard navigation
+ * P3-MICRO.1: React.memo для предотвращения частых ререндеров при навигации
  */
-export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
+export const Sidebar = React.memo(function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
     const { t } = useTranslation();
     const {
         groups,
@@ -282,4 +283,4 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
         </aside>
     );
-}
+});

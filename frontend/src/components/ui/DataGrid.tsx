@@ -171,7 +171,7 @@ interface LazyRowProps {
  * Использует rootMargin: 400px для pre-loading (загружаем до скролла).
  * P1-2.2: Image Lazy Loading — IntersectionObserver для off-screen.
  */
-function LazyRow({
+const LazyRow = React.memo(function LazyRow({
   children,
   colCount,
   rowHeight = 52,
@@ -225,7 +225,7 @@ function LazyRow({
       )}
     </tr>
   );
-}
+});
 
 // ── RenderTable sub-component (React.memo for row rendering optimization) ──
 interface RenderTableProps<T> {
@@ -593,11 +593,11 @@ export function DataGrid<T>({
     reader.readAsText(file);
   }, [importViews]);
 
-  const alignClasses = {
-    left: 'text-left',
-    center: 'text-center',
-    right: 'text-right',
-  } as const;
+  const alignClasses = useMemo(() => ({
+    left: 'text-left' as const,
+    center: 'text-center' as const,
+    right: 'text-right' as const,
+  }), []);
 
   const [orderedColumnKeys, setOrderedColumnKeys] = useState<string[] | null>(null);
   // Inline editing state

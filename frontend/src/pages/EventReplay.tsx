@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { request } from '../services/api';
 import {
@@ -249,11 +249,10 @@ export function EventReplay() {
     }
   }, [replayModal, toast]);
 
-  // ── Columns ────────────────────────────────────────────────────────
-
-  const streamsColumns = [
+  // ── Columns (P3-MICRO.2: мемоизированы для предотвращения ререндеров Table) ──
+  const streamsColumns = useMemo(() => [
     {
-      key: 'name',
+      key: 'name' as const,
       header: t('events.stream_name', 'Stream'),
       render: (s: StreamInfo) => (
         <button
@@ -267,7 +266,7 @@ export function EventReplay() {
       ),
     },
     {
-      key: 'subjects',
+      key: 'subjects' as const,
       header: t('events.subjects', 'Subjects'),
       render: (s: StreamInfo) => (
         <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate max-w-[200px] block">
@@ -276,14 +275,14 @@ export function EventReplay() {
       ),
     },
     {
-      key: 'msg_count',
+      key: 'msg_count' as const,
       header: t('events.messages', 'Messages'),
       render: (s: StreamInfo) => (
         <span className="font-mono text-sm">{s.msg_count.toLocaleString()}</span>
       ),
     },
     {
-      key: 'byte_size',
+      key: 'byte_size' as const,
       header: t('events.size', 'Size'),
       render: (s: StreamInfo) => (
         <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
@@ -292,31 +291,31 @@ export function EventReplay() {
       ),
     },
     {
-      key: 'retention',
+      key: 'retention' as const,
       header: t('events.retention', 'Retention'),
       render: (s: StreamInfo) => (
         <Badge variant={getRetentionVariant(s.retention)}>{s.retention}</Badge>
       ),
     },
     {
-      key: 'storage',
+      key: 'storage' as const,
       header: t('events.storage', 'Storage'),
       render: (s: StreamInfo) => (
         <Badge variant={getStorageVariant(s.storage)}>{s.storage}</Badge>
       ),
     },
     {
-      key: 'max_age',
+      key: 'max_age' as const,
       header: t('events.max_age', 'Max Age'),
       render: (s: StreamInfo) => (
         <span className="text-sm text-gray-500">{s.max_age}</span>
       ),
     },
-  ];
+  ], [t, handleStreamSelect, selectedStream]);
 
-  const messagesColumns = [
+  const messagesColumns = useMemo(() => [
     {
-      key: 'seq',
+      key: 'seq' as const,
       header: '#',
       width: '60px',
       render: (m: MessageInfo) => (
@@ -324,21 +323,21 @@ export function EventReplay() {
       ),
     },
     {
-      key: 'subject',
+      key: 'subject' as const,
       header: t('events.subject', 'Subject'),
       render: (m: MessageInfo) => (
         <span className="font-mono text-xs text-blue-600 dark:text-blue-400">{m.subject}</span>
       ),
     },
     {
-      key: 'timestamp',
+      key: 'timestamp' as const,
       header: t('events.timestamp', 'Timestamp'),
       render: (m: MessageInfo) => (
         <span className="text-xs text-gray-500">{formatTime(m.timestamp)}</span>
       ),
     },
     {
-      key: 'data_preview',
+      key: 'data_preview' as const,
       header: t('events.data_preview', 'Data Preview'),
       render: (m: MessageInfo) => {
         const preview = JSON.stringify(m.data).slice(0, 80);
@@ -350,7 +349,7 @@ export function EventReplay() {
       },
     },
     {
-      key: 'actions',
+      key: 'actions' as const,
       header: t('events.actions', 'Actions'),
       width: '120px',
       render: (m: MessageInfo) => (
@@ -381,7 +380,7 @@ export function EventReplay() {
         </div>
       ),
     },
-  ];
+  ], [t]);
 
   // ── Render ─────────────────────────────────────────────────────────
 

@@ -26,7 +26,11 @@ interface TableProps<T> {
     autoVirtual?: boolean;
 }
 
-export function Table<T>({
+/**
+ * Table — универсальный табличный компонент с поддержкой сортировки и expandable строк.
+ * P3-MICRO.1: Мемоизация вынесена в обёртку React.memo для избежания ререндеров.
+ */
+export const Table = React.memo(function Table<T>({
     data,
     columns,
     keyExtractor,
@@ -183,7 +187,7 @@ export function Table<T>({
             </div>
         </div>
     );
-}
+}) as <T>(props: TableProps<T>) => React.ReactElement;
 
 // Pagination component
 interface PaginationProps {
@@ -194,7 +198,11 @@ interface PaginationProps {
     itemsPerPage: number;
 }
 
-export function Pagination({
+/**
+ * Pagination — компонент постраничной навигации.
+ * P3-MICRO.1: React.memo для предотвращения ререндеров.
+ */
+export const Pagination = React.memo(function Pagination({
     currentPage,
     totalPages,
     onPageChange,
@@ -299,4 +307,4 @@ export function Pagination({
             </div>
         </div>
     );
-}
+});

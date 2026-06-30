@@ -47,6 +47,99 @@ interface FlatRow {
     notification?: any;
 }
 
+// ── Статические функции (вынесены из компонента для стабильности ссылок) ──
+
+function getIcon(type: string): React.ReactNode {
+    switch (type) {
+        case 'error': return <AlertCircle className="w-5 h-5 text-red-500" />;
+        case 'warning': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+        case 'success': return <Check className="w-5 h-5 text-green-500" />;
+        default: return <Info className="w-5 h-5 text-blue-500" />;
+    }
+}
+
+function getBorderColor(type: string): string {
+    switch (type) {
+        case 'error': return 'border-l-red-500';
+        case 'warning': return 'border-l-amber-500';
+        case 'info': return 'border-l-blue-500';
+        case 'success': return 'border-l-green-500';
+        default: return 'border-l-transparent';
+    }
+}
+
+function timeAgo(dateStr: string, t: (key: string) => string): string {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (seconds < 60) return t('just_now') || 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}${t('minutes_ago') || 'm ago'}`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}${t('hours_ago') || 'h ago'}`;
+    const days = Math.floor(hours / 24);
+    return `${days}${t('days_ago') || 'd ago'}`;
+}
+
+// ── NotificationRow — мемоизированный компонент для отдельного уведомления ──
+
+interface NotificationRowProps {
+    notification: any;
+    selectedIds: Set<string>;
+    markAsRead: (id: string) => void;
+    toggleSelection: (id: string, e: React.MouseEvent) => void;
+    navigate: ReturnType<typeof useNavigate>;
+    t: (key: string) => string;
+}
+
+const NotificationRow = React.memo(function NotificationRow({
+    notification,
+    selectedIds,
+    markAsRead,
+    toggleSelection,
+    navigate,
+    t,
+}: NotificationRowProps) {
+    return (
+        <div
+            onClick={() => {
+                if (!notification.read) markAsRead(notification.id);
+                if (notification.link) navigate(notification.link);
+            }}
+            className={`group relative flex items-start gap-3 px-4 py-3 transition-all duration-200 cursor-pointer border-l-4 ${getBorderColor(notification.type)} ${notification.read ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50' : 'bg-blue-50/60 dark:bg-blue-900/15 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
+        >
+            <div className="mt-1 flex-shrink-0" onClick={(e) => toggleSelection(notification.id, e)}>
+                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedIds.has(notification.id) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600 hover:border-slate-400'}`}>
+                    {selectedIds.has(notification.id) && <Check className="w-3.5 h-3.5 text-white" />}
+                </div>
+            </div>
+            <div className={`mt-0.5 p-2 rounded-full flex-shrink-0 ${notification.read ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' : 'bg-white dark:bg-slate-800 shadow-sm'}`}>
+                {getIcon(notification.type)}
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                    <p className={`text-sm ${notification.read ? 'text-slate-500 dark:text-slate-400 font-normal' : 'text-slate-900 dark:text-white font-bold'}`}>{notification.title}</p>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap flex items-center gap-1 font-medium"><Clock className="w-3 h-3" /> {timeAgo(notification.timestamp, t)}</span>
+                </div>
+                <p className={`mt-1 text-sm ${notification.read ? 'text-slate-500' : 'text-slate-700 dark:text-slate-300'}`}>{notification.message}</p>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        {t('device')}: {notification.message.split(' - ')[1] || 'Unknown'}
+                    </span>
+                </div>
+                {notification.link && (
+                    <Link to={notification.link} className="inline-block mt-2 text-xs font-semibold uppercase tracking-wide text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" onClick={(e) => e.stopPropagation()}>
+                        {t('view_details')} →
+                    </Link>
+                )}
+            </div>
+            {!notification.read && <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" title={t('unread')} />}
+        </div>
+    );
+});
+
+// ── Main Notifications Component ─────────────────────────────────────
+
 export function Notifications() {
     const { t } = useTranslation();
     const { data: apiNotifications = [] } = useNotifications();
@@ -79,38 +172,6 @@ export function Notifications() {
         return () => clearTimeout(timer);
     }, []);
     const navigate = useNavigate();
-
-    const timeAgo = (dateStr: string) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-        if (seconds < 60) return t('just_now') || 'just now';
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return `${minutes}${t('minutes_ago') || 'm ago'}`;
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours}${t('hours_ago') || 'h ago'}`;
-        const days = Math.floor(hours / 24);
-        return `${days}${t('days_ago') || 'd ago'}`;
-    };
-
-    const getIcon = (type: string) => {
-        switch (type) {
-            case 'error': return <AlertCircle className="w-5 h-5 text-red-500" />;
-            case 'warning': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
-            case 'success': return <Check className="w-5 h-5 text-green-500" />;
-            default: return <Info className="w-5 h-5 text-blue-500" />;
-        }
-    };
-
-    const getBorderColor = (type: string) => {
-        switch (type) {
-            case 'error': return 'border-l-red-500';
-            case 'warning': return 'border-l-amber-500';
-            case 'info': return 'border-l-blue-500';
-            case 'success': return 'border-l-green-500';
-            default: return 'border-l-transparent';
-        }
-    };
 
     const filteredNotifications = useMemo(() => {
         let filtered = notifications;
@@ -171,41 +232,15 @@ export function Notifications() {
 
     // ── Memoized notification renderer for virtual rows ───────────────
     const renderNotificationRow = useCallback((notification: any) => (
-        <div
-            onClick={() => {
-                if (!notification.read) markAsRead(notification.id);
-                if (notification.link) navigate(notification.link);
-            }}
-            className={`group relative flex items-start gap-3 px-4 py-3 transition-all duration-200 cursor-pointer border-l-4 ${getBorderColor(notification.type)} ${notification.read ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50' : 'bg-blue-50/60 dark:bg-blue-900/15 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}
-        >
-            <div className="mt-1 flex-shrink-0" onClick={(e) => toggleSelection(notification.id, e)}>
-                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedIds.has(notification.id) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600 hover:border-slate-400'}`}>
-                    {selectedIds.has(notification.id) && <Check className="w-3.5 h-3.5 text-white" />}
-                </div>
-            </div>
-            <div className={`mt-0.5 p-2 rounded-full flex-shrink-0 ${notification.read ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' : 'bg-white dark:bg-slate-800 shadow-sm'}`}>
-                {getIcon(notification.type)}
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                    <p className={`text-sm ${notification.read ? 'text-slate-500 dark:text-slate-400 font-normal' : 'text-slate-900 dark:text-white font-bold'}`}>{notification.title}</p>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap flex items-center gap-1 font-medium"><Clock className="w-3 h-3" /> {timeAgo(notification.timestamp)}</span>
-                </div>
-                <p className={`mt-1 text-sm ${notification.read ? 'text-slate-500' : 'text-slate-700 dark:text-slate-300'}`}>{notification.message}</p>
-                <div className="flex flex-wrap gap-2 mt-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        {t('device')}: {notification.message.split(' - ')[1] || 'Unknown'}
-                    </span>
-                </div>
-                {notification.link && (
-                    <Link to={notification.link} className="inline-block mt-2 text-xs font-semibold uppercase tracking-wide text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" onClick={(e) => e.stopPropagation()}>
-                        {t('view_details')} →
-                    </Link>
-                )}
-            </div>
-            {!notification.read && <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" title={t('unread')} />}
-        </div>
-    ), [selectedIds, markAsRead, navigate, t, timeAgo, getIcon, getBorderColor]);
+        <NotificationRow
+            notification={notification}
+            selectedIds={selectedIds}
+            markAsRead={markAsRead}
+            toggleSelection={toggleSelection}
+            navigate={navigate}
+            t={t}
+        />
+    ), [selectedIds, markAsRead, navigate, t]);
 
     const toggleSelection = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -370,34 +405,15 @@ export function Notifications() {
                             <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">{group}</h2>
                             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                                 {groupNotifications.map(notification => (
-                                    <div key={notification.id} onClick={() => { if (!notification.read) markAsRead(notification.id); if (notification.link) navigate(notification.link); }} className={`group relative flex items-start gap-3 px-4 py-3 transition-all duration-200 cursor-pointer border-l-4 ${getBorderColor(notification.type)} ${notification.read ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50' : 'bg-blue-50/60 dark:bg-blue-900/15 hover:bg-blue-50 dark:hover:bg-blue-900/20'}`}>
-                                        <div className="mt-1 flex-shrink-0" onClick={(e) => toggleSelection(notification.id, e)}>
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedIds.has(notification.id) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600 hover:border-slate-400'}`}>
-                                                {selectedIds.has(notification.id) && <Check className="w-3.5 h-3.5 text-white" />}
-                                            </div>
-                                        </div>
-                                        <div className={`mt-0.5 p-2 rounded-full flex-shrink-0 ${notification.read ? 'bg-slate-100 dark:bg-slate-800 text-slate-500' : 'bg-white dark:bg-slate-800 shadow-sm'}`}>
-                                            {getIcon(notification.type)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between gap-2">
-                                                <p className={`text-sm ${notification.read ? 'text-slate-500 dark:text-slate-400 font-normal' : 'text-slate-900 dark:text-white font-bold'}`}>{notification.title}</p>
-                                                <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap flex items-center gap-1 font-medium"><Clock className="w-3 h-3" /> {timeAgo(notification.timestamp)}</span>
-                                            </div>
-                                            <p className={`mt-1 text-sm ${notification.read ? 'text-slate-500' : 'text-slate-700 dark:text-slate-300'}`}>{notification.message}</p>
-                                            <div className="flex flex-wrap gap-2 mt-1.5">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                                    {t('device')}: {notification.message.split(' - ')[1] || 'Unknown'}
-                                                </span>
-                                            </div>
-                                            {notification.link && (
-                                                <Link to={notification.link} className="inline-block mt-2 text-xs font-semibold uppercase tracking-wide text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" onClick={(e) => e.stopPropagation()}>
-                                                    {t('view_details')} →
-                                                </Link>
-                                            )}
-                                        </div>
-                                        {!notification.read && <div className="mt-2 w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" title={t('unread')} />}
-                                    </div>
+                                    <NotificationRow
+                                        key={notification.id}
+                                        notification={notification}
+                                        selectedIds={selectedIds}
+                                        markAsRead={markAsRead}
+                                        toggleSelection={toggleSelection}
+                                        navigate={navigate}
+                                        t={t}
+                                    />
                                 ))}
                             </div>
                         </div>

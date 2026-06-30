@@ -7,6 +7,7 @@
 //   - Breadcrumb path tracking
 //   - Per-level icons (Building2, MapPin, Layers, etc.)
 //   - Device count badge on each node
+// P3-MICRO.1: React.memo для рекурсивных компонентов дерева
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -102,7 +103,7 @@ interface AssetTreeProps {
 
 // ── Animated Expand/Collapse ─────────────────────────────────────────
 
-function AnimatedCollapse({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) {
+const AnimatedCollapse = React.memo(function AnimatedCollapse({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(isOpen ? undefined : 0);
 
@@ -142,11 +143,11 @@ function AnimatedCollapse({ children, isOpen }: { children: React.ReactNode; isO
       <div ref={ref}>{children}</div>
     </div>
   );
-}
+});
 
 // ── Tree Node Component ──────────────────────────────────────────────
 
-function AssetTreeNode({
+const AssetTreeNode = React.memo(function AssetTreeNode({
   node,
   onToggle,
   onDeviceClick,
@@ -336,11 +337,11 @@ function AssetTreeNode({
       </AnimatedCollapse>
     </div>
   );
-}
+});
 
 // ── Main Component ───────────────────────────────────────────────────
 
-export function AssetTree({
+export const AssetTree = React.memo(function AssetTree({
   data: externalData,
   loading: externalLoading,
   error: externalError,
@@ -769,7 +770,7 @@ export function AssetTree({
       </Card>
     </div>
   );
-}
+});
 
 // ── Tree Utilities ───────────────────────────────────────────────────
 
