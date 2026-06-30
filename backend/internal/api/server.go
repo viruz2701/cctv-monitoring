@@ -52,6 +52,7 @@ import (
 	"gb-telemetry-collector/internal/crypto"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/dr"
+	"gb-telemetry-collector/internal/edge"
 	"gb-telemetry-collector/internal/events"
 	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/multiregion"
@@ -262,6 +263,21 @@ type Server struct {
 	// Community может публиковать и оценивать дескрипторы для вендоров CCTV.
 	// Compliance: OWASP ASVS V5, ISO 27001 A.12.4, IEC 62443-3-3 SL-3
 	communityRegistry communityRegistryService
+
+	// EDGE-08: WireGuard On-Demand VPN Session Manager
+	// Управление временными VPN-туннелями для удалённого доступа инженеров.
+	// Compliance:
+	//   - IEC 62443-3-3 SL-3: Zone separation
+	//   - IEC 62443-3-3 SR 2.1: Authorisation enforcement
+	//   - Приказ ОАЦ №66 п. 7.18.2: Управление удалённым доступом
+	//   - ISO 27001 A.12.4: Audit trail
+	vpnSessionManager *edge.VPNSessionManager
+
+	// PROXY-01: Edge HTTP Proxy — проксирование HTTP к устройству через VPN
+	httpProxy *edge.HTTPProxy
+
+	// PROXY-02: Edge SSH Proxy — WebSocket SSH терминал через VPN
+	sshProxy *edge.SSHProxy
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"gb-telemetry-collector/internal/edge"
 	"os"
 	"strconv"
 	"time"
@@ -167,6 +168,11 @@ type Config struct {
 	// CRED-05: HashiCorp Vault configuration for master key storage
 	// Соответствует: IEC 62443-3-3 SR 4.2, ISO 27001 A.10.1.1
 	Vault VaultConfig `mapstructure:"vault"`
+
+	// EDGE-08: WireGuard On-Demand VPN configuration
+	// Используется для временных VPN-туннелей к edge-агентам.
+	// Соответствует: IEC 62443-3-3 SL-3, Приказ ОАЦ №66 п. 7.18.2
+	WireGuard edge.WireGuardConfig `mapstructure:"wireguard"`
 }
 
 // VaultConfig — конфигурация подключения к HashiCorp Vault для хранения master keys.
@@ -747,6 +753,19 @@ func Load() *Config {
 			Address:   viper.GetString("vault.address"),
 			Token:     viper.GetString("vault.token"),
 			MountPath: viper.GetString("vault.mount_path"),
+		},
+
+		// EDGE-08: WireGuard On-Demand VPN
+		WireGuard: edge.WireGuardConfig{
+			Enabled:         viper.GetBool("wireguard.enabled"),
+			InterfaceName:   viper.GetString("wireguard.interface_name"),
+			ListenPort:      viper.GetInt("wireguard.listen_port"),
+			PrivateKey:      viper.GetString("wireguard.private_key"),
+			DefaultDuration: viper.GetString("wireguard.default_duration"),
+			MaxDuration:     viper.GetString("wireguard.max_duration"),
+			CleanupInterval: viper.GetString("wireguard.cleanup_interval"),
+			ServerEndpoint:  viper.GetString("wireguard.server_endpoint"),
+			DNS:             viper.GetStringSlice("wireguard.dns"),
 		},
 	}
 

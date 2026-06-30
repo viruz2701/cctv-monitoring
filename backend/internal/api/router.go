@@ -289,6 +289,33 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.communityRegistry != nil {
 			s.mountProtectedCommunityRegistryRoutes(r)
 		}
+
+		// EDGE-08: WireGuard On-Demand VPN Session Management
+		//   POST   /api/v1/vpn/sessions           — создать сессию (admin/support only)
+		//   GET    /api/v1/vpn/sessions           — список сессий
+		//   GET    /api/v1/vpn/sessions/{id}      — детали сессии
+		//   POST   /api/v1/vpn/sessions/{id}/revoke — закрыть сессию (admin/support only)
+		//   GET    /api/v1/vpn/sessions/{id}/config — WG config для клиента
+		// Соответствие:
+		//   - IEC 62443-3-3 SL-3: Zone separation
+		//   - IEC 62443-3-3 SR 2.1: Authorisation enforcement
+		//   - Приказ ОАЦ №66 п. 7.18.2: Управление удалённым доступом
+		//   - OWASP ASVS V3.3: Privilege escalation prevention
+		if s.vpnSessionManager != nil {
+			s.mountVPNSessionRoutes(r)
+		}
+
+		// PROXY-01/02: Zero-Touch Edge Proxy
+		// HTTP прокси к устройству и WebSocket SSH терминал через WireGuard VPN
+		//   GET/POST/PUT /api/v1/edge/proxy/{agent_id}/{device_ip}:{port}/{path*} — HTTP прокси
+		//   WSS /api/v1/edge/ssh/{agent_id}/{device_ip}/{port} — SSH терминал
+		// Соответствие:
+		//   - IEC 62443-3-3 SL-3: Zone separation
+		//   - OWASP ASVS L3 V5: Input validation, access control
+		//   - ISO 27001 A.12.4: Audit trail
+		if s.httpProxy != nil || s.sshProxy != nil {
+			s.mountEdgeProxyRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────

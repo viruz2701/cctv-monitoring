@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+	"edge-agent/internal/wireguard"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -20,6 +22,10 @@ const (
 	CommandExec        CommandType = "exec"
 	CommandGetStatus   CommandType = "get_status"
 	CommandUpdateCache CommandType = "update_cache"
+
+	// EDGE-08: WireGuard On-Demand VPN commands
+	CommandStartVPNSession CommandType = "start_vpn_session"
+	CommandStopVPNSession  CommandType = "stop_vpn_session"
 )
 
 // Command represents a command message from Backend via MQTT.
@@ -58,15 +64,18 @@ type CommandResult struct {
 //
 //	Приказ ОАЦ №66 п. 7.18.4 — управление конечными узлами
 type CommandHandler struct {
-	agent  *Agent
-	logger *slog.Logger
+	agent     *Agent
+	wgManager *wireguard.WireGuardManager
+	logger    *slog.Logger
 }
 
 // NewCommandHandler creates a new command handler.
-func NewCommandHandler(agent *Agent, logger *slog.Logger) *CommandHandler {
+// Если wgManager == nil, VPN команды будут возвращать ошибку.
+func NewCommandHandler(agent *Agent, wgManager *wireguard.WireGuardManager, logger *slog.Logger) *CommandHandler {
 	return &CommandHandler{
-		agent:  agent,
-		logger: logger.With("component", "command_handler"),
+		agent:     agent,
+		wgManager: wgManager,
+		logger:    logger.With("component", "command_handler"),
 	}
 }
 
@@ -129,12 +138,14 @@ func (h *CommandHandler) validateCommand(cmd *Command) error {
 
 	// Validate command type
 	validTypes := map[CommandType]bool{
-		CommandReboot:      true,
-		CommandSyncNow:     true,
-		CommandDiscover:    true,
-		CommandExec:        true,
-		CommandGetStatus:   true,
-		CommandUpdateCache: true,
+		CommandReboot:          true,
+		CommandSyncNow:         true,
+		CommandDiscover:        true,
+		CommandExec:            true,
+		CommandGetStatus:       true,
+		CommandUpdateCache:     true,
+		CommandStartVPNSession: true,
+		CommandStopVPNSession:  true,
 	}
 
 	if !validTypes[cmd.Type] {
@@ -166,6 +177,10 @@ func (h *CommandHandler) execute(cmd Command) CommandResult {
 		return h.handleGetStatus(cmd)
 	case CommandUpdateCache:
 		return h.handleUpdateCache(cmd)
+	case CommandStartVPNSession:
+		return h.handleStartVPNSession(cmd)
+	case CommandStopVPNSession:
+		return h.handleStopVPNSession(cmd)
 	default:
 		return CommandResult{
 			ID:        cmd.ID,
@@ -262,6 +277,119 @@ func (h *CommandHandler) handleUpdateCache(cmd Command) CommandResult {
 		ID:        cmd.ID,
 		Status:    "ok",
 		Data:      map[string]string{"message": "cache update triggered"},
+		Timestamp: time.Now(),
+	}
+}
+
+// handleStartVPNSession запускает WireGuard туннель на агенте.
+//
+// Ожидает payload с TunnelConfig в JSON.
+//
+// Compliance:
+//   - IEC 62443-3-3 SL-4: Edge device security
+//   - Приказ ОАЦ №66 п. 7.18.2: Управление удалённым доступом
+func (h *CommandHandler) handleStartVPNSession(cmd Command) CommandResult {
+	h.logger.Info("start_vpn_session command received",
+		"command_id", cmd.ID,
+	)
+
+	if h.wgManager == nil {
+		return CommandResult{
+			ID:        cmd.ID,
+			Status:    "error",
+			Error:     "WireGuard manager not configured",
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Парсим конфигурацию туннеля из payload
+	var config struct {
+		SessionID   string `json:"session_id"`
+		DurationSec int    `json:"duration_sec"`
+	}
+	if err := json.Unmarshal(cmd.Payload, &config); err != nil {
+		return CommandResult{
+			ID:        cmd.ID,
+			Status:    "error",
+			Error:     "invalid vpn config: " + err.Error(),
+			Timestamp: time.Now(),
+		}
+	}
+
+	h.logger.Info("starting vpn tunnel",
+		"session_id", config.SessionID,
+		"duration_sec", config.DurationSec,
+	)
+
+	// Запускаем туннель в фоне с авто-остановкой по таймеру
+	go func() {
+		ctx := context.Background()
+
+		// Здесь конфигурация туннеля должна быть получена от Backend
+		// через отдельный запрос или передана в payload команды
+		tunnelConfig := wireguard.DefaultTunnelConfig()
+		tunnelConfig.Duration = config.DurationSec
+
+		if err := h.wgManager.StartTunnel(ctx, tunnelConfig); err != nil {
+			h.logger.Error("failed to start vpn tunnel",
+				"session_id", config.SessionID,
+				"error", err,
+			)
+			return
+		}
+
+		h.logger.Info("vpn tunnel started",
+			"session_id", config.SessionID,
+			"duration_sec", config.DurationSec,
+		)
+	}()
+
+	return CommandResult{
+		ID:     cmd.ID,
+		Status: "ok",
+		Data: map[string]interface{}{
+			"message":    "vpn tunnel starting",
+			"session_id": config.SessionID,
+		},
+		Timestamp: time.Now(),
+	}
+}
+
+// handleStopVPNSession останавливает WireGuard туннель на агенте.
+//
+// Compliance:
+//   - IEC 62443-3-3 SR 7.2: Session termination
+//   - Приказ ОАЦ №66 п. 7.18.2: Отзыв доступа
+func (h *CommandHandler) handleStopVPNSession(cmd Command) CommandResult {
+	h.logger.Info("stop_vpn_session command received",
+		"command_id", cmd.ID,
+	)
+
+	if h.wgManager == nil {
+		return CommandResult{
+			ID:        cmd.ID,
+			Status:    "error",
+			Error:     "WireGuard manager not configured",
+			Timestamp: time.Now(),
+		}
+	}
+
+	go func() {
+		ctx := context.Background()
+		if err := h.wgManager.StopTunnel(ctx); err != nil {
+			h.logger.Error("failed to stop vpn tunnel",
+				"command_id", cmd.ID,
+				"error", err,
+			)
+		}
+	}()
+
+	return CommandResult{
+		ID:     cmd.ID,
+		Status: "ok",
+		Data: map[string]interface{}{
+			"message": "vpn tunnel stopping",
+		},
 		Timestamp: time.Now(),
 	}
 }

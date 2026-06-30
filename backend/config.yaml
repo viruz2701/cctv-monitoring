@@ -98,3 +98,26 @@ event_store:
   # s3_bucket: "cctv-event-store"
   # hot_retention_hours: 8760  # 1 год
   # cold_retention_hours: 43800  # 5 лет
+
+# ═══════════════════════════════════════════════════════════════════════
+# EDGE-08: WireGuard On-Demand VPN
+# ═══════════════════════════════════════════════════════════════════════
+# Временные VPN-туннели для удалённого доступа инженеров к edge-агентам.
+#
+# Compliance:
+#   - IEC 62443-3-3 SL-3: Zone separation
+#   - IEC 62443-3-3 SR 2.1: Authorisation enforcement
+#   - Приказ ОАЦ №66 п. 7.18.2: Управление удалённым доступом
+#   - ISO 27001 A.12.4: Audit trail
+#
+# ═══ ВАЖНО: private_key ДОЛЖЕН быть задан через GB_WIREGUARD_PRIVATE_KEY ═══
+# wireguard:
+#   enabled: false
+#   interface_name: "wg0"
+#   listen_port: 51820
+#   private_key: ""
+#   default_duration: "1h"
+#   max_duration: "2h"
+#   cleanup_interval: "5m"
+#   server_endpoint: "vpn.example.com:51820"
+#   dns: []

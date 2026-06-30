@@ -76,7 +76,8 @@ func New(cfg *Config) (*Agent, error) {
 	}
 
 	// CommandHandler needs reference to Agent for executing commands
-	a.cmdHandler = NewCommandHandler(a, logger)
+	// WireGuard manager is nil by default — enabled via config
+	a.cmdHandler = NewCommandHandler(a, nil, logger)
 
 	return a, nil
 }

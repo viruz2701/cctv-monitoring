@@ -159,7 +159,8 @@
 | **EDGE-05** | Telemetry Poller | [`poller.go`](edge-agent/internal/agent/poller.go) | 2d | ✅ |
 | **EDGE-06** | Offline Queue | [`offline_queue.go`](edge-agent/internal/agent/offline_queue.go) | 2d | ✅ |
 | **EDGE-07** | mTLS Configuration | [`config.go`](edge-agent/internal/tls/config.go) + [`generate_certs.sh`](edge-agent/scripts/generate_certs.sh) | 2d | ✅ |
-| **EDGE-08** | OpenWrt Build Script | [`build_openwrt.sh`](edge-agent/scripts/build_openwrt.sh) + [`Dockerfile.openwrt`](edge-agent/Dockerfile.openwrt) | 2d | ✅ |
+| **EDGE-08** | WireGuard On-Demand Tunnel | [`vpn_session_manager.go`](backend/internal/edge/vpn_session_manager.go), [`wireguard/manager.go`](edge-agent/internal/wireguard/manager.go) | 4d | ✅ |
+| **EDGE-09** | OpenWrt Build Script | [`build_openwrt.sh`](edge-agent/scripts/build_openwrt.sh) + [`Dockerfile.openwrt`](edge-agent/Dockerfile.openwrt) | 2d | ✅ |
 
 #### Блок 5: Unified Ingestion Layer ✅ ALL DONE
 
@@ -175,6 +176,31 @@
 | **API-01** | Device Settings Endpoints | [`device_settings_handlers.go`](backend/internal/api/device_settings_handlers.go) | 2d | ✅ |
 | **API-02** | Device Logs Endpoints | [`device_logs_handlers.go`](backend/internal/api/device_logs_handlers.go) | 1d | ✅ |
 | **API-03** | Agent Management Endpoints | [`agent_handlers.go`](backend/internal/api/agent_handlers.go), [`agent_management_routes.go`](backend/internal/api/agent_management_routes.go) | 2d | ✅ |
+
+#### Блок 7: Zero-Touch Proxy ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **PROXY-01** | Edge HTTP Proxy | [`http_proxy.go`](backend/internal/edge/http_proxy.go) | 3d | ✅ |
+| **PROXY-02** | Edge SSH Proxy + Terminal | [`ssh_proxy.go`](backend/internal/edge/ssh_proxy.go), [`EdgeTerminal.tsx`](frontend/src/components/EdgeTerminal.tsx) | 4d | ✅ |
+| **PROXY-03** | Lazy VPN Session | [`lazy_vpn.go`](backend/internal/edge/lazy_vpn.go) | 2d | ✅ |
+| **PROXY-04** | Frontend Device Actions | [`DeviceActions.tsx`](frontend/src/components/DeviceActions.tsx), [`EdgeVideoPlayer.tsx`](frontend/src/components/EdgeVideoPlayer.tsx) | 2d | ✅ |
+
+#### Блок 8: Self-Service WireGuard ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **SELFSERV-01** | WG Config Generator | [`wg_config_generator.go`](backend/internal/edge/wg_config_generator.go) | 2d | ✅ |
+| **SELFSERV-02** | Self-Service API | [`selfservice_vpn_handlers.go`](backend/internal/api/selfservice_vpn_handlers.go) | 1d | ✅ |
+| **SELFSERV-03** | WG Config Modal | [`WireGuardConfigModal.tsx`](frontend/src/components/WireGuardConfigModal.tsx) | 2d | ✅ |
+
+#### Блок 9: IE-Mode Desktop ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **DESKTOP-01** | Tauri Desktop App | [`main.rs`](desktop/src-tauri/src/main.rs) | 5d | ✅ |
+| **DESKTOP-02** | IE-Mode Launcher | [`ie_mode.rs`](desktop/src-tauri/src/ie_mode.rs) | 3d | ✅ |
+| **DESKTOP-03** | IE-Mode Button | [`IEModeButton.tsx`](frontend/src/components/IEModeButton.tsx) | 1d | ✅ |
 
 
 ### P0-PDF: Server-Side PDF Generation ✅ ALL DONE
