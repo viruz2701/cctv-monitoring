@@ -240,6 +240,11 @@ func (s *Server) MountRoutes(r chi.Router) {
 
 		// P2-FIELDS: Custom Fields Advanced (Shelf.nu-level)
 		s.mountCustomFieldRoutes(r)
+
+		// P3-DB: Database Optimization — pool stats, slow queries, index recommendations
+		if s.poolManager != nil || s.slowQueryDetector != nil {
+			s.mountDBRoutes(r)
+		}
 	})
 
 	// ── External API key auth ────────────────────────────────────────

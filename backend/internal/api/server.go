@@ -213,6 +213,10 @@ type Server struct {
 
 	// P2-API: API Versioning Store
 	versionStore VersionStore
+
+	// P3-DB: Database Optimization — PoolManager + Slow Query Detector
+	poolManager       *db.PoolManager
+	slowQueryDetector *db.SlowQueryDetector
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -441,6 +445,20 @@ func (s *Server) SetFeatureFlagsManager(ff *featureflag.Manager) {
 // SetTenantQuotaManager устанавливает Tenant Quota Manager (P1-QUOTA).
 func (s *Server) SetTenantQuotaManager(qm *tenant.QuotaManager) {
 	s.tenantQuotaManager = qm
+}
+
+// SetPoolManager устанавливает PoolManager для P3-DB Database Optimization.
+// Должен быть вызван перед стартом сервера, если требуется мониторинг пулов.
+func (s *Server) SetPoolManager(pm *db.PoolManager) {
+	s.poolManager = pm
+	s.logger.Info("P3-DB: pool manager configured")
+}
+
+// SetSlowQueryDetector устанавливает SlowQueryDetector для P3-DB.
+// Должен быть вызван перед стартом сервера, если требуется детекция медленных запросов.
+func (s *Server) SetSlowQueryDetector(sqd *db.SlowQueryDetector) {
+	s.slowQueryDetector = sqd
+	s.logger.Info("P3-DB: slow query detector configured")
 }
 
 // ---------- Вспомогательные ----------
