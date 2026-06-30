@@ -596,6 +596,25 @@ const tapScale = 'active:scale-[0.96] transition-transform duration-150 ease-out
 
 ---
 
+## 🐛 RUNTIME FIXES: Code Review & Bug Fixes (2026-06-30)
+
+10 runtime-ошибок найдено и исправлено, 7 коммитов.
+
+| # | Ошибка | Коммит | Статус |
+|---|--------|--------|--------|
+| 1 | Cookie `Secure=true` на HTTP — логин не работал | `f5dc7cf` | ✅ |
+| 2 | `webhook_delivery_logs` table missing | manual SQL | ✅ |
+| 3 | CommandPalette — conditional hooks violation (early return) | `f6d80b1` | ✅ |
+| 4 | AdvancedAnalytics — undefined `.toLocaleString()` | `f6d80b1` | ✅ |
+| 5 | BlackBox — infinite re-render (toast in deps) | `fc32204` | ✅ |
+| 6 | Device create 500 — status CHECK lowercase/uppercase | `92a7f8f` | ✅ |
+| 7 | i18n ineffective dynamic imports (code-split) | `48ded49` | ✅ |
+| 8 | IPv6 parsing in rate limiter (`LastIndex` → `SplitHostPort`) | `48ded49` | ✅ |
+| 9 | vitest running Playwright e2e tests | `48ded49` | ✅ |
+| 10 | Login missing input validation | `48ded49` | ✅ |
+
+---
+
 ## 📚 Приоритизационные правила
 
 ### Правило 1: Language-First
