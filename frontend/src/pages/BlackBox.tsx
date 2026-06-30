@@ -582,11 +582,11 @@ export function BlackBox() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, filterDeviceId, filterTrigger, toast]);
+  }, [page, pageSize, filterDeviceId, filterTrigger]); // ⚠ toast исключён — вызывает infinite loop
 
   useEffect(() => {
     fetchReports();
-  }, [fetchReports]);
+  }, [page, pageSize, filterDeviceId, filterTrigger]); // явные deps вместо fetchReports
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
