@@ -153,6 +153,11 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 		r.Get("/api/v1/mobile/stats", s.getMobileTechnicianStats)
 		r.Get("/api/v1/mobile/devices", s.listMobileDevices)
 	})
+
+	// P2-CHAT: Real-Time Chat per Work Order
+	r.Get("/api/v1/work-orders/{id}/chat", s.handleListChat)
+	r.Post("/api/v1/work-orders/{id}/chat", s.handleSendChatMessage)
+	r.Post("/api/v1/work-orders/{id}/chat/upload", s.handleChatUpload)
 }
 
 // mountProtectedCMMSRoutes оборачивает CMMS-роутер в JWT-авторизацию.

@@ -40,6 +40,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"gb-telemetry-collector/internal/ai"
+	"gb-telemetry-collector/internal/analytics"
 	apimw "gb-telemetry-collector/internal/api/middleware"
 	syncservice "gb-telemetry-collector/internal/api/sync"
 	"gb-telemetry-collector/internal/audit"
@@ -197,6 +198,12 @@ type Server struct {
 
 	// P0-REG.3-5: Maintenance Compliance Engine
 	complianceJournal *compliance.ElectronicJournal
+
+	// P2-BI: Embedded Self-Service Analytics Query Builder
+	queryBuilder *analytics.QueryBuilder
+
+	// P2-CHAT: Real-Time Chat per Work Order
+	chatHub *ws.ChatHub
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -306,10 +313,27 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 			mustNewAuditSigner(cfg.AuditHMACKey, logger),
 			cfg.PublicBaseURL,
 		),
+
+		// P2-CHAT: Real-Time Chat per Work Order
+		chatHub: ws.NewChatHub(logger),
 	}
 
 	// Инициализация сервисов
 	s.initServices()
+
+	// P2-CHAT: привязываем store callbacks к ChatHub
+	s.chatHub.SetStoreCallbacks(
+		func(msg *ws.ChatMessage) (*ws.ChatMessage, error) {
+			return s.saveChatMessage(context.Background(), msg)
+		},
+		func(messageID, userID string) error {
+			return s.saveChatReadReceipt(context.Background(), messageID, userID)
+		},
+		func(messageID, userID, emoji string) error {
+			return s.saveChatReaction(context.Background(), messageID, userID, emoji)
+		},
+		nil, // push notifications — будет добавлено позже
+	)
 
 	// WebSocket hub
 	go s.wsHub.Run()

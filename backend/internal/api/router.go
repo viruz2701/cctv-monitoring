@@ -38,6 +38,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"gb-telemetry-collector/internal/ai"
+	"gb-telemetry-collector/internal/analytics"
 	apimw "gb-telemetry-collector/internal/api/middleware"
 	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/blackbox"
@@ -102,6 +103,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 	// поэтому маршрут НЕ может быть под AuthMiddleware.
 	// handleWebSocket сам валидирует JWT из ?token=...
 	r.Get("/api/v1/ws/alarms", s.handleWebSocket)
+
+	// P2-CHAT: WebSocket для чата Work Order (JWT в query-параметре)
+	r.Get("/ws/chat/{wo_id}", s.handleChatWebSocket)
 
 	// Legacy XML/Vigi alarm endpoints
 	if s.config.HTTPXMLEnabled {
@@ -315,6 +319,9 @@ func (s *Server) initServices() {
 
 	// ── P0-REG.3-5: Maintenance Compliance Engine ─────────────────
 	s.initComplianceJournal()
+
+	// ── P2-BI: Self-Service Analytics Query Builder ────────────────
+	s.initQueryBuilder()
 }
 
 // initAnomalyService инициализирует сервис обнаружения аномалий.
@@ -457,4 +464,23 @@ func (s *Server) initComplianceJournal() {
 	} else {
 		s.logger.Warn("P0-REG.4: compliance journal not available (missing db or signer)")
 	}
+}
+
+// initQueryBuilder инициализирует Self-Service Analytics Query Builder (P2-BI).
+func (s *Server) initQueryBuilder() {
+	if s.db == nil || s.db.Pool == nil {
+		s.logger.Warn("P2-BI: query builder not available (no database pool)")
+		return
+	}
+
+	qb, err := analytics.New(s.db.Pool, analytics.DefaultTemplates())
+	if err != nil {
+		s.logger.Error("P2-BI: failed to initialize query builder", "error", err)
+		return
+	}
+
+	s.queryBuilder = qb
+	s.logger.Info("P2-BI: self-service analytics query builder initialized",
+		"templates", len(qb.GetTemplates()),
+	)
 }
