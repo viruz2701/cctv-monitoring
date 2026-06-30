@@ -229,6 +229,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 
 		// P2-CHECK: Conditional Checklists (MaintainX-level)
 		s.mountChecklistRoutes(r)
+
+		// P2-FIELDS: Custom Fields Advanced (Shelf.nu-level)
+		s.mountCustomFieldRoutes(r)
 	})
 
 	// ── External API key auth ────────────────────────────────────────

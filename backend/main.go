@@ -5,30 +5,7 @@ import (
 	"gb-telemetry-collector/internal/api"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/cron"
-	"gb-telemetry-collector/internal/db"
-	"gb-telemetry-collector/internal/events"
-	"gb-telemetry-collector/internal/featureflag"
-	"gb-telemetry-collector/internal/logging"
-	"gb-telemetry-collector/internal/logserver"
-	"gb-telemetry-collector/internal/models"
-	"gb-telemetry-collector/internal/protocols"
-	"gb-telemetry-collector/internal/sip"
-	"gb-telemetry-collector/internal/state"
-	"gb-telemetry-collector/internal/sync"
-	"gb-telemetry-collector/internal/telegram"
-	"log/slog"
-	"net/http"
-	"os"
-	"os/signal"
-	"strconv"
-	"strings"
-	"sync/atomic"
-	"syscall"
-	"time"
-
-	"github.com/joho/godotenv"
-	"github.com/nats-io/nats.go"
-)
+	{
 
 type DBWriter struct {
 	db      *db.DB

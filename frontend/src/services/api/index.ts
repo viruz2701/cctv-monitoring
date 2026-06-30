@@ -86,6 +86,15 @@ export type { WorkflowDefinition, WorkflowNode, WorkflowEdge, WorkflowListRespon
 export { playbookMarketplaceApi } from './playbookMarketplace';
 export type { MarketplacePlaybook, MarketplaceListResponse, MarketplaceFilter } from './playbookMarketplace';
 
+// P2-FIELDS: Custom Fields
+export { customFieldsApi } from './customFields';
+export type {
+  FieldDefinition, FieldGroup, FieldDefinitionWithValue,
+  FieldType, EntityType, ValidationRule, FieldCondition,
+  CreateFieldDefinitionRequest, UpdateFieldDefinitionRequest,
+  CreateGroupRequest, BulkUpdateValuesRequest,
+} from './customFields';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Комбинированный объект `api` для backward compat
 // ═══════════════════════════════════════════════════════════════════════
@@ -98,6 +107,7 @@ import { reportsApi, notificationsApi, auditLogApi } from './reports';
 import { webhooksApi, p2pApi, atlasApi, cameraModelsApi } from './integrations';
 import { predictionsApi, costApi, reliabilityApi, slaApi, logsApi } from './analytics';
 import { anomaliesApi } from './anomalies';
+import { customFieldsApi } from './customFields';
 import { servicesApi } from './services';
 import { rcaApi } from './rca';
 
@@ -259,4 +269,18 @@ export const api = {
   acknowledgeAnomaly: anomaliesApi.acknowledgeAnomaly.bind(anomaliesApi),
   resolveAnomaly: anomaliesApi.resolveAnomaly.bind(anomaliesApi),
   getAnomalyStats: anomaliesApi.getStats.bind(anomaliesApi),
+
+  // P2-FIELDS: Custom Fields
+  getCustomFieldDefinitions: customFieldsApi.getDefinitions.bind(customFieldsApi),
+  getCustomFieldDefinition: customFieldsApi.getDefinition.bind(customFieldsApi),
+  createCustomFieldDefinition: customFieldsApi.createDefinition.bind(customFieldsApi),
+  updateCustomFieldDefinition: customFieldsApi.updateDefinition.bind(customFieldsApi),
+  deleteCustomFieldDefinition: customFieldsApi.deleteDefinition.bind(customFieldsApi),
+  getCustomFieldGroups: customFieldsApi.getGroups.bind(customFieldsApi),
+  getCustomFieldGroup: customFieldsApi.getGroup.bind(customFieldsApi),
+  createCustomFieldGroup: customFieldsApi.createGroup.bind(customFieldsApi),
+  updateCustomFieldGroup: customFieldsApi.updateGroup.bind(customFieldsApi),
+  deleteCustomFieldGroup: customFieldsApi.deleteGroup.bind(customFieldsApi),
+  getCustomFieldValues: customFieldsApi.getFieldValues.bind(customFieldsApi),
+  bulkUpdateCustomFieldValues: customFieldsApi.bulkUpdateValues.bind(customFieldsApi),
 };

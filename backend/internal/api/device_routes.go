@@ -61,4 +61,18 @@ func (s *Server) mountDeviceRoutes(r chi.Router) {
 
 	// ── Notifications (для фронтенда) ──────────────────────────────────
 	r.Get("/api/v1/notifications", s.handleListNotifications)
+
+	// ── P2-BI: Self-Service Analytics ───────────────────────────────────
+	// GET  /api/v1/analytics/bi/templates   — список доступных шаблонов
+	// POST /api/v1/analytics/bi/query       — выполнение BI-запроса
+	//
+	// Compliance:
+	//   - OWASP ASVS V5.1 (Input validation — whitelist через Field definitions)
+	//   - OWASP ASVS V6.2 (SQL injection prevention — parameterized queries)
+	//   - OWASP ASVS V7.1 (Error handling — no information leakage)
+	//   - ISO 27001 A.12.6.1 (Capacity management — analytics metrics)
+	if s.queryBuilder != nil {
+		r.Get("/api/v1/analytics/bi/templates", s.handleBIGetTemplates)
+		r.Post("/api/v1/analytics/bi/query", s.handleBIExecuteQuery)
+	}
 }
