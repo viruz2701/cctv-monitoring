@@ -400,7 +400,23 @@ npx prettier --check .
 
 Storybook используется для интерактивной документации UI компонентов.
 
-Текущее покрытие: **43 stories** для ключевых компонентов.
+Текущее покрытие: **80 stories** для всех ключевых компонентов UI, включая:
+- **UI Kit**: Button, Card, Modal, Table, Tabs, Badge, Toast, Tooltip и др.
+- **Layout**: Header, Sidebar, OfflineBanner, PageSuspense, RouteErrorBoundary
+- **Dashboard**: DragDropDashboard, AlertBanner
+- **Molecules**: DateRangePicker, PriorityPicker, TechnicianSelector
+- **Auth**: PermissionGuard, RoleProtectedRoute, WebAuthnSetup
+- **Devices**: DeviceWizard, DeviceAuditLog, AssetTree
+- **SLA**: SLAGaugePanel, SLABreachTimeline, SLAHeatmap, SLATrendChart
+- **Work Orders**: PhotoAnnotation, ConditionalChecklist, WOChat
+- **Webhooks**: WebhookBuilder, WebhookLogFilter, WebhookRetryPolicy, WebhookStatsCards
+- **Pages**: EventReplay, PlaybookMarketplace, APIVersioning, Glossary
+- **P2P**: PTZControls, P2PRegistrationForm
+- **RCA**: RCAGraph, RCAWidget
+- **AI**: AIAssistantPanel
+- **Custom Fields**: FieldBuilder, WhiteLabelCustomizer
+
+### Запуск
 
 ```bash
 cd frontend
@@ -437,6 +453,31 @@ export const Secondary: Story = {
   args: { variant: 'secondary', children: 'Cancel' },
 };
 ```
+
+### Структура Storybook
+
+Stories организованы по категориям в соответствии с иерархией компонентов:
+
+```
+UI/          — примитивные компоненты (Button, Card, Modal, Input...)
+Layout/      — компоненты макета (Header, Sidebar, PageSuspense...)
+Dashboard/   — виджеты дашборда
+Auth/        — компоненты аутентификации и авторизации
+Devices/     — компоненты управления устройствами
+SLA/         — SLA-компоненты (gauges, heatmap, trends...)
+WorkOrders/  — PhotoAnnotation, ConditionalChecklist
+Webhooks/    — WebhookBuilder, LogFilter, RetryPolicy, StatsCards
+P2P/         — PTZControls, P2PRegistrationForm
+RCA/         — RCAGraph, RCAWidget
+Chat/        — WOChat
+AI/          — AIAssistantPanel
+Checklists/  — ConditionalChecklist
+CustomFields/— FieldBuilder
+Organisms/   — AssetTree, BeforeAfterSlider
+Pages/       — EventReplay, PlaybookMarketplace, APIVersioning
+```
+
+Для страниц с API-зависимостями используйте декораторы `MemoryRouter` + `QueryClientProvider`.
 
 ---
 
@@ -544,6 +585,77 @@ rm -rf node_modules/.vite
 # Переустановить зависимости
 rm -rf node_modules && npm install
 ```
+
+---
+
+## Migration Guide
+
+### Database Migrations
+
+Все изменения схемы БД выполняются через [`golang-migrate`](https://github.com/golang-migrate/migrate).
+Миграции находятся в [`backend/migrations/`](backend/migrations/).
+
+```bash
+cd backend
+
+# Создать новую миграцию
+migrate create -ext sql -dir migrations -seq add_camera_firmware
+
+# Применить все миграции
+go run cmd/migrate/main.go -up
+
+# Откатить последнюю миграцию
+go run cmd/migrate/main.go -down 1
+
+# Проверить статус
+go run cmd/migrate/main.go -verbose
+```
+
+**Важно:** Миграции нумеруются последовательно (000001, 000002...).
+Не редактируйте уже применённые миграции — создавайте новые.
+
+### Code Migration Patterns
+
+При рефакторинге между версиями API:
+
+1. **Add** — добавьте новый endpoint/тип, сохранив старый
+2. **Deprecate** — пометьте старый endpoint `Deprecated: true` в OpenAPI
+3. **Migrate** — обновите клиентов (frontend, mobile, integrations)
+4. **Remove** — удалите старый endpoint после sunset date
+
+Текущие версии API: `/api/v1` (стабильная).
+
+### Feature Flag Strategy
+
+Используйте feature flags через конфиг для поэтапного включения:
+
+```yaml
+# config.yaml
+features:
+  new_analytics_pipeline: false
+  predictive_maintenance: true
+  offline_mode: false
+```
+
+---
+
+## Glossary
+
+Проект содержит встроенный глоссарий технических терминов на странице [`/glossary`](frontend/src/pages/Glossary.tsx).
+
+**Покрытие: 60+ терминов** в категориях:
+- Device & Hardware — NVR, DVR, MTBF, MTTR
+- Network & Protocols — ONVIF, RTSP, PoE, VLAN, QoS, Multicast
+- Video & Codecs — H.264, H.265, FPS, Bitrate, Resolution
+- Analytics & AI — VCA, Motion Detection, LPR/ANPR
+- Performance & Reliability — SLO, SLI, OEE, FCR, CSAT
+- Compliance & Security — IEC 62443, KII, NIS2, GDPR, DPIA, OAC-66, STB Crypto
+- Security & Access Control — RBAC, MFA, WebAuthn, TLS, LDAP, OAuth2
+- CCTV Operations — RCA, Blast Radius, Health Score
+- Work Orders & CMMS — CMMS, EAM, Preventive/Corrective Maintenance, RCM, FMEA
+- Monitoring & Metrics — Uptime, SNMP, Syslog
+
+Новые термины добавляются в массив `GLOSSARY_ENTRIES` с указанием `id`, `term`, `definition`, `category` и опционального `seeAlso` для перекрёстных ссылок.
 
 ---
 
