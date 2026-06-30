@@ -687,12 +687,8 @@ export function CommandPalette() {
     [flatItems, selectedIndex, executeCommand, close]
   );
 
-  if (!isOpen) return null;
-
-  const hasResults = flatItems.length > 0;
-  const hasRecent = recentItems.length > 0 && !query.trim();
-
   // Combine palette keyboard handler with focus trap handler
+  // ⚠ ДОЛЖЕН быть ДО раннего возврата (Rules of Hooks)
   const combinedKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Tab') {
@@ -703,6 +699,11 @@ export function CommandPalette() {
     },
     [handleTrapKeyDown, handleKeyDown]
   );
+
+  if (!isOpen) return null;
+
+  const hasResults = flatItems.length > 0;
+  const hasRecent = recentItems.length > 0 && !query.trim();
 
   const hasEntityResults = entitySearch.results.length > 0 && query.trim().length >= 2;
 

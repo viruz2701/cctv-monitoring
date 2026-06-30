@@ -517,7 +517,7 @@ export function AdvancedAnalytics() {
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">MTBF</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  {overallMtbf.toLocaleString()} <span className="text-sm font-normal text-slate-500">ч</span>
+                  {(overallMtbf ?? 0).toLocaleString()} <span className="text-sm font-normal text-slate-500">ч</span>
                 </p>
               </div>
             </div>
@@ -532,7 +532,7 @@ export function AdvancedAnalytics() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Top Device Cost</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">${topDeviceCost.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">${(topDeviceCost ?? 0).toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -705,7 +705,7 @@ export function AdvancedAnalytics() {
                   </h2>
                 </div>
                 <Badge variant="primary" size="sm">
-                  MTBF {overallMtbf.toLocaleString()}h / MTTR {overallMttr}min
+                  MTBF {(overallMtbf ?? 0).toLocaleString()}h / MTTR {overallMttr ?? 0}min
                 </Badge>
               </div>
 
