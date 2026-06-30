@@ -44,7 +44,7 @@ CREATE TABLE devices (
     geofence_radius_meters DOUBLE PRECISION DEFAULT 500,
     vendor_type TEXT,
     device_type TEXT DEFAULT 'camera' CHECK (device_type IN ('camera', 'nvr', 'dvr', 'switch')),
-    status TEXT DEFAULT 'offline' CHECK (status IN ('online', 'offline', 'warning')),
+    status TEXT DEFAULT 'OFFLINE' CHECK (status IN ('ONLINE', 'OFFLINE', 'WARNING')),
     health TEXT DEFAULT 'healthy' CHECK (health IN ('healthy', 'faulty', 'degraded')),
     recording_status TEXT DEFAULT 'recording' CHECK (recording_status IN ('recording', 'not_recording', 'scheduled')),
     last_seen TIMESTAMPTZ,
