@@ -45,6 +45,10 @@ type Config struct {
 	// Descriptor cache
 	CachePath string
 
+	// OTA updates (Приказ ОАЦ №66 п. 7.18.5 — управление обновлениями)
+	OTADownloadURL string
+	OTADataDir     string
+
 	// Log level
 	LogLevel string
 }
@@ -55,6 +59,7 @@ const (
 	defaultDiscoveryInterval = 600 * time.Second
 	defaultBackendTimeout    = 10 * time.Second
 	defaultMQTTTopicRoot     = "cctv/edge"
+	defaultOTADataDir        = "/usb/ota"
 	envPrefix                = "EDGE_AGENT_"
 )
 
@@ -72,6 +77,8 @@ func LoadConfig() (*Config, error) {
 		BackendUser:      os.Getenv(envPrefix + "BACKEND_USER"),
 		OfflineQueuePath: os.Getenv(envPrefix + "OFFLINE_QUEUE_PATH"),
 		CachePath:        os.Getenv(envPrefix + "CACHE_PATH"),
+		OTADownloadURL:   os.Getenv(envPrefix + "OTA_DOWNLOAD_URL"),
+		OTADataDir:       envOrDefault("OTA_DATA_DIR", defaultOTADataDir),
 		LogLevel:         os.Getenv(envPrefix + "LOG_LEVEL"),
 	}
 

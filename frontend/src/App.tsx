@@ -99,6 +99,12 @@ function App() {
                   <Route path="/sites/device/:deviceId" element={<PageSuspense><Pages.DeviceDetail /></PageSuspense>} />
                   <Route path="/devices" element={<PageSuspense><Pages.Devices /></PageSuspense>} />
                   <Route path="/devices/:deviceId" element={<PageSuspense><Pages.DeviceDetail /></PageSuspense>} />
+
+                  {/* EDGE-11: Agent Monitoring Dashboard */}
+                  <Route element={<RoleProtectedRoute allowedRoles={['admin', 'support', 'manager']} />}>
+                    <Route path="/agents" element={<PageSuspense><Pages.AgentDashboard /></PageSuspense>} />
+                    <Route path="/agents/:id" element={<PageSuspense><Pages.AgentDetail /></PageSuspense>} />
+                  </Route>
                   <Route path="/tickets" element={<PageSuspense><Pages.Tickets /></PageSuspense>} />
                   <Route path="/tickets/:ticketId" element={<PageSuspense><Pages.TicketDetail /></PageSuspense>} />
                   <Route path="/alerts" element={<PageSuspense><Pages.Alerts /></PageSuspense>} />

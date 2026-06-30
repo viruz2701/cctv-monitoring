@@ -48,3 +48,7 @@ export const PlaybookMarketplace = lazy(() => import('./PlaybookMarketplace').th
 export const WorkOrders = lazy(() => import('./WorkOrders').then((m) => ({ default: m.WorkOrders })));
 export const WorkRequestPortal = lazy(() => import('./WorkRequestPortal').then((m) => ({ default: m.WorkRequestPortal })));
 export const APIVersioning = lazy(() => import('./APIVersioning').then((m) => ({ default: m.APIVersioning })));
+
+// EDGE-11: Agent Monitoring Dashboard
+export const AgentDashboard = lazy(() => import('./AgentDashboard').then((m) => ({ default: m.AgentDashboard })));
+export const AgentDetail = lazy(() => import('./AgentDetail').then((m) => ({ default: m.AgentDetail })));

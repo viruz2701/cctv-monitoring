@@ -238,10 +238,10 @@
 | **VENDOR-06** | Tiandy VendorDevice | [`tiandy/device.go`](backend/internal/vendor/tiandy/device.go) | 3d | ✅ |
 | **VENDOR-07** | Uniview VendorDevice | [`uniview/device.go`](backend/internal/vendor/uniview/device.go) | 3d | ✅ |
 | **VENDOR-08** | Tantos VendorDevice | [`tantos/device.go`](backend/internal/vendor/tantos/device.go) | 2d | ✅ |
-| **PROTO-05** | Lua Plugin Loader | gopher-lua integration, plugin API (http_get, xml_parse) | 4d | [ ] |
-| **EDGE-09** | Traffic Shaping | MQTT QoS, telemetry priority over diagnostics | 2d | [ ] |
-| **EDGE-10** | OTA Updates | Auto-update check, download+install, rollback | 3d | [ ] |
-| **EDGE-11** | Agent Monitoring Dashboard | UI for agent stats (online/offline, traffic, errors) | 3d | [ ] |
+| **PROTO-05** | Lua Plugin Loader | [`lua/loader.go`](edge-agent/internal/lua/loader.go), [`lua/api.go`](edge-agent/internal/lua/api.go) | 4d | ✅ |
+| **EDGE-09** | Traffic Shaping | [`traffic_shaping.go`](edge-agent/internal/agent/traffic_shaping.go) | 2d | ✅ |
+| **EDGE-10** | OTA Updates | [`ota.go`](edge-agent/internal/agent/ota.go), [`ota_update.sh`](edge-agent/scripts/ota_update.sh) | 3d | ✅ |
+| **EDGE-11** | Agent Monitoring Dashboard | [`AgentDashboard.tsx`](frontend/src/pages/AgentDashboard.tsx), [`AgentDetail.tsx`](frontend/src/pages/AgentDetail.tsx) | 3d | ✅ |
 
 ## 🟢 P2-EDGE: Edge Agent — Medium Priority (Q1 2027, 4 weeks) — из agent.md
 

@@ -79,6 +79,11 @@ export const queryKeys = {
     all: ['predictions'] as const,
     stats: ['predictions', 'stats'] as const,
   },
+  // EDGE-11: Agent Monitoring Dashboard
+  agents: {
+    all: ['agents'] as const,
+    detail: (id: string) => ['agents', id] as const,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════

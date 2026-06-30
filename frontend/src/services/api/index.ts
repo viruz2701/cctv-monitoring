@@ -104,6 +104,9 @@ export type {
   CreateGroupRequest, BulkUpdateValuesRequest,
 } from './customFields';
 
+// Agents — EDGE-11
+export { agentsApi } from './agents';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Комбинированный объект `api` для backward compat
 // ═══════════════════════════════════════════════════════════════════════
@@ -120,6 +123,7 @@ import { anomaliesApi } from './anomalies';
 import { customFieldsApi } from './customFields';
 import { servicesApi } from './services';
 import { rcaApi } from './rca';
+import { agentsApi } from './agents';
 
 export const api = {
   // Auth
@@ -299,4 +303,10 @@ export const api = {
   deleteCustomFieldGroup: customFieldsApi.deleteGroup.bind(customFieldsApi),
   getCustomFieldValues: customFieldsApi.getFieldValues.bind(customFieldsApi),
   bulkUpdateCustomFieldValues: customFieldsApi.bulkUpdateValues.bind(customFieldsApi),
+
+  // Agents — EDGE-11
+  getAgents: agentsApi.getAgents.bind(agentsApi),
+  getAgent: agentsApi.getAgent.bind(agentsApi),
+  sendAgentCommand: agentsApi.sendCommand.bind(agentsApi),
+  deleteAgent: agentsApi.deleteAgent.bind(agentsApi),
 };
