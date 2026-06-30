@@ -88,6 +88,15 @@ export type { MarketplacePlaybook, MarketplaceListResponse, MarketplaceFilter } 
 
 // P2-FIELDS: Custom Fields
 export { customFieldsApi } from './customFields';
+
+// P2-API: API Versioning
+export { versionsApi } from './versions';
+export type {
+  VersionInfo,
+  ChangelogEntry,
+  VersionListResponse,
+  ChangelogResponse,
+} from './versions';
 export type {
   FieldDefinition, FieldGroup, FieldDefinitionWithValue,
   FieldType, EntityType, ValidationRule, FieldCondition,
@@ -100,6 +109,7 @@ export type {
 // ═══════════════════════════════════════════════════════════════════════
 
 import { devicesApi } from './devices';
+import { versionsApi } from './versions';
 import { alarmsApi } from './alarms';
 import { authApi, usersApi } from './users';
 import { sitesApi, ticketsApi } from './sites';
@@ -270,6 +280,12 @@ export const api = {
   resolveAnomaly: anomaliesApi.resolveAnomaly.bind(anomaliesApi),
   getAnomalyStats: anomaliesApi.getStats.bind(anomaliesApi),
 
+  // P2-API: API Versioning
+  listVersions: versionsApi.listVersions.bind(versionsApi),
+  createVersion: versionsApi.createVersion.bind(versionsApi),
+  updateVersion: versionsApi.updateVersion.bind(versionsApi),
+  getChangelog: versionsApi.getChangelog.bind(versionsApi),
+ 
   // P2-FIELDS: Custom Fields
   getCustomFieldDefinitions: customFieldsApi.getDefinitions.bind(customFieldsApi),
   getCustomFieldDefinition: customFieldsApi.getDefinition.bind(customFieldsApi),

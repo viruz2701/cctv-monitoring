@@ -61,6 +61,11 @@ import (
 //   - API key: внешние alarm webhook
 //   - ITSM Webhooks: ServiceNow, Jira, 1C:TOIR (HMAC, rate-limited)
 func (s *Server) MountRoutes(r chi.Router) {
+	// ── P2-API: Version detection middleware (global) ─────────────────
+	// Определяет версию API из URL или X-API-Version header.
+	// Добавляет Sunset/Deprecation headers для deprecated версий.
+	r.Use(VersionMiddleware(s.versionStore))
+
 	// ── Публичные маршруты (без JWT) ─────────────────────────────────
 	s.mountHealthRoutes(r)
 	s.mountAuthRoutes(r)
@@ -242,6 +247,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 
 	// ── ITSM Webhooks (HMAC, rate-limited) ───────────────────────────
 	s.mountWebhookRoutes(r)
+
+	// ── P2-API: Version management (public list + admin mutations) ──
+	s.mountVersionRoutes(r)
 }
 
 // mountSetupWizardRoutes монтирует маршруты мастера установки.

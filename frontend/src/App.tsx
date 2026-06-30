@@ -122,11 +122,12 @@ function App() {
 
                   {/* Admin Only Routes */}
                   <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
-                    <Route path="/users" element={<PageSuspense><Pages.Users /></PageSuspense>} />
-                    <Route path="/api-keys" element={<PageSuspense><Pages.APIKeys /></PageSuspense>} />
-                    <Route path="/webhooks" element={<PageSuspense><Pages.Webhooks /></PageSuspense>} />
-                    <Route path="/workload-analytics" element={<PageSuspense><Pages.WorkloadAnalytics /></PageSuspense>} />
-                    <Route path="/executive-dashboard" element={<Navigate to="/dashboard" replace />} />
+                  	<Route path="/users" element={<PageSuspense><Pages.Users /></PageSuspense>} />
+                  	<Route path="/api-keys" element={<PageSuspense><Pages.APIKeys /></PageSuspense>} />
+                  	<Route path="/webhooks" element={<PageSuspense><Pages.Webhooks /></PageSuspense>} />
+                  	<Route path="/workload-analytics" element={<PageSuspense><Pages.WorkloadAnalytics /></PageSuspense>} />
+                  	<Route path="/api-versioning" element={<PageSuspense><Pages.APIVersioning /></PageSuspense>} />
+                  	<Route path="/executive-dashboard" element={<Navigate to="/dashboard" replace />} />
                   </Route>
 
                   {/* Admin Only Routes - Settings */}

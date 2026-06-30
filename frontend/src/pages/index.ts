@@ -47,3 +47,4 @@ export const SecurityAdvisories = lazy(() => import('./SecurityAdvisories').then
 export const PlaybookMarketplace = lazy(() => import('./PlaybookMarketplace').then((m) => ({ default: m.PlaybookMarketplace })));
 export const WorkOrders = lazy(() => import('./WorkOrders').then((m) => ({ default: m.WorkOrders })));
 export const WorkRequestPortal = lazy(() => import('./WorkRequestPortal').then((m) => ({ default: m.WorkRequestPortal })));
+export const APIVersioning = lazy(() => import('./APIVersioning').then((m) => ({ default: m.APIVersioning })));

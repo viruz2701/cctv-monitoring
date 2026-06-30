@@ -204,6 +204,9 @@ type Server struct {
 
 	// P2-CHAT: Real-Time Chat per Work Order
 	chatHub *ws.ChatHub
+
+	// P2-API: API Versioning Store
+	versionStore VersionStore
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -316,6 +319,9 @@ func NewServer(addr string, stateMgr state.DeviceStateManager, logger *slog.Logg
 
 		// P2-CHAT: Real-Time Chat per Work Order
 		chatHub: ws.NewChatHub(logger),
+
+		// P2-API: API Versioning Store (in-memory default, PG if db available)
+		versionStore: NewDefaultVersionStore(),
 	}
 
 	// Инициализация сервисов
