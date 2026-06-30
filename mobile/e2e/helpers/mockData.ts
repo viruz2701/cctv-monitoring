@@ -81,7 +81,7 @@ export const mockLocalWorkOrder: WorkOrder = {
 
 export const mockVerificationResponse = {
   passed: true,
-  token: 'vrf_tkn_abc123',
+  token: 'vrf_tkn_test_token',
   gps: {
     passed: true,
     distance_meters: 2.5,

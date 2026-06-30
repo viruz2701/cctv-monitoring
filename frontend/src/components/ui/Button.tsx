@@ -65,14 +65,17 @@ export function Button({
         [isDisabled, noRipple, noHaptic, createRipple, haptics, onClick],
     );
 
+    const tapScale = 'active:scale-[0.96]';
+
     return (
         <button
             className={`
         inline-flex items-center justify-center gap-2 font-medium rounded-lg
-        transition-all duration-150 ease-in-out
+        transition-[scale,background-color,box-shadow] duration-150 ease-out
         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
         ${noRipple ? '' : 'ripple-container'}
+        ${tapScale}
         ${variantClasses[variant]}
         ${sizeClasses[size]}
         ${fullWidth ? 'w-full' : ''}
@@ -130,14 +133,17 @@ export function IconButton({
         [noRipple, noHaptic, createRipple, haptics, onClick],
     );
 
+    const tapScale = 'active:scale-[0.96]';
+
     return (
         <button
             className={`
         inline-flex items-center justify-center rounded-lg
-        transition-all duration-150 ease-in-out
+        transition-[scale,background-color,box-shadow] duration-150 ease-out
         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
         disabled:opacity-50 disabled:cursor-not-allowed
         ${noRipple ? '' : 'ripple-container'}
+        ${tapScale}
         ${variantClasses[variant]}
         ${sizeClassMap[size]}
         ${className}

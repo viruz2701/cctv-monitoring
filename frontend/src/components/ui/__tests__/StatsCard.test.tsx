@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { StatsCard, MiniStatsCard } from '../StatsCard';
-import { Camera, TrendingUp } from './Icons';
+import { Camera, TrendingUp } from '../Icons';
 
 describe('StatsCard', () => {
     it('renders title and value', () => {

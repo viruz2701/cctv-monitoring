@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -112,6 +113,8 @@ func (rl *rateLimiter) stop() {
 }
 
 // extractClientIP извлекает IP клиента с учётом заголовков прокси.
+// OWASP ASVS V2.2.1: Корректное извлечение IP для rate limiting.
+// Использует net.SplitHostPort для корректной обработки IPv6 (RFC 3986).
 func extractClientIP(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		parts := strings.Split(forwarded, ",")
@@ -120,12 +123,12 @@ func extractClientIP(r *http.Request) string {
 	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
 		return strings.TrimSpace(realIP)
 	}
-	// Убираем порт из RemoteAddr
-	ip := r.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
+	// net.SplitHostPort корректно обрабатывает IPv6: [::1]:8080 → ::1
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
-	return ip
+	return host
 }
 
 // newRateLimiterMiddleware создаёт middleware с заданным лимитом и окном.

@@ -1,3 +1,4 @@
+-- +migrate Down
 -- P2-CHECK: Rollback conditional checklists
 DROP TABLE IF EXISTS checklist_scores;
 DROP TABLE IF EXISTS work_order_checklist_responses;

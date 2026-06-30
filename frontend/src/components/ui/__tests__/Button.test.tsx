@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { Button, IconButton } from '../Button';
-import { Settings } from './Icons';
+import { Settings } from '../Icons';
 
 describe('Button', () => {
     it('renders children', () => {

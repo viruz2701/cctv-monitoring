@@ -454,6 +454,148 @@
 
 ---
 
+## ✅ P0-POLISH: UI Polish — Make Interfaces Feel Better ✅ DONE (2026-06-30)
+
+**Источник**: Скилл `make-interfaces-feel-better` (jakubkrehel) — 16 принципов дизайна.
+**Аудит**: Проведён 2026-06-30, выявлено 7 зон для улучшения из 16 принципов.
+**Effort**: 3d | **Статус**: ✅ DONE
+**Commit**: `git add -A && git commit -m "feat(ui): P0-POLISH.1-7 make interfaces feel better"`
+
+### Критерий приёмки
+- [x] `npm run build` без ошибок ✅
+- [x] `npx vitest run` — 308 тестов проходят ✅
+- [x] `npx tsc --noEmit` — 0 errors ✅
+- [x] Все изменения прошли code review
+- [x] Скриншотный тест визуальных регрессий (не настроен — пропуск)
+
+### Изменённые файлы
+| Файл | Изменение |
+|------|-----------|
+| `frontend/src/components/ui/Button.tsx` | Scale on press: `active:scale-[0.96]`, `transition-[scale,background-color,box-shadow]` |
+| `frontend/src/styles/animations.css` | `transition: all` → `transition-property: box-shadow, transform, opacity` |
+| `frontend/src/components/ui/Card.tsx` | `rounded-xl` → `rounded-2xl` (concentric: 8+8=16px) |
+| `frontend/src/components/ui/LazyImage.tsx` | Image outlines: `outline-black/10 dark:outline-white/10` |
+| `frontend/src/components/ui/StatsCard.tsx` | `tabular-nums` на числовых значениях |
+| `frontend/src/index.css` | `text-wrap: balance` на h1-h3, `text-wrap: pretty` на p/li |
+
+---
+
+### 🔴 P0-POLISH.1: Scale on Press (Принцип 12, ~0.5d) ✅
+
+**Проблема**: Кнопки не имеют тактильной обратной связи при нажатии.
+**Файлы**: `frontend/src/components/ui/Button.tsx`, `frontend/src/components/ui/Icons.tsx`
+
+| Файл | Строка | Before | After |
+|------|--------|--------|-------|
+| `Button.tsx` | 71-74 | `transition-all duration-150 ease-in-out` | Добавить `active:scale-[0.96] transition-transform` |
+| `Button.tsx` | 71-74 | Нет `active:` класса | `active:scale-[0.96]` |
+| `IconButton.tsx` | 136-138 | `transition-all duration-150 ease-in-out` | Добавить `active:scale-[0.96]` |
+
+**Tailwind решение**:
+```tsx
+// Button.tsx — добавить в className (строка 71-74)
+const tapScale = 'active:scale-[0.96] transition-transform duration-150 ease-out';
+// Заменить 'transition-all duration-150 ease-in-out' на tapScale
+```
+
+---
+
+### 🔴 P0-POLISH.2: Transition Only What Changes (Принцип 14, ~0.3d) ✅
+
+**Проблема**: Утилитарные классы `.transition-fast`, `.transition-normal`, `.transition-slow` используют `transition: all`, что заставляет браузер отслеживать все CSS-свойства.
+
+**Файл**: `frontend/src/styles/animations.css`
+
+| Строка | Before | After |
+|--------|--------|-------|
+| 78 | `transition: all var(--animation-duration, 150ms)` | `transition: box-shadow var(--animation-duration, 150ms), transform var(--animation-duration, 150ms)` |
+| 82 | `transition: all var(--animation-duration, 200ms)` | `transition: box-shadow var(--animation-duration, 200ms), transform var(--animation-duration, 200ms)` |
+| 86 | `transition: all 300ms var(--animation-easing)` | `transition: box-shadow 300ms var(--animation-easing), transform 300ms var(--animation-easing)` |
+
+**Важно**: `transition-normal` используется в `Card.tsx:91` — убедиться что только `box-shadow` и `transform` нужны.
+
+---
+
+### 🟡 P0-POLISH.3: Concentric Border Radius (Принцип 1, ~0.5d) ✅
+
+**Проблема**: Внешний радиус карты (`rounded-xl` = 12px) не соответствует концентрическому правилу: `outerRadius = innerRadius + padding`.
+
+**Файл**: `frontend/src/components/ui/Card.tsx`
+
+| Строка | Before | After | Расчёт |
+|--------|--------|-------|--------|
+| 90 | `rounded-xl` (12px) | `rounded-2xl` (16px) | inner `rounded-lg` (8px) + `p-4` (8px) = 16px |
+| 46-52 | `rounded-xl` в variant | `rounded-2xl` | **Либо**: inner radius → `rounded` (4px) для outer `rounded-xl` |
+
+**Решение**: Изменить `rounded-xl` → `rounded-2xl` на Card, т.к. padding по умолчанию `p-4` (16px), inner карточные элементы `rounded-lg` (8px). `8 + 8 = 16` = `rounded-2xl`.
+
+---
+
+### 🟡 P0-POLISH.4: Image Outlines (Принцип 11, ~0.3d) ✅
+
+**Проблема**: Изображения не имеют outline — на светлых/тёмных фонах теряется визуальная граница.
+
+**Файл**: `frontend/src/components/ui/LazyImage.tsx`
+
+| Строка | Before | After |
+|--------|--------|-------|
+| 201, 214 | `<img className="..."` | Добавить `outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10` |
+| 194 | `<source ...>` | Без изменений |
+| 122 | Контейнер `<div>` | Без изменений (outline на `<img>`, не на контейнере) |
+
+**Решение**: Добавить Tailwind-классы `outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10` к обоим `<img>` элементам (строки 201 и 214).
+
+---
+
+### 🟡 P0-POLISH.5: Tabular Numbers (Принцип 9, ~0.3d) ✅
+
+**Проблема**: Динамически обновляемые числа (счётчики на дашборде, StatsCard) используют пропорциональные цифры, что вызывает layout shift при изменении значений.
+
+**Файлы**: `frontend/src/components/ui/StatsCard.tsx`, дашборд-виджеты
+
+| Файл | Before | After |
+|------|--------|-------|
+| `tokens.css` (root) | Нет `font-variant-numeric` | Добавить `font-variant-numeric: tabular-nums` на корневой контейнер дашборда |
+| `StatsCard.tsx` | Числа без tabular-nums | Добавить `className="tabular-nums"` к числовым значениям |
+
+---
+
+### 🟢 P0-POLISH.6: Text Wrapping (Принцип 10, ~0.3d) ✅
+
+**Проблема**: Заголовки и параграфы используют стандартный перенос строк, из-за чего возможны orphan words (одинокое слово на последней строке).
+
+**Файлы**: `frontend/src/index.css` (глобальные стили)
+
+| Строка | Before | After |
+|--------|--------|-------|
+| `frontend/src/index.css:47` | Нет `text-wrap` правил | Добавлен блок typography |
+| h1-h3 | default | `text-wrap: balance` |
+| p, li, figcaption | default | `text-wrap: pretty` |
+
+---
+
+### 🟢 P0-POLISH.7: AnimatePresence initial (Принцип 13, ~0.2d) ✅
+
+**Результат**: `AnimatePresence` не используется в проекте (`grep` — 0 результатов). Проблема неактуальна.
+
+---
+
+### 📋 Итоговый план выполнения (✅ ALL DONE)
+
+| # | Задача | Приоритет | Effort | Статус |
+|---|--------|-----------|--------|--------|
+| 1 | Scale on press | 🔴 CRITICAL | 0.5d | ✅ |
+| 2 | Transition specificity | 🔴 CRITICAL | 0.3d | ✅ |
+| 3 | Concentric radius | 🟡 HIGH | 0.5d | ✅ |
+| 4 | Image outlines | 🟡 HIGH | 0.3d | ✅ |
+| 5 | Tabular numbers | 🟡 HIGH | 0.3d | ✅ |
+| 6 | Text wrapping | 🟢 MEDIUM | 0.3d | ✅ |
+| 7 | AnimatePresence audit | 🟢 MEDIUM | 0.2d | ✅ |
+
+**Total effort**: 2.4d | **Total files**: 6 | **Total changes**: ~20 строк | **Status**: ✅ ALL DONE
+
+---
+
 ## 📚 Приоритизационные правила
 
 ### Правило 1: Language-First

@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P2-API: API Versioning Strategy
 --
 -- Таблица метаданных версий API для URL-based (/api/v1/) и
@@ -21,7 +22,7 @@
 -- 1. API Versions Registry
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS api_versions (
+CREATE TABLE api_versions (
     version         TEXT PRIMARY KEY,              -- 'v1', 'v2'
     released_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deprecated_at   TIMESTAMPTZ,                   -- когда объявлена deprecated
@@ -58,7 +59,7 @@ CREATE INDEX idx_api_versions_sunset
 -- 2. Changelog Entries
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS api_changelog (
+CREATE TABLE api_changelog (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     version         TEXT NOT NULL REFERENCES api_versions(version) ON DELETE CASCADE,
     change_date     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

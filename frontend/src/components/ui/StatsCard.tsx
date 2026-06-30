@@ -33,7 +33,7 @@ export function StatsCard({
             <div className="flex items-start justify-between">
                 <div className="flex-1">
                     <p className="text-sm font-medium text-slate-500 dark:text-slate-300">{title}</p>
-                    <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{value}</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white tabular-nums">{value}</p>
                     {subtitle && (
                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{subtitle}</p>
                     )}
@@ -95,7 +95,7 @@ export function MiniStatsCard({
                     <Icon className={`w-5 h-5 ${colors.icon}`} />
                 </div>
                 <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">{value}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-300">{title}</p>
                 </div>
             </div>

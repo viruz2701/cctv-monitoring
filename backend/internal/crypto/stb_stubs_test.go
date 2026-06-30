@@ -12,7 +12,7 @@ import (
 )
 
 func TestHashAPIKey(t *testing.T) {
-	key := "test-api-key-12345"
+	key := "test-api-key-placeholder"
 	hash := HashAPIKey(key)
 
 	if hash == "" {

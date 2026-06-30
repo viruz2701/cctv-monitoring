@@ -169,7 +169,7 @@ func TestExtractClientIP(t *testing.T) {
 		{
 			name:     "IPv6 RemoteAddr",
 			remote:   "[::1]:8080",
-			expected: "[::1]",
+			expected: "::1",
 		},
 	}
 
@@ -421,7 +421,7 @@ func TestExtractClientIP_TableDriven(t *testing.T) {
 			name:     "IPv6 RemoteAddr",
 			headers:  nil,
 			remote:   "[::1]:8080",
-			expected: "[::1]",
+			expected: "::1",
 		},
 	}
 

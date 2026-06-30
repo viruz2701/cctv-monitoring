@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P3-WL: White-Label Theming
 --
 -- Таблица tenant_branding для per-tenant кастомизации бренда:
@@ -19,7 +20,7 @@
 -- 1. Tenant Branding Configuration
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS tenant_branding (
+CREATE TABLE tenant_branding (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     tenant_id       VARCHAR(64) NOT NULL UNIQUE,
     
@@ -96,7 +97,7 @@ CREATE INDEX idx_tenant_branding_custom_domain
 -- 2. Domain Verification Log
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS tenant_domain_verifications (
+CREATE TABLE tenant_domain_verifications (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     tenant_id       VARCHAR(64) NOT NULL,
     domain          TEXT NOT NULL,
@@ -120,7 +121,7 @@ COMMENT ON TABLE tenant_domain_verifications IS
 -- 3. Tenant Branding Audit Log
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS tenant_branding_audit (
+CREATE TABLE tenant_branding_audit (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     tenant_id       VARCHAR(64) NOT NULL,
     action          TEXT NOT NULL,          -- 'updated', 'logo_uploaded', 'domain_verified', 'reset'

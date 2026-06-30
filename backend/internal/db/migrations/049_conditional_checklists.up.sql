@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P2-CHECK: Conditional Checklists (MaintainX-level)
 --
 -- Система шаблонов чек-листов с поддержкой:
@@ -18,7 +19,7 @@
 -- 1. Checklist Templates
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS checklist_templates (
+CREATE TABLE checklist_templates (
     id              VARCHAR(64) PRIMARY KEY,
     name            VARCHAR(255) NOT NULL,
     description     TEXT NOT NULL DEFAULT '',
@@ -38,7 +39,7 @@ CREATE INDEX idx_checklist_templates_active ON checklist_templates(is_active);
 -- 2. Checklist Items (hierarchical, with condition support)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS checklist_items (
+CREATE TABLE checklist_items (
     id              VARCHAR(64) PRIMARY KEY,
     template_id     VARCHAR(64) NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
     parent_id       VARCHAR(64) REFERENCES checklist_items(id) ON DELETE CASCADE,  -- NULL = root item
@@ -68,7 +69,7 @@ CREATE INDEX idx_checklist_items_parent_id ON checklist_items(parent_id);
 -- 3. Checklist Conditions (depends_on logic)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS checklist_conditions (
+CREATE TABLE checklist_conditions (
     id              VARCHAR(64) PRIMARY KEY,
     item_id         VARCHAR(64) NOT NULL REFERENCES checklist_items(id) ON DELETE CASCADE,
     field_id        VARCHAR(64) NOT NULL,               -- ссылается на checklist_items.id (поле-триггер)
@@ -88,7 +89,7 @@ CREATE INDEX idx_checklist_conditions_field_id ON checklist_conditions(field_id)
 -- 4. Work Order Checklists (started/submitted instances)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS work_order_checklists (
+CREATE TABLE work_order_checklists (
     id              VARCHAR(64) PRIMARY KEY,
     work_order_id   VARCHAR(64) NOT NULL,
     template_id     VARCHAR(64) NOT NULL REFERENCES checklist_templates(id) ON DELETE RESTRICT,
@@ -124,7 +125,7 @@ CREATE INDEX idx_wo_checklists_status ON work_order_checklists(status);
 -- 5. Work Order Checklist Responses
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS work_order_checklist_responses (
+CREATE TABLE work_order_checklist_responses (
     id              VARCHAR(64) PRIMARY KEY,
     checklist_id    VARCHAR(64) NOT NULL REFERENCES work_order_checklists(id) ON DELETE CASCADE,
     item_id         VARCHAR(64) NOT NULL REFERENCES checklist_items(id) ON DELETE RESTRICT,
@@ -145,7 +146,7 @@ CREATE INDEX idx_wo_checklist_responses_item_id ON work_order_checklist_response
 -- 6. Checklist Scores (audit trail for scoring history)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS checklist_scores (
+CREATE TABLE checklist_scores (
     id              VARCHAR(64) PRIMARY KEY,
     checklist_id    VARCHAR(64) NOT NULL REFERENCES work_order_checklists(id) ON DELETE CASCADE,
     item_id         VARCHAR(64) NOT NULL REFERENCES checklist_items(id) ON DELETE RESTRICT,

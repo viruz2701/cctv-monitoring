@@ -425,7 +425,7 @@ describe('Photo Upload with Gatekeeper', () => {
 
     // Проверяем token
     await expect(element(by.id('verification-token'))).toBeVisible();
-    await expect(element(by.id('verification-token'))).toHaveText('Token: vrf_tkn_abc123');
+    await expect(element(by.id('verification-token'))).toHaveText('Token: vrf_tkn_test_token');
   });
 
   it('Должен загрузить фото из галереи (не только камера)', async () => {

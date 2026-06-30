@@ -1,25 +1,33 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import en from './locales/en/translation.json';
-import ru from './locales/ru/translation.json';
-import be from './locales/be/translation.json';
 
 const DEFAULT_LANGUAGES = ['en', 'ru', 'be'];
 
-const resources: Record<string, { translation: Record<string, string> }> = {
-  en: { translation: en },
-  ru: { translation: ru },
-  be: { translation: be },
-};
+// Все языки загружаются динамически для code-splitting (P2-OPT.3)
+// Статические импорты удалены — они предотвращали корректный code-split
+async function loadDefaultLanguages() {
+  const [en, ru, be] = await Promise.all([
+    import('./locales/en/translation.json'),
+    import('./locales/ru/translation.json'),
+    import('./locales/be/translation.json'),
+  ]);
 
-i18n
-  .use(initReactI18next)
-  .init({
+  return {
+    en: { translation: en.default || en },
+    ru: { translation: ru.default || ru },
+    be: { translation: be.default || be },
+  };
+}
+
+// Инициализируем i18n с динамической загрузкой
+loadDefaultLanguages().then((resources) => {
+  i18n.use(initReactI18next).init({
     resources,
     lng: 'ru',
     fallbackLng: 'ru',
     interpolation: { escapeValue: false },
   });
+});
 
 // Lazy-load non-default languages on switch
 i18n.on('languageChanged', async (lng) => {

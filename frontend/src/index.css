@@ -44,6 +44,17 @@ body {
   background: #94a3b8;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Typography — text wrapping (Принцип 10: make-interfaces-feel-better)
+   ═══════════════════════════════════════════════════════════════════════ */
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+p, li, figcaption, blockquote {
+  text-wrap: pretty;
+}
+
 /* Utility: apply CSS vars to common elements */
 button,
 .button,

@@ -26,6 +26,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		RespondError(w, r, NewBadRequestError("invalid request"))
 		return
 	}
+
+	// OWASP ASVS V5.1: Input validation (whitelist) before DB query
+	if err := validateLoginRequest(req.Username, req.Password); err != nil {
+		RespondError(w, r, NewValidationError(err.Error()))
+		return
+	}
+
 	// Ищем пользователя по username или email
 	user, err := s.db.GetUserByUsername(req.Username)
 	if err != nil {

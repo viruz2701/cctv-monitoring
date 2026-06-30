@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P2-FIELDS: Custom Fields Advanced (Shelf.nu-level)
 --
 -- Система кастомных полей с поддержкой:
@@ -22,7 +23,7 @@
 -- 1. Custom Field Groups
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS custom_field_groups (
+CREATE TABLE custom_field_groups (
     id              VARCHAR(64) PRIMARY KEY,
     name            VARCHAR(255) NOT NULL,
     description     TEXT NOT NULL DEFAULT '',
@@ -49,7 +50,7 @@ COMMENT ON TABLE custom_field_groups IS
 -- 2. Custom Field Definitions
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS custom_field_definitions (
+CREATE TABLE custom_field_definitions (
     id              VARCHAR(64) PRIMARY KEY,
     entity_type     VARCHAR(32) NOT NULL,       -- device, work_order, site, part
     field_type      VARCHAR(32) NOT NULL,       -- text, number, date, dropdown, etc.
@@ -94,7 +95,7 @@ COMMENT ON TABLE custom_field_definitions IS
 -- 3. Custom Field Values (EAV)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS custom_field_values (
+CREATE TABLE custom_field_values (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     field_id        VARCHAR(64) NOT NULL REFERENCES custom_field_definitions(id) ON DELETE CASCADE,
     entity_type     VARCHAR(32) NOT NULL,
@@ -124,7 +125,7 @@ COMMENT ON TABLE custom_field_values IS
 -- 4. Audit trigger for custom_field_values (ISO 27001 A.12.4)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS custom_field_value_audit (
+CREATE TABLE custom_field_value_audit (
     id              VARCHAR(64) PRIMARY KEY DEFAULT gen_random_uuid()::text,
     value_id        VARCHAR(64) NOT NULL,
     field_id        VARCHAR(64) NOT NULL,

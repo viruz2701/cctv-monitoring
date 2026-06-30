@@ -187,6 +187,7 @@ export function LazyImage({
       )}
 
       {/* Actual image — показываем только когда в viewport */}
+      {/* Image outline (принцип 11): чистый чёрный/белый, не tinted neutral */}
       {isInView && (
         <>
           {hasWebp ? (
@@ -198,7 +199,7 @@ export function LazyImage({
                 loading="lazy"
                 onLoad={handleLoad}
                 onError={handleError}
-                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                className={`w-full h-full object-cover transition-opacity duration-300 outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10 ${
                   isLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
                 }`}
                 style={aspectStyle ? { position: 'absolute', inset: 0, width: '100%', height: '100%' } : undefined}
@@ -212,7 +213,7 @@ export function LazyImage({
               loading="lazy"
               onLoad={handleLoad}
               onError={handleError}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
+              className={`w-full h-full object-cover transition-opacity duration-300 outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10 ${
                 isLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
               }`}
               style={aspectStyle ? { position: 'absolute', inset: 0, width: '100%', height: '100%' } : undefined}

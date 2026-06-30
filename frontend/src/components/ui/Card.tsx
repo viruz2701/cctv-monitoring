@@ -41,6 +41,9 @@ interface CardProps {
   'aria-label'?: string;
 }
 
+// Concentric border radius (принцип 1: outerRadius = innerRadius + padding)
+// outer rounded-2xl (16px) = inner rounded-lg (8px) + p-4 (8px)
+// Если padding меняется — radius也要 пересчитать
 const variantClasses: Record<CardVariant, string> = {
   elevated:
     'bg-white dark:bg-slate-800 shadow-card border border-slate-200 dark:border-slate-700',
@@ -87,7 +90,7 @@ export function Card({
   return (
     <div
       className={`
-        rounded-xl
+        rounded-2xl
         transition-normal
         ${variantClasses[variant]}
         ${paddingClasses[padding]}

@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P2-BI: Embedded Self-Service Analytics Templates
 --
 -- Хранит шаблоны BI-запросов для self-service analytics.
@@ -9,7 +10,7 @@
 --   - OWASP ASVS V7.1 (Error handling — safe storage of SQL templates)
 --   - IEC 62443 SR 3.1 (Input validation — template validation on write)
 
-CREATE TABLE IF NOT EXISTS analytics_query_templates (
+CREATE TABLE analytics_query_templates (
     id              VARCHAR(64) PRIMARY KEY,
     name            VARCHAR(255) NOT NULL,
     description     TEXT NOT NULL DEFAULT '',

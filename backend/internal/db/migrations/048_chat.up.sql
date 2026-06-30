@@ -1,3 +1,4 @@
+-- +migrate Up
 -- P2-CHAT: Real-Time Chat per Work Order
 --
 -- Хранит сообщения чата для каждого Work Order с поддержкой:
@@ -14,7 +15,7 @@
 --   - OWASP ASVS V7.1 (Input validation — content size limits)
 --   - Приказ ОАЦ №66 п. 7.18.3 (Аудит сообщений)
 
-CREATE TABLE IF NOT EXISTS wo_chat_messages (
+CREATE TABLE wo_chat_messages (
     id              VARCHAR(64) PRIMARY KEY,
     wo_id           VARCHAR(64) NOT NULL,
     user_id         VARCHAR(64) NOT NULL,
@@ -41,7 +42,7 @@ CREATE INDEX idx_wo_chat_messages_user_id ON wo_chat_messages(user_id);
 -- Attachments (файлы, прикреплённые к сообщению)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS wo_chat_attachments (
+CREATE TABLE wo_chat_attachments (
     id              VARCHAR(64) PRIMARY KEY,
     message_id      VARCHAR(64) NOT NULL REFERENCES wo_chat_messages(id) ON DELETE CASCADE,
     file_name       VARCHAR(512) NOT NULL,
@@ -60,7 +61,7 @@ CREATE INDEX idx_wo_chat_attachments_message_id ON wo_chat_attachments(message_i
 -- @mentions (упоминания пользователей)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS wo_chat_mentions (
+CREATE TABLE wo_chat_mentions (
     id              VARCHAR(64) PRIMARY KEY,
     message_id      VARCHAR(64) NOT NULL REFERENCES wo_chat_messages(id) ON DELETE CASCADE,
     mentioned_user  VARCHAR(64) NOT NULL,
@@ -74,7 +75,7 @@ CREATE INDEX idx_wo_chat_mentions_user ON wo_chat_mentions(mentioned_user);
 -- Read Receipts (прочитано/не прочитано)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS wo_chat_read_receipts (
+CREATE TABLE wo_chat_read_receipts (
     message_id      VARCHAR(64) NOT NULL REFERENCES wo_chat_messages(id) ON DELETE CASCADE,
     user_id         VARCHAR(64) NOT NULL,
     read_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -85,7 +86,7 @@ CREATE TABLE IF NOT EXISTS wo_chat_read_receipts (
 -- Reactions (эмодзи-реакции)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS wo_chat_reactions (
+CREATE TABLE wo_chat_reactions (
     message_id      VARCHAR(64) NOT NULL REFERENCES wo_chat_messages(id) ON DELETE CASCADE,
     user_id         VARCHAR(64) NOT NULL,
     reaction        VARCHAR(32) NOT NULL,

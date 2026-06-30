@@ -10,7 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": false,
-    "types": ["detox", "jest"],
     "noEmit": true
   },
   "include": ["./**/*.ts", "./**/*.js"]

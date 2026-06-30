@@ -554,6 +554,10 @@ func Load() *Config {
 	// Database
 	bindEnv("database.url", "DATABASE_URL")
 
+	// JWT Secret (P1-SEC.1: обязателен в production)
+	// Провалидируется в main.go — при пустом значении старт не произойдёт
+	bindEnv("jwt_secret", "JWT_SECRET")
+
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			fmt.Println("Config file not found, using defaults and environment variables")
