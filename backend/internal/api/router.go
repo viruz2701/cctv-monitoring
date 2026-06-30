@@ -161,6 +161,30 @@ func (s *Server) MountRoutes(r chi.Router) {
 		// Device domain (devices, images, analytics, logs, audit)
 		s.mountDeviceRoutes(r)
 
+		// CRED-03: Credential Management (admin only, encrypted storage)
+		// Соответствует: ISO 27001 A.10.1, OWASP ASVS V2.5, Приказ ОАЦ №66 п. 7.18.3
+		s.mountCredentialRoutes(r)
+
+		// P0-EDGE.6: Device Settings Management
+		//   GET  /api/v1/devices/{id}/settings       — получить настройки
+		//   PUT  /api/v1/devices/{id}/settings       — обновить настройки (admin only)
+		//   POST /api/v1/devices/{id}/settings/apply — применить настройки (admin only)
+		// Соответствует: IEC 62443-3-3 SL-3, OWASP ASVS V3.3, V5.1, ISO 27001 A.12.4
+		s.mountDeviceSettingsRoutes(r)
+
+		// P0-EDGE.6: Device Logs
+		//   GET /api/v1/devices/{id}/logs — логи устройства с фильтрацией и пагинацией
+		// Соответствует: IEC 62443-3-3 SL-3, OWASP ASVS V5.1, ISO 27001 A.12.6.1
+		s.mountDeviceLogRoutes(r)
+
+		// P0-EDGE.6: Agent Management
+		//   GET    /api/v1/agents              — список агентов
+		//   GET    /api/v1/agents/{id}         — детали агента
+		//   POST   /api/v1/agents/{id}/command — отправить команду (admin only)
+		//   DELETE /api/v1/agents/{id}         — удалить агента (admin only)
+		// Соответствует: IEC 62443-3-3 SL-3, OWASP ASVS V3.3, Приказ ОАЦ №66 п. 7.18
+		s.mountAgentManagementRoutes(r)
+
 		// Audit domain (P3-2: compliance, chain verification, reporting)
 		r.Get("/api/v1/audit/log", s.handleListAuditLog)
 		r.Get("/api/v1/audit/verify", s.handleAuditVerify)

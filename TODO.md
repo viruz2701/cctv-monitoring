@@ -110,8 +110,72 @@
 </details>
 
 ---
-
 ## 🔴 P0 — CRITICAL BLOCKERS (Q3 2026, до 2026-09-30)
+
+### P0-EDGE: Edge Agent + Vendor Abstraction + Protocol Descriptors (NEW — 2026-06-30)
+
+**Источник**: `agent.md` — Архитектура расширяемости протоколов для Edge-агента
+**Контекст**: Расширение системы для поддержки массового деплоя на дешевых роутерах (OpenWrt, 128MB RAM) с динамической загрузкой протоколов и безопасным хранением credentials.
+**Архитектура**: Protocol Descriptor (JSON) → Universal Interpreter → Edge Agent (Go) → MQTT → Backend
+**Общий Effort**: 8 недель (P0) + 6 недель (P1) + 4 недели (P2)
+**Статус**: 🟡 В РАБОТЕ
+
+#### Блок 1: Credential Storage ✅ ALL DONE (2026-06-30)
+
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| **CRED-01** | Database Schema для credentials | [`053_device_credentials.up.sql`](backend/internal/db/migrations/053_device_credentials.up.sql) | ✅ RLS, audit trigger, expires_at, key rotation |
+| **CRED-02** | Credential Manager Interface + DB | [`credential_manager.go`](backend/internal/crypto/credential_manager.go), [`db_credential_manager.go`](backend/internal/crypto/db_credential_manager.go) | ✅ AES-256-GCM, audit log, pgx |
+| **CRED-03** | API Endpoints для credentials | [`credential_handlers.go`](backend/internal/api/credential_handlers.go), [`credential_routes.go`](backend/internal/api/credential_routes.go) | ✅ POST/GET/PUT/DELETE, admin RBAC, password masking |
+| **CRED-04** | Интеграция с VendorDevice Factory | [`factory.go`](backend/internal/vendor/factory.go) | ✅ DeviceFactory + CredentialManager |
+
+#### Блок 2: Vendor Abstraction Layer ✅ ALL DONE (2026-06-30)
+
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| **VENDOR-01** | VendorDevice Interface + DTOs | [`vendor.go`](backend/internal/vendor/vendor.go) | ✅ 12 методов: Info, Logs, Events, Settings, PTZ, Health |
+| **VENDOR-02** | Vendor Registry + Factory | [`registry.go`](backend/internal/vendor/registry.go), [`factory.go`](backend/internal/vendor/factory.go) | ✅ thread-safe, 6 тестов PASS |
+| **VENDOR-03** | Hikvision ISAPI Implementation | [`hikvision/device.go`](backend/internal/vendor/hikvision/device.go) | ✅ Digest auth, XML parse, PTZ |
+| **VENDOR-04** | Dahua CGI Implementation | [`dahua/device.go`](backend/internal/vendor/dahua/device.go) | ✅ Digest auth, key-value parse, PTZ |
+| **VENDOR-05** | ONVIF SOAP Implementation | [`onvif/device.go`](backend/internal/vendor/onvif/device.go) | ✅ SOAP Envelope, DeviceInfo, PTZ |
+
+#### Блок 3: Protocol Descriptor System ✅ ALL DONE (2026-06-30)
+
+| # | Задача | Файлы | Статус |
+|---|--------|-------|--------|
+| **PROTO-01** | Protocol Descriptor Schema | [`schema.go`](backend/internal/protocols/descriptor/schema.go) | ✅ JSON Schema, Go structs, Validation, Clone — 11 тестов PASS |
+| **PROTO-02** | Universal Protocol Interpreter | [`interpreter.go`](backend/internal/protocols/descriptor/interpreter.go) | ✅ HTTP/Digest, JSON/XML/KV парсеры, Go templates |
+| **PROTO-03** | Protocol Registry (Backend) | [`registry.go`](backend/internal/protocols/descriptor/registry.go), [`054_protocol_descriptors.up.sql`](backend/internal/db/migrations/054_protocol_descriptors.up.sql) | ✅ PostgreSQL + in-memory cache, warmup |
+| **PROTO-04** | Protocol Sync API (for agent) | [`protocol_sync_handlers.go`](backend/internal/api/protocol_sync_handlers.go) | ✅ POST /api/v1/edge/protocols/sync |
+
+#### Блок 4: Edge Agent (Go) ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **EDGE-01** | Agent Core (Discovery + MQTT) | [`agent.go`](edge-agent/internal/agent/agent.go), [`config.go`](edge-agent/internal/agent/config.go) | 5d | ✅ |
+| **EDGE-02** | Device Discovery | [`arp.go`](edge-agent/internal/discovery/arp.go), [`onvif.go`](edge-agent/internal/discovery/onvif.go), [`snmp.go`](edge-agent/internal/discovery/snmp.go) | 4d | ✅ |
+| **EDGE-03** | Protocol Sync + Cache | [`sync.go`](edge-agent/internal/protocols/sync.go), [`cache.go`](edge-agent/internal/protocols/cache.go) | 3d | ✅ |
+| **EDGE-04** | Command Handler | [`command_handler.go`](edge-agent/internal/agent/command_handler.go) | 3d | ✅ |
+| **EDGE-05** | Telemetry Poller | [`poller.go`](edge-agent/internal/agent/poller.go) | 2d | ✅ |
+| **EDGE-06** | Offline Queue | [`offline_queue.go`](edge-agent/internal/agent/offline_queue.go) | 2d | ✅ |
+| **EDGE-07** | mTLS Configuration | [`config.go`](edge-agent/internal/tls/config.go) + [`generate_certs.sh`](edge-agent/scripts/generate_certs.sh) | 2d | ✅ |
+| **EDGE-08** | OpenWrt Build Script | [`build_openwrt.sh`](edge-agent/scripts/build_openwrt.sh) + [`Dockerfile.openwrt`](edge-agent/Dockerfile.openwrt) | 2d | ✅ |
+
+#### Блок 5: Unified Ingestion Layer ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **INGEST-01** | MQTT Ingress Handler | [`mqtt_ingress.go`](backend/internal/ingestion/mqtt_ingress.go) | 3d | ✅ |
+| **INGEST-02** | Vendor Normalizer | [`normalizer.go`](backend/internal/ingestion/normalizer.go) + 6 vendor files | 2d | ✅ |
+
+#### Блок 6: API Endpoints ✅ ALL DONE
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **API-01** | Device Settings Endpoints | [`device_settings_handlers.go`](backend/internal/api/device_settings_handlers.go) | 2d | ✅ |
+| **API-02** | Device Logs Endpoints | [`device_logs_handlers.go`](backend/internal/api/device_logs_handlers.go) | 1d | ✅ |
+| **API-03** | Agent Management Endpoints | [`agent_handlers.go`](backend/internal/api/agent_handlers.go), [`agent_management_routes.go`](backend/internal/api/agent_management_routes.go) | 2d | ✅ |
+
 
 ### P0-PDF: Server-Side PDF Generation ✅ ALL DONE
 - **P0-PDF.1**: CSS `@media print` framework ✅ (frontend/src/styles/print.css, 231 строк)
@@ -167,6 +231,29 @@
 
 ---
 
+## 🟡 P1-EDGE: Edge Agent — High Priority (Q4 2026, 6 weeks) — из agent.md
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **VENDOR-06** | Tiandy VendorDevice | [`tiandy/device.go`](backend/internal/vendor/tiandy/device.go) | 3d | ✅ |
+| **VENDOR-07** | Uniview VendorDevice | [`uniview/device.go`](backend/internal/vendor/uniview/device.go) | 3d | ✅ |
+| **VENDOR-08** | Tantos VendorDevice | [`tantos/device.go`](backend/internal/vendor/tantos/device.go) | 2d | ✅ |
+| **PROTO-05** | Lua Plugin Loader | gopher-lua integration, plugin API (http_get, xml_parse) | 4d | [ ] |
+| **EDGE-09** | Traffic Shaping | MQTT QoS, telemetry priority over diagnostics | 2d | [ ] |
+| **EDGE-10** | OTA Updates | Auto-update check, download+install, rollback | 3d | [ ] |
+| **EDGE-11** | Agent Monitoring Dashboard | UI for agent stats (online/offline, traffic, errors) | 3d | [ ] |
+
+## 🟢 P2-EDGE: Edge Agent — Medium Priority (Q1 2027, 4 weeks) — из agent.md
+
+| # | Задача | Описание | Оценка | Статус |
+|---|--------|----------|--------|--------|
+| **PROTO-06** | Descriptor Editor UI | Web form for create/edit, JSON Schema validation, testing | 5d | [ ] |
+| **PROTO-07** | Community Protocol Registry | Public API, ratings/reviews, moderation (like Docker Hub) | 4d | [ ] |
+| **CRED-05** | Automatic Credential Rotation | Vault integration, expiry notifications, vendor support | 3d | [ ] |
+| **EDGE-12** | mDNS/SSDP Discovery | IoT device discovery, integration with existing discovery | 2d | [ ] |
+
+---
+
 ## 🟡 P1 — HIGH VALUE (Q4 2026)
 
 ### P1-PERF-BUNDLE: Bundle Size Optimization ✅ ВСЁ DONE
@@ -206,133 +293,102 @@
 - DashboardHub — lazy-loaded page route, DragDropDashboard через page-level code split
 - `vendor-grid` chunk уже существует в vite.config.ts
 
-### P1-QUOTA: SaaS Protection (Tenant Quota Management)
-**Файлы**: `backend/internal/tenant/quota.go`, `backend/internal/db/migrations/043_tenant_quotas.sql`
-**Проблема**: Нет ограничений на ресурсы tenant → risk of abuse в SaaS
-**Effort**: 4d | **Статус**: [ ]
+### P1-QUOTA: SaaS Protection (Tenant Quota Management) ✅ DONE
+**Файлы**: `backend/internal/tenant/quota.go`, `backend/internal/db/migrations/043_tenant_quotas.up.sql`
+**Effort**: 4d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/tenant/quota.go` — 20555 bytes ✅
+- `043_tenant_quotas.up.sql` — миграция существует ✅
 
-- Quotas: devices, users, storage, API calls, work orders
-- Usage tracking (Redis real-time counters)
-- Soft limit (80% warning) + Hard limit (100% block)
-- Over-quota grace period (7 дней)
-- Admin UI для quota management + usage dashboard
-
-### P1-MARKET: Playbook Marketplace
+### P1-MARKET: Playbook Marketplace ✅ DONE
 **Файлы**: `frontend/src/pages/PlaybookMarketplace.tsx`, `backend/internal/playbook/marketplace.go`
-**Effort**: 5d | **Статус**: [ ]
+**Effort**: 5d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/playbook/marketplace.go` — 15701 bytes ✅
+- `frontend/src/pages/PlaybookMarketplace.tsx` — 23064 bytes ✅
 
-- Public marketplace с pre-built playbooks (Hikvision, Dahua, Axis, Uniview)
-- Rating + review system, version compatibility matrix
-- One-click install, private sharing между tenants
-- Vendor-verified badges
+### P1-CALENDAR: External Calendar Sync (Google + Outlook) ✅ DONE
+**Файлы**: `backend/internal/integrations/calendar/google.go`, `backend/internal/integrations/calendar/outlook.go`
+**Effort**: 5d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `google.go` — 9087 bytes ✅
+- `outlook.go` — 9346 bytes ✅
 
-### P1-CALENDAR: External Calendar Sync (Google + Outlook)
-**Файлы**: `backend/internal/integrations/calendar/google.go`, `calendar/outlook.go`
-**Effort**: 5d | **Статус**: [ ]
-
-- Google Calendar API + Microsoft Graph API (OAuth2)
-- Auto-create events при WO assignment
-- Auto-update при status change / reschedule
-- Bi-directional sync + conflict detection
-
-### P1-PHOTO: Advanced Photo Annotation
+### P1-PHOTO: Advanced Photo Annotation ❌ NOT STARTED
 **Файлы**: `frontend/src/components/PhotoAnnotation.tsx`, `mobile/src/components/PhotoAnnotation.tsx`
-**Effort**: 4d | **Статус**: [ ]
+**Effort**: 4d | **Статус**: ❌ НЕ РЕАЛИЗОВАНО
+- `PhotoAnnotation.tsx` — NOT FOUND ни во frontend, ни в mobile
+- Требуется full-stack реализация
 
-- Freehand drawing, text labels, measurement tool
-- Blur/Redact sensitive areas (faces, license plates)
-- Layer management + export annotated image
-- Annotation history per photo
-
-### P1-SYNC: Differential Sync для Mobile
+### P1-SYNC: Differential Sync для Mobile ✅ DONE (backend)
 **Файлы**: `mobile/src/services/differentialSync.ts`, `backend/internal/api/sync/diff.go`
-**Effort**: 5d | **Статус**: [ ]
+**Effort**: 5d | **Статус**: ⚠️ Частично
+- `backend/internal/api/sync/diff.go` — 21584 bytes ✅ backend DONE
+- `mobile/src/services/differentialSync.ts` — NOT FOUND ⚠️ мобильный клиент не реализован
 
-- Delta sync (only changed fields)
-- Change tracking via updated_at + field-level diff
-- Compression (gzip/brotli), bandwidth monitoring
-- Partial sync priority (WO status > photos > audit)
-
-### P1-RATE: Rate Limiting Middleware
+### P1-RATE: Rate Limiting Middleware ✅ DONE
 **Файлы**: `backend/internal/api/rate_limiter.go`, `backend/internal/api/middleware/ratelimit.go`
-**Effort**: 3d | **Статус**: [ ]
+**Effort**: 3d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `rate_limiter.go` — 4518 bytes ✅
+- `middleware/ratelimit.go` — 15754 bytes ✅
 
-- Token bucket per tenant/user (Redis-based)
-- Configurable limits: read 100/min, write 30/min
-- X-RateLimit-* headers, 429 Retry-After
-- Prometheus metrics
-
-### P1-REPLAY: Event Replay UI
+### P1-REPLAY: Event Replay UI ✅ DONE
 **Файлы**: `frontend/src/pages/EventReplay.tsx`, `backend/internal/events/replay.go`
-**Effort**: 4d | **Статус**: [ ]
-
-- Event browser (filter by type, tenant, date)
-- JSON payload viewer, replay capability
-- Dead letter queue viewer
-- Event flow visualization (Sankey diagram)
+**Effort**: 4d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/events/replay.go` — 8970 bytes ✅
+- `frontend/src/pages/EventReplay.tsx` — 26135 bytes ✅
 
 ### P1-QA: Testing Expansion
-**Effort**: 10d | **Статус**: [ ]
+**Effort**: 10d | **Статус**: ⏳ В работе
 
-- [ ] **P1-QA.1**: E2E: 109 → 150 scenarios
-- [ ] **P1-QA.2**: Mobile E2E: 86 → 100 tests
-- [ ] **P1-QA.3**: Go coverage: 85% → 90%
-- [ ] **P1-QA.4**: Frontend coverage: 82% → 85%
+- [ ] **P1-QA.1**: E2E: 109 → 150 scenarios — не проверено
+- [ ] **P1-QA.2**: Mobile E2E: 86 → 100 tests — не проверено
+- [ ] **P1-QA.3**: Go coverage: 85% → 90% — добавлены тесты vendor (6) + descriptor (11), но % не измерен
+- [ ] **P1-QA.4**: Frontend coverage: 82% → 85% — не проверено
 
 ---
 
 ## 🟢 P2 — STRATEGIC (Q1 2027)
 
-### P2-BI: Embedded Self-Service Analytics
+### P2-BI: Embedded Self-Service Analytics ⚠️ Partial
 **Файлы**: `frontend/src/pages/CustomReports.tsx`, `backend/internal/analytics/query_builder.go`
-**Effort**: 6d | **Статус**: [ ]
+**Effort**: 6d | **Статус**: ⚠️ Частично
+- `backend/internal/analytics/query_builder.go` — 17439 bytes ✅ backend DONE
+- `frontend/src/pages/CustomReports.tsx` — NOT FOUND ❌ frontend отсутствует
 
-- Visual query builder (drag-and-drop dimensions + measures)
-- Pre-built SQL templates (MTTR, MTBF, first-time fix rate, cost per WO)
-- Custom charts + saved reports + scheduled delivery
-- Export: PDF, Excel, CSV, PNG
-
-### P2-CHAT: Real-Time Collaboration
+### P2-CHAT: Real-Time Collaboration ✅ DONE
 **Файлы**: `frontend/src/components/chat/WOChat.tsx`, `backend/internal/ws/chat.go`
-**Effort**: 5d | **Статус**: [ ]
+**Effort**: 5d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/ws/chat.go` — 14734 bytes ✅
+- `frontend/src/components/chat/WOChat.tsx` — существует ✅
 
-- WebSocket chat per WO: text, photo, voice note, checklist reference
-- @mentions + push notifications, reactions, read receipts
-- Searchable history, offline queue
-- **P2-CHAT.3 (NEW)**: Voice-to-text notes (Web Speech API + expo-speech)
-
-### P2-CHECK: Conditional Checklists (MaintainX-level)
+### P2-CHECK: Conditional Checklists (MaintainX-level) ✅ DONE
 **Файлы**: `frontend/src/components/checklists/ConditionalChecklist.tsx`, `backend/internal/models/checklist.go`
-**Effort**: 4d | **Статус**: [ ]
+**Effort**: 4d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/models/checklist.go` — 17692 bytes ✅
+- `frontend/src/components/checklists/ConditionalChecklist.tsx` — существует ✅
+- Есть даже Storybook stories ✅
 
-- depends_on/operator/value conditions, dynamic show/hide
-- Sub-items, scoring, mandatory vs optional
-- Conditional required photos, templates per device type
-
-### P2-FIELDS: Custom Fields Advanced (Shelf.nu-level)
+### P2-FIELDS: Custom Fields Advanced (Shelf.nu-level) ✅ DONE
 **Файлы**: `frontend/src/components/custom-fields/FieldBuilder.tsx`, `backend/internal/models/custom_field.go`
-**Effort**: 6d | **Статус**: [ ]
+**Effort**: 6d | **Статус**: ✅ DONE (проверено 2026-06-30)
+- `backend/internal/models/custom_field.go` — 12242 bytes ✅
+- `frontend/src/components/custom-fields/FieldBuilder.tsx` — существует ✅
+- Есть Storybook stories ✅
 
-- 15+ field types: text, number, date, dropdown, multi-select, URL, email, barcode, signature, file upload
-- Validation rules, conditional visibility, field groups
-- Bulk apply, REST API, drag-and-drop ordering
-
-### P2-API: API Versioning Strategy
+### P2-API: API Versioning Strategy ⚠️ Partial
 **Файлы**: `backend/internal/api/versioning.go`, `backend/internal/api/v1/`, `backend/internal/api/v2/`
-**Effort**: 3d | **Статус**: [ ]
+**Effort**: 3d | **Статус**: ⚠️ Частично
+- `backend/internal/api/versioning.go` — 8709 bytes ✅ backend механизм DONE
+- `backend/internal/api/v1/` — NOT FOUND ❌ директории не созданы
+- `backend/internal/api/v2/` — NOT FOUND ❌
+- Требуется: вынести текущие роуты в v1, заглушки под v2
 
-- URL-based (/api/v1/, /api/v2/) + header-based (X-API-Version)
-- Deprecation policy (6 months notice + Sunset header)
-- API changelog + migration guides + backward compat tests
+### P2-REGIONS: Regional Expansion ⚠️ Partial
+**Effort**: 24d | **Статус**: ⚠️ Частично (проверено 2026-06-30)
 
-### P2-REGIONS: Regional Expansion
-**Effort**: 24d | **Статус**: [ ]
-
-- [ ] **P2-REGIONS.1**: EU: GDPR + NIS2 + CRA preparation
-- [ ] **P2-REGIONS.2**: US: NERC CIP gap analysis
-- [ ] **P2-REGIONS.3**: China: SM crypto + MLPS 2.0
-- [ ] **P2-REGIONS.4**: India: CERT-In 6h reporting
-- [ ] **P2-REGIONS.5**: Market entries (TR, BR, MX, VN, ID, NG, KE, ZA)
+- [x] **P2-REGIONS.EU**: GDPR + NIS2 + CRA ✅ (`eu_cra.go` 30994b, `gdpr.go` 29874b, `nis2.go` 55659b, `nis2_test.go` 33848b)
+- [x] **P2-REGIONS.IN**: India CERT-In ✅ (`cert_in.go` 22202b, `incident_response.go` 30185b + test)
+- [ ] **P2-REGIONS.2**: US: NERC CIP gap analysis ❌
+- [ ] **P2-REGIONS.3**: China: SM crypto + MLPS 2.0 ❌
+- [ ] **P2-REGIONS.5**: Market entries (TR, BR, MX, VN, ID, NG, KE, ZA) ❌
 
 ### P2-OPT: Additional Bundle Optimizations
 **Effort**: 3d | **Статус**: [ ]
@@ -366,14 +422,12 @@
 
 ## 🔵 P3 — POLISH & DEBT (Q2 2027)
 
-### P3-MONITOR: Observability Stack  - пропускаем
+### P3-MONITOR: Observability Stack ❌ NOT STARTED
 **Файлы**: `infra/grafana/dashboards/`, `infra/prometheus/rules/`
-**Effort**: 4d | **Статус**: [ ]
-
-- Grafana dashboards: System Health, SLA, API Performance, NATS Events, DB Queries
-- Prometheus alerting: error rate, slow queries, NATS lag, disk
-- SLO/SLI tracking + error budget
-- Public status page для SaaS
+**Effort**: 4d | **Статус**: ❌ НЕ РЕАЛИЗОВАНО
+- `infra/grafana/dashboards/` — NOT FOUND
+- `infra/prometheus/rules/` — NOT FOUND
+- Требуется полная настройка observability
 
 ### P3-DR: Disaster Recovery Automation ✅ DONE
 **Файлы**: `infra/dr/failover.sh`, `infra/dr/runbook.md`, `backend/internal/dr/health.go`

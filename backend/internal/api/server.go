@@ -49,11 +49,13 @@ import (
 	"gb-telemetry-collector/internal/cmms/factory"
 	"gb-telemetry-collector/internal/compliance"
 	"gb-telemetry-collector/internal/config"
+	"gb-telemetry-collector/internal/crypto"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/dr"
 	"gb-telemetry-collector/internal/events"
 	"gb-telemetry-collector/internal/featureflag"
 	"gb-telemetry-collector/internal/multiregion"
+	"gb-telemetry-collector/internal/protocols/descriptor"
 	"gb-telemetry-collector/internal/rca"
 	"gb-telemetry-collector/internal/recaptcha"
 	"gb-telemetry-collector/internal/reports"
@@ -220,6 +222,30 @@ type Server struct {
 
 	// P3-WL: White-Label Theming — Tenant Branding Store
 	brandingStore *tenant.BrandingStore
+
+	// CRED-02: Credential Manager — безопасное хранение credentials устройств
+	// Шифрование AES-256-GCM / belt-gcm (СТБ 34.101.31)
+	// Compliance: ISO 27001 A.10.1, OWASP ASVS V2.5, Приказ ОАЦ №66 п. 7.18.3
+	credentialManager crypto.CredentialManager
+
+	// P0-EDGE.6: Device Settings Provider — получение/обновление настроек устройств
+	// Использует VendorDevice.GetSettings() / SetSettings() через DeviceFactory
+	// Compliance: IEC 62443-3-3 SL-3, OWASP ASVS V5.1
+	deviceSettingsProvider DeviceSettingsProvider
+
+	// P0-EDGE.6: Device Log Provider — получение логов устройств
+	// Использует VendorDevice.GetLogs() с фильтрацией по времени и пагинацией
+	// Compliance: IEC 62443-3-3 SL-3, ISO 27001 A.12.6.1
+	deviceLogProvider DeviceLogProvider
+
+	// P0-EDGE.6: Agent Store — CRUD операции для edge-агентов
+	// Таблица agents: id, name, site_id, status, last_seen, version, config
+	// Compliance: IEC 62443-3-3 SL-3, Приказ ОАЦ №66 п. 7.18
+	agentStore AgentStore
+
+	// PROTO-03: Protocol Descriptor Registry — JSON-дескрипторы протоколов
+	// Используется Edge-агентами для динамической загрузки протоколов
+	descriptorRegistry *descriptor.DescriptorRegistry
 }
 
 // securityHeadersMiddleware добавляет security headers ко всем ответам.
@@ -401,6 +427,24 @@ func (s *Server) SetRedisClient(client RedisClient) {
 // Использует *redis.Client напрямую для Lua scripting (P1-RATE).
 func (s *Server) SetRateLimitRedis(client *redis.Client) {
 	s.rateLimitRedis = client
+}
+
+// SetDeviceSettingsProvider устанавливает провайдер настроек устройств (P0-EDGE.6).
+// Используется Device Settings endpoints для получения/обновления/применения настроек.
+func (s *Server) SetDeviceSettingsProvider(provider DeviceSettingsProvider) {
+	s.deviceSettingsProvider = provider
+}
+
+// SetDeviceLogProvider устанавливает провайдер логов устройств (P0-EDGE.6).
+// Используется Device Logs endpoints для получения логов с фильтрацией и пагинацией.
+func (s *Server) SetDeviceLogProvider(provider DeviceLogProvider) {
+	s.deviceLogProvider = provider
+}
+
+// SetAgentStore устанавливает хранилище агентов (P0-EDGE.6).
+// Используется Agent Management endpoints для CRUD операций над edge-агентами.
+func (s *Server) SetAgentStore(store AgentStore) {
+	s.agentStore = store
 }
 
 // SetNATSConn устанавливает NATS соединение для health checks,

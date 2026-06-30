@@ -1,0 +1,57 @@
+# =============================================================================
+# Dockerfile for OpenWrt Cross-Compilation of Edge Agent
+#
+# Builds the edge-agent binary for multiple OpenWrt target architectures
+# using Go's cross-compilation capabilities.
+#
+# Usage:
+#   docker build -t edge-agent-builder -f Dockerfile.openwrt .
+#   docker run --rm -v $(pwd)/build:/build edge-agent-builder
+#
+# Compliance:
+#   - Приказ ОАЦ №66 п. 7.18 — контроль целостности бинарников
+#   - IEC 62443-3-3 SL-3 — безопасная сборка в изолированной среде
+# =============================================================================
+
+FROM golang:1.25-alpine AS builder
+
+# Install build tools
+RUN apk add --no-cache \
+    git \
+    ca-certificates \
+    upx \
+    make \
+    bash
+
+WORKDIR /app
+
+# Copy go.mod and go.sum for dependency caching
+COPY go.mod ./
+# COPY go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build script entrypoint
+COPY scripts/build_openwrt.sh /build.sh
+RUN chmod +x /build.sh
+
+# Build all targets
+RUN mkdir -p /build && \
+    VERSION=$(git describe --tags --always 2>/dev/null || echo "dev") && \
+    export VERSION && \
+    /build.sh all
+
+# =============================================================================
+# Minimal runtime image (just the binaries for extraction)
+# =============================================================================
+FROM scratch AS runtime
+
+COPY --from=builder /build/ /build/
+COPY --from=builder /app/scripts/generate_certs.sh /build/
+
+# Default: just list the built binaries
+CMD ["ls", "-lh", "/build/"]
