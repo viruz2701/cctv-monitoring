@@ -47,6 +47,14 @@ const (
 	RegionCN = "CN"
 	// RegionUS — США (FIPS 140-3, HIPAA, SOC 2) — stub
 	RegionUS = "US"
+	// RegionVN — Вьетнам (TCVN 11930:2017, Camera Standard 2025)
+	RegionVN = "VN"
+	// RegionID — Индонезия (SNI 27001, UU PDP)
+	RegionID = "ID"
+	// RegionNG — Нигерия (NDPR)
+	RegionNG = "NG"
+	// RegionKE — Кения (DPA 2019)
+	RegionKE = "KE"
 )
 
 // ValidRegions — список поддерживаемых регионов на текущем этапе.

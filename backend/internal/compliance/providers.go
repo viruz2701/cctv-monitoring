@@ -42,7 +42,7 @@ import (
 
 // init обновляет ValidRegions при загрузке пакета.
 func init() {
-	ValidRegions = []string{RegionBY, RegionEU, RegionINTL, RegionRU, RegionCN, RegionUS}
+	ValidRegions = []string{RegionBY, RegionEU, RegionINTL, RegionRU, RegionCN, RegionUS, RegionVN, RegionID, RegionNG, RegionKE}
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -573,6 +573,435 @@ func (p *INTLProfile) Session() SessionPolicy {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// VN Profile — Вьетнам (TCVN 11930:2017, Camera Standard 2025)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - TCVN 11930:2017 — Information security
+//   - Camera Standard 2025 — CCTV-specific regulation
+//   - Cyber Information Security Law (2015)
+//   - Personal Data Protection (Decree 13/2023/ND-CP)
+//   - Data residency requirements (localization)
+//   - ISO 27001 A.5.1 — Information security policies
+//   - IEC 62443-3-3 — IACS Security
+//   - OWASP ASVS L3
+
+// VNProfile implements ComplianceProfile для Вьетнама.
+type VNProfile struct {
+	*BaseProfile
+}
+
+// NewVNProfile создаёт VN Compliance Profile.
+func NewVNProfile() *VNProfile {
+	return &VNProfile{
+		BaseProfile: NewBaseProfile(RegionVN,
+			"TCVN 11930:2017 (Vietnam)",
+			"Профиль соответствия для Вьетнама. TCVN 11930:2017, Camera Standard 2025, Decree 13/2023/ND-CP.",
+		),
+	}
+}
+
+func (p *VNProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoAES256GCM, // AES-256-GCM (международный, compatible)
+		KeySize:       256,
+		AADRequired:   true,  // TCVN 11930: AAD рекомендуется
+		TLSMinVersion: "1.3", // Camera Standard 2025
+	}
+}
+
+func (p *VNProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSHA256,
+		SaltRequired:   true, // TCVN 11930: соль обязательна
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *VNProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureES256, // ECDSA P-256
+		Curve:       "P-256",
+		HashForSign: HashSHA256,
+	}
+}
+
+func (p *VNProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              8,
+		RequireMFA:             true, // Camera Standard 2025: MFA required
+		MFATypes:               []MFAType{MFATOTP, MFASMS},
+		MaxAgeDays:             90, // Ротация 90 дней
+		HistoryCount:           3,
+		RequireComplexity:      true,
+		LockoutThreshold:       5,
+		LockoutDurationMinutes: 15,
+	}
+}
+
+func (p *VNProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionVN},
+		CrossBorderTransferAllowed: true, // С разрешения Субъекта (Decree 13)
+		ColdStorageRegion:          RegionVN,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true, // TCVN 11930
+	}
+}
+
+func (p *VNProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       730, // 2 года (TCVN 11930)
+		EventDataDays:      365, // 1 год
+		VideoDataDays:      90,  // 90 дней (Camera Standard 2025)
+		LegalHoldSupported: true,
+		AutoDeleteEnabled:  true,
+	}
+}
+
+func (p *VNProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true, // TCVN 11930 A.12.4
+		ChainHashPrev:   false,
+		RetentionYears:  2,
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *VNProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       30, // 30 мин (Camera Standard 2025)
+		MaxSessionHours:          12,
+		MaxConcurrentSessions:    3,
+		FailedLoginLockout:       5,
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ID Profile — Индонезия (SNI 27001, UU PDP)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - SNI ISO/IEC 27001 — National ISMS standard (ISO 27001 equivalent)
+//   - UU PDP (Law No. 27 of 2022) — Personal Data Protection
+//   - Permenkominfo No. 20/2016 — Personal Data Protection
+//   - ISO 27001 A.5.1 — Information security policies
+//   - IEC 62443-3-3 — IACS Security
+
+// IDProfile implements ComplianceProfile для Индонезии.
+type IDProfile struct {
+	*BaseProfile
+}
+
+// NewIDProfile создаёт ID Compliance Profile.
+func NewIDProfile() *IDProfile {
+	return &IDProfile{
+		BaseProfile: NewBaseProfile(RegionID,
+			"SNI 27001 / UU PDP (Indonesia)",
+			"Профиль соответствия для Индонезии. SNI ISO/IEC 27001, UU PDP, Permenkominfo 20/2016.",
+		),
+	}
+}
+
+func (p *IDProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoAES256GCM, // AES-256-GCM
+		KeySize:       256,
+		AADRequired:   false,
+		TLSMinVersion: "1.2", // SNI ISO/IEC 27001
+	}
+}
+
+func (p *IDProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSHA256,
+		SaltRequired:   false,
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *IDProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureES256,
+		Curve:       "P-256",
+		HashForSign: HashSHA256,
+	}
+}
+
+func (p *IDProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              8,
+		RequireMFA:             false, // UU PDP не требует MFA
+		MFATypes:               []MFAType{MFATOTP},
+		MaxAgeDays:             0, // Без принудительной ротации
+		HistoryCount:           3,
+		RequireComplexity:      true,
+		LockoutThreshold:       5,
+		LockoutDurationMinutes: 15,
+	}
+}
+
+func (p *IDProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionID},
+		CrossBorderTransferAllowed: true, // UU PDP Art. 55: с согласия субъекта
+		ColdStorageRegion:          RegionID,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true,
+	}
+}
+
+func (p *IDProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       365, // 1 год (UU PDP)
+		EventDataDays:      180,
+		VideoDataDays:      30,
+		LegalHoldSupported: true,
+		AutoDeleteEnabled:  true,
+	}
+}
+
+func (p *IDProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true, // SNI ISO/IEC 27001 A.12.4
+		ChainHashPrev:   false,
+		RetentionYears:  1,
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *IDProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       60,
+		MaxSessionHours:          24,
+		MaxConcurrentSessions:    5,
+		FailedLoginLockout:       5,
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NG Profile — Нигерия (NDPR — Nigeria Data Protection Regulation)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - NDPR 2019 — Nigeria Data Protection Regulation
+//   - NDPR 2022 — Implementation Framework
+//   - NITDA Guidelines — National IT Development Agency
+//   - ISO 27001 A.5.1 — Information security policies
+//   - IEC 62443-3-3 — IACS Security
+//   - Использует INTL baseline с NDPR-specific настройками
+
+// NGProfile implements ComplianceProfile для Нигерии.
+type NGProfile struct {
+	*BaseProfile
+}
+
+// NewNGProfile создаёт NG Compliance Profile.
+func NewNGProfile() *NGProfile {
+	return &NGProfile{
+		BaseProfile: NewBaseProfile(RegionNG,
+			"NDPR (Nigeria)",
+			"Профиль соответствия для Нигерии. NDPR 2019/2022, NITDA Guidelines.",
+		),
+	}
+}
+
+func (p *NGProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoAES256GCM, // AES-256-GCM
+		KeySize:       256,
+		AADRequired:   false,
+		TLSMinVersion: "1.2",
+	}
+}
+
+func (p *NGProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSHA256,
+		SaltRequired:   false,
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *NGProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureES256,
+		Curve:       "P-256",
+		HashForSign: HashSHA256,
+	}
+}
+
+func (p *NGProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              8,
+		RequireMFA:             false,
+		MFATypes:               []MFAType{MFATOTP},
+		MaxAgeDays:             0,
+		HistoryCount:           3,
+		RequireComplexity:      true,
+		LockoutThreshold:       5,
+		LockoutDurationMinutes: 15,
+	}
+}
+
+func (p *NGProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             ValidRegions,
+		CrossBorderTransferAllowed: true, // NDPR: с адекватной защитой
+		ColdStorageRegion:          "",
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true,
+	}
+}
+
+func (p *NGProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       365, // 1 год (NDPR)
+		EventDataDays:      90,
+		VideoDataDays:      30,
+		LegalHoldSupported: false,
+		AutoDeleteEnabled:  true,
+	}
+}
+
+func (p *NGProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    false,
+		ChainHashPrev:   false,
+		RetentionYears:  1,
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *NGProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       120,
+		MaxSessionHours:          24,
+		MaxConcurrentSessions:    10,
+		FailedLoginLockout:       5,
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KE Profile — Кения (DPA 2019 — Data Protection Act)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Соответствие стандартам:
+//   - DPA 2019 — Kenya Data Protection Act
+//   - Data Protection Regulations 2021
+//   - Digital Health Act specified requirements
+//   - ISO 27001 A.5.1 — Information security policies
+//   - IEC 62443-3-3 — IACS Security
+//   - M-Pesa integration security requirements (fintech adjacent)
+
+// KEProfile implements ComplianceProfile для Кении.
+type KEProfile struct {
+	*BaseProfile
+}
+
+// NewKEProfile создаёт KE Compliance Profile.
+func NewKEProfile() *KEProfile {
+	return &KEProfile{
+		BaseProfile: NewBaseProfile(RegionKE,
+			"DPA 2019 (Kenya)",
+			"Профиль соответствия для Кении. Data Protection Act 2019, Regulations 2021.",
+		),
+	}
+}
+
+func (p *KEProfile) Crypto() CryptoPolicy {
+	return CryptoPolicy{
+		Provider:      CryptoAES256GCM, // AES-256-GCM
+		KeySize:       256,
+		AADRequired:   true, // DPA 2019: дополнительная защита
+		TLSMinVersion: "1.2",
+	}
+}
+
+func (p *KEProfile) Hash() HashPolicy {
+	return HashPolicy{
+		Provider:       HashSHA256,
+		SaltRequired:   true, // DPA 2019: соль для хешей
+		OutputSizeBits: 256,
+	}
+}
+
+func (p *KEProfile) Signature() SignaturePolicy {
+	return SignaturePolicy{
+		Provider:    SignatureES256,
+		Curve:       "P-256",
+		HashForSign: HashSHA256,
+	}
+}
+
+func (p *KEProfile) Password() PasswordPolicy {
+	return PasswordPolicy{
+		HashProvider:           PasswordArgon2ID,
+		MinLength:              8,
+		RequireMFA:             true,                       // DPA 2019: MPA рекомендуется
+		MFATypes:               []MFAType{MFATOTP, MFASMS}, // SMS для M-Pesa регионов
+		MaxAgeDays:             90,                         // Ротация 90 дней (DPA Regulations)
+		HistoryCount:           3,
+		RequireComplexity:      true,
+		LockoutThreshold:       5,
+		LockoutDurationMinutes: 15,
+	}
+}
+
+func (p *KEProfile) DataResidency() DataResidencyPolicy {
+	return DataResidencyPolicy{
+		AllowedRegions:             []string{RegionKE},
+		CrossBorderTransferAllowed: true, // DPA 2019 Art. 51: с согласия
+		ColdStorageRegion:          RegionKE,
+		StorageTiers:               []StorageTier{StorageHot, StorageCold},
+		RequireEncryptionAtRest:    true,
+	}
+}
+
+func (p *KEProfile) Retention() RetentionPolicy {
+	return RetentionPolicy{
+		AuditLogDays:       365, // 1 год (DPA 2019)
+		EventDataDays:      180,
+		VideoDataDays:      30,
+		LegalHoldSupported: true, // DPA 2019 Art. 26: legal hold
+		AutoDeleteEnabled:  true,
+	}
+}
+
+func (p *KEProfile) Audit() AuditPolicy {
+	return AuditPolicy{
+		HMACRequired:    true, // DPA 2019: audit trail
+		ChainHashPrev:   false,
+		RetentionYears:  1,
+		LogAllMutations: true,
+		IncludeTraceID:  true,
+	}
+}
+
+func (p *KEProfile) Session() SessionPolicy {
+	return SessionPolicy{
+		IdleTimeoutMinutes:       60,
+		MaxSessionHours:          24,
+		MaxConcurrentSessions:    5,
+		FailedLoginLockout:       5,
+		RequireRefreshToken:      true,
+		WarnBeforeTimeoutMinutes: 5,
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // US Profile — США (NIST SP 800-53, FedRAMP, FIPS 140-3)
 // ═══════════════════════════════════════════════════════════════════════════
 //
@@ -704,6 +1133,10 @@ func RegisterBaselineProfiles(logger *slog.Logger) *ProfileRegistry {
 		WithProfile(NewEUProfile()),
 		WithProfile(NewCNProfile()),
 		WithProfile(NewUSProfile()),
+		WithProfile(NewVNProfile()),
+		WithProfile(NewIDProfile()),
+		WithProfile(NewNGProfile()),
+		WithProfile(NewKEProfile()),
 		WithProfile(NewINTLProfile()),
 	)
 

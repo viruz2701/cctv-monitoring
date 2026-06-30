@@ -49,7 +49,8 @@ func NewFromProfile(p compliance.ComplianceProfile) (stb.CryptoProvider, error) 
 	switch p.Region() {
 	case compliance.RegionBY:
 		return NewBeltCrypto(), nil
-	case compliance.RegionEU, compliance.RegionINTL, compliance.RegionUS:
+	case compliance.RegionEU, compliance.RegionINTL, compliance.RegionUS,
+		compliance.RegionVN, compliance.RegionID, compliance.RegionNG, compliance.RegionKE:
 		return NewAESCrypto(), nil
 	case compliance.RegionRU:
 		return NewGOSTCrypto(), nil
