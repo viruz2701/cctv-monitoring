@@ -153,7 +153,7 @@ func DBToSiteInfo(wo models.WorkOrder) *SiteInfo {
 }
 
 // VerifyChecklist проверяет, что все элементы чек-листа выполнены.
-func VerifyChecklist(items []models.ChecklistItem) bool {
+func VerifyChecklist(items []models.BasicChecklistItem) bool {
 	if len(items) == 0 {
 		return false
 	}

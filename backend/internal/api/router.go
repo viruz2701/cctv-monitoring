@@ -226,6 +226,9 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.playbookMarketplace != nil {
 			s.mountPlaybookMarketplaceRoutes(r)
 		}
+
+		// P2-CHECK: Conditional Checklists (MaintainX-level)
+		s.mountChecklistRoutes(r)
 	})
 
 	// ── External API key auth ────────────────────────────────────────

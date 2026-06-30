@@ -60,8 +60,9 @@ type MaintenanceSchedule struct {
 	AssigneeName string `json:"assignee_name,omitempty"`
 }
 
-// ChecklistItem — элемент чек-листа
-type ChecklistItem struct {
+// BasicChecklistItem — простой элемент чек-листа (legacy для MaintenanceSchedule).
+// Заменён на models.ChecklistItem из checklist.go для conditional checklists.
+type BasicChecklistItem struct {
 	Task      string `json:"task"`
 	Completed bool   `json:"completed"`
 }
