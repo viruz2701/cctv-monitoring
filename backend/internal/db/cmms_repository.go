@@ -460,22 +460,46 @@ func (db *DB) AssignWorkOrder(id string, userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Получаем текущего assignee для уменьшения workload
-	var oldAssignee *string
-	_ = db.Pool.QueryRow(ctx, "SELECT assigned_to FROM work_orders WHERE id = $1", id).Scan(&oldAssignee)
+	// Атомарное назначение: SELECT FOR UPDATE + проверка assigned_to
+	// Предотвращает TOCTOU race (P0-CR-10): два concurrent вызова не назначат на разных техников
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("assign work_order %s: begin tx: %w", id, err)
+	}
+	defer tx.Rollback(ctx)
 
-	_, err := db.Pool.Exec(ctx, `
-		UPDATE work_orders SET assigned_to = $1, updated_at = NOW() WHERE id = $2
+	// Блокируем строку и проверяем, не назначена ли уже
+	var oldAssignee *string
+	err = tx.QueryRow(ctx, "SELECT assigned_to FROM work_orders WHERE id = $1 FOR UPDATE", id).Scan(&oldAssignee)
+	if err != nil {
+		return fmt.Errorf("assign work_order %s: select for update: %w", id, err)
+	}
+
+	// Если уже назначена — возвращаем ошибку (caller должен обработать)
+	if oldAssignee != nil && *oldAssignee != "" {
+		return fmt.Errorf("assign work_order %s: already assigned to %s", id, *oldAssignee)
+	}
+
+	// Атомарный UPDATE с проверкой
+	tag, err := tx.Exec(ctx, `
+		UPDATE work_orders SET assigned_to = $1, updated_at = NOW() WHERE id = $2 AND assigned_to IS NULL
 	`, userID, id)
 	if err != nil {
 		return fmt.Errorf("assign work_order %s: %w", id, err)
 	}
-
-	// Обновляем workload
-	if oldAssignee != nil {
-		_, _ = db.Pool.Exec(ctx, `UPDATE users SET current_workload = GREATEST(0, current_workload - 1) WHERE id = $1`, *oldAssignee)
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("assign work_order %s: already assigned (concurrent)", id)
 	}
-	_, _ = db.Pool.Exec(ctx, `UPDATE users SET current_workload = current_workload + 1 WHERE id = $1`, userID)
+
+	// Обновляем workload нового техника
+	_, err = tx.Exec(ctx, `UPDATE users SET current_workload = current_workload + 1 WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("assign work_order %s: update workload: %w", id, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("assign work_order %s: commit: %w", id, err)
+	}
 
 	return nil
 }

@@ -135,17 +135,17 @@
 ## 🔴 P0-CR: CRITICAL — Production Blockers (Must Fix Before Launch)
 
 ### P0-CR-01: Audit Log prev_hash Migration Rollback
-**Статус**: ❌ NOT FIXED
+**Статус**: ✅ FALSE ALARM — миграция 043 не удаляет prev_hash
 **Источник**: DevSecOps SEC-01
 **Файлы**: `backend/internal/db/migrations/043_tenant_quotas.up.sql`
-**Проблема**: Миграция удаляет `prev_hash` колонку из `audit_log` — потеря tamper-proof гарантии (ISO 27001 A.12.4, СТБ 34.101.27)
-**Решение**: Revert миграции, восстановить `prev_hash` + hash chain verification
-**Effort**: 0.5d
-**Критерий приёмки**:
-- `prev_hash` колонка существует в `audit_log`
-- Hash chain verification тесты проходят
-- Migration rollback тест успешен
-- ADR-021 создан с объяснением
+**Проблема**: Анализ показал, что `043_tenant_quotas.up.sql` **не удаляет** `prev_hash` из `audit_log`. Миграция только создаёт таблицы `tenant_quotas` и `tenant_quota_history`. `prev_hash` добавлен в `006_iso27001_asset_management.up.sql` и `034_audit_chain.up.sql` — обе с `IF NOT EXISTS`. Down-миграции (006, 034) содержат `DROP COLUMN IF EXISTS prev_hash`, но они не выполнялись.
+**Решение**: Ошибка в описании задачи. Миграция 043 не затрагивает audit_log. Реального бага нет.
+**Проверка**:
+- ✅ `grep -r "prev_hash" 043_tenant_quotas.up.sql` — 0 результатов
+- ✅ `grep "ALTER TABLE audit_log" 043_tenant_quotas.up.sql` — 0 результатов
+- ✅ `backend/internal/audit/chain.go` корректно использует prev_hash для HMAC chain
+- ✅ Верификация цепочки через `verify_audit_chain()` существует
+**Effort**: 0d (false alarm)
 **Compliance**: ISO 27001 A.12.4, СТБ 34.101.27, ОАЦ РБ
 
 ### P0-CR-02: Python ETL SQL Injection
@@ -156,16 +156,20 @@
 **Решение**: Parameterized queries через psycopg3 (уже реализовано)
 
 ### P0-CR-03: CMMSIntegrator Race Condition
-**Статус**: ❌ NOT FIXED
+**Статус**: ✅ FIXED (commit `7e5df11`)
 **Источник**: Debug DBG-02
 **Файлы**: `backend/internal/agent/cmms_integration.go`
 **Проблема**: `ticketMap map[string]string` без mutex → `fatal error: concurrent map read/write`
-**Решение**: Добавить `sync.RWMutex` или заменить на `sync.Map`
+**Решение**: Добавлен `sync.RWMutex`:
+- `AutoCreateTicket` → `Lock()` при записи
+- `AutoCloseTicket` → `RLock()` при чтении, `Lock()` при `delete`
+- `GetTicketForDevice` → `RLock()` при чтении
+- Добавлены concurrent-тесты: `TestCMMSIntegrator_ConcurrentAccess` (100 goroutines create/close/get) + `TestCMMSIntegrator_ConcurrentReadWriteRace` (50 readers + 50 writers)
 **Effort**: 0.5d
 **Критерий приёмки**:
-- `go test -race ./internal/agent/...` = PASS
-- Concurrent test: 100 goroutines read/write ticketMap = no panic
-- Production monitoring: 0 race condition alerts за 7 дней
+- ✅ `go test -race ./internal/agent/...` = PASS (46s)
+- ✅ Concurrent test: 100 goroutines read/write ticketMap = no panic
+- ⏳ Production monitoring: 0 race condition alerts за 7 дней
 
 ### P0-CR-04: Python ↔ Go Subprocess Deadlock
 **Статус**: ❌ NOT FIXED

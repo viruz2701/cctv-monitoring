@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -338,8 +339,27 @@ func (d *AutoDispatcher) AutoAssign(ctx context.Context, workOrderID string) (*A
 	// 7. Берём лучшего кандидата
 	best := candidates[0]
 
-	// 8. Назначаем
+	// 8. Атомарное назначение (P0-CR-10: SELECT FOR UPDATE в AssignWorkOrder)
 	if err := d.woProvider.AssignWorkOrder(ctx, workOrderID, best.UserID); err != nil {
+		// Обрабатываем race condition: другой dispatcher уже назначил этот WO
+		if strings.Contains(err.Error(), "already assigned") {
+			// Перечитываем WO, чтобы узнать кто назначен
+			wo, reloadErr := d.woProvider.GetWorkOrder(ctx, workOrderID)
+			if reloadErr == nil && wo != nil && wo.AssignedTo != nil {
+				d.logger.Warn("work order was concurrently assigned",
+					"work_order_id", workOrderID,
+					"assigned_to", *wo.AssignedTo,
+					"attempted", best.UserID,
+				)
+				return &AssignResult{
+					WorkOrderID:  workOrderID,
+					TechnicianID: *wo.AssignedTo,
+					Status:       AssignStatusAlreadyAssigned,
+					Reason:       "concurrent_assignment",
+				}, nil
+			}
+		}
+
 		d.logAudit(ctx, &DispatchAuditEntry{
 			WorkOrderID:  workOrderID,
 			TechnicianID: best.UserID,
