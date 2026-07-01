@@ -19,8 +19,16 @@ import (
 
 // ─── Статистические функции ───────────────────────────────────────────────
 
+// MaxFiniteZScore — максимальное конечное значение z-score.
+// Используется вместо math.Inf для предотвращения ошибки JSON сериализации
+// "json: unsupported value: +Inf" (P1-HI-08).
+const MaxFiniteZScore = 100.0
+
 // calculateZScore вычисляет z-score для значения относительно выборки.
 // z = (x - mean) / stddev
+//
+// Защита от division by zero: при stdDev == 0 возвращает конечное значение,
+// а не math.Inf, чтобы избежать ошибки JSON сериализации (P1-HI-08).
 func calculateZScore(value float64, values []float64) (float64, float64, float64) {
 	n := len(values)
 	if n == 0 {
@@ -47,8 +55,10 @@ func calculateZScore(value float64, values []float64) (float64, float64, float64
 		if value == mean {
 			return 0, mean, 0
 		}
-		// Если stdDev = 0, но value != mean — это бесконечная аномалия
-		return math.Inf(1), mean, 0
+		// Если stdDev = 0, но value != mean — все исторические значения
+		// одинаковы, текущее отличается. Возвращаем MaxFiniteZScore вместо
+		// math.Inf, т.к. Inf не сериализуется в JSON (P1-HI-08).
+		return MaxFiniteZScore, mean, 0
 	}
 
 	z := (value - mean) / stdDev

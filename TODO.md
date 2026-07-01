@@ -239,6 +239,24 @@
 - ⏳ DB integration test с concurrent assign (testcontainers)
 - ⏳ Production monitoring: 0 duplicate assignments за 7 дней
 
+### P0-CR-12: Form State Loss on Navigation
+**Статус**: ✅ FIXED (commit `2b0e13c`)
+**Источник**: Frontend FE-05
+**Файлы**: `frontend/src/hooks/useUnsavedChanges.ts`, `frontend/src/pages/WorkOrderDetail/WorkOrderDetail.tsx`
+**Проблема**: Техник заполняет форму завершения WO (notes, photos, parts, reason) → навигация/закрытие вкладки → весь прогресс потерян
+**Решение**: Создан хук `useUnsavedChanges`:
+- `useBlocker` (React Router v7) для блокировки SPA-навигации
+- `beforeunload` для блокировки закрытия вкладки/браузера
+- `isFormDirty` мемоизированная проверка dirty state (notes, photos, parts, reason)
+- Confirm-диалог с возможностью подтвердить или отменить навигацию
+**Effort**: 1d
+**Критерий приёмки**:
+- ✅ `npx tsc --noEmit` = PASS
+- ✅ Форма с данными → попытка навигации → confirm диалог
+- ✅ Форма с данными → закрытие вкладки → beforeunload диалог
+- ✅ Чистая форма → навигация без предупреждения
+- ⏳ E2E тест: заполнить форму → navigate away → confirm → данные сохранены
+
 ### P0-CR-11: Route-level Error Boundaries Missing
 **Статус**: ✅ FIXED (ErrorBoundary, RouteErrorBoundary, ErrorBoundaryLite, WidgetErrorBoundary, SentryErrorBoundary — все существуют)
 **Источник**: Frontend FE-06
