@@ -30,6 +30,11 @@ export function useAlarmWebSocket() {
     const maxReconnectDelay = 30000; // 30 seconds
     const scheduleReconnectRef = useRef<() => void>(() => {});
     const wsSupportedRef = useRef(true);
+    const mountedRef = useRef(true); // P1-HI-17: предотвращает reconnect после unmount
+
+    // Стабильная ссылка на toast (P1-HI-17: убираем toast из зависимостей connect)
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
 
     const connect = useCallback(() => {
         if (!token || !user || !wsSupportedRef.current) return;
@@ -45,8 +50,7 @@ export function useAlarmWebSocket() {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'alarm' && data.alarm) {
-                    toast.error(data.alarm.description || `Alarm triggered on device ${data.alarm.device_id}`);
-                    // Alarm data comes from useAlarms() React Query hook on next refetch
+                    toastRef.current.error(data.alarm.description || `Alarm triggered on device ${data.alarm.device_id}`);
                 }
             } catch (err) {
                 console.error('Failed to parse WebSocket message', err);
@@ -55,6 +59,9 @@ export function useAlarmWebSocket() {
 
         ws.onclose = (event) => {
             wsRef.current = null;
+
+            // P1-HI-17: не реконнектимся после unmount компонента
+            if (!mountedRef.current) return;
 
             // Если код закрытия указывает на ошибку авторизации — не реконнектимся
             if (AUTH_CLOSE_CODES.has(event.code)) {
@@ -78,7 +85,7 @@ export function useAlarmWebSocket() {
         };
 
         wsRef.current = ws;
-    }, [token, user, toast]);
+    }, [token, user]); // P1-HI-17: убран toast из зависимостей
 
     const scheduleReconnect = useCallback(() => {
         if (reconnectTimeoutRef.current) {
@@ -89,7 +96,10 @@ export function useAlarmWebSocket() {
         reconnectAttempts.current += 1;
 
         reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
+            // P1-HI-17: проверка mounted перед reconnect
+            if (mountedRef.current) {
+                connect();
+            }
         }, delay);
     }, [connect]);
 
@@ -104,6 +114,8 @@ export function useAlarmWebSocket() {
     }, [token]);
 
     useEffect(() => {
+        mountedRef.current = true;
+
         if (token && user) {
             connect();
         } else {
@@ -119,6 +131,8 @@ export function useAlarmWebSocket() {
         }
 
         return () => {
+            mountedRef.current = false; // P1-HI-17: сигнал для onclose не реконнектиться
+
             if (wsRef.current) {
                 wsRef.current.close();
                 wsRef.current = null;
