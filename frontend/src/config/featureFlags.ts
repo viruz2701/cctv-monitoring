@@ -13,6 +13,9 @@ export interface FeatureFlags {
   /** UX-3.2: Auto-fill TO Journals при закрытии WorkOrder */
   to_auto_generation: boolean;
 
+  /** UX-4.2: QR Mobile Lifecycle — Onboarding / Maintenance / Verification */
+  mobile_qr_lifecycle: boolean;
+
   /**
    * Добавляй новые флаги сюда.
    * Соглашение: snake_case с суффиксом версии (_v2, _v3).
@@ -23,6 +26,7 @@ export interface FeatureFlags {
 const featureFlags: FeatureFlags = {
   unified_work_hub_v2: false,
   to_auto_generation: false,
+  mobile_qr_lifecycle: false,
 };
 
 /**

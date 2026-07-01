@@ -14,6 +14,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Layout, PageSuspense } from './layout';
 import { useAuth } from '../hooks/useAuth';
 import { setSentryUser } from '../lib/sentry';
+import { isFeatureEnabled } from '../config/featureFlags';
 
 // ── Lazy-loaded pages (P0-CR-06: Route-based code splitting) ────────────
 // Каждая страница — отдельный chunk для минимизации main bundle
@@ -52,6 +53,7 @@ const Profile = lazy(() => import('../pages/Profile').then((m) => ({ default: m.
 const MaintenanceSchedules = lazy(() => import('../pages/MaintenanceSchedules').then((m) => ({ default: m.MaintenanceSchedules })));
 const WorkOrders = lazy(() => import('../pages/WorkOrders').then((m) => ({ default: m.WorkOrders })));
 const WorkOrderDetail = lazy(() => import('../pages/WorkOrderDetail/WorkOrderDetail').then((m) => ({ default: m.WorkOrderDetail })));
+const UnifiedWorkHub = lazy(() => import('../pages/UnifiedWorkHub').then((m) => ({ default: m.UnifiedWorkHub })));
 const SpareParts = lazy(() => import('../pages/SpareParts').then((m) => ({ default: m.SpareParts })));
 const TechnicianWeek = lazy(() => import('../pages/TechnicianWeek').then((m) => ({ default: m.TechnicianWeek })));
 const AssetOverview = lazy(() => import('../pages/AssetOverview').then((m) => ({ default: m.AssetOverview })));
@@ -133,7 +135,13 @@ function AppRoutes() {
           <Route path="/agents" element={<PageSuspense><AgentDashboard /></PageSuspense>} />
           <Route path="/agents/:id" element={<PageSuspense><AgentDetail /></PageSuspense>} />
         </Route>
-        <Route path="/tickets" element={<PageSuspense><Tickets /></PageSuspense>} />
+
+        {/* UX-1.2: Unified Work Hub — conditional override */}
+        {isFeatureEnabled('unified_work_hub_v2') ? (
+          <Route path="/tickets" element={<Navigate to="/hub?tab=requests" replace />} />
+        ) : (
+          <Route path="/tickets" element={<PageSuspense><Tickets /></PageSuspense>} />
+        )}
         <Route path="/tickets/:ticketId" element={<PageSuspense><TicketDetail /></PageSuspense>} />
         <Route path="/alerts" element={<PageSuspense><Alerts /></PageSuspense>} />
         <Route path="/notifications" element={<PageSuspense><Notifications /></PageSuspense>} />
@@ -183,7 +191,17 @@ function AppRoutes() {
         {/* CMMS Routes */}
         <Route element={<RoleProtectedRoute allowedRoles={['admin', 'manager', 'technician']} />}>
           <Route path="/maintenance" element={<PageSuspense><MaintenanceSchedules /></PageSuspense>} />
-          <Route path="/work-orders" element={<PageSuspense><WorkOrders /></PageSuspense>} />
+
+          {/* UX-1.2: Unified Work Hub — conditional override */}
+          {isFeatureEnabled('unified_work_hub_v2') ? (
+            <>
+              <Route path="/hub" element={<PageSuspense><UnifiedWorkHub /></PageSuspense>} />
+              <Route path="/work-orders" element={<Navigate to="/hub?tab=tasks" replace />} />
+            </>
+          ) : (
+            <Route path="/work-orders" element={<PageSuspense><WorkOrders /></PageSuspense>} />
+          )}
+
           <Route path="/work-orders/:id" element={<PageSuspense><WorkOrderDetail /></PageSuspense>} />
           <Route path="/spare-parts" element={<PageSuspense><SpareParts /></PageSuspense>} />
           <Route path="/technician-dashboard" element={<Navigate to="/dashboard" replace />} />

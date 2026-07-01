@@ -81,18 +81,25 @@ export type RootStackParamList = {
   Main: undefined;
   WorkOrderDetail: { workOrderId: string };
   CompleteWorkOrder: { workOrder: WorkOrder }; // Unified wizard
-  QRScanner: { defaultMode?: QRScanMode } | undefined;
+  QRScanner: { defaultMode?: QRScanMode; lifecycleAction?: QRLifecycleAction } | undefined;
   Signature: { workOrderId: string };
+  /** UX-4.2: Maintenance checklist via QR */
+  MaintenanceChecklist: { workOrder: WorkOrder; codeId: string };
 };
 
-export type QRScanMode = 'device' | 'part' | 'work_order';
+export type QRScanMode = 'device' | 'part' | 'work_order' | 'onboarding' | 'maintenance' | 'verify';
 
 export interface QRScanResult {
-  type: 'device' | 'part' | 'work_order';
+  type: 'device' | 'part' | 'work_order' | 'onboarding' | 'maintenance' | 'verify';
   id: string;
   label?: string;
   raw: string;
+  /** UX-4.2: decoded QR payload for lifecycle */
+  lifecyclePayload?: import('../services/qrLifecycle').QRLifecyclePayload;
 }
+
+/** UX-4.2: QR lifecycle action types */
+export type QRLifecycleAction = 'onboard' | 'maintenance' | 'verify';
 
 export interface VerificationRequest {
   gps: {

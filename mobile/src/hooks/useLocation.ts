@@ -83,3 +83,21 @@ export function useLocation() {
 
   return { ...location, refreshLocation };
 }
+
+/**
+ * Получить текущую GPS позицию (для сервисов вне React-компонентов).
+ * Используется QRLifecycleService (UX-4.2) для GPS верификации.
+ */
+export async function getLocationAsync(): Promise<Location.LocationObject | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      return null;
+    }
+    return await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+  } catch {
+    return null;
+  }
+}

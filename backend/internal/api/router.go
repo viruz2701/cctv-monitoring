@@ -316,6 +316,17 @@ func (s *Server) MountRoutes(r chi.Router) {
 		if s.httpProxy != nil || s.sshProxy != nil {
 			s.mountEdgeProxyRoutes(r)
 		}
+
+		// UX-4.2: QR Mobile Lifecycle (Onboarding / Maintenance / Verification)
+		//   POST /api/v1/qr/generate-batch — bulk PDF с QR
+		//   POST /api/v1/qr/{code_id}/onboard — onboard device
+		//   GET  /api/v1/qr/{code_id}/verify — TO initiation + GPS verification
+		// Соответствие:
+		//   - IEC 62443-3-3 SR 3.1 (Queue-based batch generation)
+		//   - IEC 62443-3-3 SR 2.1 (Authorisation enforcement)
+		//   - ISO 27001 A.12.4 (Audit trail)
+		//   - Приказ ОАЦ №66 п. 7.18 (Уникальная идентификация устройств)
+		s.mountQRRoutes(r)
 	})
 
 	// ── External API key auth ────────────────────────────────────────

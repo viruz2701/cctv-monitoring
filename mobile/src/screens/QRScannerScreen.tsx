@@ -9,12 +9,14 @@ import {
   Alert,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, QRScanMode, QRScanResult } from '../types';
+import { qrLifecycleService } from '../services/qrLifecycle';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
@@ -29,7 +31,7 @@ const VIBRATION_DURATION = 100;
 type ScreenRoute = RouteProp<RootStackParamList, 'QRScanner'>;
 
 // ═══════════════════════════════════════════════════════════════════════
-// Scan Modes Config
+// Scan Modes Config (включая UX-4.2 lifecycle modes)
 // ═══════════════════════════════════════════════════════════════════════
 
 interface ScanModeConfig {
@@ -37,6 +39,8 @@ interface ScanModeConfig {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   description: string;
+  /** UX-4.2: lifecycle action for this mode */
+  lifecycleAction?: 'onboard' | 'maintenance' | 'verify';
 }
 
 const SCAN_MODES: ScanModeConfig[] = [
@@ -58,23 +62,68 @@ const SCAN_MODES: ScanModeConfig[] = [
     icon: 'document-text',
     description: 'Сканируйте QR-код наряда',
   },
+  // ═══ UX-4.2: QR Lifecycle Modes ═══
+  {
+    key: 'onboarding',
+    label: 'Onboarding',
+    icon: 'rocket',
+    description: 'Сканируйте QR для регистрации устройства',
+    lifecycleAction: 'onboard',
+  },
+  {
+    key: 'maintenance',
+    label: 'ТО',
+    icon: 'build',
+    description: 'Сканируйте QR для начала обслуживания',
+    lifecycleAction: 'maintenance',
+  },
+  {
+    key: 'verify',
+    label: 'Верификация',
+    icon: 'checkmark-circle',
+    description: 'Сканируйте QR для верификации',
+    lifecycleAction: 'verify',
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
-// QR Parsing
+// QR Parsing (расширен для UX-4.2 lifecycle payload)
 // ═══════════════════════════════════════════════════════════════════════
 
 function parseQRData(data: string, mode: QRScanMode): QRScanResult | null {
-  // Try JSON format first
+  // Try JSON format first (v1 QR payload)
   try {
     const parsed = JSON.parse(data);
-    if (mode === 'device' && parsed.device_id) {
+    
+    // UX-4.2: lifecycle QR payload (v1 format)
+    if (parsed.v && parsed.t && parsed.cid && parsed.eid) {
+      const typeMap: Record<string, QRScanResult['type']> = {
+        device: 'device',
+        work_order: 'work_order',
+        spare_part: 'part',
+        to: 'maintenance',
+        onboard: 'onboarding',
+        verify: 'verify',
+      };
+      const mappedType = typeMap[parsed.t] || mode;
+      const payload = qrLifecycleService.decodeQRPayload(data);
+      return {
+        type: mappedType,
+        id: parsed.eid,
+        label: parsed.enm,
+        raw: data,
+        lifecyclePayload: payload || undefined,
+      };
+    }
+
+    // Legacy JSON formats
+    if (parsed.device_id) {
       return { type: 'device', id: parsed.device_id, label: parsed.device_name, raw: data };
     }
-    if (mode === 'part' && parsed.part_id) {
+    if (parsed.part_id) {
       return { type: 'part', id: parsed.part_id, label: parsed.part_name, raw: data };
     }
-    if (mode === 'work_order' && parsed.work_order_id) {
+    if (parsed.work_order_id) {
       return { type: 'work_order', id: parsed.work_order_id, label: parsed.work_order_ref, raw: data };
     }
   } catch {
@@ -83,8 +132,8 @@ function parseQRData(data: string, mode: QRScanMode): QRScanResult | null {
 
   // Plain text formats: "DEVICE:abc123", "PART:xyz", "WO:456"
   const deviceMatch = data.match(/^DEVICE[:_](\S+)/i);
-  if (deviceMatch && mode === 'device') {
-    return { type: 'device', id: deviceMatch[1], raw: data };
+  if (deviceMatch && (mode === 'device' || mode === 'onboarding' || mode === 'verify')) {
+    return { type: mode === 'onboarding' ? 'onboarding' : mode === 'verify' ? 'verify' : 'device', id: deviceMatch[1], raw: data };
   }
 
   const partMatch = data.match(/^PART[:_](\S+)/i);
@@ -93,8 +142,8 @@ function parseQRData(data: string, mode: QRScanMode): QRScanResult | null {
   }
 
   const woMatch = data.match(/^(?:WO|WORK_ORDER)[:_](\S+)/i);
-  if (woMatch && mode === 'work_order') {
-    return { type: 'work_order', id: woMatch[1], raw: data };
+  if (woMatch && (mode === 'work_order' || mode === 'maintenance')) {
+    return { type: 'maintenance', id: woMatch[1], raw: data };
   }
 
   // Fallback: treat raw string as ID for the current mode
@@ -192,11 +241,17 @@ export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
 
   // State
-  const [mode, setMode] = useState<QRScanMode>(route.params?.defaultMode || 'device');
+  const [mode, setMode] = useState<QRScanMode>(
+    route.params?.defaultMode || route.params?.lifecycleAction ? (
+      route.params?.lifecycleAction === 'onboard' ? 'onboarding' :
+      route.params?.lifecycleAction === 'maintenance' ? 'maintenance' : 'verify'
+    ) : 'device'
+  );
   const [enableTorch, setEnableTorch] = useState(false);
   const [zoom, setZoom] = useState(0);
   const [scanned, setScanned] = useState(false);
   const [flashVisible, setFlashVisible] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [lastPinchDistance, setLastPinchDistance] = useState<number | null>(null);
 
   const pendingScanRef = useRef(false);
@@ -258,45 +313,241 @@ export default function QRScannerScreen() {
     [scanned, mode, navigation],
   );
 
-  const handleScanNavigation = (result: QRScanResult) => {
-    switch (result.type) {
-      case 'work_order':
-        navigation.navigate('WorkOrderDetail', { workOrderId: result.id });
-        break;
+  const handleScanNavigation = async (result: QRScanResult) => {
+    setProcessing(true);
 
-      case 'device':
-        Alert.alert(
-          'Устройство найдено',
-          `${result.label ? `📹 ${result.label}\n` : ''}ID: ${result.id}`,
-          [
-            {
-              text: 'Сканировать снова',
-              onPress: () => {
-                setScanned(false);
-                pendingScanRef.current = false;
-              },
-            },
-            { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
-          ],
-        );
-        break;
+    try {
+      switch (result.type) {
+        // ── Legacy: Work Order ──────────────────────────────────────────
+        case 'work_order':
+          navigation.navigate('WorkOrderDetail', { workOrderId: result.id });
+          break;
 
-      case 'part':
-        Alert.alert(
-          'Запчасть найдена',
-          `${result.label ? `🔧 ${result.label}\n` : ''}ID: ${result.id}`,
-          [
-            {
-              text: 'Сканировать снова',
-              onPress: () => {
-                setScanned(false);
-                pendingScanRef.current = false;
+        // ── Legacy: Device ──────────────────────────────────────────────
+        case 'device':
+          Alert.alert(
+            'Устройство найдено',
+            `${result.label ? `📹 ${result.label}\n` : ''}ID: ${result.id}`,
+            [
+              {
+                text: 'Сканировать снова',
+                onPress: () => {
+                  setScanned(false);
+                  pendingScanRef.current = false;
+                },
               },
-            },
-            { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
-          ],
-        );
-        break;
+              { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+            ],
+          );
+          break;
+
+        // ── Legacy: Part ────────────────────────────────────────────────
+        case 'part':
+          Alert.alert(
+            'Запчасть найдена',
+            `${result.label ? `🔧 ${result.label}\n` : ''}ID: ${result.id}`,
+            [
+              {
+                text: 'Сканировать снова',
+                onPress: () => {
+                  setScanned(false);
+                  pendingScanRef.current = false;
+                },
+              },
+              { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+            ],
+          );
+          break;
+
+        // ═══ UX-4.2: Onboarding Flow ═══════════════════════════════════
+        case 'onboarding':
+          try {
+            const payload = result.lifecyclePayload;
+            if (payload) {
+              const onboardResult = await qrLifecycleService.onboardDevice(payload);
+              Alert.alert(
+                'Устройство зарегистрировано',
+                `✅ Устройство ${onboardResult.device_id.slice(0, 8)}... успешно зарегистрировано.\nСтатус: ${onboardResult.status}`,
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      setScanned(false);
+                      pendingScanRef.current = false;
+                      navigation.goBack();
+                    },
+                  },
+                ],
+              );
+            } else {
+              // Legacy format — show info
+              Alert.alert(
+                'QR-код устройства',
+                `📹 ID: ${result.id}`,
+                [
+                  {
+                    text: 'Сканировать снова',
+                    onPress: () => {
+                      setScanned(false);
+                      pendingScanRef.current = false;
+                    },
+                  },
+                  { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+                ],
+              );
+            }
+          } catch (error) {
+            Alert.alert(
+              'Ошибка регистрации',
+              `Не удалось зарегистрировать устройство: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+              [
+                {
+                  text: 'Повторить',
+                  onPress: () => {
+                    setScanned(false);
+                    pendingScanRef.current = false;
+                  },
+                },
+                { text: 'Закрыть', style: 'cancel' },
+              ],
+            );
+          }
+          break;
+
+        // ═══ UX-4.2: Maintenance Flow ═══════════════════════════════════
+        case 'maintenance':
+          try {
+            const maintPayload = result.lifecyclePayload;
+            if (maintPayload) {
+              const { workOrder, gpsPassed } = await qrLifecycleService.initiateMaintenance(maintPayload);
+
+              if (workOrder) {
+                  // Navigate to work order completion wizard
+                  navigation.navigate('CompleteWorkOrder', { workOrder });
+                } else {
+                Alert.alert(
+                  'Нет активных нарядов',
+                  'Для данного устройства нет открытых нарядов на обслуживание.',
+                  [
+                    {
+                      text: 'Сканировать снова',
+                      onPress: () => {
+                        setScanned(false);
+                        pendingScanRef.current = false;
+                      },
+                    },
+                    { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+                  ],
+                );
+              }
+            } else {
+              // Legacy WO format — open WO detail
+              navigation.navigate('WorkOrderDetail', { workOrderId: result.id });
+            }
+          } catch (error) {
+            Alert.alert(
+              'Ошибка',
+              `Не удалось начать обслуживание: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+              [
+                {
+                  text: 'Повторить',
+                  onPress: () => {
+                    setScanned(false);
+                    pendingScanRef.current = false;
+                  },
+                },
+                { text: 'Закрыть', style: 'cancel' },
+              ],
+            );
+          }
+          break;
+
+        // ═══ UX-4.2: Verification Flow ══════════════════════════════════
+        case 'verify':
+          try {
+            const verifyPayload = result.lifecyclePayload;
+            if (verifyPayload) {
+              // Get active WO for this device
+              const { workOrder } = await qrLifecycleService.initiateMaintenance(verifyPayload);
+
+              if (workOrder) {
+                const verifyResult = await qrLifecycleService.verifyQR(
+                  verifyPayload,
+                  workOrder.id,
+                );
+
+                const gpsStatus = verifyResult.gps_passed ? '✅ GPS: пройдена' : '❌ GPS: не пройдена';
+                const toStatus = verifyResult.to_initiated ? '✅ TO: инициирован' : '❌ TO: не инициирован';
+                const historyCount = verifyResult.history?.length ?? 0;
+
+                Alert.alert(
+                  'Результат верификации',
+                  `${gpsStatus} (${verifyResult.gps_distance_m}м)\n${toStatus}\n📊 История: ${historyCount} записей\n${verifyResult.to_journal ? `\n🔗 Hash-chain: ${verifyResult.to_journal.hash_chain.slice(0, 16)}...` : ''}`,
+                  [
+                    {
+                      text: 'Сканировать снова',
+                      onPress: () => {
+                        setScanned(false);
+                        pendingScanRef.current = false;
+                      },
+                    },
+                    { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+                  ],
+                );
+              } else {
+                // No active WO — just show device info
+                Alert.alert(
+                  'Устройство найдено',
+                  `📹 ${result.label || result.id}\n${verifyPayload.site_id ? `📍 Сайт: ${verifyPayload.site_id}` : ''}`,
+                  [
+                    {
+                      text: 'Сканировать снова',
+                      onPress: () => {
+                        setScanned(false);
+                        pendingScanRef.current = false;
+                      },
+                    },
+                    { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+                  ],
+                );
+              }
+            } else {
+              // Legacy device format
+              Alert.alert(
+                'Устройство найдено',
+                `${result.label ? `📹 ${result.label}\n` : ''}ID: ${result.id}`,
+                [
+                  {
+                    text: 'Сканировать снова',
+                    onPress: () => {
+                      setScanned(false);
+                      pendingScanRef.current = false;
+                    },
+                  },
+                  { text: 'Закрыть', onPress: () => navigation.goBack(), style: 'cancel' },
+                ],
+              );
+            }
+          } catch (error) {
+            Alert.alert(
+              'Ошибка верификации',
+              `${error instanceof Error ? error.message : 'Неизвестная ошибка'}`,
+              [
+                {
+                  text: 'Повторить',
+                  onPress: () => {
+                    setScanned(false);
+                    pendingScanRef.current = false;
+                  },
+                },
+                { text: 'Закрыть', style: 'cancel' },
+              ],
+            );
+          }
+          break;
+      }
+    } finally {
+      setProcessing(false);
     }
   };
 

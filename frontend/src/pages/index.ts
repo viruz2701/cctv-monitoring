@@ -49,6 +49,9 @@ export const WorkOrders = lazy(() => import('./WorkOrders').then((m) => ({ defau
 export const WorkRequestPortal = lazy(() => import('./WorkRequestPortal').then((m) => ({ default: m.WorkRequestPortal })));
 export const APIVersioning = lazy(() => import('./APIVersioning').then((m) => ({ default: m.APIVersioning })));
 
+// UX-1.2: Unified Work Hub
+export const UnifiedWorkHub = lazy(() => import('./UnifiedWorkHub').then((m) => ({ default: m.UnifiedWorkHub })));
+
 // EDGE-11: Agent Monitoring Dashboard
 export const AgentDashboard = lazy(() => import('./AgentDashboard').then((m) => ({ default: m.AgentDashboard })));
 export const AgentDetail = lazy(() => import('./AgentDetail').then((m) => ({ default: m.AgentDetail })));
