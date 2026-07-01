@@ -224,12 +224,20 @@
 **Effort**: 2d
 
 ### P0-CR-10: AutoDispatcher Race Condition
-**Статус**: ❌ NOT FIXED
+**Статус**: ✅ FIXED (commit `529ad97`)
 **Источник**: Debug DBG-01
-**Файлы**: `backend/internal/agent/auto_dispatcher.go`
+**Файлы**: `backend/internal/db/cmms_repository.go`, `backend/internal/cmms/auto_dispatcher.go`
 **Проблема**: TOCTOU между `FindAvailable` и `Assign` → один техник получает 10 WO
-**Решение**: `SELECT FOR UPDATE` или Redis distributed lock
+**Решение**: `SELECT FOR UPDATE` в транзакции + `AND assigned_to IS NULL` в UPDATE + `RowsAffected() == 0` guard:
+- `AssignWorkOrder` обёрнут в транзакцию с `SELECT ... FOR UPDATE`
+- UPDATE проверяет `assigned_to IS NULL` и возвращает ошибку при 0 rows
+- `AutoAssign` обрабатывает `already_assigned` ошибку — перечитывает WO и возвращает `AssignStatusAlreadyAssigned`
+- Workload update теперь атомарный внутри той же транзакции
 **Effort**: 1d
+**Критерий приёмки**:
+- ✅ `go build ./...` = PASS
+- ⏳ DB integration test с concurrent assign (testcontainers)
+- ⏳ Production monitoring: 0 duplicate assignments за 7 дней
 
 ### P0-CR-11: Route-level Error Boundaries Missing
 **Статус**: ✅ FIXED (ErrorBoundary, RouteErrorBoundary, ErrorBoundaryLite, WidgetErrorBoundary, SentryErrorBoundary — все существуют)

@@ -6,6 +6,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -67,6 +68,16 @@ export const WorkOrderDetail: React.FC = () => {
   const [timeSubmitting, setTimeSubmitting] = useState(false);
   const [laborCost, setLaborCost] = useState<LaborCost | null>(null);
   const [activeUsers] = useState<{id: string; name: string; action: string}[]>([]);
+ 
+  // ── Unsaved changes guard (P0-CR-12) ─────────────────────────────
+  const isFormDirty = useMemo(() => {
+  	return completeNotes !== '' ||
+  		completePhotos.length > 0 ||
+  		completeParts.length > 0 ||
+  		cancelReason !== '';
+  }, [completeNotes, completePhotos, completeParts, cancelReason]);
+ 
+  useUnsavedChanges(isFormDirty);
 
   // ── Data Fetching ──────────────────────────────────────────────────
   useEffect(() => {
