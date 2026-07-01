@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { request } from '../../services/api';
 import {
   Card,
+  CardHeader,
   Badge,
   StatsCard,
   EmptyState,
@@ -36,7 +37,7 @@ import {
   HardDrive,
   Thermometer,
   RefreshCw,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -137,10 +138,12 @@ export function RegulatoryCompliance() {
       setLoading(true);
       setError(null);
 
-      const params = selectedRegion !== 'all' ? { region: selectedRegion } : {};
-      const response = await request.get('/api/v1/compliance/regulatory-dashboard', { params });
+      const query = selectedRegion !== 'all' ? `?region=${encodeURIComponent(selectedRegion)}` : '';
+      const response = await request<RegulatoryDashboardData>(
+        `/api/v1/compliance/regulatory-dashboard${query}`,
+      );
 
-      setData(response.data as RegulatoryDashboardData);
+      setData(response);
     } catch (err) {
       console.error('[RegulatoryCompliance] Failed to load:', err);
       setError(t('common:error_loading'));
@@ -553,20 +556,56 @@ export function RegulatoryCompliance() {
         </div>
       </div>
 
-      {/* Maintenance KPI */}
-      <Card title={t('compliance:maintenance_kpi')}>
+      <Card>
+        <CardHeader>
+          <h3 className="text-lg font-semibold">{t('compliance:maintenance_kpi')}</h3>
+        </CardHeader>
         {renderMaintenanceKPI()}
       </Card>
 
       {/* Regulation Status & Regional Scores */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card title={t('compliance:regulation_status')}>
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold">{t('compliance:regulation_status')}</h3>
+            </CardHeader>
             {renderRegulationStatus()}
           </Card>
         </div>
         <div>
-          <Card title={t('compliance:regional_scores')}>
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold">{t('compliance:regional_scores')}</h3>
+            </CardHeader>
+            {renderRegionalScores()}
+          </Card>
+        </div>
+      </div>
+
+      {/* Licenses & Retention */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-lg font-semibold">{t('compliance:maintenance_kpi')}</h3>
+        </CardHeader>
+        {renderMaintenanceKPI()}
+      </Card>
+
+      {/* Regulation Status & Regional Scores */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold">{t('compliance:regulation_status')}</h3>
+            </CardHeader>
+            {renderRegulationStatus()}
+          </Card>
+        </div>
+        <div>
+          <Card>
+            <CardHeader>
+              <h3 className="text-lg font-semibold">{t('compliance:regional_scores')}</h3>
+            </CardHeader>
             {renderRegionalScores()}
           </Card>
         </div>
@@ -574,16 +613,16 @@ export function RegulatoryCompliance() {
 
       {/* Licenses & Retention */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card
-          title={t('compliance:license_alerts')}
-          className="border-t-4 border-yellow-400"
-        >
+        <Card className="border-t-4 border-yellow-400">
+          <CardHeader>
+            <h3 className="text-lg font-semibold">{t('compliance:license_alerts')}</h3>
+          </CardHeader>
           {renderLicenseAlerts()}
         </Card>
-        <Card
-          title={t('compliance:retention_status')}
-          className="border-t-4 border-blue-400"
-        >
+        <Card className="border-t-4 border-blue-400">
+          <CardHeader>
+            <h3 className="text-lg font-semibold">{t('compliance:retention_status')}</h3>
+          </CardHeader>
           {renderRetentionStatus()}
         </Card>
       </div>

@@ -152,7 +152,8 @@ describe('AgentDetail', () => {
 
     renderWithRoute();
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    // Loading skeleton имеет role="status" и aria-label="Loading..."
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('shows error alert when error exists', () => {

@@ -1,3 +1,4 @@
+-- +migrate Up
 -- ═══════════════════════════════════════════════════════════════════════
 -- 055_annotations.up.sql — Work Order Photo Annotations (P1-PHOTO)
 --
@@ -11,12 +12,12 @@
 --   - СТБ 34.101.27 п. 6.2 (Контроль целостности данных)
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS work_order_annotations (
+CREATE TABLE work_order_annotations (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    work_order_id   UUID NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+    work_order_id   TEXT NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
     photo_url       TEXT NOT NULL,
     elements        JSONB NOT NULL DEFAULT '[]'::jsonb,
-    created_by      UUID NOT NULL REFERENCES users(id),
+    created_by      TEXT NOT NULL REFERENCES users(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -56,7 +57,7 @@ CREATE POLICY annotations_tenant_isolation ON work_order_annotations
         work_order_id IN (
             SELECT wo.id FROM work_orders wo
             JOIN devices d ON d.device_id = wo.device_id
-            WHERE d.owner_id = current_setting('app.tenant_id')::UUID
+            WHERE d.owner_id = current_setting('app.tenant_id')
         )
     );
 

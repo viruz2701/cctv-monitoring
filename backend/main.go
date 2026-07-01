@@ -293,34 +293,31 @@ func main() {
 	dbWriter := NewDBWriter(database, 1000)
 
 	// --- NATS Connection (ARCH-01: нужен до State Manager) ---
-	// В production (NATSRequired=true) — обязателен, startup фейлится при недоступности.
-	// В dev режиме — опционально, работаем без событийной шины.
+	// В production (NATSRequired=true, docker-compose) — обязателен, startup фейлится.
+	// По умолчанию — опционально, работаем без событийной шины.
 	var natsConn *nats.Conn
+
 	if cfg.NATSURL != "" {
 		nc, err := nats.Connect(cfg.NATSURL)
 		if err != nil {
 			if cfg.NATSRequired {
-				logger.Error("NATS connection required but unavailable", "url", cfg.NATSURL, "error", err)
+				logger.Error("NATS connection required but unavailable — set GB_NATS_REQUIRED=false to disable", "url", cfg.NATSURL, "error", err)
 				os.Exit(1)
 			}
-			logger.Debug("NATS not available, continuing without", "error", err)
+			logger.Warn("NATS not available, continuing without event bus", "url", cfg.NATSURL, "error", err)
 		} else {
 			natsConn = nc
 			logger.Info("NATS connected", "url", cfg.NATSURL)
 		}
-	} else if cfg.NATSRequired {
-		logger.Error("NATS connection required but nats_url is not configured")
-		os.Exit(1)
 	}
 
 	// --- NATS JetStream KV State Manager (P0-BACKEND.1) ---
-	// JetStream KV — единственный supported state manager для production.
-	// InMemoryStateManager используется только как dev fallback при UseNATSKV=false.
-	// При UseNATSKV=true: JetStream обязателен, startup фейлится при недоступности.
+	// InMemoryStateManager — dev fallback. Docker Compose ставит UseNATSKV=true.
 	var (
 		stateManager     state.DeviceStateManager
-		jetStreamManager *state.JetStreamStateManager // для graceful shutdown
+		jetStreamManager *state.JetStreamStateManager
 	)
+
 	if natsConn != nil && cfg.UseNATSKV {
 		js, err := natsConn.JetStream()
 		if err != nil {
@@ -351,7 +348,6 @@ func main() {
 		)
 		os.Exit(1)
 	} else {
-		// Dev mode: UseNATSKV=false — InMemoryStateManager для разработки
 		stateManager = state.NewInMemoryStateManager()
 		logger.Warn("P0-BACKEND.1: Using InMemoryStateManager (dev mode only — не для production)")
 	}

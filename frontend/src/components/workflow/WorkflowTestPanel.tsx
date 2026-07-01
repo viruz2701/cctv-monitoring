@@ -410,9 +410,9 @@ export function WorkflowTestPanel() {
               </span>
             </div>
 
-            {result.output && (
+            {(result.output as React.ReactNode) && (
               <pre className="text-[10px] font-mono text-slate-600 dark:text-slate-400 mt-1 bg-white dark:bg-slate-900/50 p-1.5 rounded overflow-x-auto">
-                {JSON.stringify(result.output, null, 2) as string}
+                {JSON.stringify(result.output, null, 2)}
               </pre>
             )}
 

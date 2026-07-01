@@ -8,14 +8,9 @@
 // Compliance: ISO 27001 A.7.2 (Awareness), IEC 62443 SR 2.1
 
 import React, { useEffect, useState } from 'react';
-import Joyride, {
-  type Step,
-  type CallBackProps,
-  type Status,
-  ACTIONS,
-  EVENTS,
-  STATUS,
-} from 'react-joyride';
+import { Joyride as JoyrideOriginal, ACTIONS, STATUS, type Step } from 'react-joyride';
+
+const Joyride = JoyrideOriginal as unknown as React.ComponentType<any>;
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -28,7 +23,6 @@ const TECHNICIAN_STEPS: Step[] = [
     content: 'Добро пожаловать в CCTV Health Monitor! Этот тур покажет основные возможности для техника.',
     title: '🚀 Онбординг — Техник',
     placement: 'center',
-    disableBeacon: true,
   },
   {
     target: '[data-tour="work-orders"]',
@@ -68,7 +62,6 @@ const MANAGER_STEPS: Step[] = [
     content: 'Добро пожаловать! Вот основные инструменты для менеджера.',
     title: '🚀 Онбординг — Менеджер',
     placement: 'center',
-    disableBeacon: true,
   },
   {
     target: '[data-tour="dashboard"]',
@@ -108,7 +101,6 @@ const ADMIN_STEPS: Step[] = [
     content: 'Добро пожаловать! Полный доступ ко всем функциям системы.',
     title: '🚀 Онбординг — Администратор',
     placement: 'center',
-    disableBeacon: true,
   },
   {
     target: '[data-tour="system-health"]',
@@ -197,10 +189,10 @@ export function OnboardingTour({ showTrigger = true }: OnboardingTourProps) {
     }
   }, [completed, running, user, startTour]);
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
-    const { action, index, status, type } = data;
+  const handleJoyrideCallback = (data: any) => {
+    const { action, status } = data;
 
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status as Status)) {
+    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
       setRun(false);
       markCompleted();
     }

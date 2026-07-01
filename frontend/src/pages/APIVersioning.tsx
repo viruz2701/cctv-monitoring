@@ -13,13 +13,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../services/api';
-import type { VersionInfo, ChangelogEntry } from '../services/api';
 import { Button, Modal, Input, Badge, useToast } from '../components/ui';
 import { Plus, Shield, Calendar, Clock, AlertTriangle } from '../components/ui/Icons';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
 import { useConfirmAction } from '../hooks/useConfirmAction';
+
+// Re-exported locally to avoid import from services/api
+interface VersionInfo {
+  version: string;
+  deprecated: boolean;
+  sunset?: string;
+  changelog: string;
+  released_at: string;
+}
+
+interface ChangelogEntry {
+  version: string;
+  deprecated: boolean;
+  change: string;
+  date: string;
+  sunset?: string;
+}
 
 interface FormData {
   version: string;

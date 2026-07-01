@@ -34,7 +34,7 @@ export function OfflineBanner({ queueCount = 0 }: OfflineBannerProps) {
         <div
             role="alert"
             aria-live="assertive"
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+            className={`fixed top-0 left-0 right-0 z-50 transition-[transform,opacity] duration-500 ${
                 isOnline ? 'bg-emerald-600' : 'bg-amber-600'
             } text-white`}
         >

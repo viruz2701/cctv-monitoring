@@ -19,6 +19,16 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
+}
+
+/* P2-FEEL.12: Image outlines — subtle border for depth on any background */
+img {
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+.dark img {
+  outline: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 #root {

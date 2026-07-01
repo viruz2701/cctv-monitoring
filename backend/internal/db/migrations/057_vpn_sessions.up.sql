@@ -18,8 +18,8 @@
 
 CREATE TABLE vpn_sessions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    agent_id        VARCHAR(100) NOT NULL REFERENCES agents(id),
-    engineer_id     UUID NOT NULL REFERENCES users(id),
+    agent_id        VARCHAR(100) NOT NULL,
+    engineer_id     TEXT NOT NULL REFERENCES users(id),
     started_at      TIMESTAMPTZ DEFAULT NOW(),
     expires_at      TIMESTAMPTZ NOT NULL,
     allowed_ips     INET[] NOT NULL,

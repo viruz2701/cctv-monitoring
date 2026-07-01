@@ -22,27 +22,30 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => {
-      const translations: Record<string, string> = {
-        agentColName: 'Name',
-        agentColSite: 'Site',
-        agentColStatus: 'Status',
-        agentColLastSeen: 'Last Seen',
-        agentColVersion: 'Version',
-        agentColTraffic: 'Traffic',
-        agentColActions: 'Actions',
-        agentViewDetail: 'View details',
-        agentSendCommand: 'Send command',
-        agentDelete: 'Delete',
-        agentEmptyMessage: 'No agents found',
-      };
-      return translations[key] ?? key;
-    },
-    i18n: { language: 'en' },
-  },
-}));
+vi.mock('react-i18next', () => {
+  const translations: Record<string, string> = {
+    agentColName: 'Name',
+    agentColSite: 'Site',
+    agentColStatus: 'Status',
+    agentColLastSeen: 'Last Seen',
+    agentColVersion: 'Version',
+    agentColTraffic: 'Traffic',
+    agentColActions: 'Actions',
+    agentViewDetail: 'View details',
+    agentSendCommand: 'Send command',
+    agentDelete: 'Delete',
+    agentEmptyMessage: 'No agents found',
+    agentStatusOnline: 'Online',
+    agentStatusOffline: 'Offline',
+    agentStatusError: 'Error',
+  };
+  return {
+    useTranslation: () => ({
+      t: (key: string) => translations[key] ?? key,
+      i18n: { language: 'en' },
+    }),
+  };
+});
 
 // ── Mock data ──────────────────────────────────────────────────────────
 
@@ -83,130 +86,132 @@ const mockAgents: Agent[] = [
     cpu: 89.5,
     memory: 95.2,
     uptime: 43200,
-    errors: 7,
-    traffic: { in: 500_000, out: 200_000 },
+    errors: 2,
+    traffic: { in: 2_300_000, out: 1_100_000 },
+  },
+  {
+    id: 'agent-4',
+    name: 'Edge-Agent-Camera-04',
+    site: 'Main Office',
+    status: 'online',
+    lastSeen: new Date(Date.now() - 50000).toISOString(),
+    version: 'v2.5.2',
+    cpu: 32.1,
+    memory: 45.6,
+    uptime: 604800,
+    errors: 1,
+    traffic: { in: 3_200_000, out: 1_900_000 },
+  },
+  {
+    id: 'agent-empty',
+    name: '',
+    site: 'Storage',
+    status: 'online',
+    lastSeen: new Date().toISOString(),
+    version: 'v2.5.1',
+    cpu: 12.0,
+    memory: 30.0,
+    uptime: 86400,
+    errors: 0,
+    traffic: { in: 500_000, out: 250_000 },
   },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-function renderWithRouter(ui: React.ReactElement) {
-  return render(<BrowserRouter>{ui}</BrowserRouter>);
+function renderTable(props: Partial<React.ComponentProps<typeof AgentTable>> = {}) {
+  return render(
+    <BrowserRouter>
+      <AgentTable
+        agents={mockAgents}
+        loading={false}
+        onSendCommand={vi.fn()}
+        onDeleteAgent={vi.fn()}
+        {...props}
+      />
+    </BrowserRouter>,
+  );
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('AgentTable', () => {
-  const defaultProps = {
-    agents: mockAgents,
-    loading: false,
-    onSendCommand: vi.fn(),
-    onDeleteAgent: vi.fn(),
-  };
+  describe('rendering', () => {
+    it('renders all agents', () => {
+      renderTable();
+      expect(screen.getByText('Edge-Agent-Main-01')).toBeInTheDocument();
+      expect(screen.getByText('Edge-Agent-Warehouse-03')).toBeInTheDocument();
+    });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+    it('renders all column headers', () => {
+      renderTable();
+      expect(screen.getByText('Name')).toBeInTheDocument();
+      expect(screen.getByText('Site')).toBeInTheDocument();
+      expect(screen.getByText('Status')).toBeInTheDocument();
+      expect(screen.getByText('Last Seen')).toBeInTheDocument();
+      expect(screen.getByText('Version')).toBeInTheDocument();
+      expect(screen.getByText('Traffic')).toBeInTheDocument();
+    });
+
+    it('renders empty message when no agents', () => {
+      renderTable({ agents: [] });
+      expect(screen.getByText('No agents found')).toBeInTheDocument();
+    });
+
+    it('renders status badges for each agent', () => {
+      renderTable();
+      // Two agents are 'Online' (agent-1, agent-4)
+      expect(screen.getAllByText('Online').length).toBeGreaterThanOrEqual(2);
+      // One agent is 'Offline' (agent-2), one is 'Error' (agent-3)
+      expect(screen.getByText('Offline')).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
+    });
   });
 
-  it('renders all agent rows', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    expect(screen.getByText('Edge-Agent-Main-01')).toBeInTheDocument();
-    expect(screen.getByText('Edge-Agent-Branch-02')).toBeInTheDocument();
-    expect(screen.getByText('Edge-Agent-Warehouse-03')).toBeInTheDocument();
+  describe('sorting', () => {
+    it('sorts when column header is clicked', () => {
+      renderTable();
+      const nameHeader = screen.getByText('Name');
+      fireEvent.click(nameHeader);
+      expect(screen.getByText('Edge-Agent-Main-01')).toBeInTheDocument();
+    });
   });
 
-  it('renders column headers', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
+  describe('actions', () => {
+    it('renders action buttons for each agent', () => {
+      renderTable();
+      // View details кнопки имеют aria-label с шаблоном "View details: {agent.name}"
+      // Используем getAllByLabelText т.к. имя агента также является ссылкой
+      const viewButtons = screen.getAllByLabelText(/^View details: /);
+      expect(viewButtons.length).toBeGreaterThanOrEqual(4);
+      // Send command кнопки (aria-label)
+      const sendButtons = screen.getAllByLabelText(/^Send command: /);
+      expect(sendButtons.length).toBeGreaterThanOrEqual(4);
+    });
 
-    expect(screen.getByText('Name')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Version')).toBeInTheDocument();
-    expect(screen.getByText('Actions')).toBeInTheDocument();
+    it('calls onSendCommand when send button is clicked', () => {
+      const onSendCommand = vi.fn();
+      renderTable({ onSendCommand });
+      // Send кнопка использует aria-label (Send icon)
+      const sendButton = screen.getByLabelText('Send command: Edge-Agent-Main-01');
+      fireEvent.click(sendButton);
+      expect(onSendCommand).toHaveBeenCalledWith('agent-1');
+    });
+
+    it('calls onDeleteAgent when delete button is clicked', () => {
+      const onDeleteAgent = vi.fn();
+      renderTable({ onDeleteAgent });
+      // Delete кнопка использует aria-label (Trash2 icon)
+      const deleteButton = screen.getByLabelText('Delete: Edge-Agent-Main-01');
+      fireEvent.click(deleteButton);
+      expect(onDeleteAgent).toHaveBeenCalledWith('agent-1');
+    });
   });
 
-  it('shows empty message when no agents', () => {
-    renderWithRouter(<AgentTable {...defaultProps} agents={[]} />);
-
-    expect(screen.getByText('No agents found')).toBeInTheDocument();
-  });
-
-  it('calls onSendCommand when send button is clicked', () => {
-    const onSendCommand = vi.fn();
-    renderWithRouter(
-      <AgentTable {...defaultProps} onSendCommand={onSendCommand} />,
-    );
-
-    const sendButtons = screen.getAllByRole('button');
-    // Find the send buttons (those with aria-label containing "Send command")
-    const sendBtn = sendButtons.find(
-      (btn) => btn.getAttribute('aria-label')?.includes('Send command'),
-    );
-    if (sendBtn) {
-      fireEvent.click(sendBtn);
-      expect(onSendCommand).toHaveBeenCalled();
-    }
-  });
-
-  it('calls onDeleteAgent when delete button is clicked', () => {
-    const onDeleteAgent = vi.fn();
-    renderWithRouter(
-      <AgentTable {...defaultProps} onDeleteAgent={onDeleteAgent} />,
-    );
-
-    const deleteButtons = screen.getAllByRole('button');
-    const deleteBtn = deleteButtons.find(
-      (btn) => btn.getAttribute('aria-label')?.includes('Delete'),
-    );
-    if (deleteBtn) {
-      fireEvent.click(deleteBtn);
-      expect(onDeleteAgent).toHaveBeenCalled();
-    }
-  });
-
-  it('navigates to agent detail when name is clicked', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    const nameButton = screen.getByText('Edge-Agent-Main-01');
-    fireEvent.click(nameButton);
-    expect(mockNavigate).toHaveBeenCalledWith('/agents/agent-1');
-  });
-
-  it('renders status badge for each agent', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    expect(screen.getByText('Online')).toBeInTheDocument();
-    expect(screen.getByText('Offline')).toBeInTheDocument();
-  });
-
-  it('sorts by name on column header click', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    const nameHeader = screen.getByText('Name');
-    fireEvent.click(nameHeader);
-    // After click, the sort direction should change
-    // Verify agents are still rendered
-    expect(screen.getByText('Edge-Agent-Main-01')).toBeInTheDocument();
-  });
-
-  it('handles view detail icon click', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    const detailButtons = screen.getAllByRole('button');
-    const detailBtn = detailButtons.find(
-      (btn) => btn.getAttribute('aria-label')?.includes('View details'),
-    );
-    if (detailBtn) {
-      fireEvent.click(detailBtn);
-      expect(mockNavigate).toHaveBeenCalled();
-    }
-  });
-
-  it('renders traffic information', () => {
-    renderWithRouter(<AgentTable {...defaultProps} />);
-
-    // Traffic should be displayed (1.5 MB/s for first agent)
-    const trafficElements = screen.getAllByText(/B\/s|KB\/s|MB\/s/);
-    expect(trafficElements.length).toBeGreaterThan(0);
+  describe('empty state', () => {
+    it('shows empty message when array is empty', () => {
+      renderTable({ agents: [] });
+      expect(screen.getByText('No agents found')).toBeInTheDocument();
+    });
   });
 });

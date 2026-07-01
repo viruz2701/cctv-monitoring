@@ -256,9 +256,9 @@ export function DeviceActions({
             className={`
               flex flex-col items-center gap-2 p-4 rounded-xl
               ${action.color} ${action.hoverColor}
-              text-white transition-all duration-200
+              text-white transition-transform duration-200
               disabled:opacity-50 disabled:cursor-not-allowed
-              active:scale-95 hover:shadow-lg
+              active:scale-[0.96] hover:shadow-lg
               focus:outline-none focus:ring-2 focus:ring-white/30
             `}
             title={action.description}

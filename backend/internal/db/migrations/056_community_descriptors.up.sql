@@ -11,12 +11,12 @@
 --   - IEC 62443-3-3 SL-3: Zone separation (Zone 3 — Backend)
 --   - OWASP ASVS V5.1: Input validation
 
-CREATE TABLE IF NOT EXISTS community_descriptors (
+CREATE TABLE community_descriptors (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vendor      VARCHAR(200) NOT NULL,
     version     VARCHAR(50) NOT NULL,
     descriptor  JSONB NOT NULL,
-    author_id   UUID NOT NULL,
+    author_id   TEXT NOT NULL,
     rating      NUMERIC(3,2) NOT NULL DEFAULT 0,
     downloads   INTEGER NOT NULL DEFAULT 0,
     verified    BOOLEAN NOT NULL DEFAULT FALSE,
@@ -64,10 +64,10 @@ CREATE TRIGGER trg_community_descriptors_updated
 -- Community Ratings Table
 -- ═══════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS community_descriptor_ratings (
+CREATE TABLE community_descriptor_ratings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     descriptor_id   UUID NOT NULL REFERENCES community_descriptors(id) ON DELETE CASCADE,
-    user_id         UUID NOT NULL,
+    user_id         TEXT NOT NULL,
     score           INTEGER NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 

@@ -204,6 +204,12 @@ export default function OverviewTab() {
         .filter(a => selectedSite === 'all' || devices.find(d => d.id === a.deviceId)?.siteId === selectedSite)
         .slice(0, 5);
 
+    // ── Chart data validation guard (предотвращает Nivo SVG ошибку translate(, )) ──
+    function chartHasData<T extends { value?: number }>(data: T[]): boolean {
+        if (!data || data.length === 0) return false;
+        return data.some(d => typeof d.value === 'number' && d.value > 0);
+    }
+
     const deviceHealthChartData = [
         { name: t('healthy'), value: stats.healthyDevices, fill: '#22c55e' },
         { name: t('faulty'), value: stats.faultyDevices, fill: '#ef4444' },
@@ -281,34 +287,40 @@ export default function OverviewTab() {
                 <div key="deviceHealthChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('device_health_distribution') || 'Device Health'}</h3>
                     <div style={{ height: '80%', minHeight: 200 }}>
-                        <ResponsiveBar
-                            data={deviceHealthChartData}
-                            keys={['value']}
-                            indexBy="name"
-                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
-                            padding={0.3}
-                            colors={['#22c55e', '#ef4444', '#f97316']}
-                            colorBy="indexValue"
-                            borderRadius={4}
-                            borderColor={{ from: 'color', modifiers: [['darker', 1.6]] }}
-                            axisBottom={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            axisLeft={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            theme={nivoTheme}
-                            enableLabel={false}
-                            tooltip={({ data: d }) => (
-                                <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                                    {String(d.name)}: {Number(d.value)}
-                                </div>
-                            )}
-                        />
+                        {chartHasData(deviceHealthChartData) ? (
+                            <ResponsiveBar
+                                data={deviceHealthChartData}
+                                keys={['value']}
+                                indexBy="name"
+                                margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                                padding={0.3}
+                                colors={['#22c55e', '#ef4444', '#f97316']}
+                                colorBy="indexValue"
+                                borderRadius={4}
+                                borderColor={{ from: 'color', modifiers: [['darker', 1.6]] }}
+                                axisBottom={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                axisLeft={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                theme={nivoTheme}
+                                enableLabel={false}
+                                tooltip={({ data: d }) => (
+                                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                        {String(d.name)}: {Number(d.value)}
+                                    </div>
+                                )}
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-sm text-slate-400 dark:text-slate-500">
+                                {t('no_data') || 'Нет данных'}
+                            </div>
+                        )}
                     </div>
                 </div>
             ),
@@ -319,44 +331,50 @@ export default function OverviewTab() {
                 <div key="alertTrendChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('alert_trend') || 'Alert Trend'}</h3>
                     <div style={{ height: '80%', minHeight: 200 }}>
-                        <ResponsiveLine
-                            data={[{
-                                id: 'alerts',
-                                data: sparklineData.map(d => ({ x: d.name, y: d.value })),
-                            }]}
-                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
-                            xScale={{ type: 'point' }}
-                            yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-                            curve="monotoneX"
-                            lineWidth={2}
-                            colors={['#3b82f6']}
-                            enablePoints={false}
-                            enableArea={true}
-                            areaOpacity={0.15}
-                            enableGridX={false}
-                            axisBottom={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            axisLeft={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            theme={nivoTheme}
-                            enableSlices="x"
-                            sliceTooltip={({ slice }) => {
-                                if (!slice.points.length) return null;
-                                return (
-                                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                                        {slice.points.map(p => (
-                                            <div key={p.id}><strong>{String(p.data.x)}</strong>: {Number(p.data.y)}</div>
-                                        ))}
-                                    </div>
-                                );
-                            }}
-                        />
+                        {sparklineData.length > 0 ? (
+                            <ResponsiveLine
+                                data={[{
+                                    id: 'alerts',
+                                    data: sparklineData.map(d => ({ x: d.name, y: d.value })),
+                                }]}
+                                margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                                xScale={{ type: 'point' }}
+                                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                                curve="monotoneX"
+                                lineWidth={2}
+                                colors={['#3b82f6']}
+                                enablePoints={false}
+                                enableArea={true}
+                                areaOpacity={0.15}
+                                enableGridX={false}
+                                axisBottom={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                axisLeft={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                theme={nivoTheme}
+                                enableSlices="x"
+                                sliceTooltip={({ slice }) => {
+                                    if (!slice.points.length) return null;
+                                    return (
+                                        <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                            {slice.points.map(p => (
+                                                <div key={p.id}><strong>{String(p.data.x)}</strong>: {Number(p.data.y)}</div>
+                                            ))}
+                                        </div>
+                                    );
+                                }}
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-sm text-slate-400 dark:text-slate-500">
+                                {t('no_data') || 'Нет данных'}
+                            </div>
+                        )}
                     </div>
                 </div>
             ),
@@ -367,59 +385,65 @@ export default function OverviewTab() {
                 <div key="ticketTrendChart" className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 overflow-hidden h-full">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">{t('ticket_trend') || 'Ticket Trend'}</h3>
                     <div style={{ height: '80%', minHeight: 200 }}>
-                        <ResponsiveLine
-                            data={[
-                                { id: 'critical', data: ticketTrendData.map(d => ({ x: d.name, y: d.critical })) },
-                                { id: 'high', data: ticketTrendData.map(d => ({ x: d.name, y: d.high })) },
-                                { id: 'medium', data: ticketTrendData.map(d => ({ x: d.name, y: d.medium })) },
-                                { id: 'low', data: ticketTrendData.map(d => ({ x: d.name, y: d.low })) },
-                            ]}
-                            margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
-                            xScale={{ type: 'point' }}
-                            yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-                            curve="monotoneX"
-                            lineWidth={2}
-                            colors={['#ef4444', '#f97316', '#3b82f6', '#22c55e']}
-                            enablePoints={false}
-                            enableGridX={false}
-                            axisBottom={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            axisLeft={{
-                                tickSize: 5,
-                                tickPadding: 5,
-                                tickRotation: 0,
-                            }}
-                            theme={nivoTheme}
-                            legends={[
-                                {
-                                    anchor: 'bottom',
-                                    direction: 'row',
-                                    translateY: 36,
-                                    itemWidth: 60,
-                                    itemHeight: 14,
-                                    itemTextColor: '#94a3b8',
-                                    symbolSize: 10,
-                                    symbolShape: 'circle',
-                                },
-                            ]}
-                            enableSlices="x"
-                            sliceTooltip={({ slice }) => {
-                                if (!slice.points.length) return null;
-                                return (
-                                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{String(slice.points[0].data.x)}</div>
-                                        {slice.points.map(p => (
-                                            <div key={p.id} style={{ color: String(p.color) }}>
-                                                {p.seriesId}: {Number(p.data.y)}
-                                            </div>
-                                        ))}
-                                    </div>
-                                );
-                            }}
-                        />
+                        {ticketTrendData.length > 0 ? (
+                            <ResponsiveLine
+                                data={[
+                                    { id: 'critical', data: ticketTrendData.map(d => ({ x: d.name, y: d.critical })) },
+                                    { id: 'high', data: ticketTrendData.map(d => ({ x: d.name, y: d.high })) },
+                                    { id: 'medium', data: ticketTrendData.map(d => ({ x: d.name, y: d.medium })) },
+                                    { id: 'low', data: ticketTrendData.map(d => ({ x: d.name, y: d.low })) },
+                                ]}
+                                margin={{ top: 10, right: 20, bottom: 30, left: 40 }}
+                                xScale={{ type: 'point' }}
+                                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                                curve="monotoneX"
+                                lineWidth={2}
+                                colors={['#ef4444', '#f97316', '#3b82f6', '#22c55e']}
+                                enablePoints={false}
+                                enableGridX={false}
+                                axisBottom={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                axisLeft={{
+                                    tickSize: 5,
+                                    tickPadding: 5,
+                                    tickRotation: 0,
+                                }}
+                                theme={nivoTheme}
+                                legends={[
+                                    {
+                                        anchor: 'bottom',
+                                        direction: 'row',
+                                        translateY: 36,
+                                        itemWidth: 60,
+                                        itemHeight: 14,
+                                        itemTextColor: '#94a3b8',
+                                        symbolSize: 10,
+                                        symbolShape: 'circle',
+                                    },
+                                ]}
+                                enableSlices="x"
+                                sliceTooltip={({ slice }) => {
+                                    if (!slice.points.length) return null;
+                                    return (
+                                        <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                                            <div style={{ fontWeight: 600, marginBottom: 4 }}>{String(slice.points[0].data.x)}</div>
+                                            {slice.points.map(p => (
+                                                <div key={p.id} style={{ color: String(p.color) }}>
+                                                    {p.seriesId}: {Number(p.data.y)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                }}
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-sm text-slate-400 dark:text-slate-500">
+                                {t('no_data') || 'Нет данных'}
+                            </div>
+                        )}
                     </div>
                 </div>
             ),

@@ -20,9 +20,9 @@
 -- 1. Device Credentials Table
 -- ═══════════════════════════════════════════════════════════════════════
 
-CREATE TABLE IF NOT EXISTS device_credentials (
+CREATE TABLE device_credentials (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id       UUID NOT NULL,
+    device_id       TEXT NOT NULL,
     username_enc    BYTEA NOT NULL,       -- зашифрованный username (AES-256-GCM / belt-gcm)
     password_enc    BYTEA NOT NULL,       -- зашифрованный password (AES-256-GCM / belt-gcm)
     algorithm       VARCHAR(50) NOT NULL DEFAULT 'aes-256-gcm',  -- алгоритм шифрования
@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS device_credentials (
     expires_at      TIMESTAMPTZ,          -- опциональный срок действия credentials
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by      UUID,                 -- кто создал credentials
-    updated_by      UUID,                 -- кто последним обновил
+    created_by      TEXT,                 -- кто создал credentials
+    updated_by      TEXT,                 -- кто последним обновил
 
     -- Foreign key с каскадным удалением
     CONSTRAINT fk_device_credentials_device
@@ -86,8 +86,8 @@ CREATE POLICY device_credentials_tenant_isolation ON device_credentials
         device_id IN (
             SELECT d.device_id FROM devices d
             WHERE d.site_id IN (
-                SELECT s.site_id FROM sites s
-                WHERE s.tenant_id = current_setting('app.tenant_id')::UUID
+                SELECT s.id FROM sites s
+                WHERE s.tenant_id = current_setting('app.tenant_id')
             )
         )
     );

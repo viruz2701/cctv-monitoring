@@ -17,7 +17,7 @@ function cspPlugin(): Plugin {
 
   // Dev CSP — нужен 'unsafe-inline' для HMR и 'wasm-unsafe-eval' для Vite
   // Это приемлемо только для разработки
-  const devCSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com", "img-src 'self' data: https:", "connect-src 'self' http://localhost:8080 https://nominatim.openstreetmap.org ws: wss:", "base-uri 'self'", "form-action 'self'"].join('; ');
+  const devCSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:", "worker-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com", "img-src 'self' data: https:", "connect-src 'self' http://localhost:8080 https://nominatim.openstreetmap.org ws: wss:", "frame-src https://www.openstreetmap.org", "base-uri 'self'", "form-action 'self'"].join('; ');
   return {
     name: 'vite-plugin-csp',
     transformIndexHtml: {
@@ -115,6 +115,13 @@ export default defineConfig({
   ].filter(Boolean),
   build: {
     target: 'es2020', // P2-OPT.3: современные браузеры — меньше полифиллов
+    minify: 'esbuild', // P2-OPT.4: esbuild быстрее terser, достаточно для production
+    cssMinify: 'lightningcss', // P2-OPT.5: LightningCSS быстрее esbuild для CSS
+    cssCodeSplit: true, // P2-OPT.6: раздельный CSS для каждого чанка
+    sourcemap: Boolean(process.env.SENTRY_AUTH_TOKEN), // P2-OPT.7: sourcemap только для Sentry
+    reportCompressedSize: false, // P2-OPT.8: ускоряет сборку, не влияет на деплой
+    assetsInlineLimit: 4096, // P2-OPT.9: инлайн SVG/изображений <4KB как data URI
+    emptyOutDir: true, // P2-OPT.14: очистка dist перед сборкой
     rollupOptions: {
       output: {
         // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
@@ -164,6 +171,10 @@ export default defineConfig({
           if (id.includes('node_modules/react-datepicker')) {
             return 'vendor-datepicker';
           }
+          // Image comparison (react-compare-image ~50KB) — P2-OPT.10: выделяем отдельно
+          if (id.includes('node_modules/react-compare-image')) {
+            return 'vendor-compare-image';
+          }
           // Query & state management (@tanstack/react-query, query-core, react-virtual, zustand)
           if (id.includes('node_modules/@tanstack') || id.includes('node_modules/zustand')) {
             return 'vendor-state';
@@ -185,9 +196,16 @@ export default defineConfig({
             return 'vendor-other';
           }
         },
+        // P2-OPT.11: assetFileNames для кэширования
+        assetFileNames: 'assets/[name]-[hash:8][extname]',
+        chunkFileNames: 'assets/[name]-[hash:8].js',
+        entryFileNames: 'assets/[name]-[hash:8].js',
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 350, // P2-OPT.12: уменьшаем порог для раннего обнаружения
+    rolldownOptions: {
+      external: ['preact', '@preact/signals'], // @schedule-x/calendar использует preact как transitive dep
+    },
   },
   server: {
     host: '0.0.0.0',

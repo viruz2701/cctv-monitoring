@@ -138,7 +138,7 @@ export function Settings() {
         {isAdmin && activeTab === 'sso' && <SSOSettings />}
       </div>
 
-      <ThemeCustomizer isOpen={themeCustomizerOpen} onClose={() => setThemeCustomizerOpen(false)} />
+      <ThemeCustomizer />
     </PermissionGuard>
   );
 }

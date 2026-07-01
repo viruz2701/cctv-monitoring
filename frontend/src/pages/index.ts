@@ -58,3 +58,6 @@ export const DescriptorEditor = lazy(() => import('./DescriptorEditor').then((m)
 
 // PROTO-07: Community Protocol Registry
 export const CommunityRegistry = lazy(() => import('./CommunityRegistry').then((m) => ({ default: m.CommunityRegistry })));
+
+// P2-BI: Self-Service Analytics Query Builder
+export const BIQueryBuilder = lazy(() => import('./BIQueryBuilder').then((m) => ({ default: m.BIQueryBuilder })));

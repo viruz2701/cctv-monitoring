@@ -23,7 +23,7 @@ import {
   Shield,
   Database,
   FileSpreadsheet,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

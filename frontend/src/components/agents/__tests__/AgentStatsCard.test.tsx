@@ -85,8 +85,9 @@ describe('AgentStatsCard', () => {
     const allOffline: AgentStats = { total: 5, online: 0, offline: 5, errors: 0 };
     render(<AgentStatsCard stats={allOffline} />);
 
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('0')).toBeInTheDocument();
+    // Five appears twice (total + offline), zero appears twice (online + errors)
+    expect(screen.getAllByText('5')).toHaveLength(2);
+    expect(screen.getAllByText('0')).toHaveLength(2);
   });
 
   it('has region role and label', () => {

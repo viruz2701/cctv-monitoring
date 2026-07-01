@@ -16,7 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

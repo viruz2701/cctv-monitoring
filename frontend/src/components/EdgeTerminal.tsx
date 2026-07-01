@@ -19,15 +19,8 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 
 // Динамический импорт xterm.js для избежания проблем с SSR
 // В production xterm.css должен быть импортирован в index.html или через import
-interface ITerminal {
-  open(element: HTMLElement): void;
-  write(data: string): void;
-  resize(cols: number, rows: number): void;
-  onData(callback: (data: string) => void): void;
-  onResize(callback: (cols: number, rows: number) => void): void;
-  dispose(): void;
-  element?: HTMLElement;
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ITerminal = any;
 
 interface EdgeTerminalProps {
   /** ID edge-агента */
@@ -78,7 +71,7 @@ export function EdgeTerminal({
 
   // Инициализация терминала
   useEffect(() => {
-    let term: ITerminal | null = null;
+    let term: any = null;
     let ws: WebSocket | null = null;
     let disposed = false;
 

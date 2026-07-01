@@ -68,6 +68,8 @@ export function EdgeVideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const v = video!;
+
     async function initPlayer() {
       try {
         setStatus('loading');
@@ -80,20 +82,20 @@ export function EdgeVideoPlayer({
           if (Hls.isSupported()) {
             const proxyUrl = getHlsProxyUrl();
 
-            hls = new Hls({
+            hls = new (Hls as any)({
               enableWorker: true,
               lowLatencyMode: true,
-              backbufferLength: 30,
+              backBufferLength: 30,
               maxBufferLength: 30,
               manifestLoadingTimeOut: 10000,
             });
 
             hls.loadSource(proxyUrl);
-            hls.attachMedia(video);
+            hls.attachMedia(v);
             hlsRef.current = hls;
 
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              video.play().catch(() => {
+              v.play().catch(() => {
                 // Autoplay может быть заблокирован браузером
                 setStatus('idle');
               });
@@ -107,11 +109,11 @@ export function EdgeVideoPlayer({
                 onError?.(`HLS fatal error: ${data.type}`);
               }
             });
-          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
             // Native HLS support (Safari)
-            video.src = getHlsProxyUrl();
-            video.addEventListener('loadedmetadata', () => {
-              video.play().catch(() => {});
+            v.src = getHlsProxyUrl();
+            v.addEventListener('loadedmetadata', () => {
+              v.play().catch(() => {});
               setStatus('playing');
             });
           } else {

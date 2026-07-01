@@ -184,7 +184,7 @@ export function ManualDownloadTab() {
                 'ticket_log': t('ticket_log_report')
             };
 
-            const approximateSize = result?.excelBuffer?.length ? `${(result.excelBuffer.length / 1024).toFixed(1)} KB` : '1.2 MB';
+            const approximateSize = (result as any)?.excelBuffer?.length ? `${(((result as any).excelBuffer as any).byteLength / 1024).toFixed(1)} KB` : '1.2 MB';
 
             addGeneratedReport({
                 id: `rep-${Date.now()}`,

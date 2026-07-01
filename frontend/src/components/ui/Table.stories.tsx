@@ -48,7 +48,7 @@ export const Basic: Story = {
   args: {
     data: sampleDevices,
     columns,
-    keyExtractor: (item: Device) => item.id,
+    keyExtractor: (item: unknown) => (item as Device).id,
   },
 };
 
@@ -87,7 +87,7 @@ export const Loading: Story = {
   args: {
     data: [],
     columns,
-    keyExtractor: (item: Device) => item.id,
+    keyExtractor: (item: unknown) => (item as Device).id,
     loading: true,
   },
 };
@@ -98,7 +98,7 @@ export const Empty: Story = {
   args: {
     data: [],
     columns,
-    keyExtractor: (item: Device) => item.id,
+    keyExtractor: (item: unknown) => (item as Device).id,
     emptyMessage: 'No devices found matching your search criteria.',
   },
 };
@@ -109,29 +109,32 @@ export const ExpandableRows: Story = {
   args: {
     data: sampleDevices.slice(0, 3),
     columns,
-    keyExtractor: (item: Device) => item.id,
-    expandable: (item: Device) => (
-      <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-slate-500">Model:</span>{' '}
-            <span className="text-slate-900 dark:text-white font-medium">Pro Series</span>
-          </div>
-          <div>
-            <span className="text-slate-500">Firmware:</span>{' '}
-            <span className="text-slate-900 dark:text-white font-medium">v3.2.1</span>
-          </div>
-          <div>
-            <span className="text-slate-500">Last Seen:</span>{' '}
-            <span className="text-slate-900 dark:text-white font-medium">{new Date().toLocaleString()}</span>
-          </div>
-          <div>
-            <span className="text-slate-500">Location:</span>{' '}
-            <span className="text-slate-900 dark:text-white font-medium">{item.site}</span>
+    keyExtractor: (item: unknown) => (item as Device).id,
+    expandable: (item: unknown) => {
+      const device = item as Device;
+      return (
+        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-slate-500">Model:</span>{' '}
+              <span className="text-slate-900 dark:text-white font-medium">Pro Series</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Firmware:</span>{' '}
+              <span className="text-slate-900 dark:text-white font-medium">v3.2.1</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Last Seen:</span>{' '}
+              <span className="text-slate-900 dark:text-white font-medium">{new Date().toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Location:</span>{' '}
+              <span className="text-slate-900 dark:text-white font-medium">{device.site}</span>
+            </div>
           </div>
         </div>
-      </div>
-    ),
+      );
+    },
   },
 };
 
@@ -215,6 +218,6 @@ export const Playground: Story = {
   args: {
     data: sampleDevices.slice(0, 3),
     columns: columns.slice(0, 3),
-    keyExtractor: (item: Device) => item.id,
+    keyExtractor: (item: unknown) => (item as Device).id,
   },
 };

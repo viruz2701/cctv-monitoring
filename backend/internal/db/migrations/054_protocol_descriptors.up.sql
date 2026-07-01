@@ -10,7 +10,7 @@
 --   - IEC 62443-3-3 SR 1.1: Unique identification
 --   - IEC 62443-3-3 SL-3: Zone separation (Zone 3 — Backend)
 
-CREATE TABLE IF NOT EXISTS protocol_descriptors (
+CREATE TABLE protocol_descriptors (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vendor      VARCHAR(100) NOT NULL,
     version     VARCHAR(50) NOT NULL,

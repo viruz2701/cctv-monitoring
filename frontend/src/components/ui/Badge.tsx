@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'primary';
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'primary' | 'outline';
 type BadgeSize = 'sm' | 'md' | 'lg';
 
 interface BadgeProps {
@@ -21,6 +21,7 @@ const variantClasses: Record<BadgeVariant, string> = {
     info: 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:border-cyan-800',
     neutral: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
     primary: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800',
+    outline: 'bg-transparent text-slate-600 border-slate-300 dark:text-slate-400 dark:border-slate-600',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
@@ -30,6 +31,7 @@ const dotColors: Record<BadgeVariant, string> = {
     info: 'bg-cyan-500',
     neutral: 'bg-slate-500',
     primary: 'bg-blue-500',
+    outline: 'bg-slate-400',
 };
 
 const sizeClasses: Record<BadgeSize, string> = {
@@ -45,6 +47,7 @@ const variantLabels: Record<BadgeVariant, string> = {
     info: 'Info',
     neutral: 'Neutral',
     primary: 'Primary',
+    outline: 'Outline',
 };
 
 export function Badge({

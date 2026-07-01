@@ -120,7 +120,7 @@ export const Sidebar = React.memo(function Sidebar({ collapsed, onToggle, mobile
 
     return (
         <aside
-            className={`fixed left-0 top-0 z-40 h-screen bg-slate-900 transition-all duration-300 flex flex-col
+            className={`fixed left-0 top-0 z-40 h-screen bg-slate-900 transition-[width,transform] duration-300 ease-out will-change-transform flex flex-col
                 ${collapsed ? 'w-20' : 'w-64'}
                 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} 
                 lg:translate-x-0`}

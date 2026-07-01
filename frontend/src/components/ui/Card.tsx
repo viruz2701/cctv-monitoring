@@ -23,7 +23,7 @@ import React, { useCallback } from 'react';
 import { useRipple } from '../../hooks/useRipple';
 import { useHapticFeedback } from '../../hooks/useHapticFeedback';
 
-type CardVariant = 'elevated' | 'outlined' | 'flat' | 'interactive';
+type CardVariant = 'elevated' | 'outlined' | 'flat' | 'interactive' | 'bordered' | 'default';
 
 interface CardProps {
   children: React.ReactNode;
@@ -52,6 +52,10 @@ const variantClasses: Record<CardVariant, string> = {
   flat: 'bg-slate-50 dark:bg-slate-800/50',
   interactive:
     'bg-white dark:bg-slate-800 shadow-card border border-slate-200 dark:border-slate-700 card-hover cursor-pointer',
+  bordered:
+    'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700',
+  default:
+    'bg-white dark:bg-slate-800 shadow-card border border-slate-200 dark:border-slate-700',
 };
 
 const paddingClasses: Record<string, string> = {

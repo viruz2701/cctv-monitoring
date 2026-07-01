@@ -252,6 +252,24 @@ func TestBuildQuery_FilterOperators(t *testing.T) {
 	}
 }
 
+func TestBuildQuery_EmptyInArray(t *testing.T) {
+	qb, err := New(nil, []QueryTemplate{simpleTemplate()})
+	if err != nil {
+		t.Fatalf("New() returned error: %v", err)
+	}
+
+	tmpl := simpleTemplate()
+
+	_, _, err = qb.buildQuery(tmpl, QueryParams{
+		TemplateID: "simple",
+		Dimensions: []string{"device_id"},
+		Filters:    []FilterCondition{{Field: "vendor_type", Operator: "in", Value: []interface{}{}}},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty IN array")
+	}
+}
+
 func TestBuildQuery_InvalidFilterOperator(t *testing.T) {
 	qb, err := New(nil, []QueryTemplate{simpleTemplate()})
 	if err != nil {

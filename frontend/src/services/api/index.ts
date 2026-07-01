@@ -44,10 +44,11 @@ export { webhooksApi, p2pApi, atlasApi, cameraModelsApi } from './integrations';
 export type { WebhookEndpoint, CameraSpec, CameraBrand, CameraModelSummary } from './integrations';
 
 // Analytics
-export { predictionsApi, costApi, reliabilityApi, slaApi, logsApi } from './analytics';
+export { predictionsApi, costApi, reliabilityApi, slaApi, logsApi, biApi } from './analytics';
 export type {
   Prediction, CostData, CostTrend, TopExpensiveDevice,
   VendorReliability, SLAMetrics, ReliabilityData, ParsedLog,
+  QueryTemplate, QueryParams, QueryResult, Field, FilterCondition,
 } from './analytics';
 
 // P2-AI.4: Anomaly Detection
@@ -134,7 +135,7 @@ import { authApi, usersApi } from './users';
 import { sitesApi, ticketsApi } from './sites';
 import { reportsApi, notificationsApi, auditLogApi } from './reports';
 import { webhooksApi, p2pApi, atlasApi, cameraModelsApi } from './integrations';
-import { predictionsApi, costApi, reliabilityApi, slaApi, logsApi } from './analytics';
+import { predictionsApi, costApi, reliabilityApi, slaApi, logsApi, biApi } from './analytics';
 import { anomaliesApi } from './anomalies';
 import { customFieldsApi } from './customFields';
 import { servicesApi } from './services';
@@ -325,4 +326,8 @@ export const api = {
   getAgent: agentsApi.getAgent.bind(agentsApi),
   sendAgentCommand: agentsApi.sendCommand.bind(agentsApi),
   deleteAgent: agentsApi.deleteAgent.bind(agentsApi),
+
+  // P2-BI: Self-Service Analytics
+  getBITemplates: biApi.getTemplates.bind(biApi),
+  executeBIQuery: biApi.executeQuery.bind(biApi),
 };

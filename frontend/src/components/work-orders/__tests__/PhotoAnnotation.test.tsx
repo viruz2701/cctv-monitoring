@@ -52,6 +52,7 @@ const mockCanvasContext = {
   fillRect: vi.fn(),
   strokeRect: vi.fn(),
   scale: vi.fn(),
+  translate: vi.fn(),
   drawImage: vi.fn(),
   measureText: vi.fn(() => ({ width: 50 })),
   fillText: vi.fn(),
@@ -146,7 +147,7 @@ describe('PhotoAnnotation', () => {
     expect(redoButton).toBeDisabled();
 
     // Clear кнопка
-    const clearButton = screen.getByTitle('Очистить все');
+    const clearButton = screen.getByTitle('Очистить все (Delete)');
     expect(clearButton).toBeDisabled();
 
     // Export кнопка

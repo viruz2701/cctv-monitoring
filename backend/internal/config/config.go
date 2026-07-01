@@ -364,8 +364,11 @@ func Load() *Config {
 	viper.SetDefault("jira_fallback_dir", "/var/lib/gb-telemetry/fallback/jira")
 
 	// NATS defaults (P0-BACKEND.1: JetStream mandatory for production)
-	viper.SetDefault("use_nats_kv", true)   // P0-BACKEND.1: JetStream KV включён по умолчанию
-	viper.SetDefault("nats_required", true) // P0-BACKEND.1: NATS обязателен для production
+	// В debug=false (production): NATS обязателен
+	// В debug=true (development): NATS опционален (graceful degradation)
+	// Docker Compose (production) устанавливает GB_NATS_REQUIRED=true явно
+	viper.SetDefault("use_nats_kv", false)   // P0-BACKEND.1: KV отключён по умолчанию
+	viper.SetDefault("nats_required", false) // P0-BACKEND.1: NATS опционален по умолчанию
 	viper.SetDefault("nats_embedded", false)
 	viper.SetDefault("nats_url", "nats://localhost:4222")
 	viper.SetDefault("nats_tls", false)

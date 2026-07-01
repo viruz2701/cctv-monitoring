@@ -400,6 +400,9 @@ func buildCondition(expr string, f FilterCondition, nextArg func(interface{}) st
 		if !ok {
 			return "", fmt.Errorf("IN operator requires array value")
 		}
+		if len(vals) == 0 {
+			return "", fmt.Errorf("IN operator requires at least one value")
+		}
 		placeholders := make([]string, len(vals))
 		for i, v := range vals {
 			placeholders[i] = nextArg(v)

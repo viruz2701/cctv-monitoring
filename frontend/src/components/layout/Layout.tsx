@@ -171,7 +171,7 @@ export function Layout() {
                 id={targetId}
                 role="main"
                 tabIndex={-1}
-                className={`transition-all duration-300 pt-16 min-h-screen ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+                className={`transition-[margin] duration-300 pt-16 min-h-screen ${sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
                     }`}
             >
                 <div className="p-4 md:p-6 lg:p-8">

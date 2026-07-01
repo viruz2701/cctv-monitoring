@@ -30,7 +30,7 @@ import {
   Camera,
   Wifi,
   UserX,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types

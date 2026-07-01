@@ -23,7 +23,7 @@ import {
   Shield,
   Globe,
   Search,
-} from '../components/ui/Icons';
+} from '../../components/ui/Icons';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -560,19 +560,20 @@ function DPIATab() {
           {reports.map((report) => (
             <div key={report.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedReport(report)}>
               <Card>
-              <div className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="font-semibold">{report.system_name}</h4>
-                    <p className="text-xs text-slate-500">{report.data_controller}</p>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-semibold">{report.system_name}</h4>
+                      <p className="text-xs text-slate-500">{report.data_controller}</p>
+                    </div>
+                    <RiskBadge level={report.risk_level} />
                   </div>
-                  <RiskBadge level={report.risk_level} />
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">{report.system_description}</p>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>DPIA: {report.dpia_required ? '✅' : '❌'}</span>
-                  <span>DPO: {report.dpo_reviewed ? '✅' : '⏳'}</span>
-                  <span>Review: {new Date(report.review_date).toLocaleDateString()}</span>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">{report.system_description}</p>
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>DPIA: {report.dpia_required ? '✅' : '❌'}</span>
+                    <span>DPO: {report.dpo_reviewed ? '✅' : '⏳'}</span>
+                    <span>Review: {new Date(report.review_date).toLocaleDateString()}</span>
+                  </div>
                 </div>
               </Card>
             </div>

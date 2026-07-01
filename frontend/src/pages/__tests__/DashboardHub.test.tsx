@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { DashboardHub } from '../DashboardHub';
-import type { AuthUser } from '../../hooks/useAuth';
+import type { AuthUser } from '../../store/authStore';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 

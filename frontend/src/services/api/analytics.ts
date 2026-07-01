@@ -158,3 +158,61 @@ export const logsApi = {
     return request<ParsedLog[]>(`/logs/search?${query.toString()}`);
   },
 };
+
+// ─── BI Query API (P2-BI) ──────────────────────────────────────────
+
+export interface Field {
+  key: string;
+  label: string;
+  type: string;
+  agg?: string;
+  sql_expr?: string;
+}
+
+export interface QueryTemplate {
+  id: string;
+  name: string;
+  description: string;
+  dimensions: Field[];
+  measures: Field[];
+  date_field: string;
+}
+
+export interface FilterCondition {
+  field: string;
+  op: string;
+  value: unknown;
+}
+
+export interface QueryParams {
+  template_id: string;
+  dimensions?: string[];
+  measures?: string[];
+  filters?: FilterCondition[];
+  time_from?: string;
+  time_to?: string;
+  limit?: number;
+  offset?: number;
+  order_by?: string;
+  order_dir?: string;
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: unknown[][];
+  total: number;
+  took: string;
+}
+
+export const biApi = {
+  getTemplates(): Promise<QueryTemplate[]> {
+    return request<QueryTemplate[] | null>('/analytics/bi/templates').then((data) => data || []);
+  },
+
+  executeQuery(params: QueryParams): Promise<QueryResult> {
+    return request<QueryResult>('/analytics/bi/query', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+};

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ReactNode, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout, PageSuspense } from './components/layout';
@@ -19,6 +19,22 @@ initSentry(import.meta.env.VITE_SENTRY_DSN, {
 
 // ── Lazy-loaded pages via barrel ──────────────────────────────────────────
 import * as Pages from './pages';
+
+// P2-OPT.13: Prefetch критических маршрутов после загрузки основного бандла
+// Используем requestIdleCallback для отложенной загрузки DashboardHub
+const prefetchCriticalRoutes = () => {
+  // Dashboard — первый экран после логина, загружаем заранее
+  const dashboardLink = document.createElement('link');
+  dashboardLink.rel = 'modulepreload';
+  dashboardLink.href = new URL('./pages/DashboardHub.tsx', import.meta.url).href;
+  document.head.appendChild(dashboardLink);
+};
+// Запускаем после idle или через 2 секунды
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(prefetchCriticalRoutes, { timeout: 2000 });
+} else {
+  setTimeout(prefetchCriticalRoutes, 2000);
+}
 
 import { RoleProtectedRoute } from './components/auth/RoleProtectedRoute';
 
@@ -139,6 +155,9 @@ function App() {
                   	<Route path="/admin/descriptors" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
                   	<Route path="/admin/descriptors/new" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
                   	<Route path="/admin/descriptors/:vendor/edit" element={<PageSuspense><Pages.DescriptorEditor /></PageSuspense>} />
+
+                  	{/* P2-BI: Self-Service Analytics Query Builder */}
+                  	<Route path="/bi-query" element={<PageSuspense><Pages.BIQueryBuilder /></PageSuspense>} />
                   </Route>
 
                   {/* Admin Only Routes - Settings */}

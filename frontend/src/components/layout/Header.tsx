@@ -98,7 +98,7 @@ export function Header({ onMobileMenuToggle, sidebarCollapsed }: HeaderProps) {
     };
 
     return (
-        <header className={`fixed top-0 right-0 left-0 z-30 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-all duration-300 ${sidebarCollapsed ? 'lg:left-20' : 'lg:left-64'}`}>
+        <header className={`fixed top-0 right-0 left-0 z-30 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 transition-[left] duration-300 ${sidebarCollapsed ? 'lg:left-20' : 'lg:left-64'}`}>
             <div className="flex items-center justify-between h-full px-6">
                 <div className="flex items-center gap-2">
                     <WorkspaceSwitcher />
