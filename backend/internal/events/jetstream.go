@@ -85,9 +85,11 @@ func (m *JetStreamManager) InitStreams() error {
 			Subjects:    []string{"alarms.>", "cmms.workorder.>", "predictions.>", "telemetry.>"},
 			Retention:   nats.LimitsPolicy,
 			MaxAge:      365 * 24 * time.Hour,
+			MaxMsgs:     50_000_000,              // P1-HI-04: лимит сообщений
+			MaxBytes:    10 * 1024 * 1024 * 1024, // P1-HI-04: 10 GB лимит
 			Storage:     nats.FileStorage,
 			Replicas:    1,
-			Discard:     nats.DiscardNew,
+			Discard:     nats.DiscardOld, // P1-HI-04: discard old вместо new
 			AllowDirect: true,
 		},
 	}

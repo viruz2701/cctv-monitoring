@@ -52,6 +52,9 @@ func New(cfg Config, logger *slog.Logger) (*DB, error) {
 	poolConfig.MaxConnLifetime = cfg.MaxConnLifetime
 	poolConfig.MaxConnIdleTime = cfg.MaxConnIdleTime
 	poolConfig.HealthCheckPeriod = cfg.HealthCheckPeriod
+	// P1-HI-01: Simple protocol для совместимости с PgBouncer transaction mode
+	// (PgBouncer не поддерживает prepared statements в транзакционном режиме)
+	poolConfig.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
