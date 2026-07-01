@@ -32,6 +32,11 @@ type AnomalyConfig struct {
 	// MinDataPoints — минимальное количество точек данных для анализа (default: 5).
 	MinDataPoints int `mapstructure:"min_data_points"`
 
+	// WarmUpSamples — количество точек данных для разогрева детектора (default: 30).
+	// До накопления WarmUpSamples используются статические пороги,
+	// т.к. z-score ненадёжен на малых выборках (P2-MED-27).
+	WarmUpSamples int `mapstructure:"warm_up_samples"`
+
 	// MetricBufferSize — размер буфера метрик на устройство (default: 1000).
 	MetricBufferSize int `mapstructure:"metric_buffer_size"`
 
@@ -54,11 +59,42 @@ func DefaultAnomalyConfig() AnomalyConfig {
 		ZScoreThreshold:       3.0,
 		MovingAverageWindow:   10,
 		MinDataPoints:         5,
+		WarmUpSamples:         30,
 		MetricBufferSize:      1000,
 		EvaluationInterval:    "5m",
 		NATSTopicPrefix:       "ai.anomaly",
 		AnomalyRetentionHours: 168, // 7 days
 		MaxAnomaliesPerDevice: 50,
+	}
+}
+
+// ─── Статические пороги для warm-up периода ───────────────────────────────
+
+// WarmUpThreshold — статический порог для одного типа метрики в период разогрева.
+type WarmUpThreshold struct {
+	// Min — минимальное допустимое значение (используется math.Inf(-1) если не задан).
+	Min float64 `json:"min,omitempty"`
+	// Max — максимальное допустимое значение (используется math.Inf(1) если не задан).
+	Max float64 `json:"max,omitempty"`
+	// ToleranceMultiplier — множитель допустимого отклонения от среднего (default: 2.0).
+	// Применяется только если есть хотя бы 2 точки данных.
+	ToleranceMultiplier float64 `json:"tolerance_multiplier,omitempty"`
+}
+
+// DefaultWarmUpThresholds возвращает статические пороги для warm-up периода
+// для всех известных типов метрик (P2-MED-27).
+func DefaultWarmUpThresholds() map[string]WarmUpThreshold {
+	return map[string]WarmUpThreshold{
+		"heartbeat_latency": {Min: 0, Max: 5000, ToleranceMultiplier: 2.0},    // ms
+		"error_rate":        {Min: 0, Max: 0.1, ToleranceMultiplier: 2.0},     // 0-10%
+		"packet_loss":       {Min: 0, Max: 0.05, ToleranceMultiplier: 2.0},    // 0-5%
+		"cpu_usage":         {Min: 0, Max: 95, ToleranceMultiplier: 2.0},      // 0-95%
+		"memory_usage":      {Min: 0, Max: 95, ToleranceMultiplier: 2.0},      // 0-95%
+		"disk_usage":        {Min: 0, Max: 95, ToleranceMultiplier: 2.0},      // 0-95%
+		"video_bitrate":     {Min: 100, Max: 50000, ToleranceMultiplier: 2.0}, // kbps
+		"fps":               {Min: 1, Max: 60, ToleranceMultiplier: 2.0},      // 1-60 fps
+		"connection_jitter": {Min: 0, Max: 200, ToleranceMultiplier: 2.0},     // ms
+		"temperature":       {Min: -20, Max: 80, ToleranceMultiplier: 2.0},    // °C
 	}
 }
 

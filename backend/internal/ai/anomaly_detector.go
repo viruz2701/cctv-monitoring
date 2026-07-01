@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -199,6 +200,10 @@ func NewAnomalyDetector(cfg AnomalyConfig, logger *slog.Logger) *AnomalyDetector
 
 // Feed добавляет метрику в буфер и возвращает аномалии, если обнаружены.
 // Если метрика является аномальной, возвращает AnomalyResult.
+//
+// Warm-up period (P2-MED-27): пока не накоплено WarmUpSamples точек данных,
+// используются статические пороги вместо z-score. Это предотвращает ложные
+// срабатывания на малых выборках, когда stdDev может быть 0 или нестабильным.
 func (d *AnomalyDetector) Feed(ctx context.Context, m DeviceMetricPoint) *AnomalyResult {
 	buf := d.getOrCreateBuffer(m.DeviceID, m.MetricType)
 	buf.Push(m)
@@ -210,6 +215,74 @@ func (d *AnomalyDetector) Feed(ctx context.Context, m DeviceMetricPoint) *Anomal
 
 	// Анализируем
 	return d.evaluate(ctx, m.DeviceID, m.MetricType, m.Value)
+}
+
+// isWarmUpComplete проверяет, завершён ли разогрев детектора для указанной метрики.
+// Возвращает true, когда накоплено WarmUpSamples или больше точек данных.
+// P2-MED-27: до 30+ samples используем статические пороги.
+func (d *AnomalyDetector) isWarmUpComplete(deviceID, metricType string) bool {
+	buf := d.getOrCreateBuffer(deviceID, metricType)
+	return buf.Len() >= d.cfg.WarmUpSamples
+}
+
+// checkStaticThreshold проверяет значение метрики по статическим порогам для warm-up периода.
+// Возвращает true, если значение выходит за пределы статического порога (аномалия).
+// Использует DefaultWarmUpThresholds() если кастомные не заданы.
+// P2-MED-27: статические пороги до накопления 30+ samples.
+func (d *AnomalyDetector) checkStaticThreshold(deviceID, metricType string, value float64) (bool, float64, float64, float64) {
+	thresholds := DefaultWarmUpThresholds()
+	t, ok := thresholds[metricType]
+	if !ok {
+		// Если порог для метрики не найден — пропускаем (нет аномалии)
+		return false, 0, 0, 0
+	}
+
+	buf := d.getOrCreateBuffer(deviceID, metricType)
+	values := buf.Values()
+
+	// Вычисляем среднее по имеющимся данным
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	mean := sum / float64(len(values))
+
+	// Если задан ToleranceMultiplier — используем его для динамического порога
+	// на основе среднего, но не выходя за абсолютные границы [Min, Max].
+	tolerance := t.ToleranceMultiplier
+	if tolerance <= 0 {
+		tolerance = 2.0
+	}
+
+	upperBound := mean * tolerance
+	lowerBound := mean / tolerance
+
+	// Ограничиваем абсолютными границами
+	if t.Max > 0 && upperBound > t.Max {
+		upperBound = t.Max
+	}
+	if lowerBound < t.Min {
+		lowerBound = t.Min
+	}
+
+	// Проверяем выход за границы
+	if value > upperBound || value < lowerBound {
+		// Вычисляем z-score-like отклонение для консистентности
+		stdDev := 0.0
+		if len(values) > 1 {
+			var varianceSum float64
+			for _, v := range values {
+				diff := v - mean
+				varianceSum += diff * diff
+			}
+			variance := varianceSum / float64(len(values))
+			stdDev = math.Sqrt(variance)
+		}
+
+		return true, mean, stdDev, (value - mean) / (stdDev + 0.0001)
+	}
+
+	return false, mean, 0, 0
 }
 
 // GetActiveAnomalies возвращает активные (не разрешённые) аномалии.
@@ -261,13 +334,9 @@ func (d *AnomalyDetector) GetAllAnomalies(deviceID, metricType, severity, status
 	}
 
 	// Сортируем по времени убывания (новые сверху)
-	for i := 0; i < len(results); i++ {
-		for j := i + 1; j < len(results); j++ {
-			if results[j].DetectedAt.After(results[i].DetectedAt) {
-				results[i], results[j] = results[j], results[i]
-			}
-		}
-	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].DetectedAt.After(results[j].DetectedAt)
+	})
 
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
@@ -364,22 +433,49 @@ func (d *AnomalyDetector) getOrCreateBuffer(deviceID, metricType string) *Metric
 }
 
 // evaluate анализирует метрику на аномалию.
+//
+// Если разогрев не завершён (P2-MED-27), использует статические пороги
+// вместо z-score, который ненадёжен на выборках < 30 элементов.
 func (d *AnomalyDetector) evaluate(ctx context.Context, deviceID, metricType string, currentValue float64) *AnomalyResult {
 	buf := d.getOrCreateBuffer(deviceID, metricType)
 	values := buf.Values()
 
-	// Берём только нужное окно для moving average
-	window := d.cfg.MovingAverageWindow
-	if window > len(values) {
-		window = len(values)
-	}
-	windowValues := values[len(values)-window:]
+	var zScore, mean, stdDev float64
+	var isAnomaly bool
 
-	zScore, mean, stdDev := calculateZScore(currentValue, windowValues)
+	// P2-MED-27: Warm-up period — статические пороги до 30+ samples
+	if !d.isWarmUpComplete(deviceID, metricType) {
+		isAnomaly, mean, stdDev, zScore = d.checkStaticThreshold(deviceID, metricType, currentValue)
+		if !isAnomaly {
+			d.logger.DebugContext(ctx, "metric within static threshold (warm-up)",
+				"device_id", deviceID,
+				"metric_type", metricType,
+				"value", currentValue,
+				"samples", len(values),
+			)
+			return nil
+		}
+		d.logger.WarnContext(ctx, "metric exceeded static threshold (warm-up)",
+			"device_id", deviceID,
+			"metric_type", metricType,
+			"value", currentValue,
+			"samples", len(values),
+		)
+	} else {
+		// Нормальный режим: z-score анализ
+		// Берём только нужное окно для moving average
+		window := d.cfg.MovingAverageWindow
+		if window > len(values) {
+			window = len(values)
+		}
+		windowValues := values[len(values)-window:]
 
-	// Проверяем порог
-	if math.Abs(zScore) < d.cfg.ZScoreThreshold {
-		return nil
+		zScore, mean, stdDev = calculateZScore(currentValue, windowValues)
+
+		// Проверяем порог
+		if math.Abs(zScore) < d.cfg.ZScoreThreshold {
+			return nil
+		}
 	}
 
 	// Проверяем, нет ли уже активной аномалии для этого типа метрики

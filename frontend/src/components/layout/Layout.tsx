@@ -111,10 +111,11 @@ export function Layout() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* WCAG 2.1 AA: Skip Link — первый фокусируемый элемент (UX-14.2.7) */}
+            {/* P3-LOW-02: focus-visible ring + entrance animation для keyboard users */}
             <a
                 href={`#${targetId}`}
                 onClick={handleSkip}
-                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 transition-all duration-300 animate-fade-slide-down"
             >
                 Перейти к основному содержанию
             </a>

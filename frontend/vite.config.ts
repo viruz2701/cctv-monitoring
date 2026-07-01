@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { VitePWA } from 'vite-plugin-pwa';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
+import { imagetools } from 'vite-imagetools';
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 function cspPlugin(): Plugin {
@@ -66,6 +67,16 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    imagetools({
+      // P3-LOW-01: Автоматическая WebP конвертация изображений
+      // Использует sharp (уже в devDependencies) для преобразования
+      defaultDirectives: () => new URLSearchParams([
+        ['webp', 'true'],        // Конвертация в WebP
+        ['format', 'webp'],      // Принудительный формат
+        ['quality', '80'],       // Качество 80% (P3-LOW-01)
+        ['w', '800'],            // Максимальная ширина 800px
+      ]),
+    }),
     cspPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
