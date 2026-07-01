@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getArrayData } from '../utils/helpers';
 import {
@@ -15,8 +15,9 @@ import { useWorkOrders } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
 import { MaintenanceSchedule } from '../services/maintenanceApi';
 import { Button, Card, DataGrid, Badge, Modal, Input } from '../components/ui';
-import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays } from '../components/ui/Icons';
+import { Plus, Calendar, CheckCircle, AlertCircle, Table2, CalendarDays, LayoutDashboard } from '../components/ui/Icons';
 import ScheduleXWrapper from '../components/planning/FullCalendarWrapper';
+import { ScheduleBuilder, type DeviceOption } from '../components/schedule/ScheduleBuilder';
 
 type ViewMode = 'table' | 'calendar';
 
@@ -32,14 +33,80 @@ export const MaintenanceSchedules: React.FC = () => {
   const navigate = useNavigate();
   const { data: schedules = [], isLoading: loading } = useMaintenanceSchedules();
   const { data: workOrders = [] } = useWorkOrders();
+  const { data: rawSites } = useSites();
+  const { data: rawDevices } = useDevices();
+  const { data: rawUsers = [] } = useUsers();
   const completeScheduleMut = useCompleteMaintenanceSchedule();
   const deleteScheduleMut = useDeleteMaintenanceSchedule();
   const updateScheduleMut = useUpdateMaintenanceSchedule();
+  const createScheduleMut = useCreateMaintenanceSchedule();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedEvent, setSelectedEvent] = useState<MaintenanceSchedule | null>(null);
+
+  // ── Schedule Builder data ──────────────────────────────────────────────
+  const safeDevicesList = useMemo(
+    () => getArrayData<{ device_id: string; name?: string; site_id?: string; type?: string; manufacturer?: string; model?: string }>(rawDevices),
+    [rawDevices],
+  );
+  const safeSitesList = useMemo(
+    () => getArrayData<{ id: string; name?: string }>(rawSites),
+    [rawSites],
+  );
+
+  const deviceOptions: DeviceOption[] = useMemo(
+    () =>
+      safeDevicesList.map((d: any) => {
+        const site = safeSitesList.find((s: any) => s.id === d.site_id);
+        return {
+          id: d.device_id || d.id,
+          name: d.name || d.device_id || 'Unknown',
+          siteId: d.site_id || '',
+          siteName: site?.name || d.site_id || 'Unknown',
+          type: d.type || 'unknown',
+          vendor: d.manufacturer || undefined,
+          model: d.model || undefined,
+        };
+      }),
+    [safeDevicesList, safeSitesList],
+  );
+
+  const users = useMemo(() => rawUsers.map((u: any) => ({ ...u, name: u.name || u.username })), [rawUsers]);
+
+  const technicianOptions = useMemo(
+    () =>
+      users
+        .filter((u: any) => u.role === 'technician')
+        .map((u: any) => ({
+          id: u.id,
+          name: u.name || u.username,
+          role: u.role,
+          team: u.department || 'General',
+          workload: 0,
+          avatarColor: '#6366f1',
+        })),
+    [users],
+  );
+
+  const handleGenerateSchedule = useCallback(
+    async (entries: import('../components/schedule/ScheduleBuilder').ScheduleEntry[]) => {
+      for (const entry of entries) {
+        await createScheduleMut.mutateAsync({
+          device_id: entry.deviceId,
+          schedule_type: entry.ruleType,
+          interval_days: entry.intervalDays,
+          next_due: entry.nextDue,
+          assigned_to: entry.technicianIds[0] || undefined,
+          notes: `${entry.ruleLabel}: ${entry.description}`,
+          priority: 'medium',
+        });
+      }
+    },
+    [createScheduleMut],
+  );
 
   const filteredSchedules = useMemo(() => schedules.filter((s) => {
     if (filterType && s.schedule_type !== filterType) return false;
@@ -185,6 +252,9 @@ export const MaintenanceSchedules: React.FC = () => {
               {t('view_calendar')}
             </button>
           </div>
+          <Button onClick={() => setShowScheduleBuilder(true)} variant="secondary" icon={<LayoutDashboard size={20} />}>
+            {t('schedule_builder') || 'Schedule Builder'}
+          </Button>
           <Button onClick={() => setShowCreateModal(true)} icon={<Plus size={20} />}>
             {t('create_schedule')}
           </Button>
@@ -245,6 +315,17 @@ export const MaintenanceSchedules: React.FC = () => {
           </div>
         )}
       </Card>
+
+      {/* Schedule Builder Modal */}
+      <ScheduleBuilder
+        isOpen={showScheduleBuilder}
+        onClose={() => setShowScheduleBuilder(false)}
+        devices={deviceOptions}
+        technicians={technicianOptions}
+        sites={safeSitesList.map((s: any) => ({ id: s.id, name: s.name || s.id }))}
+        onGenerate={handleGenerateSchedule}
+        region={localStorage.getItem('region') || 'EU'}
+      />
 
       <Modal
         isOpen={showCreateModal}
