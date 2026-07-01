@@ -208,6 +208,9 @@ type Server struct {
 	// P0-REG.3-5: Maintenance Compliance Engine
 	complianceJournal *compliance.ElectronicJournal
 
+	// UX-3.2: Auto-fill TO Journals при закрытии WorkOrder
+	toJournalService *compliance.TOJournalService
+
 	// P2-BI: Embedded Self-Service Analytics Query Builder
 	queryBuilder *analytics.QueryBuilder
 

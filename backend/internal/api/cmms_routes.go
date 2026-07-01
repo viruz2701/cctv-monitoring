@@ -60,6 +60,15 @@ func (s *Server) mountCMMSRoutes(r chi.Router) {
 	r.Post("/api/v1/work-orders/{id}/cancel", s.cancelWorkOrder)
 	r.Post("/api/v1/work-orders/{id}/photos", s.uploadWorkOrderPhotos)
 
+	// UX-3.2: Auto-fill TO Journals при закрытии WorkOrder
+	// Feature flag: to_auto_generation (default: false)
+	r.Get("/api/v1/work-orders/{id}/to-journal", s.handleListTOJournal)
+	r.Post("/api/v1/work-orders/{id}/to-journal/auto-fill", s.handleAutoFillTOJournal)
+	r.Get("/api/v1/work-orders/{id}/to-journal/check", s.handleCheckTOJournal)
+
+	// TO Journal manual update (required fields)
+	r.Put("/api/v1/to-journal/{id}", s.handleUpdateTOJournal)
+
 	// P1-PHOTO: Work Order Photo Annotations
 	r.Get("/api/v1/work-orders/{id}/photos/{photoId}/annotations", s.handleGetAnnotations)
 	r.Post("/api/v1/work-orders/{id}/photos/{photoId}/annotations", s.handleSaveAnnotations)
