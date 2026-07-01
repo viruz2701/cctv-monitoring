@@ -770,7 +770,7 @@ func (e *SLACalculationEngine) evictStaleTrackers() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	now := time.Now()
+	now := time.Now().UTC()
 	var evicted int
 
 	for woID, tracker := range e.trackers {
