@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,9 +28,65 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"gb-telemetry-collector/internal/ai"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/models"
 )
+
+// ─── Vision Guard integration ──────────────────────────────────────────────
+
+// visionGuardInstance — глобальный экземпляр VisionGuard для annotation handlers.
+var annotationVisionGuard *ai.VisionGuard
+
+func init() {
+	cfg := ai.DefaultVisionGuardConfig()
+	// Для annotation handlers: warn mode (не блокируем сохранение)
+	cfg.StrictMode = false
+	annotationVisionGuard = ai.NewVisionGuard(cfg, nil)
+}
+
+// checkPhotoWithVisionGuard проверяет фото по URL через Vision Guard.
+// Это defense-in-depth слой: даже если gatekeeper пропустит,
+// мы логгируем подозрительные фото при сохранении аннотаций.
+//
+// Функция не блокирует операцию, только логгирует предупреждения.
+func (s *Server) checkPhotoWithVisionGuard(photoURL string) {
+	// Пытаемся загрузить фото (graceful degradation при ошибке сети)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(photoURL)
+	if err != nil {
+		s.logger.Debug("vision guard: cannot fetch photo for check, skipping",
+			"photo_url", photoURL, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // max 10 MB
+	if err != nil {
+		s.logger.Debug("vision guard: cannot read photo for check, skipping",
+			"photo_url", photoURL, "error", err)
+		return
+	}
+
+	result := annotationVisionGuard.CheckImage(data)
+	if result == nil {
+		return
+	}
+
+	if result.Suspicious {
+		s.logger.Warn("vision guard: suspicious photo detected in annotation",
+			"photo_url", photoURL,
+			"qr_detected", result.QRDetected,
+			"text_detected", result.TextDetected,
+			"warnings", result.Warnings,
+		)
+	}
+
+	if result.Error != "" {
+		s.logger.Error("vision guard: photo check error",
+			"photo_url", photoURL, "error", result.Error)
+	}
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // AnnotationStore — интерфейс для хранения аннотаций.
@@ -208,6 +265,9 @@ func (s *Server) handleSaveAnnotations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// P0-CR-09: Vision Guard — проверка фото перед созданием аннотации
+	s.checkPhotoWithVisionGuard(photoURL)
+
 	userID := getUserIDFromContext(r.Context())
 
 	ann := &models.WorkOrderAnnotation{
@@ -268,6 +328,9 @@ func (s *Server) handleUpdateAnnotations(w http.ResponseWriter, r *http.Request)
 		RespondError(w, r, NewBadRequestError("validation failed: "+strings.Join(errs, "; ")))
 		return
 	}
+
+	// P0-CR-09: Vision Guard — проверка фото перед обновлением аннотации
+	s.checkPhotoWithVisionGuard(photoURL)
 
 	store := s.getAnnotationStore()
 	userID := getUserIDFromContext(r.Context())

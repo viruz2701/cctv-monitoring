@@ -71,6 +71,9 @@ const MAX_RETRY_COUNT = 5;
 /** Задержки exponential backoff (в ms) */
 const RETRY_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000];
 
+/** Максимальный случайный jitter для backoff (в ms) */
+const JITTER_MAX_MS = 1_000;
+
 // ── DifferentialSyncService ─────────────────────────────────────────────
 
 export class DifferentialSyncService {
@@ -306,7 +309,14 @@ export class DifferentialSyncService {
   }
 
   /**
-   * Отправить изменения на сервер с exponential backoff retry.
+   * Отправить изменения на сервер с exponential backoff retry + jitter.
+   *
+   * Jitter предотвращает thundering herd problem при параллельных retry
+   * нескольких клиентов. Задержка:
+   *   backoff = baseDelay + random(0, JITTER_MAX_MS)
+   *
+   * Соответствует:
+   *   - IEC 62443-3-3 SR 3.1 (Queue-based processing with backoff)
    */
   private async _applyWithRetry(
     changes: SyncChange[],
@@ -317,7 +327,9 @@ export class DifferentialSyncService {
       return { applied: result.applied };
     } catch (error) {
       if (attempt < MAX_RETRY_COUNT - 1) {
-        const delay = RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
+        const baseDelay =
+          RETRY_DELAYS[attempt] ?? RETRY_DELAYS[RETRY_DELAYS.length - 1];
+        const delay = this._jitter(baseDelay);
         await this._sleep(delay);
         return this._applyWithRetry(changes, attempt + 1);
       }
@@ -567,6 +579,16 @@ export class DifferentialSyncService {
   }
 
   // ── Private: Utils ─────────────────────────────────────────────────
+
+  /**
+   * Добавить случайный jitter к задержке backoff.
+   * Возвращает baseDelay + random(0, JITTER_MAX_MS).
+   * Предотвращает thundering herd при параллельных retry.
+   */
+  private _jitter(baseDelay: number): number {
+    const jitter = Math.floor(Math.random() * (JITTER_MAX_MS + 1));
+    return baseDelay + jitter;
+  }
 
   private _sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));

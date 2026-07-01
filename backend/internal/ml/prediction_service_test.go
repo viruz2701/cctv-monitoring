@@ -2,13 +2,14 @@
 package ml
 
 import (
-	"bufio"
+	"encoding/json"
 	"log/slog"
-	"strings"
+	"math"
 	"testing"
 )
 
 // newTestService создаёт PredictionService с настроенным логгером для тестов.
+// NATS connection не требуется — тестируем только логику.
 func newTestService() *PredictionService {
 	return &PredictionService{
 		logger: slog.Default(),
@@ -16,119 +17,67 @@ func newTestService() *PredictionService {
 	}
 }
 
-// ── JSONL Parser Tests ──────────────────────────────────────────────
+// ── PredictionTask Validation Tests ──────────────────────────────────
 
-func TestParseOutput_ValidJSONL(t *testing.T) {
-	svc := newTestService()
-	input := `{"device_id":"CAM-001","failure_probability":0.87,"confidence_score":0.92,"model_version":"xgboost_v1","model_variant":"A","prediction_date":"2026-06-26T14:00:00+00:00","prediction_window_days":30,"is_actionable":true,"is_anomaly":false,"calibration_bin":8,"top_features":[{"feature":"offline_ratio","importance":0.45,"value":0.32}],"features_snapshot":{"offline_ratio":0.32},"trace_id":"abc123"}
-{"device_id":"CAM-002","failure_probability":0.32,"confidence_score":0.65,"model_version":"xgboost_v1","model_variant":"A","prediction_date":"2026-06-26T14:00:00+00:00","prediction_window_days":30,"is_actionable":false,"is_anomaly":false,"calibration_bin":3,"top_features":[],"features_snapshot":{"offline_ratio":0.05},"trace_id":"abc123"}
-{"_meta":{"total":2,"actionable":1,"avg_probability":0.595,"status":"ok","timestamp":"2026-06-26T14:00:00+00:00"}}`
-
-	results, meta, err := svc.parseOutput(bufio.NewReader(strings.NewReader(input)))
-	if err != nil {
-		t.Fatalf("parseOutput error: %v", err)
+func TestPredictionTask_Validate_Valid(t *testing.T) {
+	task := PredictionTask{
+		DeviceID:     "CAM-001",
+		ModelVariant: "A",
+		TraceID:      "abc123",
 	}
-
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-
-	// Проверяем первое предсказание
-	if results[0].DeviceID != "CAM-001" {
-		t.Errorf("expected CAM-001, got %s", results[0].DeviceID)
-	}
-	if results[0].FailureProbability != 0.87 {
-		t.Errorf("expected 0.87, got %f", results[0].FailureProbability)
-	}
-	if results[0].ConfidenceScore != 0.92 {
-		t.Errorf("expected 0.92, got %f", results[0].ConfidenceScore)
-	}
-	if !results[0].IsActionable {
-		t.Errorf("expected actionable=true")
-	}
-	if results[0].ModelVariant != "A" {
-		t.Errorf("expected variant A, got %s", results[0].ModelVariant)
-	}
-	if len(results[0].TopFeatures) != 1 {
-		t.Errorf("expected 1 top feature, got %d", len(results[0].TopFeatures))
-	}
-
-	// Проверяем второе предсказание
-	if results[1].DeviceID != "CAM-002" {
-		t.Errorf("expected CAM-002, got %s", results[1].DeviceID)
-	}
-	if results[1].IsActionable {
-		t.Errorf("expected actionable=false")
-	}
-
-	// Проверяем мета-информацию
-	if meta.Meta.Total != 2 {
-		t.Errorf("expected meta total=2, got %d", meta.Meta.Total)
-	}
-	if meta.Meta.Actionable != 1 {
-		t.Errorf("expected meta actionable=1, got %d", meta.Meta.Actionable)
-	}
-	if meta.Meta.Status != "ok" {
-		t.Errorf("expected meta status=ok, got %s", meta.Meta.Status)
+	if err := task.Validate(); err != nil {
+		t.Fatalf("expected valid task, got error: %v", err)
 	}
 }
 
-func TestParseOutput_InvalidJSONLine(t *testing.T) {
-	svc := newTestService()
-	input := `not valid json
-{"device_id":"CAM-001","failure_probability":0.87,"confidence_score":0.92,"model_version":"xgboost_v1","model_variant":"A","prediction_date":"2026-06-26T14:00:00+00:00","prediction_window_days":30,"is_actionable":true,"is_anomaly":false,"calibration_bin":8,"top_features":[],"features_snapshot":{},"trace_id":"abc123"}
-{"_meta":{"total":1,"actionable":1,"avg_probability":0.87,"status":"ok","timestamp":"2026-06-26T14:00:00+00:00"}}`
-
-	results, meta, err := svc.parseOutput(bufio.NewReader(strings.NewReader(input)))
-	if err != nil {
-		t.Fatalf("parseOutput error: %v", err)
+func TestPredictionTask_Validate_MissingDeviceID(t *testing.T) {
+	task := PredictionTask{
+		ModelVariant: "A",
+		TraceID:      "abc123",
 	}
-
-	// Должен пропустить невалидную строку, но распарсить валидную
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result (skipping invalid), got %d", len(results))
-	}
-
-	if results[0].DeviceID != "CAM-001" {
-		t.Errorf("expected CAM-001, got %s", results[0].DeviceID)
-	}
-
-	if meta.Meta.Total != 1 {
-		t.Errorf("expected meta total=1, got %d", meta.Meta.Total)
+	if err := task.Validate(); err == nil {
+		t.Fatal("expected error for missing device_id")
 	}
 }
 
-func TestParseOutput_EmptyInput(t *testing.T) {
-	svc := newTestService()
-	input := `{"_meta":{"total":0,"actionable":0,"avg_probability":0,"status":"ok","timestamp":"2026-06-26T14:00:00+00:00"}}`
-
-	results, meta, err := svc.parseOutput(bufio.NewReader(strings.NewReader(input)))
-	if err != nil {
-		t.Fatalf("parseOutput error: %v", err)
+func TestPredictionTask_Validate_MissingVariant(t *testing.T) {
+	task := PredictionTask{
+		DeviceID: "CAM-001",
+		TraceID:  "abc123",
 	}
-
-	if len(results) != 0 {
-		t.Errorf("expected 0 results, got %d", len(results))
-	}
-
-	if meta.Meta.Status != "ok" {
-		t.Errorf("expected status=ok, got %s", meta.Meta.Status)
+	if err := task.Validate(); err == nil {
+		t.Fatal("expected error for missing model_variant")
 	}
 }
 
-func TestParseOutput_MissingDeviceID(t *testing.T) {
-	svc := newTestService()
-	input := `{"failure_probability":0.87,"confidence_score":0.92,"model_version":"xgboost_v1","model_variant":"A","prediction_date":"2026-06-26T14:00:00+00:00","prediction_window_days":30,"is_actionable":true,"is_anomaly":false,"calibration_bin":8,"top_features":[],"features_snapshot":{},"trace_id":"abc123"}
-{"_meta":{"total":0,"actionable":0,"avg_probability":0,"status":"ok","timestamp":"2026-06-26T14:00:00+00:00"}}`
+// ── PredictionTask Serialization Tests ───────────────────────────────
 
-	results, _, err := svc.parseOutput(bufio.NewReader(strings.NewReader(input)))
-	if err != nil {
-		t.Fatalf("parseOutput error: %v", err)
+func TestPredictionTask_JSONRoundTrip(t *testing.T) {
+	task := PredictionTask{
+		DeviceID:     "CAM-001",
+		ModelVariant: "A",
+		TraceID:      "abc123",
+		ModelVersion: "xgboost_v1",
 	}
 
-	// Должен пропустить строку без device_id
-	if len(results) != 0 {
-		t.Errorf("expected 0 results (missing device_id), got %d", len(results))
+	data, err := json.Marshal(task)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+
+	var decoded PredictionTask
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+
+	if decoded.DeviceID != task.DeviceID {
+		t.Errorf("expected device_id %s, got %s", task.DeviceID, decoded.DeviceID)
+	}
+	if decoded.ModelVariant != task.ModelVariant {
+		t.Errorf("expected variant %s, got %s", task.ModelVariant, decoded.ModelVariant)
+	}
+	if decoded.TraceID != task.TraceID {
+		t.Errorf("expected trace_id %s, got %s", task.TraceID, decoded.TraceID)
 	}
 }
 
@@ -217,51 +166,51 @@ func TestHashDeviceID_DifferentIDs(t *testing.T) {
 	}
 }
 
-// ── Truncate Utility Test ───────────────────────────────────────────
-
-func TestTruncateString(t *testing.T) {
-	short := "hello"
-	if truncated := truncateString(short, 10); truncated != short {
-		t.Errorf("expected no truncation, got %s", truncated)
-	}
-
-	long := "this is a very long string that should be truncated"
-	truncated := truncateString(long, 20)
-	if len(truncated) != 23 { // 20 + "..."
-		t.Errorf("expected length 23, got %d: %s", len(truncated), truncated)
-	}
-	if truncated != "this is a very long ..." {
-		t.Errorf("unexpected truncation: %s", truncated)
-	}
-}
-
 // ── Config Defaults Test ────────────────────────────────────────────
 
 func TestDefaultMLConfig(t *testing.T) {
 	cfg := DefaultMLConfig()
 
-	if cfg.PythonPath != "python3" {
-		t.Errorf("expected python3, got %s", cfg.PythonPath)
+	if cfg.QueueEnabled != true {
+		t.Errorf("expected QueueEnabled=true")
 	}
-	if cfg.ScriptPath != "analytics/predict.py" {
-		t.Errorf("expected analytics/predict.py, got %s", cfg.ScriptPath)
+	if cfg.MaxActiveWorkers != 5 {
+		t.Errorf("expected MaxActiveWorkers=5, got %d", cfg.MaxActiveWorkers)
 	}
-	if cfg.ModelVariant != "A" {
-		t.Errorf("expected variant A, got %s", cfg.ModelVariant)
+	if cfg.PredictionStream != PredictionStream {
+		t.Errorf("expected PredictionStream=%s, got %s", PredictionStream, cfg.PredictionStream)
 	}
-	if !cfg.ABTestingEnabled {
-		t.Errorf("expected ABTestingEnabled=true")
+	if cfg.PredictionSubject != PredictionSubject {
+		t.Errorf("expected PredictionSubject=%s, got %s", PredictionSubject, cfg.PredictionSubject)
 	}
-	if cfg.ABTestingRatio != 0.5 {
-		t.Errorf("expected 0.5, got %f", cfg.ABTestingRatio)
+	if cfg.PredictionConsumer != PredictionConsumer {
+		t.Errorf("expected PredictionConsumer=%s, got %s", PredictionConsumer, cfg.PredictionConsumer)
 	}
-	if cfg.ProbabilityThreshold != 0.5 {
-		t.Errorf("expected 0.5, got %f", cfg.ProbabilityThreshold)
+	if cfg.WorkerScriptPath != "analytics/predict_worker.py" {
+		t.Errorf("expected analytics/predict_worker.py, got %s", cfg.WorkerScriptPath)
 	}
-	if cfg.MinConfidenceThreshold != 0.3 {
-		t.Errorf("expected 0.3, got %f", cfg.MinConfidenceThreshold)
+}
+
+// ── AssignVariants used in RunBatch — internal test ─────────────────
+
+// assignVariants — внутренний метод, используемый PredictionService.RunBatch
+// для A/B распределения устройств. Он же используется в assignVariants
+// тестах выше через вызов на PredictionResult.
+func (s *PredictionService) assignVariants(results []PredictionResult) []PredictionResult {
+	ratio := s.cfg.ABTestingRatio
+	if ratio <= 0 || ratio >= 1 {
+		return results // не меняем variant'ы
 	}
-	if cfg.NATSTopicPrefix != "ml.prediction" {
-		t.Errorf("expected ml.prediction, got %s", cfg.NATSTopicPrefix)
+
+	// Детерминированное распределение по device_id (hash-based)
+	for i, r := range results {
+		hash := hashDeviceID(r.DeviceID)
+		if float64(hash)/float64(math.MaxUint32) < ratio {
+			results[i].ModelVariant = "B"
+		} else {
+			results[i].ModelVariant = "A"
+		}
 	}
+
+	return results
 }

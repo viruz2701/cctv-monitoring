@@ -29,14 +29,14 @@ func (m *mockCMMSAdapter) CreateWorkOrder(ctx context.Context, wo *models.WorkOr
 	if m.createWOFunc != nil {
 		return m.createWOFunc(ctx, wo)
 	}
-	return nil
+	return fmt.Errorf("createWOFunc not set by test")
 }
 
 func (m *mockCMMSAdapter) UpdateWorkOrder(ctx context.Context, id string, updates map[string]interface{}) error {
 	if m.updateWOFunc != nil {
 		return m.updateWOFunc(ctx, id, updates)
 	}
-	return nil
+	return fmt.Errorf("updateWOFunc not set by test")
 }
 
 // ── Unused interface stubs ─────────────────────────────────────────
@@ -573,6 +573,9 @@ func TestCMMSIntegrator_GetTicketForDevice(t *testing.T) {
 	adapter := &mockCMMSAdapter{
 		createWOFunc: func(ctx context.Context, wo *models.WorkOrder) error {
 			wo.ID = "wo-map-001"
+			return nil
+		},
+		updateWOFunc: func(ctx context.Context, id string, updates map[string]interface{}) error {
 			return nil
 		},
 	}
