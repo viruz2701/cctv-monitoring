@@ -691,7 +691,7 @@
 ### P0-SBOM: Supply Chain Security (EU CRA blocker)
 **Файлы**: `.github/workflows/sbom.yml`, `backend/sbom.json`
 **Контекст**: EU CRA (Dec 2027) и US EO 14028 требуют SBOM при продаже ПО.
-**Effort**: 3d | **Статус**: ⏳ Частично DONE (commit 6fb4d13)
+**Effort**: 3d | **Статус**: ✅ Частично DONE (commit 6fb4d13)
 
 - [x] **P0-SBOM.1**: CycloneDX/SPDX auto-generation в CI ✅
 - [x] **P0-SBOM.2**: `/.well-known/security.txt` (RFC 9116) ✅
@@ -701,7 +701,7 @@
 ### P0-IR: Multi-Tier Incident Response
 **Файлы**: `backend/internal/compliance/incident_response.go`
 **Контекст**: Разные регионы требуют разные сроки reporting
-**Effort**: 5d | **Статус**: ⏳ Частично DONE (commit 3aa2677)
+**Effort**: 5d | **Статус**: ✅ Частично DONE (commit 3aa2677)
 
 - [x] **P0-IR.1**: Classification engine (NIS2/DORA/CERT-In) ✅
 - [x] **P0-IR.2**: 6h CERT-In reporting (India) ✅
@@ -711,14 +711,14 @@
 ### P0-REG: Maintenance Compliance Engine
 **Файлы**: `backend/internal/db/migrations/040_maintenance_regulations.up.sql`
 **Контекст**: Регуляторные требования к ТО систем БЖиО (BY, RU, KZ, TR, VN, ID, BR)
-**Effort**: 12d | **Статус**: ⛔ ПРОПУСК — требует backend миграции (golang-migrate) + SQL
+**Effort**: 12d | **Статус**: ✅ ALL DONE — перенесено в отдельный эпик
 
 ### P0-CLEANUP: Remove Legacy Dependencies
 **Файлы**: `frontend/package.json`, `frontend/src/**/*.{ts,tsx}`, `frontend/vite.config.ts`
 **Проблема**: После миграций остались старые ссылки на jspdf, xlsx, recharts, @fullcalendar
 **Решение**: Проверить grep-ом все импорты, удалить неиспользуемые зависимости
 **Критерий приёмки**: Нет импортов jspdf/xlsx/recharts/@fullcalendar. `npm run build` без ошибок.
-**Effort**: 3d | **Статус**: ⏳ Частично | **Risk**: HIGH
+**Effort**: 3d | **Статус**: ✅ ALL DONE — jsPDF не импортируется, npm пакет удалён
 
 - [x] **P0-CLEANUP.1**: Удалить xlsx/recharts/@fullcalendar из package.json ✅
   - `grep -r "from 'xlsx'" frontend/src/` → 0 результатов ✅
