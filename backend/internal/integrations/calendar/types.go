@@ -120,15 +120,16 @@ type SyncStore interface {
 
 // SyncLogEntry — запись аудита синхронизации (ISO 27001 A.12.4).
 type SyncLogEntry struct {
-	WOID       string `json:"wo_id"`
-	Provider   string `json:"provider"`
-	Direction  string `json:"direction"`  // push, pull
-	EventType  string `json:"event_type"` // created, updated, deleted, skipped, conflict
-	ExternalID string `json:"external_id"`
-	Details    string `json:"details"`
-	Status     string `json:"status"` // success, error, conflict
-	ErrorMsg   string `json:"error_message"`
-	TenantID   string `json:"tenant_id"`
+	WOID           string `json:"wo_id"`
+	Provider       string `json:"provider"`
+	Direction      string `json:"direction"`  // push, pull
+	EventType      string `json:"event_type"` // created, updated, deleted, skipped, conflict
+	ExternalID     string `json:"external_id"`
+	Details        string `json:"details"`
+	Status         string `json:"status"` // success, error, conflict
+	ErrorMsg       string `json:"error_message"`
+	TenantID       string `json:"tenant_id"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"` // P1-HI-09: UUID для dedup
 }
 
 // ── Sync Config ───────────────────────────────────────────────────────

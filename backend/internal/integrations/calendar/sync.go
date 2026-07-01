@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ── SyncEngine ────────────────────────────────────────────────────────
@@ -284,13 +286,14 @@ func (se *SyncEngine) logSync(ctx context.Context, woID, provider, direction,
 	eventType, externalID, status, errMsg string) {
 
 	entry := &SyncLogEntry{
-		WOID:       woID,
-		Provider:   provider,
-		Direction:  direction,
-		EventType:  eventType,
-		ExternalID: externalID,
-		Status:     status,
-		ErrorMsg:   errMsg,
+		WOID:           woID,
+		Provider:       provider,
+		Direction:      direction,
+		EventType:      eventType,
+		ExternalID:     externalID,
+		Status:         status,
+		ErrorMsg:       errMsg,
+		IdempotencyKey: uuid.New().String(), // P1-HI-09: уникальный ключ для dedup
 	}
 
 	if err := se.store.LogSync(ctx, entry); err != nil {
