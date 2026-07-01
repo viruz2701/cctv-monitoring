@@ -1,6 +1,7 @@
 # CCTV Health Monitor — Software Bill of Materials (SBOM)
-# Generated: 2026-06-25
+# Generated: 2026-07-01
 # Format: Dependency Name,Version,License,Type,Layer
+# VEX: https://cctv-monitor.example.com/.well-known/sbom/vex.json
 
 # ═══════════════════════════════════════════════════════════════════════
 # Go Backend Dependencies
@@ -12,18 +13,21 @@ github.com/go-chi/cors,v1.2.2,MIT,Go Direct,Backend
 
 # Authentication & Security
 github.com/golang-jwt/jwt/v5,v5.3.1,MIT,Go Direct,Backend
+github.com/go-webauthn/webauthn,v0.17.4,BSD-2-Clause,Go Direct,Backend
 github.com/pquerna/otp,v1.5.0,MIT,Go Direct,Backend
 github.com/icholy/digest,v1.1.0,MIT,Go Direct,Backend
-golang.org/x/crypto,v0.53.0,BSD-3-Clause,Go Direct,Backend
+github.com/hashicorp/vault/api,v1.23.0,MPL-2.0,Go Direct,Backend
+golang.org/x/crypto,v0.52.0,BSD-3-Clause,Go Direct,Backend
 golang.org/x/oauth2,v0.36.0,BSD-3-Clause,Go Direct,Backend
 
 # Database
 github.com/jackc/pgx/v5,v5.10.0,MIT,Go Direct,Backend
-github.com/golang-migrate/migrate/v4,v4.19.1,MIT,Go Direct,Backend
+github.com/golang-migrate/migrate/v4,v4.18.2,MIT,Go Direct,Backend
+github.com/redis/go-redis/v9,v9.21.0,BSD-2-Clause,Go Direct,Backend
 
 # Message Queue
-github.com/nats-io/nats.go,v1.52.0,Apache-2.0,Go Direct,Backend
-github.com/nats-io/nkeys,v0.4.15,Apache-2.0,Go Indirect,Backend
+github.com/nats-io/nats.go,v1.41.1,Apache-2.0,Go Direct,Backend
+github.com/nats-io/nkeys,v0.4.10,Apache-2.0,Go Indirect,Backend
 github.com/nats-io/nuid,v1.0.1,Apache-2.0,Go Indirect,Backend
 
 # Configuration
@@ -39,9 +43,15 @@ github.com/sourcegraph/conc,v0.3.1,MIT,Go Indirect,Backend
 github.com/go-viper/mapstructure/v2,v2.5.0,MIT,Go Indirect,Backend
 github.com/pelletier/go-toml/v2,v2.3.1,Apache-2.0,Go Indirect,Backend
 
+# Observability (OpenTelemetry)
+go.opentelemetry.io/otel,v1.37.0,Apache-2.0,Go Direct,Backend
+go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp,v1.28.0,Apache-2.0,Go Direct,Backend
+go.opentelemetry.io/otel/sdk,v1.36.0,Apache-2.0,Go Direct,Backend
+go.opentelemetry.io/otel/trace,v1.37.0,Apache-2.0,Go Direct,Backend
+
 # PDF & Excel Generation
 github.com/jung-kurt/gofpdf,v1.16.2,MIT,Go Direct,Backend
-github.com/xuri/excelize/v2,v2.10.1,BSD-3-Clause,Go Direct,Backend
+github.com/xuri/excelize/v2,v2.9.0,BSD-3-Clause,Go Direct,Backend
 github.com/richardlehane/mscfb,v1.0.6,BSD-3-Clause,Go Indirect,Backend
 github.com/richardlehane/msoleps,v1.0.6,BSD-3-Clause,Go Indirect,Backend
 github.com/xuri/efp,v0.0.1,BSD-3-Clause,Go Indirect,Backend
@@ -51,22 +61,23 @@ github.com/xuri/nfp,v0.0.2,BSD-3-Clause,Go Indirect,Backend
 github.com/gorilla/websocket,v1.5.3,BSD-2-Clause,Go Direct,Backend
 
 # SNMP
-github.com/gosnmp/gosnmp,v1.43.2,BSD-2-Clause,Go Direct,Backend
+github.com/gosnmp/gosnmp,v1.43.1,BSD-2-Clause,Go Direct,Backend
 
 # State Machine
 github.com/looplab/fsm,v1.0.2,MIT,Go Direct,Backend
 
-# YAML
+# YAML / JSON Schema
 go.yaml.in/yaml/v3,v3.0.4,MIT,Go Direct,Backend
+github.com/xeipuuv/gojsonschema,v1.2.0,Apache-2.0,Go Direct,Backend
 
 # FTP Server
-goftp.io/server/v2,v2.0.3,Apache-2.0,Go Direct,Backend
+goftp.io/server/v2,v2.0.1,Apache-2.0,Go Direct,Backend
 
 # Telegram Bot
 github.com/go-telegram-bot-api/telegram-bot-api/v5,v5.5.1,MIT,Go Direct,Backend
 
 # MinIO (S3-compatible storage)
-github.com/minio/minio-go/v7,v7.2.0,Apache-2.0,Go Indirect,Backend
+github.com/minio/minio-go/v7,v7.2.1,Apache-2.0,Go Indirect,Backend
 github.com/minio/md5-simd,v1.1.2,Apache-2.0,Go Indirect,Backend
 github.com/minio/crc64nvme,v1.1.1,Apache-2.0,Go Indirect,Backend
 github.com/rs/xid,v1.6.0,BSD-3-Clause,Go Indirect,Backend
@@ -77,6 +88,10 @@ github.com/klauspost/cpuid/v2,v2.2.11,Apache-2.0,Go Indirect,Backend
 github.com/klauspost/crc32,v1.3.0,Apache-2.0,Go Indirect,Backend
 github.com/zeebo/xxh3,v1.1.0,BSD-2-Clause,Go Indirect,Backend
 
+# Validation
+github.com/go-playground/validator/v10,v10.30.3,MIT,Go Direct,Backend
+github.com/gabriel-vasile/mimetype,v1.4.13,MIT,Go Indirect,Backend
+
 # Misc
 github.com/boombuler/barcode,v1.0.1,MIT,Go Indirect,Backend
 github.com/cespare/xxhash/v2,v2.3.0,MIT,Go Indirect,Backend
@@ -86,13 +101,23 @@ github.com/jackc/puddle/v2,v2.2.2,MIT,Go Indirect,Backend
 github.com/lib/pq,v1.10.9,MIT,Go Indirect,Backend
 github.com/philhofer/fwd,v1.2.0,MIT,Go Indirect,Backend
 github.com/tiendc/go-deepcopy,v1.7.2,MIT,Go Indirect,Backend
-github.com/tinylib/msgp,v1.6.1,MIT,Go Indirect,Backend
-golang.org/x/net,v0.55.0,BSD-3-Clause,Go Indirect,Backend
+github.com/tinylib/msgp,v1.6.4,MIT,Go Indirect,Backend
+golang.org/x/net,v0.54.0,BSD-3-Clause,Go Indirect,Backend
 golang.org/x/sync,v0.21.0,BSD-3-Clause,Go Indirect,Backend
 golang.org/x/sys,v0.46.0,BSD-3-Clause,Go Indirect,Backend
 golang.org/x/text,v0.38.0,BSD-3-Clause,Go Direct,Backend
+golang.org/x/time,v0.12.0,BSD-3-Clause,Go Indirect,Backend
 gopkg.in/ini.v1,v1.67.2,Apache-2.0,Go Indirect,Backend
 gopkg.in/natefinch/lumberjack.v2,v2.2.1,MIT,Go Direct,Backend
+github.com/fxamacker/cbor/v2,v2.9.2,MIT,Go Indirect,Backend
+github.com/go-jose/go-jose/v4,v4.1.1,Apache-2.0,Go Indirect,Backend
+github.com/google/go-tpm,v0.9.8,Apache-2.0,Go Indirect,Backend
+github.com/makiuchi-d/gozxing,v0.1.1,Apache-2.0,Go Indirect,Backend
+github.com/mdlayher/genetlink,v1.3.2,MIT,Go Indirect,Backend
+github.com/mdlayher/netlink,v1.7.2,MIT,Go Indirect,Backend
+github.com/mdlayher/socket,v0.5.1,MIT,Go Indirect,Backend
+golang.zx2c4.com/wireguard,v0.0.0-20231211153847-12269c276173,MIT,Go Indirect,Backend
+golang.zx2c4.com/wireguard/wgctrl,v0.0.0-20241231184526-a9ab2273dd10,MIT,Go Indirect,Backend
 
 # ═══════════════════════════════════════════════════════════════════════
 # Frontend (React 19 + Vite) Dependencies
@@ -224,9 +249,10 @@ typescript,^5.3.0,Apache-2.0,JS Dev,Mobile
 # ═══════════════════════════════════════════════════════════════════════
 # Summary
 # ═══════════════════════════════════════════════════════════════════════
-# Go Backend: 60+ dependencies
+# Go Backend: 75+ dependencies (+OpenTelemetry, Redis, Vault, WebAuthn)
 # Frontend: 35+ dependencies  
 # Mobile: 30+ dependencies
-# All licenses: MIT (majority), Apache-2.0, BSD-2/3-Clause, ISC
+# All licenses: MIT (majority), Apache-2.0, BSD-2/3-Clause, ISC, MPL-2.0
 # AGPL: NONE — clean AGPL-free codebase
 # Closed-source: NONE — all OSS
+# VEX endpoint: /.well-known/sbom/vex.json

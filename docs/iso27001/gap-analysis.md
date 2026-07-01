@@ -1,8 +1,10 @@
 # ISO 27001 Gap Analysis — CCTV Intelligence Platform
 
-**Дата:** 2026-06-20
-**Аудитор:** Phase 0 Research
+**Дата:** 2026-07-01
+**Версия:** 2.0
+**Аудитор:** Phase 0 Research + Phase 1-4 Remediation
 **Методология:** Анализ кода бэкенда, конфигурации и архитектуры
+**Статус:** Все 17 gaps закрыты (100%)
 
 ---
 
@@ -10,13 +12,9 @@
 
 ### Gap 1: Отсутствует Security Policy
 **Серьёзность:** HIGH
-**Описание:** Нет документированной политики информационной безопасности.
-**Рекомендация:** Создать `docs/iso27001/security-policy.md` с разделами:
-- Scope и Objectives
-- Roles and Responsibilities (CISO, Admin, Developer)
-- Acceptable Use Policy
-- Data Classification Policy
-- Incident Response Procedure
+**Файл:** [`docs/iso27001/security-policy.md`](../iso27001/security-policy.md)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Security Policy создана с разделами Scope, Objectives, Roles, Acceptable Use, Data Classification, Incident Response.
 
 ---
 
@@ -24,21 +22,15 @@
 
 ### Gap 2: Нет CMDB
 **Серьёзность:** MEDIUM
-**Описание:** Устройства есть в БД, но нет классификации активов (HW, SW, Data, People).
-**Рекомендация:** Добавить поле `asset_class` в таблицу `devices`:
-- `hardware` — камеры, NVR, серверы
-- `software` — лицензии, прошивки
-- `data` — записи, конфигурации
-- `network` — коммутаторы, маршрутизаторы
+**Файл:** `devices` в БД
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Добавлена классификация активов (HW, SW, Data, Network). Поле `asset_class` интегрировано.
 
 ### Gap 3: Нет классификации данных
 **Серьёзность:** MEDIUM
-**Описание:** Все данные хранятся одинаково, без классификации.
-**Рекомендация:** Внедрить метки:
-- `public` — статистика, документация
-- `internal` — служебная информация
-- `confidential` — PII (push tokens, emails), пароли
-- `restricted` — JWT secrets, API keys, ключи шифрования
+**Файл:** [`backend/internal/compliance/personal_data.go`](../../backend/internal/compliance/personal_data.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Внедрены метки: `public`, `internal`, `confidential`, `restricted`.
 
 ---
 
@@ -47,22 +39,23 @@
 ### Gap 4: SHA-256 вместо bcrypt для API-ключей
 **Серьёзность:** CRITICAL
 **Файл:** [`apikey_handlers.go`](../../backend/internal/api/apikey_handlers.go)
-**Описание:** API-ключи хэшируются SHA-256 — не предназначен для хранения паролей/ключей.
-**Рекомендация:** Заменить на bcrypt (cost factor 12):
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Заменён на bcrypt (cost factor 12):
 ```go
 hash, err := bcrypt.GenerateFromPassword([]byte(rawKey), 12)
 ```
 
 ### Gap 5: Нет rate limiting на login
 **Серьёзность:** HIGH
-**Файл:** [`server.go`](../../backend/internal/api/server.go) — `handleLogin`
-**Описание:** Нет защиты от brute-force атак на логин.
-**Рекомендация:** Добавить rate limiter middleware (5 попыток в минуту на IP).
+**Файл:** [`server.go`](../../backend/internal/api/server.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Добавлен rate limiter middleware (5 попыток в минуту на IP).
 
 ### Gap 6: JWT в localStorage
 **Серьёзность:** MEDIUM
-**Описание:** Frontend хранит JWT в localStorage — уязвим к XSS.
-**Рекомендация:** Использовать HttpOnly cookies для JWT, либо добавить fingerprint.
+**Файл:** [`jwt.go`](../../backend/internal/auth/jwt.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Реализован Refresh Token Rotation с fingerprint_hash. В плане — HttpOnly cookies.
 
 ---
 
@@ -70,33 +63,27 @@ hash, err := bcrypt.GenerateFromPassword([]byte(rawKey), 12)
 
 ### Gap 7: Дефолтный JWT secret в коде
 **Серьёзность:** CRITICAL
-**Файл:** [`jwt.go`](../../backend/internal/auth/jwt.go), строка 22
-**Описание:**
-```go
-return []byte("dev-secret-key-change-in-production-immediately")
-```
-**Рекомендация:** Убрать дефолтное значение. Если `JWT_SECRET` не задан — паниковать при старте.
+**Файл:** [`jwt.go`](../../backend/internal/auth/jwt.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Дефолтное значение убрано. `panic()` при отсутствии `JWT_SECRET`.
 
 ### Gap 8: Push-токены в открытом виде
 **Серьёзность:** CRITICAL
-**Файл:** [`cmms_repository.go`](../../backend/internal/db/cmms_repository.go) — `SavePushToken`
-**Описание:** Push-токены хранятся plaintext в таблице `users`:
-```go
-UPDATE users SET push_token = $1, push_platform = $2
-```
-**Рекомендация:** Шифровать AES-256-GCM перед сохранением. Ключ шифрования из env.
+**Файл:** [`cmms_repository.go`](../../backend/internal/db/cmms_repository.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Шифрование belt-GCM перед сохранением. Ключ шифрования из env.
 
 ### Gap 9: Пароли в config.yaml
 **Серьёзность:** HIGH
 **Файл:** [`config.yaml`](../../backend/config.yaml)
-**Описание:** `p2p_api_key`, FTP пароль, Hikvision пароли — в открытом виде.
-**Рекомендация:** Использовать env vars или secrets manager (Vault).
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Все секреты вынесены в env vars. Добавлена поддержка HashiCorp Vault.
 
 ### Gap 10: CORS `*` разрешён
 **Серьёзность:** MEDIUM
-**Файл:** [`server.go`](../../backend/internal/api/server.go), строка 57
-**Описание:** `AllowedOrigins: []string{"*"}` — любой origin может делать запросы.
-**Рекомендация:** Ограничить конкретными доменами в production.
+**Файл:** [`server.go`](../../backend/internal/api/server.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Ограничен конкретными доменами из `CORSAllowedOrigins`.
 
 ---
 
@@ -104,13 +91,14 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ### Gap 11: Нет log integrity
 **Серьёзность:** MEDIUM
-**Описание:** Audit log пишется в БД, но нет защиты от подделки.
-**Рекомендация:** Добавить HMAC-подпись для каждой audit-записи или использовать append-only log.
+**Файл:** [`internal/audit/signer.go`](../../backend/internal/audit/signer.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Добавлена HMAC-подпись (bash-256) для каждой audit-записи с chain integrity.
 
 ### Gap 12: Нет vulnerability scanning
 **Серьёзность:** MEDIUM
-**Описание:** Нет автоматического сканирования уязвимостей.
-**Рекомендация:** Добавить в CI/CD:
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** В CI/CD добавлены:
 - `npm audit` для frontend
 - `gosec` для Go backend
 - `trivy` для Docker images
@@ -118,8 +106,8 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ### Gap 13: Нет алертов на подозрительную активность
 **Серьёзность:** LOW
-**Описание:** Audit log пишется, но не анализируется.
-**Рекомендация:** Добавить алерты на:
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Добавлены алерты на:
 - 5+ failed login attempts
 - Admin-действия в нерабочее время
 - Массовое создание/удаление пользователей
@@ -130,13 +118,14 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ### Gap 14: Нет CSP headers
 **Серьёзность:** MEDIUM
-**Описание:** Нет Content-Security-Policy, X-Frame-Options, X-Content-Type-Options.
-**Рекомендация:** Добавить security headers middleware.
+**Файл:** [`internal/api/csp.go`](../../backend/internal/api/csp.go)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Добавлен security headers middleware с CSP nonce, X-Frame-Options, X-Content-Type-Options.
 
 ### Gap 15: Нет TLS enforcement
 **Серьёзность:** MEDIUM
-**Описание:** API слушает на `:8080` без TLS (предполагается reverse proxy).
-**Рекомендация:** Документировать требование TLS termination на reverse proxy (nginx/Caddy).
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Документировано требование TLS termination на reverse proxy. mTLS 1.3 для межсервисного взаимодействия.
 
 ---
 
@@ -144,8 +133,8 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ### Gap 16: Нет threat modeling
 **Серьёзность:** MEDIUM
-**Описание:** Архитектура хорошая, но нет формального threat model.
-**Рекомендация:** Провести STRIDE-анализ для ключевых компонентов (CMMS, Gatekeeper, P2P Gateway).
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Проведён STRIDE-анализ для CMMS, Gatekeeper, P2P Gateway.
 
 ---
 
@@ -153,8 +142,9 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ### Gap 17: Нет Incident Response Plan
 **Серьёзность:** HIGH
-**Описание:** Нет документированного плана реагирования на инциденты.
-**Рекомендация:** Создать IR playbook:
+**Файл:** [`docs/iso27001/incident-response.md`](../iso27001/incident-response.md)
+**Статус:** ✅ **ЗАКРЫТ**
+**Описание:** Создан IR playbook:
 - Detection (алерты, мониторинг)
 - Containment (блокировка аккаунта, отзыв ключей)
 - Eradication (исправление уязвимости)
@@ -163,11 +153,13 @@ UPDATE users SET push_token = $1, push_platform = $2
 
 ---
 
-## Итого: 17 Gaps
+## Итого: 17 Gaps — Все закрыты
 
-| Приоритет | Количество |
-|-----------|-----------|
-| CRITICAL | 3 (JWT secret, API Keys, Push Tokens) |
-| HIGH | 4 (Security Policy, Rate Limiting, Config Secrets, IR Plan) |
-| MEDIUM | 8 |
-| LOW | 2 |
+| Приоритет | Количество | Статус |
+|-----------|-----------|--------|
+| CRITICAL | 3 (JWT secret, API Keys, Push Tokens) | ✅ Все закрыты |
+| HIGH | 4 (Security Policy, Rate Limiting, Config Secrets, IR Plan) | ✅ Все закрыты |
+| MEDIUM | 8 | ✅ Все закрыты |
+| LOW | 2 | ✅ Все закрыты |
+
+**Финальный статус:** 17/17 gaps remediated — 100%
