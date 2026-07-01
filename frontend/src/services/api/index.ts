@@ -124,6 +124,15 @@ export type {
   PublishDescriptorRequest,
 } from './communityRegistry';
 
+// UX-2.4: Secure Tunnel
+export { tunnelApi } from './tunnel';
+export type {
+  TunnelTokenResponse,
+  TunnelStatus,
+  TunnelLogEntry,
+  TunnelProtocol,
+} from './tunnel';
+
 // ═══════════════════════════════════════════════════════════════════════
 // Комбинированный объект `api` для backward compat
 // ═══════════════════════════════════════════════════════════════════════
