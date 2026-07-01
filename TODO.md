@@ -110,8 +110,465 @@
 </details>
 
 ---
-## 🔴 P0 — CRITICAL BLOCKERS (Q3 2026, до 2026-09-30)
 
+---
+
+# 🐛 CODE REVIEW FINDINGS — Unified Tracking (2026-07-01)
+
+**Источник**: Аудит 6 ролей (UX/UI, Architect, BA, DevOps, DevSecOps, Debug, Frontend)
+**Всего findings**: 80
+**Уже исправлено**: 7 (отмечены ✅)
+**К добавлению в TODO**: 73
+
+## 📊 Сводка
+
+| Приоритет | Всего | Уже ✅ | Осталось | Total Effort |
+|-----------|-------|--------|----------|--------------|
+| 🔴 P0 CRITICAL | 12 | 3 | 9 | 19d |
+| 🟠 P1 HIGH | 19 | 2 | 17 | 30d |
+| 🟡 P2 MEDIUM | 27 | 2 | 25 | 43d |
+| 🟢 P3 LOW | 3 | 1 | 2 | 2d |
+| **TOTAL** | **61** | **8** | **53** | **94d** |
+
+---
+
+## 🔴 P0-CR: CRITICAL — Production Blockers (Must Fix Before Launch)
+
+### P0-CR-01: Audit Log prev_hash Migration Rollback
+**Статус**: ❌ NOT FIXED
+**Источник**: DevSecOps SEC-01
+**Файлы**: `backend/internal/db/migrations/043_tenant_quotas.up.sql`
+**Проблема**: Миграция удаляет `prev_hash` колонку из `audit_log` — потеря tamper-proof гарантии (ISO 27001 A.12.4, СТБ 34.101.27)
+**Решение**: Revert миграции, восстановить `prev_hash` + hash chain verification
+**Effort**: 0.5d
+**Критерий приёмки**:
+- `prev_hash` колонка существует в `audit_log`
+- Hash chain verification тесты проходят
+- Migration rollback тест успешен
+- ADR-021 создан с объяснением
+**Compliance**: ISO 27001 A.12.4, СТБ 34.101.27, ОАЦ РБ
+
+### P0-CR-02: Python ETL SQL Injection
+**Статус**: ✅ FIXED (использует parameterized queries через psycopg3)
+**Источник**: DevSecOps SEC-02
+**Файлы**: `backend/analytics/predict.py`, `backend/analytics/etl.py`
+**Проверка**: `grep -r "f\".*device_id" backend/analytics/*.py` — 0 результатов ✅
+**Решение**: Parameterized queries через psycopg3 (уже реализовано)
+
+### P0-CR-03: CMMSIntegrator Race Condition
+**Статус**: ❌ NOT FIXED
+**Источник**: Debug DBG-02
+**Файлы**: `backend/internal/agent/cmms_integration.go`
+**Проблема**: `ticketMap map[string]string` без mutex → `fatal error: concurrent map read/write`
+**Решение**: Добавить `sync.RWMutex` или заменить на `sync.Map`
+**Effort**: 0.5d
+**Критерий приёмки**:
+- `go test -race ./internal/agent/...` = PASS
+- Concurrent test: 100 goroutines read/write ticketMap = no panic
+- Production monitoring: 0 race condition alerts за 7 дней
+
+### P0-CR-04: Python ↔ Go Subprocess Deadlock
+**Статус**: ❌ NOT FIXED
+**Источник**: DevOps DOPS-02, Debug DBG-03
+**Файлы**: `backend/analytics/predict.py`, Go consumer code
+**Проблема**: subprocess + stdout JSONL → deadlock при stderr fill, OOM risk, no backpressure
+**Решение**: Перевести на gRPC streaming или NATS JetStream worker queue
+**Effort**: 3d
+
+### P0-CR-05: Mobile LWW Data Loss
+**Статус**: ❌ NOT FIXED (всё ещё Last-Write-Win в `differentialSync.ts:160`)
+**Источник**: DevSecOps SEC-04, Frontend FE-21
+**Файлы**: `mobile/src/services/differentialSync.ts`, `mobile/src/api/sync.ts`
+**Проблема**: Last-Write-Win в CMMS → потеря данных техников, SLA breach
+**Решение**: 3-way merge с server authority + Conflict Resolution UI
+**Effort**: 4d
+
+### P0-CR-06: Bundle Size Crisis (Main Chunk 612KB)
+**Статус**: ⚠️ PARTIAL (vendor chunks оптимизированы, но main chunk всё ещё 612KB)
+**Источник**: Frontend FE-01
+**Файлы**: `frontend/vite.config.ts`, `frontend/src/**/*`
+**Проблема**: Main chunk 612KB → LCP > 4s, INP > 500ms, Core Web Vitals fail
+**Прогресс**: ✅ Vendor chunks (Schedule-X, Nivo, ExcelJS) — DONE. ⚠️ Main chunk — остаётся.
+**Решение**: Route-based code splitting + lazy loading
+**Effort**: 2d
+**Критерий приёмки**:
+- Main chunk < 200KB
+- Все route chunks < 100KB
+- Lighthouse Performance > 90
+- LCP < 2.5s на 3G
+
+### P0-CR-07: Context API Re-render Storm
+**Статус**: ✅ FIXED (Zustand stores — 15+; `createContext` только в ThemeProvider/useAuth как backward-compat обёртки)
+**Источник**: Frontend FE-02
+**Файлы**: `frontend/src/contexts/*`, `frontend/src/stores/*`
+**Проверка**: 15+ Zustand stores существуют, `createContext` в `contexts/` — 0 результатов ✅. P1-ARCH.1 завершён.
+
+### P0-CR-08: XSS в Playbook Marketplace
+**Статус**: ❌ NOT FIXED
+**Источник**: Frontend FE-08
+**Файлы**: `frontend/src/pages/PlaybookMarketplace.tsx`
+**Проблема**: `dangerouslySetInnerHTML` без санитизации → stored XSS
+**Решение**: DOMPurify для всех user-generated HTML
+**Effort**: 0.5d
+
+### P0-CR-09: DeepSeek Vision Prompt Injection
+**Статус**: ❌ NOT FIXED
+**Источник**: DevSecOps SEC-03
+**Файлы**: `backend/internal/api/annotation_handlers.go`
+**Проблема**: Adversarial payload в фото → AI подписывает фейковый акт ТО
+**Решение**: Pre-process фото через CV (text/QR detection) + vision_guard layer
+**Effort**: 2d
+
+### P0-CR-10: AutoDispatcher Race Condition
+**Статус**: ❌ NOT FIXED
+**Источник**: Debug DBG-01
+**Файлы**: `backend/internal/agent/auto_dispatcher.go`
+**Проблема**: TOCTOU между `FindAvailable` и `Assign` → один техник получает 10 WO
+**Решение**: `SELECT FOR UPDATE` или Redis distributed lock
+**Effort**: 1d
+
+### P0-CR-11: Route-level Error Boundaries Missing
+**Статус**: ✅ FIXED (ErrorBoundary, RouteErrorBoundary, ErrorBoundaryLite, WidgetErrorBoundary, SentryErrorBoundary — все существуют)
+**Источник**: Frontend FE-06
+**Файлы**: `frontend/src/App.tsx`, `frontend/src/pages/*`
+**Проверка**: `ErrorBoundaryLite` оборачивает `<Outlet/>` в Layout ✅, `RouteErrorBoundary` с fallback UI ✅
+
+### P0-CR-12: Form State Loss on Navigation
+**Статус**: ❌ NOT FIXED
+**Источник**: Frontend FE-05
+**Файлы**: `frontend/src/pages/WorkOrderDetail.tsx`, `frontend/src/hooks/*`
+**Проблема**: Техник закрывает форму с 20+ полями → весь прогресс потерян
+**Решение**: `useUnsavedChanges` + React Router blocker
+**Effort**: 1d
+
+---
+
+## 🟠 P1-HI: HIGH — Major Issues (Fix in Next 2 Sprints)
+
+### P1-HI-01: PgBouncer Transaction Mode + Prepared Statements
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/db/pool.go`, `backend/config.yaml`
+**Решение**: `pgxpool.Config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol`
+**Effort**: 0.5d
+
+### P1-HI-02: Materialized View Refresh Without CONCURRENTLY
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/db/migrations/*_mv_*.up.sql`
+**Решение**: `REFRESH MATERIALIZED VIEW CONCURRENTLY` + pg_cron
+**Effort**: 1d
+
+### P1-HI-03: Edge Agent OTA Without Rollback
+**Статус**: ❌ NOT FIXED
+**Файлы**: `edge-agent/scripts/ota_update.sh`, `edge-agent/internal/agent/ota.go`
+**Решение**: swupdate-подобный dual-boot + Ed25519 signature verification
+**Effort**: 3d
+
+### P1-HI-04: NATS JetStream Retention Policy
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/events/nats.go`, `backend/config.yaml`
+**Решение**: Задать `max_age`, `max_bytes`, `discard: old`
+**Effort**: 0.5d
+
+### P1-HI-05: JWT Without Refresh Token Rotation
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/auth/jwt.go`, `backend/internal/db/migrations/*_refresh_tokens.up.sql`
+**Решение**: Refresh tokens с rotation + device fingerprinting
+**Effort**: 2d
+
+### P1-HI-06: WireGuard Config Without Per-Device PSK
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/edge/wg_config_generator.go`
+**Решение**: Unique PrivateKey per device + unique PSK + post-quantum hybrid
+**Effort**: 2d
+
+### P1-HI-07: GraphQL Without Query Complexity Limit
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/api/graphql.go`
+**Решение**: Query complexity analyzer + max depth 5
+**Effort**: 1d
+
+### P1-HI-08: Z-score Division by Zero
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/analytics/anomaly_handlers.go`
+**Решение**: Explicit protection + custom JSON encoder
+**Effort**: 0.5d
+
+### P1-HI-09: Calendar Sync Without Idempotency Keys
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/integrations/calendar/calendar_store.go`
+**Решение**: `idempotency_key UUID` + `ON CONFLICT DO NOTHING`
+**Effort**: 1d
+
+### P1-HI-10: Work Order SLA Timezone Bug
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/models/work_order.go`, `backend/internal/sla/engine.go`
+**Решение**: Все SLA calculations в UTC
+**Effort**: 1d
+
+### P1-HI-11: DataGrid Without Virtualization
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/DataGrid.tsx`
+**Решение**: `@tanstack/react-virtual` или `react-window`
+**Effort**: 2d
+
+### P1-HI-12: Color Contrast Systemic Failure
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/*`, `frontend/src/index.css`
+**Решение**: Глобальный fix + CI contrast check
+**Effort**: 2d
+
+### P1-HI-13: Missing Skip Navigation
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/Layout.tsx`
+**Решение**: Skip link с focus-visible styling
+**Effort**: 0.5d
+
+### P1-HI-14: Mobile AsyncStorage Limitations
+**Статус**: ❌ NOT FIXED
+**Файлы**: `mobile/src/services/storage.ts`
+**Решение**: WatermelonDB (reactive, sync-ready)
+**Effort**: 5d
+
+### P1-HI-15: Mobile Offline Data Access
+**Статус**: ❌ NOT FIXED
+**Файлы**: `mobile/src/screens/*`, `mobile/src/services/sync.ts`
+**Решение**: WatermelonDB как single source of truth + background sync
+**Effort**: 3d
+
+### P1-HI-16: Mobile Tile Cache Management
+**Статус**: ❌ NOT FIXED
+**Файлы**: `mobile/src/screens/MapScreen.tsx`
+**Решение**: Auto-cleanup + LRU eviction
+**Effort**: 1d
+
+### P1-HI-17: WebSocket Memory Leak
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/services/ws.ts`
+**Решение**: Proper cleanup в useEffect return
+**Effort**: 1d
+
+### P1-HI-18: Infinite Re-render Pattern (BlackBox Toast)
+**Статус**: ✅ FIXED (Runtime Fixes #5, commit `fc32204`)
+**Источник**: Frontend FE-03
+**Файлы**: `frontend/src/components/BlackBox.tsx`
+**Проверка**: ESLint `react-hooks/exhaustive-deps: error` + stable toast reference ✅
+
+### P1-HI-19: Missing key Prop в Dynamic Lists
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/DataGrid.tsx`, `frontend/src/components/ui/Table.tsx`
+**Решение**: ESLint `react/jsx-key: error` + stable IDs
+**Effort**: 1d
+
+---
+
+## 🟡 P2-MED: MEDIUM — Quality Improvements (Fix in Next 4 Sprints)
+
+### P2-MED-01: Calendar Sync Hypertable Chunk Interval
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/db/migrations/*_calendar_sync_log.up.sql`
+**Решение**: `chunk_time_interval => INTERVAL '1 day'`
+**Effort**: 0.5d
+
+### P2-MED-02: Tauri Desktop Auto-Update Strategy
+**Статус**: ❌ NOT FIXED
+**Файлы**: `desktop/src-tauri/src/main.rs`, `desktop/src-tauri/Cargo.toml`
+**Решение**: Tauri Updater + EV certificate
+**Effort**: 3d
+
+### P2-MED-03: SBOM Without VEX
+**Статус**: ❌ NOT FIXED
+**Файлы**: `.github/workflows/sbom.yml`
+**Решение**: `vexctl` + `osv-scanner` в CI
+**Effort**: 2d
+
+### P2-MED-04: Telegram Bot Token в Plaintext Config
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/config.yaml`, `backend/internal/integrations/telegram/bot.go`
+**Решение**: Read from vault (`vault_client.go`) или env с rotation
+**Effort**: 1d
+
+### P2-MED-05: Exponential Backoff Without Jitter
+**Статус**: ❌ NOT FIXED
+**Файлы**: `mobile/src/services/differentialSync.ts`
+**Решение**: `backoff = min(base * 2^attempt + random(0, 1000ms), maxBackoff)`
+**Effort**: 0.5d
+
+### P2-MED-06: context.WithTimeout Cleanup Leak
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/api/*_handlers.go`
+**Решение**: `context.WithTimeoutCause` (Go 1.20+)
+**Effort**: 1d
+
+### P2-MED-07: Mock CMMS Adapter With Nil Function Pointers
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/agent/cmms_integration_test.go`
+**Решение**: Fail loudly: if `m.createWOFunc == nil { t.Fatal("not set") }`
+**Effort**: 0.5d
+
+### P2-MED-08: Tailwind v4 JIT Without Purge Safelist
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/tailwind.config.ts`
+**Решение**: Safelist только для dynamic patterns
+**Effort**: 0.5d
+
+### P2-MED-09: Nivo Charts Without Lazy Loading
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/Analytics.tsx`
+**Решение**: `const LineChart = lazy(() => import('@nivo/line'))`
+**Effort**: 1d
+
+### P2-MED-10: i18n Bundle: 17 Languages в Main
+**Статус**: ✅ FIXED (P1-OPT.3 — lazy load через `languageChanged` listener, commit P1-OPT.3)
+**Файлы**: `frontend/src/i18n.ts`
+**Проверка**: en/ru/be статически (~150KB), 17 языков lazy-load ✅
+
+### P2-MED-11: React.memo Applied Selectively (8 components only)
+**Статус**: ✅ FIXED (P3-MICRO.1 — 8 компонентов: DataGrid LazyRow, AssetTree, Sidebar, Table, Pagination, NotificationRow)
+**Файлы**: `frontend/src/components/*`
+**Проверка**: P3-MICRO.1 отмечен как DONE ✅
+
+### P2-MED-12: Missing useCallback для Event Handlers в Lists
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/DataGrid.tsx`, `frontend/src/components/ui/Table.tsx`
+**Решение**: `useCallback` для всех handlers в lists
+**Effort**: 1d
+
+### P2-MED-13: ARIA Attributes Missing на Interactive Elements
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/Input.tsx`, `frontend/src/components/ui/Select.tsx`, `frontend/src/components/ui/Badge.tsx`
+**Решение**: Add ARIA attributes + error messages
+**Effort**: 2d
+
+### P2-MED-14: Focus Trap Incomplete в Nested Modals
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/hooks/useFocusTrap.ts`
+**Решение**: Radix UI Dialog или manual stack
+**Effort**: 2d
+
+### P2-MED-15: Missing aria-live для Dynamic Content
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ui/Toast.tsx`, `frontend/src/components/ui/Notification.tsx`
+**Решение**: `aria-live="polite"` для toast/notifications
+**Effort**: 0.5d
+
+### P2-MED-16: Frontend Coverage 82% (Target 85%)
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/**/*`
+**Решение**: Focus на critical paths: auth, payment, WO lifecycle
+**Effort**: 5d
+
+### P2-MED-17: Missing Visual Regression Tests
+**Статус**: ❌ NOT FIXED
+**Файлы**: `tests/visual/visual-regression.spec.ts`
+**Решение**: Playwright snapshots + CI gate
+**Effort**: 2d
+
+### P2-MED-18: Storybook Stories Missing
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/.storybook/*`
+**Решение**: Enforce stories для всех UI components
+**Effort**: 5d
+
+### P2-MED-19: Sentry DSN Exposure
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/services/sentry.ts`
+**Решение**: Rate limit + `beforeSend` filter
+**Effort**: 0.5d
+
+### P2-MED-20: Trace ID Exposure в Production
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/src/components/ErrorBoundary.tsx`
+**Решение**: Only в DEV: `{import.meta.env.DEV && traceId && ...}`
+**Effort**: 0.5d
+
+### P2-MED-21: Missing CSP Headers
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/vite.config.ts`
+**Решение**: Vite plugin для CSP
+**Effort**: 1d
+
+### P2-MED-22: OpenTelemetry Span Propagation
+**Статус**: ✅ FIXED (otel.go существует с Config, TracerProvider, метриками)
+**Файлы**: `backend/internal/telemetry/otel.go`
+**Проверка**: `otel.SetTracerProvider(tp)` + метрики через OpenTelemetry в ratelimit.go ✅
+
+### P2-MED-23: Community Descriptor Registry Prototype Pollution
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/api/protocol_registry_handlers.go`
+**Решение**: JSON Schema validation + recursion depth limit + URL allowlist
+**Effort**: 2d
+
+### P2-MED-24: AI Assistant Feedback Endpoint Rate Limit
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/api/ai_handlers.go`
+**Решение**: Per-user per-hour rate limit + deduplication
+**Effort**: 1d
+
+### P2-MED-25: SLA Engine Memory Leak
+**Статус**: ✅ FIXED (TTL eviction + cleanupLoop goroutine реализованы)
+**Файлы**: `backend/internal/sla/engine.go:198`
+**Проверка**: `evictionTTL`, `cleanupLoop()`, `isTerminalStatus()` существуют ✅
+
+### P2-MED-26: Bubble Sort в Replay() Merge
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/events/store.go:337-341`
+**Решение**: Заменить на `sort.Slice`
+**Effort**: 0.5d
+
+### P2-MED-27: Anomaly Detection With Uninitialized Detector
+**Статус**: ❌ NOT FIXED
+**Файлы**: `backend/internal/analytics/anomaly_detector.go`
+**Решение**: Warm-up period с static thresholds до 30+ samples
+**Effort**: 1d
+
+---
+
+## 🟢 P3-LOW: LOW — Nice-to-Have (Fix When Time Permits)
+
+### P3-LOW-01: Image Optimization
+**Статус**: ❌ NOT FIXED
+**Файлы**: `frontend/public/images/*`
+**Решение**: WebP conversion + vite-imagetools
+**Effort**: 1d
+
+### P3-LOW-02: Missing Skip Navigation Focus Styling
+**Статус**: ❌ NOT FIXED (см. P1-HI-13 — skip link вообще отсутствует)
+**Файлы**: `frontend/src/components/Layout.tsx`
+**Решение**: Focus-visible styling + animation (после P1-HI-13)
+**Effort**: 0.5d
+
+### P3-LOW-03: Rate Limiter IPv6 Parsing Regression Test
+**Статус**: ✅ FIXED (Runtime Fixes #8, commit `48ded49`)
+**Файлы**: `backend/internal/api/rate_limiter_test.go`
+**Проверка**: IPv6 parsing fix применён ✅
+
+---
+
+## 📋 Итоговая статистика Code Review Findings
+
+| Приоритет | Всего | ✅ Fixed | ❌ Open | Total Effort |
+|-----------|-------|----------|--------|--------------|
+| P0 CRITICAL | 12 | 3 | 9 | 19d |
+| P1 HIGH | 19 | 2 | 17 | 30d |
+| P2 MEDIUM | 27 | 3 | 24 | 43d |
+| P3 LOW | 3 | 1 | 2 | 2d |
+| **TOTAL** | **61** | **9** | **52** | **94d** |
+
+**🎯 Приоритет для Roo (из 52 открытых):**
+1. P0-CR-03 (CMMSIntegrator race) — 0.5d, production crash
+2. P0-CR-10 (AutoDispatcher race) — 1d, data corruption
+3. P0-CR-01 (prev_hash migration) — 0.5d, compliance
+4. P0-CR-08 (XSS Playbook) — 0.5d, security
+5. P0-CR-06 (Bundle size) — 2d, performance
+6. P0-CR-12 (Form state loss) — 1d, UX
+7. P0-CR-05 (Mobile LWW) — 4d, data loss
+8. P0-CR-04 (Subprocess deadlock) — 3d, reliability
+9. P0-CR-09 (Vision injection) — 2d, security
+10. P1-HI-01 → P1-HI-19 — по мере возможности
+
+---
+
+## 🔴 P0 — CRITICAL BLOCKERS (Q3 2026, до 2026-09-30)
 ### P0-EDGE: Edge Agent + Vendor Abstraction + Protocol Descriptors (NEW — 2026-06-30)
 
 **Источник**: `agent.md` — Архитектура расширяемости протоколов для Edge-агента
@@ -532,6 +989,10 @@
 | ML Accuracy | Synthetic | 75% production | 85% |
 | Enterprise Playbooks | 3 | 20+ | 50+ |
 | RTO/RPO | Manual | <15min / <5min | Automated |
+| **Code Review: P0 Fixed** | **3/12** | **12/12** | — |
+| **Code Review: P1 Fixed** | **2/19** | **19/19** | — |
+| **Code Review: P2 Fixed** | **3/27** | — | **27/27** |
+| **Code Review: P3 Fixed** | **1/3** | — | **3/3** |
 
 ---
 

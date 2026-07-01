@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"gb-telemetry-collector/internal/cmms"
@@ -19,6 +20,7 @@ type CMMSIntegrator struct {
 
 	// Маппинг deviceID → ticketID для отслеживания открытых тикетов
 	ticketMap map[string]string // deviceID → workOrderID
+	mu        sync.RWMutex      // защита ticketMap от concurrent map read/write (P0-CR-03)
 }
 
 // NewCMMSIntegrator создаёт новый интегратор.
@@ -59,7 +61,10 @@ func (ci *CMMSIntegrator) AutoCreateTicket(ctx context.Context, deviceID, device
 		return "", fmt.Errorf("create ticket: %w", err)
 	}
 
+	ci.mu.Lock()
 	ci.ticketMap[deviceID] = wo.ID
+	ci.mu.Unlock()
+
 	ci.logger.Info("auto-ticket created",
 		"device_id", deviceID,
 		"ticket_id", wo.ID,
@@ -78,7 +83,9 @@ func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketI
 	if ticketID == "" {
 		// Пробуем найти по deviceID
 		var ok bool
+		ci.mu.RLock()
 		ticketID, ok = ci.ticketMap[deviceID]
+		ci.mu.RUnlock()
 		if !ok {
 			ci.logger.Warn("no ticket found for device", "device_id", deviceID)
 			return nil
@@ -101,7 +108,10 @@ func (ci *CMMSIntegrator) AutoCloseTicket(ctx context.Context, deviceID, ticketI
 		return fmt.Errorf("close ticket %s: %w", ticketID, err)
 	}
 
+	ci.mu.Lock()
 	delete(ci.ticketMap, deviceID)
+	ci.mu.Unlock()
+
 	ci.logger.Info("auto-ticket closed", "device_id", deviceID, "ticket_id", ticketID)
 	return nil
 }
@@ -128,6 +138,8 @@ func (ci *CMMSIntegrator) AddAuditNote(ctx context.Context, ticketID, action, de
 
 // GetTicketForDevice возвращает ID тикета для устройства.
 func (ci *CMMSIntegrator) GetTicketForDevice(deviceID string) (string, bool) {
+	ci.mu.RLock()
+	defer ci.mu.RUnlock()
 	id, ok := ci.ticketMap[deviceID]
 	return id, ok
 }

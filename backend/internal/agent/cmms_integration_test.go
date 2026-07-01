@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -650,4 +651,116 @@ func TestNewCMMSIntegrator_NilLogger(t *testing.T) {
 	if integrator.logger == nil {
 		t.Fatal("expected default logger when nil passed")
 	}
+}
+
+// ── Concurrency test: Race condition verification (P0-CR-03) ───────
+
+func TestCMMSIntegrator_ConcurrentAccess(t *testing.T) {
+	adapter := &mockCMMSAdapter{
+		createWOFunc: func(ctx context.Context, wo *models.WorkOrder) error {
+			wo.ID = "wo-" + wo.DeviceID
+			return nil
+		},
+		updateWOFunc: func(ctx context.Context, id string, updates map[string]interface{}) error {
+			return nil
+		},
+	}
+	integrator := newTestIntegrator(adapter)
+
+	ctx := context.Background()
+	var wg sync.WaitGroup
+
+	// 100 goroutines: concurrent create + close + get
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			devID := fmt.Sprintf("dev-concurrent-%d", n)
+
+			// Auto-create ticket
+			_, err := integrator.AutoCreateTicket(ctx, devID, "Cam-"+devID, "motion", "high", "Concurrent test")
+			if err != nil {
+				t.Errorf("create ticket for %s: %v", devID, err)
+				return
+			}
+
+			// Read-back from map
+			_, ok := integrator.GetTicketForDevice(devID)
+			if !ok {
+				t.Errorf("ticket not found for %s after create", devID)
+			}
+
+			// Auto-close ticket
+			err = integrator.AutoCloseTicket(ctx, devID, "", "Concurrent close")
+			if err != nil {
+				t.Errorf("close ticket for %s: %v", devID, err)
+			}
+
+			// Verify removed from map
+			_, ok = integrator.GetTicketForDevice(devID)
+			if ok {
+				t.Errorf("ticket still in map for %s after close", devID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestCMMSIntegrator_ConcurrentReadWriteRace(t *testing.T) {
+	adapter := &mockCMMSAdapter{
+		createWOFunc: func(ctx context.Context, wo *models.WorkOrder) error {
+			wo.ID = "wo-race-" + wo.DeviceID
+			return nil
+		},
+		updateWOFunc: func(ctx context.Context, id string, updates map[string]interface{}) error {
+			return nil
+		},
+	}
+	integrator := newTestIntegrator(adapter)
+
+	ctx := context.Background()
+
+	// Pre-create tickets for 10 devices
+	for i := 0; i < 10; i++ {
+		devID := fmt.Sprintf("dev-race-%d", i)
+		_, err := integrator.AutoCreateTicket(ctx, devID, "Cam-"+devID, "motion", "high", "Race test")
+		if err != nil {
+			t.Fatalf("pre-create ticket for %s: %v", devID, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	// 50 concurrent readers
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				devID := fmt.Sprintf("dev-race-%d", j)
+				integrator.GetTicketForDevice(devID)
+			}
+		}()
+	}
+
+	// 50 concurrent writers (close + re-create)
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			devID := fmt.Sprintf("dev-race-%d", n%10)
+
+			// Close existing ticket
+			_ = integrator.AutoCloseTicket(ctx, devID, "", "Race close")
+
+			// Re-create
+			_, err := integrator.AutoCreateTicket(ctx, devID, "Cam-"+devID, "motion", "high", "Race re-create")
+			if err != nil {
+				t.Errorf("re-create ticket for %s: %v", devID, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
