@@ -178,3 +178,33 @@ func (v *VaultClient) DeleteMasterKey(ctx context.Context, deviceID string) erro
 	v.logger.Info("master key deleted from vault", "device_id", deviceID)
 	return nil
 }
+
+// ReadSecret читает секрет из Vault по указанному пути.
+//
+// P2-MED-04: Используется Telegram TokenProvider для чтения токена бота.
+// Возвращает data-часть секрета (без метаданных).
+//
+// Соответствует:
+//   - IEC 62443-3-3 SR 4.2: Централизованное управление секретами
+func (v *VaultClient) ReadSecret(ctx context.Context, path string) (map[string]interface{}, error) {
+	if v == nil || v.client == nil {
+		return nil, fmt.Errorf("CRED-05: vault client not initialized, enable vault in config")
+	}
+
+	secretPath := fmt.Sprintf("%s/data/%s", v.path, path)
+
+	secret, err := v.client.ReadWithContext(ctx, secretPath)
+	if err != nil {
+		return nil, fmt.Errorf("CRED-05: read secret from vault: %w", err)
+	}
+	if secret == nil || secret.Data["data"] == nil {
+		return nil, fmt.Errorf("CRED-05: secret not found at %s", secretPath)
+	}
+
+	data, ok := secret.Data["data"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("CRED-05: invalid vault response format at %s", secretPath)
+	}
+
+	return data, nil
+}

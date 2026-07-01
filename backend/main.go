@@ -5,6 +5,7 @@ import (
 	"gb-telemetry-collector/internal/api"
 	"gb-telemetry-collector/internal/config"
 	"gb-telemetry-collector/internal/cron"
+	"gb-telemetry-collector/internal/crypto"
 	"gb-telemetry-collector/internal/db"
 	"gb-telemetry-collector/internal/events"
 	"gb-telemetry-collector/internal/featureflag"
@@ -532,12 +533,16 @@ func main() {
 	stateWrapper.broadcastFn = apiServer.BroadcastAlarm
 
 	// --- Telegram бот ---
+	// P2-MED-04: Токен читается через TokenProvider (Vault → env)
 	var telegramBot *telegram.Bot
-	if cfg.Telegram.Enabled && cfg.Telegram.Token != "" {
+	if cfg.Telegram.Enabled {
+		// Создаём TokenProvider с поддержкой Vault + env fallback
+		tokenProvider := createTelegramTokenProvider(ctx, *cfg, logger)
+
 		var err error
 		telegramBot, err = telegram.NewBot(telegram.Config{
-			Token:  cfg.Telegram.Token,
-			Logger: logger,
+			TokenProvider: tokenProvider,
+			Logger:        logger,
 		}, database, stateWrapper)
 		if err != nil {
 			logger.Error("Failed to create Telegram bot", "error", err)
@@ -793,4 +798,54 @@ func (r *Reaper) Stop() {
 	default:
 		close(r.stopCh)
 	}
+}
+
+// createTelegramTokenProvider создаёт TokenProvider для Telegram бота.
+//
+// P2-MED-04: Приоритет: Vault (если включён) → env (GB_TELEGRAM_TOKEN).
+// Vault путь: telegram/config, поле: token.
+func createTelegramTokenProvider(ctx context.Context, cfg config.Config, logger *slog.Logger) telegram.TokenProvider {
+	// Если Vault включён — пытаемся создать VaultTokenProvider
+	if cfg.Vault.Enabled {
+		// Конвертируем config.VaultConfig → crypto.VaultConfig (одинаковые поля)
+		vCfg := crypto.VaultConfig{
+			Enabled:   cfg.Vault.Enabled,
+			Address:   cfg.Vault.Address,
+			Token:     cfg.Vault.Token,
+			MountPath: cfg.Vault.MountPath,
+		}
+
+		vaultClient, err := crypto.NewVaultClient(vCfg, logger)
+		if err == nil && vaultClient != nil {
+			logger.Info("P2-MED-04: using Vault token provider for Telegram bot")
+
+			// Пытаемся прочитать токен из Vault для валидации
+			if secret, err := vaultClient.ReadSecret(ctx, "telegram/config"); err == nil {
+				if t, ok := secret["token"].(string); ok && t != "" {
+					logger.Info("P2-MED-04: Telegram token found in Vault")
+				}
+			} else {
+				logger.Warn("P2-MED-04: Vault telegram token not found, falling back to env",
+					"error", err,
+				)
+			}
+
+			return telegram.NewVaultTokenProvider(
+				vaultClient,
+				"telegram/config",
+				"token",
+				"GB_TELEGRAM_TOKEN",
+				logger,
+			)
+		}
+		if err != nil {
+			logger.Warn("P2-MED-04: failed to create vault client, falling back to env",
+				"error", err,
+			)
+		}
+	}
+
+	// Fallback: env var
+	logger.Info("P2-MED-04: using env token provider for Telegram bot (GB_TELEGRAM_TOKEN)")
+	return telegram.NewEnvTokenProvider("GB_TELEGRAM_TOKEN", logger)
 }

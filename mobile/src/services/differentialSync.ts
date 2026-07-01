@@ -5,13 +5,22 @@
 //   1. Pull — получить remote изменения с сервера (fetchDiff)
 //   2. Apply — применить remote изменения в локальный SQLite
 //   3. Collect — собрать локальные pending мутации
-//   4. Resolve — разрешить конфликты (Last-Write-Wins)
+//   4. Resolve — разрешить конфликты (3-way merge + server authority)
 //   5. Push — отправить локальные изменения на сервер (applyChanges)
+//
+// 3-Way Merge Policy (P0-CR-05):
+//   - Server-authoritative поля: status, priority, sla_deadline, sla_status, assigned_to
+//     → всегда принимается серверная версия
+//   - Client-authoritative поля: notes, parts_used, checklist, photos
+//     → сохраняется локальная версия; если обе стороны изменили → ConflictResolution UI
+//   - Immutable поля: device_id, type, created_by, created_at
+//     → не участвуют в merge
 //
 // Интеграция:
 //   - syncApi — HTTP клиент для backend sync endpoints
 //   - offlineStorage — SQLite CRUD для work_orders, devices, sites
 //   - useSyncStore — Zustand store для реактивного статуса
+//   - ConflictResolutionModal — UI для ручного разрешения конфликтов
 //
 // Соответствует:
 //   - IEC 62443-3-3 SR 3.1 (Queue-based processing)
@@ -32,6 +41,7 @@ import {
   PendingMutation,
 } from './offlineStorage';
 import { WorkOrder } from '../types';
+import type { ConflictField } from '../components/ConflictResolutionModal';
 
 // ── Типы ────────────────────────────────────────────────────────────────
 
@@ -50,17 +60,36 @@ export interface SyncResult {
   pullChanges: number;
   pushChanges: number;
   conflictsResolved: number;
+  /** Неразрешённые конфликты — требуется участие пользователя */
+  unresolvedConflicts: ThreeWayConflict[];
   entities: EntitySyncResult[];
   totalDurationMs: number;
   error: string | null;
 }
 
-/** Тип конфликта */
+/** Тип конфликта (LWW — сохранён для обратной совместимости) */
 export interface ConflictEntry {
   local: SyncChange;
   remote: SyncChange;
   resolved: boolean;
   resolution: 'local' | 'remote' | null;
+}
+
+/**
+ * Конфликт 3-way merge, требующий UI resolution.
+ * Используется ConflictResolutionModal для отображения diff.
+ */
+export interface ThreeWayConflict {
+  /** ID сущности (work_order_id) */
+  id: string;
+  /** Человекочитаемое название */
+  label: string;
+  /** Локальный timestamp */
+  localTimestamp: number;
+  /** Серверный timestamp */
+  serverTimestamp: number;
+  /** Список конфликтующих полей (client-authoritative) */
+  fields: ConflictField[];
 }
 
 // ── Константы ──────────────────────────────────────────────────────────
@@ -73,6 +102,37 @@ const RETRY_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000];
 
 /** Максимальный случайный jitter для backoff (в ms) */
 const JITTER_MAX_MS = 1_000;
+
+// ── 3-Way Merge Field Classification (P0-CR-05) ─────────────────────────
+//
+// Server-authoritative поля — всегда принимается серверная версия.
+// Клиентские изменения этих полей отбрасываются при конфликте.
+const SERVER_AUTHORITATIVE_FIELDS = new Set([
+  'status',
+  'priority',
+  'sla_deadline',
+  'sla_status',
+  'assigned_to',
+]);
+
+// Client-authoritative поля — локальная версия сохраняется.
+// Если обе стороны изменили одно поле → создаётся ConflictEntry для UI.
+const CLIENT_AUTHORITATIVE_FIELDS = new Set([
+  'notes',
+  'parts_used',
+  'checklist',
+  'photos',
+]);
+
+// Immutable поля — не участвуют в merge, игнорируются при сравнении.
+const IMMUTABLE_FIELDS = new Set([
+  'id',
+  'device_id',
+  'type',
+  'created_by',
+  'created_at',
+  'schedule_id',
+]);
 
 // ── DifferentialSyncService ─────────────────────────────────────────────
 
@@ -110,6 +170,7 @@ export class DifferentialSyncService {
         pullChanges,
         pushChanges,
         conflictsResolved,
+        unresolvedConflicts: pushResult.unresolvedConflicts,
         entities: entityResults,
         totalDurationMs,
         error: hasError ? 'One or more entities failed to sync' : null,
@@ -123,6 +184,7 @@ export class DifferentialSyncService {
         pullChanges,
         pushChanges,
         conflictsResolved,
+        unresolvedConflicts: [],
         entities: entityResults,
         totalDurationMs: Date.now() - startTime,
         error: message,
@@ -160,14 +222,27 @@ export class DifferentialSyncService {
 
   /**
    * Разрешить конфликты между локальными и remote изменениями.
-   * Стратегия: Last-Write-Wins (LWW).
-   * Возвращает массив победивших изменений для отправки на сервер.
+   * Стратегия: 3-way merge + server authority (P0-CR-05).
+   *
+   * Server-authoritative поля (status, priority, sla_deadline, sla_status, assigned_to):
+   *   → всегда принимается серверная версия
+   * Client-authoritative поля (notes, parts_used, checklist, photos):
+   *   → если обе стороны изменили одно поле → ThreeWayConflict для UI
+   *   → если только локальная сторона → сохраняется локальная версия
+   *
+   * Возвращает:
+   *   resolved — изменения для отправки на сервер (смерженные)
+   *   conflicts — конфликты, требующие UI resolution
    */
-  async resolveConflicts(
+  async resolveConflicts3Way(
     local: SyncChange[],
     remote: SyncChange[],
-  ): Promise<SyncChange[]> {
+  ): Promise<{
+    resolved: SyncChange[];
+    conflicts: ThreeWayConflict[];
+  }> {
     const resolved: SyncChange[] = [];
+    const conflicts: ThreeWayConflict[] = [];
     const remoteMap = new Map<string, SyncChange>();
 
     for (const r of remote) {
@@ -184,18 +259,157 @@ export class DifferentialSyncService {
         continue;
       }
 
-      // LWW: сравниваем timestamp
-      const localTime = new Date(l.timestamp).getTime();
-      const remoteTime = new Date(r.timestamp).getTime();
+      // Конфликт обнаружен — выполняем 3-way merge
+      const mergeResult = this._threeWayMerge(l, r);
 
-      if (localTime >= remoteTime) {
-        // Локальное новее или равно — побеждает локальное
-        resolved.push(l);
+      if (mergeResult.resolvedChange) {
+        resolved.push(mergeResult.resolvedChange);
       }
-      // Если remote новее — отбрасываем локальное
+      if (mergeResult.conflict) {
+        conflicts.push(mergeResult.conflict);
+      }
     }
 
-    return resolved;
+    return { resolved, conflicts };
+  }
+
+  /**
+   * 3-way merge одного конфликтующего изменения (P0-CR-05).
+   *
+   * Алгоритм:
+   * 1. Берём remote.data как базовую версию
+   * 2. Для каждого поля из local.changedFields:
+   *    a. Server-authoritative → оставляем remote значение
+   *    b. Client-authoritative, изменено на обеих сторонах и значения разные → Conflict
+   *    c. Client-authoritative, изменено только локально → берём local значение
+   *    d. Immutable → игнорируем
+   * 3. Поля, изменённые только на сервере → остаются серверные
+   *
+   * Возвращает смерженный SyncChange и опциональный ThreeWayConflict.
+   */
+  private _threeWayMerge(
+    local: SyncChange,
+    remote: SyncChange,
+  ): {
+    resolvedChange: SyncChange | null;
+    conflict: ThreeWayConflict | null;
+  } {
+    // Определяем, какие поля изменила каждая сторона
+    const localFields = new Set(
+      local.changedFields ?? Object.keys(local.data),
+    );
+    const remoteFields = new Set(
+      remote.changedFields ?? Object.keys(remote.data),
+    );
+
+    // Начинаем с remote как базовой версии
+    const mergedData: Record<string, unknown> = { ...remote.data };
+    const conflictingFields: ConflictField[] = [];
+    let hasClientChanges = false;
+
+    // Проходим по всем полям, изменённым локально
+    for (const field of localFields) {
+      if (IMMUTABLE_FIELDS.has(field)) {
+        continue;
+      }
+
+      if (SERVER_AUTHORITATIVE_FIELDS.has(field)) {
+        // Server wins — оставляем remote значение (уже в mergedData)
+        continue;
+      }
+
+      if (CLIENT_AUTHORITATIVE_FIELDS.has(field)) {
+        const localVal = local.data[field];
+        const remoteVal = remote.data[field];
+        const bothChanged = remoteFields.has(field);
+        const valuesDiffer =
+          JSON.stringify(localVal) !== JSON.stringify(remoteVal);
+
+        if (bothChanged && valuesDiffer) {
+          // Обе стороны изменили одно client-authoritative поле → конфликт
+          conflictingFields.push({
+            name: field,
+            localValue: this._stringifyValue(localVal),
+            serverValue: this._stringifyValue(remoteVal),
+            isChanged: true,
+          });
+          // В mergedData кладём local значение (может быть изменено UI)
+          mergedData[field] = localVal;
+          hasClientChanges = true;
+        } else {
+          // Только локальная сторона изменила (или значения совпадают)
+          mergedData[field] = localVal;
+          hasClientChanges = true;
+        }
+        continue;
+      }
+
+      // Другие поля (не классифицированные) — берем локальное значение
+      // если оно отличается от remote
+      if (remoteFields.has(field)) {
+        const localVal = local.data[field];
+        const remoteVal = remote.data[field];
+        if (JSON.stringify(localVal) !== JSON.stringify(remoteVal)) {
+          mergedData[field] = localVal;
+          hasClientChanges = true;
+        }
+      } else {
+        mergedData[field] = local.data[field];
+        hasClientChanges = true;
+      }
+    }
+
+    // Если есть только server-authoritative изменения — не отправляем локальное
+    if (!hasClientChanges) {
+      return { resolvedChange: null, conflict: null };
+    }
+
+    // Строим resolved change с обновлённым timestamp
+    const resolvedChange: SyncChange = {
+      table: local.table,
+      id: local.id,
+      operation: local.operation,
+      data: mergedData,
+      changedFields: [
+        ...new Set([
+          ...localFields,
+          ...conflictingFields.map((f) => f.name),
+        ]),
+      ],
+      timestamp: new Date().toISOString(),
+    };
+
+    if (conflictingFields.length > 0) {
+      const localTs = new Date(local.timestamp).getTime();
+      const remoteTs = new Date(remote.timestamp).getTime();
+
+      return {
+        resolvedChange,
+        conflict: {
+          id: local.id,
+          label: `${local.table}:${local.id}`,
+          localTimestamp: localTs,
+          serverTimestamp: remoteTs,
+          fields: conflictingFields,
+        },
+      };
+    }
+
+    return { resolvedChange, conflict: null };
+  }
+
+  /**
+   * Преобразовать значение в строку для отображения в ConflictResolution UI.
+   * Объекты/массивы сериализуются в JSON, примитивы — в String().
+   */
+  private _stringifyValue(value: unknown): string {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
   }
 
   // ── Private: Pull Phase ────────────────────────────────────────────
@@ -253,21 +467,26 @@ export class DifferentialSyncService {
 
   /**
    * Фаза push: собрать локальные изменения, разрешить конфликты, отправить.
+   *
+   * Использует 3-way merge (P0-CR-05) вместо LWW.
+   * Возвращает unresolvedConflicts для отображения в ConflictResolutionModal.
    */
   private async _pushPhase(
     results: EntitySyncResult[],
   ): Promise<{
     changesPushed: number;
     conflictsResolved: number;
+    unresolvedConflicts: ThreeWayConflict[];
   }> {
     let totalPushed = 0;
     let totalConflicts = 0;
+    let unresolvedConflicts: ThreeWayConflict[] = [];
 
     try {
       // 1. Собираем локальные изменения
       const localChanges = await this.collectLocalChanges();
       if (localChanges.length === 0) {
-        return { changesPushed: 0, conflictsResolved: 0 };
+        return { changesPushed: 0, conflictsResolved: 0, unresolvedConflicts: [] };
       }
 
       // 2. Получаем последний diff с сервера для conflict detection
@@ -275,14 +494,15 @@ export class DifferentialSyncService {
         entities: [...new Set(localChanges.map((c) => c.table))],
       });
 
-      // 3. Разрешаем конфликты (LWW)
-      const resolved = await this.resolveConflicts(
+      // 3. Разрешаем конфликты (3-way merge + server authority)
+      const { resolved, conflicts } = await this.resolveConflicts3Way(
         localChanges,
         remoteDiff.changes,
       );
-      totalConflicts = localChanges.length - resolved.length;
+      unresolvedConflicts = conflicts;
+      totalConflicts = conflicts.length;
 
-      // 4. Отправляем победившие изменения на сервер
+      // 4. Отправляем смерженные изменения на сервер
       if (resolved.length > 0) {
         const applyResult = await this._applyWithRetry(resolved);
 
@@ -305,7 +525,11 @@ export class DifferentialSyncService {
       result.changesPushed = totalPushed;
     }
 
-    return { changesPushed: totalPushed, conflictsResolved: totalConflicts };
+    return {
+      changesPushed: totalPushed,
+      conflictsResolved: totalConflicts,
+      unresolvedConflicts,
+    };
   }
 
   /**
@@ -472,6 +696,7 @@ export class DifferentialSyncService {
 
   /**
    * Преобразовать PendingMutation → SyncChange.
+   * Заполняет changedFields ключами payload для field-level merge.
    */
   private _mutationToChange(m: PendingMutation): SyncChange {
     let payload: Record<string, unknown> = {};
@@ -486,6 +711,7 @@ export class DifferentialSyncService {
       id: m.entity_id,
       operation: this._mutationToOperation(m.mutation_type),
       data: payload,
+      changedFields: Object.keys(payload),
       timestamp: new Date(m.timestamp).toISOString(),
     };
   }

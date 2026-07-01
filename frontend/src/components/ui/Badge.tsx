@@ -12,6 +12,8 @@ interface BadgeProps {
     className?: string;
     /** aria-label для screen readers, если children не достаточно */
     ariaLabel?: string;
+    /** ARIA role для семантики (например, "status" для динамических бейджей) */
+    role?: string;
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
@@ -57,6 +59,7 @@ export function Badge({
     dot = false,
     className = '',
     ariaLabel,
+    role,
 }: BadgeProps) {
     // WCAG 2.1 AA: если dot индикатор, добавляем aria-label с описанием цвета (UX-14.2.7)
     const computedLabel = ariaLabel || (dot ? `${variantLabels[variant]} status` : undefined);
@@ -65,6 +68,7 @@ export function Badge({
         <span
             className={`inline-flex items-center gap-1.5 font-medium rounded-full border ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
             aria-label={computedLabel}
+            role={role}
         >
             {dot && (
                 <span
@@ -89,7 +93,7 @@ export function StatusBadge({ status }: { status: 'online' | 'offline' | 'warnin
         maintenance: { variant: 'warning' as BadgeVariant, label: t('maintenance') },
     };
     const { variant, label } = config[status] || { variant: 'neutral' as BadgeVariant, label: status };
-    return <Badge variant={variant} dot ariaLabel={`Status: ${label}`}>{label}</Badge>;
+    return <Badge variant={variant} dot ariaLabel={`Status: ${label}`} role="status">{label}</Badge>;
 }
 
 // Здоровье устройства
@@ -101,7 +105,7 @@ export function HealthBadge({ health }: { health: 'healthy' | 'faulty' | 'degrad
         degraded: { variant: 'warning' as BadgeVariant, label: t('degraded') },
     };
     const { variant, label } = config[health];
-    return <Badge variant={variant} ariaLabel={`Device health: ${label}`}>{label}</Badge>;
+    return <Badge variant={variant} ariaLabel={`Device health: ${label}`} role="status">{label}</Badge>;
 }
 
 // Приоритет заявки
@@ -114,7 +118,7 @@ export function PriorityBadge({ priority }: { priority: 'critical' | 'high' | 'm
         low: { variant: 'neutral' as BadgeVariant, label: t('low') },
     };
     const { variant, label } = config[priority];
-    return <Badge variant={variant} ariaLabel={`Priority: ${label}`}>{label}</Badge>;
+    return <Badge variant={variant} ariaLabel={`Priority: ${label}`} role="status">{label}</Badge>;
 }
 
 // Статус заявки
@@ -128,7 +132,7 @@ export function TicketStatusBadge({ status }: { status: 'open' | 'in_progress' |
         closed: { variant: 'neutral' as BadgeVariant, label: t('closed') },
     };
     const { variant, label } = config[status];
-    return <Badge variant={variant} ariaLabel={`Ticket status: ${label}`}>{label}</Badge>;
+    return <Badge variant={variant} ariaLabel={`Ticket status: ${label}`} role="status">{label}</Badge>;
 }
 
 // Роль пользователя
@@ -143,5 +147,5 @@ export function RoleBadge({ role }: { role: 'admin' | 'manager' | 'technician' |
         support: { variant: 'info' as BadgeVariant, label: t('support') },
     };
     const { variant, label } = config[role];
-    return <Badge variant={variant} ariaLabel={`Role: ${label}`}>{label}</Badge>;
+    return <Badge variant={variant} ariaLabel={`Role: ${label}`} role="status">{label}</Badge>;
 }

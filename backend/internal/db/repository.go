@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"gb-telemetry-collector/internal/auth"
 	"gb-telemetry-collector/internal/models"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -586,7 +588,7 @@ func (db *DB) DeleteTelegramLinkToken(token string) error {
 	return err
 }
 
-func (db *DB) RevokeSession(sessionID string) error {
+func (db *DB) RevokeSessionDelete(sessionID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -604,6 +606,134 @@ func (db *DB) RevokeAllOtherSessions(userID string, currentSessionID string) err
 		DELETE FROM user_sessions WHERE user_id = $1 AND id != $2
 	`, userID, currentSessionID)
 	return err
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// P1-HI-05: Refresh Token Rotation — RefreshTokenStore implementation
+// ═══════════════════════════════════════════════════════════════════════
+
+// CreateSession создаёт новую сессию refresh токена с поддержкой
+// fingerprint_hash и token_family для rotation/reuse detection.
+//
+// Соответствие: OWASP ASVS V3.2.2, V3.2.3, V3.2.4
+func (db *DB) CreateSession(
+	userID, tokenHash, ipAddress, userAgent, fingerprintHash string,
+	tokenFamily *uuid.UUID, expiresAt time.Time,
+) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var id string
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO user_sessions (id, user_id, token_hash, ip_address, user_agent,
+		                           fingerprint_hash, token_family, is_revoked, expires_at, created_at)
+		VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, FALSE, $7, NOW())
+		RETURNING id
+	`, userID, tokenHash, ipAddress, userAgent, fingerprintHash, tokenFamily, expiresAt).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// GetSessionByTokenHash возвращает сессию по хешу токена.
+func (db *DB) GetSessionByTokenHash(tokenHash string) (*auth.RefreshSession, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var s auth.RefreshSession
+	var fingerprintHash string
+	var tf *uuid.UUID
+	var isRevoked bool
+
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, user_id, token_hash,
+		       COALESCE(ip_address, ''), COALESCE(user_agent, ''),
+		       COALESCE(fingerprint_hash, ''), token_family, is_revoked,
+		       expires_at, created_at
+		FROM user_sessions
+		WHERE token_hash = $1
+	`, tokenHash).Scan(
+		&s.ID, &s.UserID, &s.TokenHash,
+		&s.IPAddress, &s.UserAgent,
+		&fingerprintHash, &tf, &isRevoked,
+		&s.ExpiresAt, &s.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get session by token hash: %w", err)
+	}
+
+	s.FingerprintHash = fingerprintHash
+	s.TokenFamily = tf
+	s.IsRevoked = isRevoked
+	return &s, nil
+}
+
+// RevokeSession помечает сессию как отозванную (is_revoked = TRUE).
+// В отличие от DELETE, сохраняет запись для reuse detection.
+func (db *DB) RevokeSession(sessionID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE user_sessions SET is_revoked = TRUE WHERE id = $1
+	`, sessionID)
+	return err
+}
+
+// RevokeTokenFamily помечает ВСЕ сессии в семье как отозванные.
+// Используется при reuse detection (OWASP ASVS V3.2.3).
+func (db *DB) RevokeTokenFamily(tokenFamily uuid.UUID) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE user_sessions SET is_revoked = TRUE
+		WHERE token_family = $1 AND is_revoked = FALSE
+	`, tokenFamily)
+	return err
+}
+
+// GetActiveSessionsByFamily возвращает активные сессии в семье.
+func (db *DB) GetActiveSessionsByFamily(tokenFamily uuid.UUID) ([]*auth.RefreshSession, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, user_id, token_hash,
+		       COALESCE(ip_address, ''), COALESCE(user_agent, ''),
+		       COALESCE(fingerprint_hash, ''), token_family, is_revoked,
+		       expires_at, created_at
+		FROM user_sessions
+		WHERE token_family = $1 AND is_revoked = FALSE AND expires_at > NOW()
+		ORDER BY created_at DESC
+	`, tokenFamily)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*auth.RefreshSession
+	for rows.Next() {
+		var s auth.RefreshSession
+		var fh string
+		var tf *uuid.UUID
+		var revoked bool
+
+		if err := rows.Scan(
+			&s.ID, &s.UserID, &s.TokenHash,
+			&s.IPAddress, &s.UserAgent,
+			&fh, &tf, &revoked,
+			&s.ExpiresAt, &s.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		s.FingerprintHash = fh
+		s.TokenFamily = tf
+		s.IsRevoked = revoked
+		sessions = append(sessions, &s)
+	}
+	return sessions, rows.Err()
 }
 
 // ═══════════════════════════════════════════════════════════════════════

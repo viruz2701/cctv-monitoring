@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSearchParams } from 'react-router-dom';
 import {
   ChevronUp, ChevronDown, ChevronsUpDown, Download, Columns,
@@ -226,6 +227,170 @@ const LazyRow = React.memo(function LazyRow({
     </tr>
   );
 });
+
+// ── DataGridRow (P2-MED-12: React.memo + useCallback для inline handlers) ──
+interface DataGridRowProps<T> {
+  item: T;
+  rowIdx: number;
+  columns: Column<T>[];
+  keyExtractor: (item: T) => string;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  vs: any;
+  ds: any;
+  columnWidths: Record<string, number>;
+  search: string;
+  emptyMessage: string;
+  emptyIcon?: React.ReactNode;
+  onCellEdit?: (item: T, key: string, value: any) => Promise<void>;
+  editingCell: { rowId: string; colKey: string } | null;
+  editValue: string;
+  editSaving: boolean;
+  editInputRef: React.RefObject<HTMLInputElement | HTMLSelectElement | null>;
+  setEditingCell: (cell: { rowId: string; colKey: string } | null) => void;
+  setEditValue: (v: string) => void;
+  setEditSaving: (v: boolean) => void;
+  toggleSelect: (id: string) => void;
+  rowClassName?: (item: T) => string;
+  colCount: number;
+  alignClasses: Record<string, string>;
+  variant: DataGridVariant;
+  onRowClick?: (item: T) => void;
+  onRowHover?: (item: T) => void;
+}
+
+function DataGridRowInner<T>({
+  item, rowIdx, columns, keyExtractor, selectable, selectedIds, vs, ds,
+  columnWidths, search, emptyMessage, emptyIcon, onCellEdit,
+  editingCell, editValue, editSaving, editInputRef,
+  setEditingCell, setEditValue, setEditSaving, toggleSelect,
+  rowClassName, colCount, alignClasses, variant, onRowClick, onRowHover,
+}: DataGridRowProps<T>) {
+  const id = keyExtractor(item);
+  const isSelected = selectedIds?.has(id);
+  const customRowClass = rowClassName?.(item) || '';
+  const isEvenRow = rowIdx % 2 === 1;
+  const rowBgClass = isSelected
+    ? 'bg-blue-50 dark:bg-blue-900/20'
+    : isEvenRow && vs.evenRow ? vs.evenRow : vs.bodyRow;
+
+  const handleMouseEnter = useCallback(() => onRowHover?.(item), [onRowHover, item]);
+  const handleRowClick = useCallback(() => onRowClick?.(item), [onRowClick, item]);
+  const handleToggleSelect = useCallback(() => toggleSelect(id), [toggleSelect, id]);
+
+  return (
+    <LazyRow
+      colCount={colCount}
+      rowHeight={52}
+      className={`group ${rowBgClass} ${
+        onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''
+      } ${customRowClass}`}
+      onMouseEnter={handleMouseEnter}
+      onClick={handleRowClick}
+      aria-selected={isSelected}
+      aria-rowindex={rowIdx + 1}
+    >
+      {selectable && (
+        <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={handleToggleSelect}
+            className="text-slate-500 hover:text-blue-600"
+            aria-label={isSelected ? `Deselect row ${rowIdx + 1}` : `Select row ${rowIdx + 1}`}
+          >
+            {isSelected ? <CheckSquare size={16} className="text-blue-600" aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
+          </button>
+        </td>
+      )}
+      {columns.map((column) => {
+        const colKey = String(column.key);
+        const isEditing = editingCell?.rowId === id && editingCell?.colKey === colKey;
+
+        const startEditing = useCallback((e: React.MouseEvent) => {
+          e.stopPropagation();
+          if (!column.editable || !onCellEdit) return;
+          const currentVal = String(getValue(item, colKey) ?? '');
+          setEditValue(currentVal);
+          setEditingCell({ rowId: id, colKey });
+          setTimeout(() => {
+            if (editInputRef.current) editInputRef.current.focus();
+          }, 50);
+        }, [column, onCellEdit, item, colKey, setEditValue, setEditingCell, editInputRef]);
+
+        const saveEdit = useCallback(async () => {
+          if (!editingCell || !onCellEdit) return;
+          setEditSaving(true);
+          try {
+            const parsedValue = column.editType === 'number' ? Number(editValue) : editValue;
+            await onCellEdit(item, colKey, parsedValue);
+            setEditingCell(null);
+          } catch {
+            setEditingCell(null);
+          } finally {
+            setEditSaving(false);
+          }
+        }, [editingCell, onCellEdit, setEditSaving, column.editType, editValue, item, colKey, setEditingCell]);
+
+        const cancelEdit = useCallback(() => setEditingCell(null), [setEditingCell]);
+
+        const handleKeyDown = useCallback(async (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter') await saveEdit();
+          if (e.key === 'Escape') cancelEdit();
+        }, [saveEdit, cancelEdit]);
+
+        return (
+          <td
+            key={colKey}
+            className={`${ds.cell} text-slate-700 dark:text-slate-300 ${alignClasses[column.align || 'left']} ${variant === 'bordered' ? 'border border-slate-200 dark:border-slate-700' : ''} ${
+              column.editable && onCellEdit ? 'group relative cursor-pointer' : ''
+            }`}
+            onDoubleClick={startEditing}
+          >
+            {isEditing ? (
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                {column.editType === 'select' && column.editOptions ? (
+                  <select
+                    ref={editInputRef as any}
+                    className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={saveEdit}
+                    disabled={editSaving}
+                  >
+                    {column.editOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    ref={editInputRef as any}
+                    type={column.editType === 'number' ? 'number' : 'text'}
+                    className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={saveEdit}
+                    disabled={editSaving}
+                  />
+                )}
+                {editSaving && <span className="text-xs text-blue-500">...</span>}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                {column.render ? column.render(item) : String(getValue(item, column.key) ?? '')}
+                {column.editable && onCellEdit && (
+                  <span className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-400 ml-1 transition-opacity">✎</span>
+                )}
+              </div>
+            )}
+          </td>
+        );
+      })}
+    </LazyRow>
+  );
+}
+
+const DataGridRow = React.memo(DataGridRowInner) as typeof DataGridRowInner;
 
 // ── RenderTable sub-component (React.memo for row rendering optimization) ──
 interface RenderTableProps<T> {
@@ -487,6 +652,8 @@ export function DataGrid<T>({
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // P1-HI-11: Virtual scrolling ref (row virtualization через @tanstack/react-virtual)
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
   // P1-UX.9: Saved filter presets
   const [searchParams, setSearchParams] = useSearchParams();
   const {
@@ -692,6 +859,16 @@ export function DataGrid<T>({
     ? filteredData.slice(safePage * pageSizeVal, (safePage + 1) * pageSizeVal)
     : filteredData;
   const displayData = pagedData;
+
+  // P1-HI-11: Row virtualization — включаем только когда нет пагинации и > 500 строк
+  const enableRowVirtualization = !pageSizeVal && filteredData.length > 500;
+  const rowVirtualizer = useVirtualizer({
+    count: displayData.length,
+    getScrollElement: () => tableRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+    enabled: enableRowVirtualization,
+  });
 
   const allSelected = useMemo(() => {
     if (!selectable || !selectedIds) return false;
@@ -1589,130 +1766,96 @@ export function DataGrid<T>({
                       </div>
                     </td>
                   </tr>
+                ) : enableRowVirtualization ? (
+                  /* P1-HI-11: Virtualized rows (без пагинации, >500 строк) */
+                  <tr>
+                    <td colSpan={colCount} style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                      {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const item = displayData[virtualRow.index];
+                        return (
+                          <div
+                            key={keyExtractor(item)}
+                            data-index={virtualRow.index}
+                            ref={rowVirtualizer.measureElement}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <table className="w-full">
+                              <tbody>
+                                <DataGridRow
+                                  item={item}
+                                  rowIdx={virtualRow.index}
+                                  columns={visibleColumns}
+                                  keyExtractor={keyExtractor}
+                                  selectable={selectable}
+                                  selectedIds={selectedIds}
+                                  vs={vs}
+                                  ds={ds}
+                                  columnWidths={columnWidths}
+                                  search={search}
+                                  emptyMessage={emptyMessage}
+                                  emptyIcon={emptyIcon}
+                                  onCellEdit={onCellEdit}
+                                  editingCell={editingCell}
+                                  editValue={editValue}
+                                  editSaving={editSaving}
+                                  editInputRef={editInputRef}
+                                  setEditingCell={setEditingCell}
+                                  setEditValue={setEditValue}
+                                  setEditSaving={setEditSaving}
+                                  toggleSelect={toggleSelect}
+                                  rowClassName={rowClassName}
+                                  colCount={colCount}
+                                  alignClasses={alignClasses}
+                                  variant={variant}
+                                  onRowClick={onRowClick}
+                                  onRowHover={onRowHover}
+                                />
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
+                    </td>
+                  </tr>
                 ) : (
-                  displayData.map((item, rowIdx) => {
-                    const id = keyExtractor(item);
-                    const isSelected = selectedIds?.has(id);
-                    const customRowClass = rowClassName?.(item) || '';
-                    const isEvenRow = rowIdx % 2 === 1;
-                    const rowBgClass = isSelected
-                      ? 'bg-blue-50 dark:bg-blue-900/20'
-                      : isEvenRow && vs.evenRow
-                        ? vs.evenRow
-                        : vs.bodyRow;
-
-                    return (
-                      <LazyRow
-                        key={id}
-                        colCount={colCount}
-                        rowHeight={52}
-                        className={`group ${rowBgClass} ${
-                          onRowClick ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors' : ''
-                        } ${customRowClass}`}
-                        onMouseEnter={() => onRowHover?.(item)}
-                        onClick={() => onRowClick?.(item)}
-                        aria-selected={isSelected}
-                        aria-rowindex={rowIdx + 1}
-                      >
-                        {selectable && (
-                          <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => toggleSelect(id)}
-                              className="text-slate-500 hover:text-blue-600"
-                              aria-label={isSelected ? `Deselect row ${rowIdx + 1}` : `Select row ${rowIdx + 1}`}
-                            >
-                              {isSelected ? <CheckSquare size={16} className="text-blue-600" aria-hidden="true" /> : <Square size={16} aria-hidden="true" />}
-                            </button>
-                          </td>
-                        )}
-                        {visibleColumns.map((column) => {
-                          const colKey = String(column.key);
-                          const isEditing = editingCell?.rowId === id && editingCell?.colKey === colKey;
-
-                          const startEditing = (e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            if (!column.editable || !onCellEdit) return;
-                            const currentVal = String(getValue(item, colKey) ?? '');
-                            setEditValue(currentVal);
-                            setEditingCell({ rowId: id, colKey });
-                            setTimeout(() => {
-                              if (editInputRef.current) editInputRef.current.focus();
-                            }, 50);
-                          };
-
-                          const saveEdit = async () => {
-                            if (!editingCell || !onCellEdit) return;
-                            setEditSaving(true);
-                            try {
-                              const parsedValue = column.editType === 'number' ? Number(editValue) : editValue;
-                              await onCellEdit(item, colKey, parsedValue);
-                              setEditingCell(null);
-                            } catch {
-                              setEditingCell(null);
-                            } finally {
-                              setEditSaving(false);
-                            }
-                          };
-
-                          const cancelEdit = () => setEditingCell(null);
-
-                          const handleKeyDown = async (e: React.KeyboardEvent) => {
-                            if (e.key === 'Enter') await saveEdit();
-                            if (e.key === 'Escape') cancelEdit();
-                          };
-
-                          return (
-                            <td
-                              key={colKey}
-                              className={`${ds.cell} text-slate-700 dark:text-slate-300 ${alignClasses[column.align || 'left']} ${variant === 'bordered' ? 'border border-slate-200 dark:border-slate-700' : ''} ${
-                                column.editable && onCellEdit ? 'group relative cursor-pointer' : ''
-                              }`}
-                              onDoubleClick={startEditing}
-                            >
-                              {isEditing ? (
-                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                  {column.editType === 'select' && column.editOptions ? (
-                                    <select
-                                      ref={editInputRef as any}
-                                      className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                      value={editValue}
-                                      onChange={(e) => setEditValue(e.target.value)}
-                                      onKeyDown={handleKeyDown}
-                                      onBlur={saveEdit}
-                                      disabled={editSaving}
-                                    >
-                                      {column.editOptions.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <input
-                                      ref={editInputRef as any}
-                                      type={column.editType === 'number' ? 'number' : 'text'}
-                                      className="w-full px-2 py-1 text-sm border border-blue-400 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                      value={editValue}
-                                      onChange={(e) => setEditValue(e.target.value)}
-                                      onKeyDown={handleKeyDown}
-                                      onBlur={saveEdit}
-                                      disabled={editSaving}
-                                    />
-                                  )}
-                                  {editSaving && <span className="text-xs text-blue-500">...</span>}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1">
-                                  {column.render ? column.render(item) : String(getValue(item, column.key) ?? '')}
-                                  {column.editable && onCellEdit && (
-                                    <span className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-400 ml-1 transition-opacity">✎</span>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </LazyRow>
-                    );
-                  })
+                  displayData.map((item, rowIdx) => (
+                    <DataGridRow
+                      key={keyExtractor(item)}
+                      item={item}
+                      rowIdx={rowIdx}
+                      columns={visibleColumns}
+                      keyExtractor={keyExtractor}
+                      selectable={selectable}
+                      selectedIds={selectedIds}
+                      vs={vs}
+                      ds={ds}
+                      columnWidths={columnWidths}
+                      search={search}
+                      emptyMessage={emptyMessage}
+                      emptyIcon={emptyIcon}
+                      onCellEdit={onCellEdit}
+                      editingCell={editingCell}
+                      editValue={editValue}
+                      editSaving={editSaving}
+                      editInputRef={editInputRef}
+                      setEditingCell={setEditingCell}
+                      setEditValue={setEditValue}
+                      setEditSaving={setEditSaving}
+                      toggleSelect={toggleSelect}
+                      rowClassName={rowClassName}
+                      colCount={colCount}
+                      alignClasses={alignClasses}
+                      variant={variant}
+                      onRowClick={onRowClick}
+                      onRowHover={onRowHover}
+                    />
+                  ))
                 )}
               </tbody>
             </table>

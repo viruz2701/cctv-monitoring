@@ -16,84 +16,120 @@ const meta: Meta<typeof SLAProgress> = {
 export default meta;
 type Story = StoryObj<typeof SLAProgress>;
 
-const now = new Date();
-const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600000).toISOString();
-const hoursLater = (h: number) => new Date(now.getTime() + h * 3600000).toISOString();
+// ── Helper ────────────────────────────────────────────────────────────────
 
-// ── On Track (Green) ─────────────────────────────────────────────────────
+const daysAgo = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+};
+
+const daysFromNow = (days: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+};
+
+const hoursFromNow = (hours: number): string => {
+  const d = new Date();
+  d.setHours(d.getHours() + hours);
+  return d.toISOString();
+};
+
+const hoursAgo = (hours: number): string => {
+  const d = new Date();
+  d.setHours(d.getHours() - hours);
+  return d.toISOString();
+};
+
+// ── Statuses ──────────────────────────────────────────────────────────────
 
 export const OnTrack: Story = {
   args: {
-    createdAt: hoursAgo(2),
-    deadline: hoursLater(22),
+    createdAt: daysAgo(5),
+    deadline: daysFromNow(10),
     status: 'on_track',
   },
 };
 
-// ── At Risk (Yellow) ─────────────────────────────────────────────────────
-
 export const AtRisk: Story = {
   args: {
-    createdAt: hoursAgo(18),
-    deadline: hoursLater(4),
+    createdAt: daysAgo(8),
+    deadline: hoursFromNow(6),
     status: 'at_risk',
   },
 };
 
-// ── Breached (Red) ───────────────────────────────────────────────────────
-
 export const Breached: Story = {
   args: {
-    createdAt: hoursAgo(48),
-    deadline: hoursAgo(2),
+    createdAt: daysAgo(10),
+    deadline: hoursAgo(24),
     status: 'breached',
   },
 };
 
-// ── Completed ────────────────────────────────────────────────────────────
-
 export const Completed: Story = {
   args: {
-    createdAt: hoursAgo(72),
-    deadline: hoursAgo(48),
+    createdAt: daysAgo(7),
+    deadline: daysAgo(1),
     status: 'completed',
   },
 };
 
-// ── Auto Status (Almost Breached) ────────────────────────────────────────
+// ── Auto Status ───────────────────────────────────────────────────────────
 
-export const AutoStatus: Story = {
+export const AutoOnTrack: Story = {
   args: {
-    createdAt: hoursAgo(23),
-    deadline: hoursLater(1),
+    createdAt: daysAgo(1),
+    deadline: daysFromNow(10),
   },
 };
 
-// ── Early Stage ──────────────────────────────────────────────────────────
-
-export const EarlyStage: Story = {
+export const AutoAtRisk: Story = {
   args: {
-    createdAt: hoursAgo(1),
-    deadline: hoursLater(47),
-    status: 'on_track',
+    createdAt: daysAgo(20),
+    deadline: hoursFromNow(2),
   },
 };
 
-// ── Overdue Auto ─────────────────────────────────────────────────────────
-
-export const OverdueAuto: Story = {
+export const AutoBreached: Story = {
   args: {
-    createdAt: hoursAgo(48),
-    deadline: hoursAgo(1),
+    createdAt: daysAgo(5),
+    deadline: hoursAgo(3),
   },
 };
 
-// ── Playground ───────────────────────────────────────────────────────────
+// ── All Statuses Showcase ─────────────────────────────────────────────────
+
+export const AllStatuses: StoryObj = {
+  render: () => (
+    <div className="flex flex-col gap-6 p-4 max-w-md">
+      <div>
+        <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">On Track</h3>
+        <SLAProgress createdAt={daysAgo(3)} deadline={daysFromNow(7)} status="on_track" />
+      </div>
+      <div>
+        <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">At Risk</h3>
+        <SLAProgress createdAt={daysAgo(7)} deadline={hoursFromNow(4)} status="at_risk" />
+      </div>
+      <div>
+        <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Breached</h3>
+        <SLAProgress createdAt={daysAgo(10)} deadline={hoursAgo(12)} status="breached" />
+      </div>
+      <div>
+        <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Completed</h3>
+        <SLAProgress createdAt={daysAgo(14)} deadline={daysAgo(2)} status="completed" />
+      </div>
+    </div>
+  ),
+};
+
+// ── Playground ────────────────────────────────────────────────────────────
 
 export const Playground: Story = {
   args: {
-    createdAt: hoursAgo(12),
-    deadline: hoursLater(12),
+    createdAt: daysAgo(5),
+    deadline: daysFromNow(5),
     status: 'on_track',
   },
 };

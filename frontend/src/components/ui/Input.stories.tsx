@@ -6,81 +6,58 @@ const meta: Meta<typeof Input> = {
   component: Input,
   tags: ['autodocs'],
   argTypes: {
-    type: { control: 'select', options: ['text', 'email', 'password', 'number', 'date', 'time'] },
+    type: {
+      control: 'select',
+      options: ['text', 'email', 'password', 'number', 'tel', 'url'],
+    },
     placeholder: { control: 'text' },
     disabled: { control: 'boolean' },
-    error: { control: 'text' },
-    helperText: { control: 'text' },
-    label: { control: 'text' },
+    required: { control: 'boolean' },
   },
 };
 
 export default meta;
 type Story = StoryObj<typeof Input>;
 
-// ── Input Variants ───────────────────────────────────────────────────────
+// ── Input Variants ────────────────────────────────────────────────────────
 
 export const Default: Story = {
-  args: {
-    placeholder: 'Enter text...',
-  },
+  args: { placeholder: 'Enter text...' },
 };
 
 export const WithLabel: Story = {
-  args: {
-    label: 'Device Name',
-    placeholder: 'e.g. NVR-01',
-  },
+  args: { label: 'Device Name', placeholder: 'Enter device name' },
+};
+
+export const WithValue: Story = {
+  args: { label: 'IP Address', value: '192.168.1.100', readOnly: true },
 };
 
 export const WithError: Story = {
-  args: {
-    label: 'Email',
-    type: 'email',
-    value: 'invalid-email',
-    error: 'Please enter a valid email address',
-  },
+  args: { label: 'Email', type: 'email', value: 'invalid', error: 'Please enter a valid email address' },
 };
 
 export const WithHelperText: Story = {
-  args: {
-    label: 'IP Address',
-    placeholder: '192.168.1.100',
-    helperText: 'Enter the IPv4 address of the device',
-  },
+  args: { label: 'Password', type: 'password', helperText: 'Must be at least 8 characters' },
 };
 
 export const Disabled: Story = {
-  args: {
-    label: 'System ID',
-    value: 'SYS-001-A',
-    disabled: true,
-  },
+  args: { label: 'Disabled Field', value: 'Cannot edit', disabled: true },
+};
+
+export const Required: Story = {
+  args: { label: 'Required Field', required: true, placeholder: 'This is required' },
 };
 
 export const Password: Story = {
-  args: {
-    label: 'Password',
-    type: 'password',
-    placeholder: 'Enter password',
-    value: 'secret123',
-  },
+  args: { label: 'Password', type: 'password', placeholder: 'Enter password' },
 };
 
-export const DateInput: Story = {
-  args: {
-    label: 'Installation Date',
-    type: 'date',
-  },
+export const Number: Story = {
+  args: { label: 'Port', type: 'number', placeholder: '8080' },
 };
 
-// ── SearchInput ──────────────────────────────────────────────────────────
-
-const searchMeta: Meta<typeof SearchInput> = {
-  title: 'UI/Input/SearchInput',
-  component: SearchInput,
-  tags: ['autodocs'],
-};
+// ── SearchInput ───────────────────────────────────────────────────────────
 
 export const SearchDefault: StoryObj<typeof SearchInput> = {
   render: () => <SearchInput placeholder="Search devices..." />,
@@ -90,87 +67,81 @@ export const SearchWithValue: StoryObj<typeof SearchInput> = {
   render: () => <SearchInput placeholder="Search..." value="NVR-01" onChange={() => {}} />,
 };
 
-// ── Select ───────────────────────────────────────────────────────────────
+// ── Select ────────────────────────────────────────────────────────────────
 
-const selectMeta: Meta<typeof Select> = {
-  title: 'UI/Input/Select',
-  component: Select,
-  tags: ['autodocs'],
-};
+const sampleOptions = [
+  { value: '', label: 'Select an option...' },
+  { value: 'camera', label: 'Camera' },
+  { value: 'nvr', label: 'NVR' },
+  { value: 'sensor', label: 'Sensor' },
+  { value: 'gateway', label: 'Gateway' },
+];
 
 export const SelectDefault: StoryObj<typeof Select> = {
-  render: () => (
-    <Select
-      label="Device Type"
-      options={[
-        { value: '', label: 'Select type...' },
-        { value: 'camera', label: 'Camera' },
-        { value: 'nvr', label: 'NVR' },
-        { value: 'sensor', label: 'Sensor' },
-      ]}
-    />
-  ),
+  render: () => <Select label="Device Type" options={sampleOptions} />,
+};
+
+export const SelectWithValue: StoryObj<typeof Select> = {
+  render: () => <Select label="Device Type" options={sampleOptions} value="camera" />,
 };
 
 export const SelectWithError: StoryObj<typeof Select> = {
   render: () => (
     <Select
-      label="Priority"
-      error="Please select a priority level"
-      options={[
-        { value: '', label: 'Select priority...' },
-        { value: 'low', label: 'Low' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'high', label: 'High' },
-      ]}
+      label="Device Type"
+      options={sampleOptions}
+      value=""
+      error="Please select a device type"
     />
   ),
 };
 
 export const SelectDisabled: StoryObj<typeof Select> = {
-  render: () => (
-    <Select
-      label="Region"
-      disabled
-      value="emea"
-      options={[{ value: 'emea', label: 'EMEA' }]}
-    />
-  ),
+  render: () => <Select label="Device Type" options={sampleOptions} disabled />,
 };
 
-// ── Textarea ─────────────────────────────────────────────────────────────
-
-const textareaMeta: Meta<typeof Textarea> = {
-  title: 'UI/Input/Textarea',
-  component: Textarea,
-  tags: ['autodocs'],
-};
+// ── Textarea ──────────────────────────────────────────────────────────────
 
 export const TextareaDefault: StoryObj<typeof Textarea> = {
+  render: () => <Textarea label="Description" placeholder="Enter description..." />,
+};
+
+export const TextareaWithValue: StoryObj<typeof Textarea> = {
   render: () => (
     <Textarea
       label="Notes"
-      placeholder="Enter maintenance notes..."
+      value="This is a sample text in the textarea component for demonstration purposes."
     />
   ),
 };
 
 export const TextareaWithError: StoryObj<typeof Textarea> = {
+  render: () => <Textarea label="Notes" value="" error="This field is required" />,
+};
+
+// ── All Inputs Showcase ───────────────────────────────────────────────────
+
+export const AllInputs: StoryObj = {
   render: () => (
-    <Textarea
-      label="Description"
-      value="Too short"
-      error="Description must be at least 50 characters"
-    />
+    <div className="flex flex-col gap-6 p-4 max-w-sm">
+      <Input label="Standard Input" placeholder="Enter text..." />
+      <Input label="With Error" value="bad data" error="Invalid value" />
+      <Input label="Disabled" value="Read only" disabled />
+      <SearchInput placeholder="Search..." />
+      <Select label="Select Option" options={sampleOptions} />
+      <Textarea label="Text Area" placeholder="Enter notes..." />
+    </div>
   ),
 };
 
-// ── Playground ───────────────────────────────────────────────────────────
+// ── Playground ────────────────────────────────────────────────────────────
 
 export const Playground: Story = {
   args: {
     label: 'Custom Input',
     placeholder: 'Type something...',
-    helperText: 'This is a playground input',
+    disabled: false,
+    required: false,
+    helperText: 'This is a helper text',
   },
 };

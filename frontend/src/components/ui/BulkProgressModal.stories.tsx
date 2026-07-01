@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { useState, useEffect } from 'react';
 import { BulkProgressModal, type BulkProgressState } from './BulkProgressModal';
 
 const meta: Meta<typeof BulkProgressModal> = {
@@ -8,144 +9,232 @@ const meta: Meta<typeof BulkProgressModal> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof BulkProgressModal>;
 
-// ── In Progress ──────────────────────────────────────────────────────────
+// ── Sample Items ──────────────────────────────────────────────────────────
 
-const inProgressState: BulkProgressState = {
-  total: 5,
-  items: [
-    { id: '1', label: 'NVR-01 firmware update', status: 'done' },
-    { id: '2', label: 'CAM-101 firmware update', status: 'done' },
-    { id: '3', label: 'CAM-102 firmware update', status: 'processing' },
-    { id: '4', label: 'CAM-103 firmware update', status: 'pending' },
-    { id: '5', label: 'NVR-02 firmware update', status: 'pending' },
-  ],
-  isRunning: true,
-  isCancelled: false,
-  operationLabel: 'Updating firmware...',
+const sampleItems = [
+  { id: '1', label: 'NVR-01 firmware update', status: 'done' as const },
+  { id: '2', label: 'CAM-101 config sync', status: 'done' as const },
+  { id: '3', label: 'CAM-102 reboot', status: 'failed' as const, error: 'Connection timeout' },
+  { id: '4', label: 'GW-01 backup', status: 'processing' as const },
+  { id: '5', label: 'SENSOR-TEMP calibration', status: 'pending' as const },
+  { id: '6', label: 'NVR-02 disk cleanup', status: 'pending' as const },
+];
+
+// ── In Progress ───────────────────────────────────────────────────────────
+
+function InProgressDemo() {
+  const [state, setState] = useState<BulkProgressState>({
+    total: 6,
+    items: sampleItems,
+    isRunning: true,
+    isCancelled: false,
+    operationLabel: 'Processing devices...',
+  });
+
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => setState((prev) => ({ ...prev, isCancelled: true, isRunning: false }))}
+        onRetryAll={() => {}}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const InProgress: StoryObj = {
+  render: () => <InProgressDemo />,
 };
 
-export const InProgress: Story = {
-  args: {
-    state: inProgressState,
-    onCancel: () => alert('Cancelled'),
-    onRetryAll: () => alert('Retry all'),
-    onRetryItem: (id) => alert(`Retry ${id}`),
-    onClose: () => alert('Close'),
-  },
+// ── Completed ─────────────────────────────────────────────────────────────
+
+function CompletedDemo() {
+  const [state] = useState<BulkProgressState>({
+    total: 6,
+    items: sampleItems.map((item) =>
+      item.status === 'pending' || item.status === 'processing'
+        ? { ...item, status: 'done' as const }
+        : item,
+    ),
+    isRunning: false,
+    isCancelled: false,
+    operationLabel: 'Processing devices...',
+  });
+
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => {}}
+        onRetryAll={() => {}}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const Completed: StoryObj = {
+  render: () => <CompletedDemo />,
 };
 
-// ── Complete ─────────────────────────────────────────────────────────────
+// ── With Errors ───────────────────────────────────────────────────────────
 
-const completeState: BulkProgressState = {
-  total: 5,
-  items: [
-    { id: '1', label: 'NVR-01 firmware update', status: 'done' },
-    { id: '2', label: 'CAM-101 firmware update', status: 'done' },
-    { id: '3', label: 'CAM-102 firmware update', status: 'done' },
-    { id: '4', label: 'CAM-103 firmware update', status: 'done' },
-    { id: '5', label: 'NVR-02 firmware update', status: 'done' },
-  ],
-  isRunning: false,
-  isCancelled: false,
-  operationLabel: 'Firmware update complete',
+function WithErrorsDemo() {
+  const [state] = useState<BulkProgressState>({
+    total: 4,
+    items: [
+      { id: '1', label: 'Device A', status: 'done' },
+      { id: '2', label: 'Device B', status: 'failed', error: 'Connection refused' },
+      { id: '3', label: 'Device C', status: 'failed', error: 'Authentication failed' },
+      { id: '4', label: 'Device D', status: 'done' },
+    ],
+    isRunning: false,
+    isCancelled: false,
+    operationLabel: 'Bulk firmware update',
+  });
+
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => {}}
+        onRetryAll={() => alert('Retrying all failed items...')}
+        onRetryItem={(id) => alert(`Retrying item ${id}`)}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const WithErrors: StoryObj = {
+  render: () => <WithErrorsDemo />,
 };
 
-export const Complete: Story = {
-  args: {
-    state: completeState,
-    onCancel: () => {},
-    onRetryAll: () => {},
-    onClose: () => alert('Close'),
-  },
+// ── All Failed ────────────────────────────────────────────────────────────
+
+function AllFailedDemo() {
+  const [state] = useState<BulkProgressState>({
+    total: 3,
+    items: [
+      { id: '1', label: 'NVR-01', status: 'failed', error: 'Connection timeout' },
+      { id: '2', label: 'CAM-101', status: 'failed', error: 'Invalid credentials' },
+      { id: '3', label: 'GW-01', status: 'failed', error: 'Service unavailable' },
+    ],
+    isRunning: false,
+    isCancelled: false,
+    operationLabel: 'Bulk operation',
+  });
+
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => {}}
+        onRetryAll={() => alert('Retrying all...')}
+        onRetryItem={(id) => alert(`Retrying ${id}`)}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const AllFailed: StoryObj = {
+  render: () => <AllFailedDemo />,
 };
 
-// ── With Errors ──────────────────────────────────────────────────────────
+// ── Cancelled ─────────────────────────────────────────────────────────────
 
-const withErrorsState: BulkProgressState = {
-  total: 6,
-  items: [
-    { id: '1', label: 'NVR-01 firmware update', status: 'done' },
-    { id: '2', label: 'CAM-101 firmware update', status: 'done' },
-    { id: '3', label: 'CAM-102 firmware update', status: 'failed', error: 'Connection timeout after 30s' },
-    { id: '4', label: 'CAM-103 firmware update', status: 'done' },
-    { id: '5', label: 'NVR-02 firmware update', status: 'failed', error: 'Incompatible firmware version' },
-    { id: '6', label: 'CAM-201 firmware update', status: 'cancelled' },
-  ],
-  isRunning: false,
-  isCancelled: false,
-  operationLabel: 'Bulk firmware update - 2 failed',
+function CancelledDemo() {
+  const [state] = useState<BulkProgressState>({
+    total: 5,
+    items: [
+      { id: '1', label: 'Device A', status: 'done' },
+      { id: '2', label: 'Device B', status: 'done' },
+      { id: '3', label: 'Device C', status: 'cancelled' },
+      { id: '4', label: 'Device D', status: 'cancelled' },
+      { id: '5', label: 'Device E', status: 'cancelled' },
+    ],
+    isRunning: false,
+    isCancelled: true,
+    operationLabel: 'Bulk operation (cancelled)',
+  });
+
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => {}}
+        onRetryAll={() => {}}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const Cancelled: StoryObj = {
+  render: () => <CancelledDemo />,
 };
 
-export const WithErrors: Story = {
-  args: {
-    state: withErrorsState,
-    onCancel: () => {},
-    onRetryAll: () => alert('Retrying all failed'),
-    onRetryItem: (id) => alert(`Retrying ${id}`),
-    onClose: () => alert('Close'),
-  },
-};
+// ── Simulated Progress ────────────────────────────────────────────────────
 
-// ── Large Batch ──────────────────────────────────────────────────────────
+function SimulatedProgressDemo() {
+  const [state, setState] = useState<BulkProgressState>({
+    total: 6,
+    items: [
+      { id: '1', label: 'Device-001 firmware update', status: 'processing' },
+      { id: '2', label: 'Device-002 config sync', status: 'pending' },
+      { id: '3', label: 'Device-003 reboot', status: 'pending' },
+      { id: '4', label: 'Device-004 backup', status: 'pending' },
+      { id: '5', label: 'Device-005 calibration', status: 'pending' },
+      { id: '6', label: 'Device-006 disk cleanup', status: 'pending' },
+    ],
+    isRunning: true,
+    isCancelled: false,
+    operationLabel: 'Processing devices...',
+  });
 
-const largeBatchState: BulkProgressState = {
-  total: 20,
-  items: Array.from({ length: 20 }, (_, i) => ({
-    id: `${i}`,
-    label: `Device ${String.fromCharCode(65 + Math.floor(i / 5))}-${(i % 5) + 1} configuration`,
-    status: (i < 8 ? 'done' : i < 12 ? 'processing' : i < 15 ? 'failed' : 'pending') as any,
-    error: i >= 12 && i < 15 ? 'Configuration rejected' : undefined,
-  })),
-  isRunning: true,
-  isCancelled: false,
-  operationLabel: 'Applying bulk configuration...',
-};
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setState((prev) => {
+        const items = [...prev.items];
+        const nextPending = items.findIndex((i) => i.status === 'pending');
+        const nextProcessing = items.findIndex((i) => i.status === 'processing');
 
-export const LargeBatch: Story = {
-  args: {
-    state: largeBatchState,
-    onCancel: () => alert('Cancel'),
-    onRetryAll: () => alert('Retry all'),
-    onRetryItem: (id) => alert(`Retry ${id}`),
-    onClose: () => alert('Close'),
-  },
-};
+        if (nextProcessing >= 0) {
+          items[nextProcessing] = {
+            ...items[nextProcessing],
+            status: Math.random() > 0.2 ? 'done' : 'failed',
+            error: Math.random() > 0.2 ? undefined : 'Simulated error',
+          };
+        }
 
-// ── Cancelled ────────────────────────────────────────────────────────────
+        if (nextPending >= 0 && nextProcessing === -1) {
+          items[nextPending] = { ...items[nextPending], status: 'processing' };
+        }
 
-const cancelledState: BulkProgressState = {
-  total: 10,
-  items: [
-    { id: '1', label: 'Device A-1 setup', status: 'done' },
-    { id: '2', label: 'Device A-2 setup', status: 'done' },
-    { id: '3', label: 'Device A-3 setup', status: 'cancelled' },
-    { id: '4', label: 'Device A-4 setup', status: 'cancelled' },
-    { id: '5', label: 'Device A-5 setup', status: 'cancelled' },
-  ],
-  isRunning: false,
-  isCancelled: true,
-  operationLabel: 'Bulk setup - cancelled',
-};
+        const isRunning = items.some((i) => i.status === 'pending' || i.status === 'processing');
 
-export const Cancelled: Story = {
-  args: {
-    state: cancelledState,
-    onCancel: () => {},
-    onRetryAll: () => alert('Retry all'),
-    onClose: () => alert('Close'),
-  },
-};
+        return { ...prev, items, isRunning };
+      });
+    }, 1500);
 
-// ── Playground ───────────────────────────────────────────────────────────
+    return () => clearInterval(timer);
+  }, []);
 
-export const Playground: Story = {
-  args: {
-    state: inProgressState,
-    onCancel: () => alert('Cancel'),
-    onRetryAll: () => alert('Retry all'),
-    onRetryItem: (id) => alert(`Retry ${id}`),
-    onClose: () => alert('Close'),
-  },
+  return (
+    <div className="p-4">
+      <BulkProgressModal
+        state={state}
+        onCancel={() => setState((prev) => ({ ...prev, isCancelled: true, isRunning: false }))}
+        onRetryAll={() => {}}
+        onClose={() => {}}
+      />
+    </div>
+  );
+}
+
+export const SimulatedProgress: StoryObj = {
+  render: () => <SimulatedProgressDemo />,
 };

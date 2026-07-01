@@ -17,6 +17,7 @@
 //   - OWASP ASVS V5 (Input validation — whitelist field names)
 //   - OWASP ASVS V7 (Error handling — structured errors)
 //   - IEC 62443 SR 7.1 (Resource availability — query limits)
+//   - P1-HI-07: Query complexity analysis + max depth 5
 package api
 
 import (
@@ -48,11 +49,31 @@ type gqlError struct {
 // ── Parsed Query ─────────────────────────────────────────────────────
 
 type gqlQuery struct {
-	Field     string
-	Arguments map[string]string
-	Fields    []string // requested sub-fields
-	Limit     int
+	Field        string
+	Arguments    map[string]string
+	Fields       []string // requested sub-fields
+	Limit        int
+	Complexity   int // P1-HI-07: вес запроса
+	NestingDepth int // P1-HI-07: глубина вложенности
 }
+
+// P1-HI-07: Константы для анализа сложности запросов
+const (
+	// MaxQueryDepth — максимальная глубина вложенности GraphQL запроса.
+	// Depth > 5 указывает на потенциальную атаку recursion/N+1.
+	MaxQueryDepth = 5
+
+	// MaxQueryComplexity — максимальный вес запроса.
+	// Каждое поле = 1, каждый лимит в 10 элементов = +1 вес.
+	MaxQueryComplexity = 50
+
+	// BaseFieldComplexity — базовый вес одного поля.
+	BaseFieldComplexity = 1
+
+	// LimitComplexityMultiplier — множитель веса для пагинации.
+	// Запрос с limit=100 будет иметь больший вес.
+	LimitComplexityMultiplier = 0.1
+)
 
 // ── Handler ──────────────────────────────────────────────────────────
 
@@ -73,6 +94,20 @@ func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
 	if len(queries) == 0 {
 		writeGraphQLError(w, http.StatusBadRequest, "no valid queries found")
 		return
+	}
+
+	// P1-HI-07: Query complexity analysis
+	for _, q := range queries {
+		if q.NestingDepth > MaxQueryDepth {
+			writeGraphQLError(w, http.StatusBadRequest,
+				fmt.Sprintf("query too deep: max depth is %d, got %d", MaxQueryDepth, q.NestingDepth))
+			return
+		}
+		if q.Complexity > MaxQueryComplexity {
+			writeGraphQLError(w, http.StatusBadRequest,
+				fmt.Sprintf("query too complex: max complexity is %d, got %d", MaxQueryComplexity, q.Complexity))
+			return
+		}
 	}
 
 	// Execute queries
@@ -339,8 +374,15 @@ func parseGQLQuery(query string) []gqlQuery {
 			}
 			fieldsStr := query[1:closeBrace]
 			q.Fields = strings.Fields(fieldsStr)
+
+			// P1-HI-07: Calculate nesting depth based on nested braces
+			q.NestingDepth = calculateNestingDepth(fieldsStr)
+
 			query = strings.TrimSpace(query[closeBrace+1:])
 		}
+
+		// P1-HI-07: Calculate total query complexity
+		q.Complexity = calculateQueryComplexity(&q)
 
 		queries = append(queries, q)
 
@@ -351,6 +393,57 @@ func parseGQLQuery(query string) []gqlQuery {
 	}
 
 	return queries
+}
+
+// P1-HI-07: calculateNestingDepth вычисляет максимальную глубину вложенности
+// полей в GraphQL запросе. Считает уровень по фигурным скобкам {}.
+func calculateNestingDepth(fieldsStr string) int {
+	maxDepth := 0
+	currentDepth := 0
+	for _, ch := range fieldsStr {
+		switch ch {
+		case '{':
+			currentDepth++
+			if currentDepth > maxDepth {
+				maxDepth = currentDepth
+			}
+		case '}':
+			if currentDepth > 0 {
+				currentDepth--
+			}
+		}
+	}
+	return maxDepth
+}
+
+// P1-HI-07: calculateQueryComplexity вычисляет общий вес запроса.
+//
+// Формула: BaseFieldComplexity * len(Fields) + LimitComplexityMultiplier * limit
+// Вес полей списка умножается на лимит пагинации, так как каждое поле
+// будет возвращено для каждого элемента списка.
+//
+// Compliance:
+//   - IEC 62443 SR 7.1: Resource availability — предотвращение DoS через сложные запросы
+//   - OWASP ASVS V5.3.1: Input validation — ограничение сложности запросов
+func calculateQueryComplexity(q *gqlQuery) int {
+	fieldCount := len(q.Fields)
+	if fieldCount == 0 {
+		fieldCount = 1 // Минимум 1 поле (сам запрос)
+	}
+
+	// Базовая сложность: количество запрашиваемых полей
+	complexity := BaseFieldComplexity * fieldCount
+
+	// P1-HI-07: Добавляем вес пагинации (поле * лимит)
+	// Запрос с limit=100 возвращает до 100 записей → высокая стоимость
+	if q.Limit > 0 {
+		complexity += int(float64(fieldCount) * float64(q.Limit) * LimitComplexityMultiplier)
+	}
+
+	// Добавляем вес вложенности (глубина * 2)
+	complexity += q.NestingDepth * 2
+
+	return complexity
 }
 
 func parseGQLArgs(argsStr string) map[string]string {

@@ -10,11 +10,17 @@
 // Сохраняет обратную совместимость с существующими компонентами
 // (addToQueue, processQueue, setOnline, conflicts).
 //
+// SYNC_QUEUE persistence migrated from AsyncStorage → WatermelonDB
+// (pending_mutations table). See mobile/src/database/ for the
+// reactive database layer.
+//
 // Соответствует:
 //   - IEC 62443-3-3 SR 3.1 (Queue-based processing)
+//   - ISO 27001 A.12.4 (audit trail via pending_mutations)
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { create } from 'zustand';
+import { Q } from '@nozbe/watermelondb';
 import { storage } from '../utils/storage';
 import { workOrdersApi } from '../api/workOrders';
 import { CompleteWorkOrderPayload } from '../types';
@@ -23,24 +29,16 @@ import { syncService } from '../services/syncService';
 import {
   DifferentialSyncService,
   SyncResult,
+  ThreeWayConflict,
 } from '../services/differentialSync';
 import { syncApi, SyncStatusResponse } from '../api/sync';
+import { getDatabase } from '../database';
+import type {
+  ConflictResolutionAction,
+  ConflictData,
+} from '../components/ConflictResolutionModal';
 
 // ── Legacy Types (from existing store) ──────────────────────────────────
-
-interface ConflictData {
-  id: string;
-  label: string;
-  local: Record<string, unknown>;
-  server: Record<string, unknown>;
-  field: string;
-}
-
-interface ConflictResolutionAction {
-  conflictId: string;
-  type: 'keep_local' | 'keep_server' | 'merge';
-  mergedFields: Record<string, unknown>;
-}
 
 interface SyncAction {
   id: string;
@@ -213,6 +211,27 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
       const lastSyncTime = new Date().toISOString();
 
+      // ── P0-CR-05: Wire unresolved 3-way merge conflicts into store ──
+      const unresolved = result.unresolvedConflicts ?? [];
+      if (unresolved.length > 0) {
+        // ThreeWayConflict совместим с ConflictResolutionModal.ConflictData
+        const storeConflicts: ConflictData[] = unresolved.map((c) => ({
+          id: c.id,
+          label: c.label,
+          localTimestamp: c.localTimestamp,
+          serverTimestamp: c.serverTimestamp,
+          fields: c.fields,
+        }));
+
+        // Добавляем в store (заменяем существующие для этого id)
+        set((state) => {
+          const filtered = state.conflicts.filter(
+            (existing) => !storeConflicts.some((sc) => sc.id === existing.id),
+          );
+          return { conflicts: [...filtered, ...storeConflicts] };
+        });
+      }
+
       set({
         dSyncStatus: result.success ? 'success' : 'error',
         dSyncProgress: updatedProgress,
@@ -247,6 +266,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         pullChanges: 0,
         pushChanges: 0,
         conflictsResolved: 0,
+        unresolvedConflicts: [],
         entities: [],
         totalDurationMs: 0,
         error: message,
@@ -319,6 +339,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
   /**
    * Добавить действие в очередь синхронизации.
+   * Persisted в WatermelonDB pending_mutations для отказоустойчивости.
    */
   addToQueue: async (action: Omit<SyncAction, 'id' | 'timestamp' | 'retryCount'>) => {
     const newAction: SyncAction = {
@@ -328,21 +349,46 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       retryCount: 0,
     };
 
+    // Persist to WatermelonDB pending_mutations table
+    try {
+      const db = getDatabase();
+      const collection = db.get('pending_mutations');
+      await collection.create((record) => {
+        const rec = record as unknown as {
+          entity_type: string;
+          entity_id: string;
+          mutation_type: string;
+          payload: string;
+          timestamp: number;
+          retry_count: number;
+        };
+        rec.entity_type = 'sync_action';
+        rec.entity_id = newAction.id;
+        rec.mutation_type = newAction.type;
+        rec.payload = JSON.stringify(newAction);
+        rec.timestamp = newAction.timestamp;
+        rec.retry_count = 0;
+      });
+    } catch (error) {
+      console.warn('[SyncStore] Failed to persist action to WatermelonDB:', error);
+    }
+
     set((state) => {
       const updated = [...state.queue, newAction];
-      storage.setSyncQueue(JSON.stringify(updated));
       return { queue: updated };
     });
   },
 
   /**
    * Обработать очередь синхронизации.
+   * После успешной обработки удаляем записи из WatermelonDB pending_mutations.
    */
   processQueue: async () => {
     const { queue, isOnline } = get();
     if (!isOnline || queue.length === 0) return;
 
     const updatedQueue = [...queue];
+    const processedIds: string[] = [];
     let hasChanges = false;
 
     for (let i = 0; i < updatedQueue.length; i++) {
@@ -358,6 +404,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
           console.log(`Checklist action ${action.type} for WO ${action.workOrderId} recorded locally`);
         }
 
+        processedIds.push(action.id);
         updatedQueue.splice(i, 1);
         i--;
         hasChanges = true;
@@ -366,6 +413,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
         action.retryCount++;
 
         if (action.retryCount >= 3) {
+          processedIds.push(action.id);
           updatedQueue.splice(i, 1);
           i--;
           hasChanges = true;
@@ -375,7 +423,22 @@ export const useSyncStore = create<SyncState>((set, get) => ({
 
     if (hasChanges) {
       set({ queue: updatedQueue });
-      storage.setSyncQueue(JSON.stringify(updatedQueue));
+
+      // Remove processed mutations from WatermelonDB
+      try {
+        const db = getDatabase();
+        const collection = db.get('pending_mutations');
+        const records = await collection
+          .query(Q.where('entity_type', 'sync_action'), Q.where('entity_id', Q.oneOf(processedIds)))
+          .fetch();
+        await db.write(async () => {
+          for (const record of records) {
+            await record.destroyPermanently();
+          }
+        });
+      } catch (error) {
+        console.warn('[SyncStore] Failed to cleanup processed mutations:', error);
+      }
     }
   },
 
@@ -390,16 +453,31 @@ export const useSyncStore = create<SyncState>((set, get) => ({
   },
 
   /**
-   * Загрузить очередь из storage.
+   * Загрузить очередь из WatermelonDB pending_mutations.
+   * Восстанавливает SyncAction[] из записей с entity_type === 'sync_action'.
    */
   loadQueue: async () => {
     try {
-      const stored = await storage.getSyncQueue();
-      if (stored) {
-        set({ queue: JSON.parse(stored) });
-      }
+      const db = getDatabase();
+      const collection = db.get('pending_mutations');
+      const records = await collection
+        .query(Q.where('entity_type', 'sync_action'), Q.sortBy('timestamp', 'asc'))
+        .fetch();
+
+      const restored: SyncAction[] = records
+        .map((record) => {
+          const r = record as unknown as { payload: string };
+          try {
+            return JSON.parse(r.payload) as SyncAction;
+          } catch {
+            return null;
+          }
+        })
+        .filter((a): a is SyncAction => a !== null);
+
+      set({ queue: restored });
     } catch (error: unknown) {
-      console.error('Failed to load sync queue:', error);
+      console.error('Failed to load sync queue from WatermelonDB:', error);
     }
   },
 

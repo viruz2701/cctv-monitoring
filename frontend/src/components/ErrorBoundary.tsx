@@ -106,8 +106,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               An unexpected error occurred. Please try refreshing the page.
             </p>
 
-            {/* Показываем trace_id для поддержки (ISO 27001 A.12.4.1) */}
-            {traceId && (
+            {/* Показываем trace_id только в DEV (P2-MED-20) */}
+            {import.meta.env.DEV && traceId && (
               <p className="mb-4 text-xs text-gray-400 dark:text-gray-500 font-mono">
                 Error ID: <span className="text-gray-500 dark:text-gray-400">{traceId}</span>
               </p>

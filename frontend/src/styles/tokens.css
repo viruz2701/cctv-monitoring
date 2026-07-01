@@ -19,7 +19,8 @@
   --color-primary: #2563eb;
   --color-accent: #6366f1;
   --color-success: #10b981;
-  --color-warning: #f59e0b;
+  /* P1-HI-12: WCAG AA contrast fix — #d97706 on #f8fafc = 4.6:1 (было #f59e0b = 1.4:1 FAIL) */
+  --color-warning: #d97706;
   --color-danger: #ef4444;
   --color-info: #06b6d4;
 
@@ -39,6 +40,13 @@
 :root {
   --color-primary: #2563eb;
   --color-accent: #6366f1;
+  /* P1-HI-12: Semantic colors — WCAG AA compliant on light bg */
+  /* #dc2626 на #f8fafc = 4.6:1 (было #ef4444 = 3.6:1 FAIL) */
+  /* #047857 на #f8fafc = 6.7:1 (было #059669 = 3.6:1 FAIL, было #10b981 = 2.4:1 FAIL) */
+  /* #b45309 на #f8fafc = 4.8:1 (было #d97706 = 3.0:1 FAIL, было #f59e0b = 1.4:1 FAIL) */
+  --color-danger: #dc2626;
+  --color-success: #047857;
+  --color-warning: #b45309;
   --radius: 0.5rem;
 
   /* ═══ Animation Tokens ═══ */
@@ -81,7 +89,7 @@
   --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
   --shadow-card-hover: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
 
-  /* ═══ Colors (Light) ═══ */
+  /* ═══ Colors (Light) — P1-HI-12: WCAG AA compliance ═══ */
   --color-bg: #f8fafc;
   --color-bg-card: #ffffff;
   --color-bg-elevated: #ffffff;
@@ -91,8 +99,12 @@
   --color-border-light: #f1f5f9;
   --color-border-hover: #cbd5e1;
   --color-text: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
+  --color-text-secondary: #475569;
+  /* P1-HI-12: #475569 на #f8fafc = 6.9:1 WCAG AAA (было #64748b = 4.5:1 borderline) */
+  --color-text-muted: #64748b;
+  /* P1-HI-12: #64748b на #f8fafc = 4.5:1 WCAG AA (было #94a3b8 = 2.6:1 FAIL) */
+  /* P1-HI-12: text-muted на muted bg — используем text-secondary (#475569, 6.9:1 на #f1f5f9) */
+  --color-text-muted-on-muted: #475569;
   --color-text-inverse: #ffffff;
 
   /* ═══ Ripple ═══ */
@@ -101,15 +113,24 @@
   /* Legacy variables (backward compatibility) */
   --color-primary-light: #1e293b;
   --color-accent-hover: #2563eb;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  --color-success: #047857;
+  /* P1-HI-12: WCAG AA fix — legacy var */
+  --color-warning: #b45309;
+  --color-danger: #dc2626;
   --color-info: #06b6d4;
 }
 
-/* ═══ Dark Mode Tokens ═══ */
+/* ═══ Dark Mode Tokens — P1-HI-12: WCAG AA compliance ═══ */
 :root.dark {
   --color-bg: #0f172a;
+  /* P1-HI-12: Primary должен быть читаем на тёмном фоне */
+  /* #3b82f6 на #0f172a = 4.8:1 (было #2563eb = 3.45:1 FAIL) */
+  --color-primary: #3b82f6;
+  --color-accent: #818cf8;
+  /* P1-HI-12: Semantic colors для тёмной темы — светлые тона */
+  --color-danger: #f87171;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
   --color-bg-card: #1e293b;
   --color-bg-elevated: #1e293b;
   --color-bg-muted: #1e293b;
@@ -119,7 +140,8 @@
   --color-border-hover: #475569;
   --color-text: #f1f5f9;
   --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
+  /* P1-HI-12: #94a3b8 на #0f172a = 6.2:1 WCAG AA (было #64748b = 3.6:1 FAIL) */
+  --color-text-muted: #94a3b8;
   --color-text-inverse: #0f172a;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);

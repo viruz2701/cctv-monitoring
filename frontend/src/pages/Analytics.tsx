@@ -1,12 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Card, DataGrid, Badge, SkeletonStatsCard, SkeletonChart, SkeletonTable } from '../components/ui';
 import { api, Prediction } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
-import { ResponsiveBar } from '@nivo/bar';
-import { ResponsivePie } from '@nivo/pie';
-import { ResponsiveLine } from '@nivo/line';
 import { Activity, Clock, TrendingUp, Shield, AlertTriangle, CheckCircle } from '../components/ui/Icons';
+
+// P2-MED-09: Lazy loading для тяжёлых nivo chart компонентов
+const ResponsiveLine = lazy(() => import('@nivo/line').then(m => ({ default: m.ResponsiveLine })));
+const ResponsiveBar = lazy(() => import('@nivo/bar').then(m => ({ default: m.ResponsiveBar })));
+const ResponsivePie = lazy(() => import('@nivo/pie').then(m => ({ default: m.ResponsivePie })));
+
+/** P2-MED-09: Suspense fallback для chart */
+function ChartFallback() {
+  return (
+    <div className="h-[250px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+      <div className="animate-pulse flex flex-col items-center gap-2">
+        <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
+      </div>
+    </div>
+  );
+}
+
+/** P2-MED-09: Lazy-loaded chart wrapper */
+function LazyChart({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<ChartFallback />}>{children}</Suspense>;
+}
 
 const mtbfTrendData = [
   { month: 'Янв', mtbf: 720 }, { month: 'Фев', mtbf: 680 },
@@ -175,41 +194,43 @@ export function Analytics() {
               MTBF Trend (Mean Time Between Failures)
             </h3>
             <div className="h-[250px]">
-              <ResponsiveLine
-                data={[{
-                  id: 'mtbf',
-                  data: mtbfTrendData.map(d => ({ x: d.month, y: d.mtbf })),
-                }]}
-                margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
-                xScale={{ type: 'point' }}
-                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-                curve="monotoneX"
-                lineWidth={2}
-                colors={['#3b82f6']}
-                enablePoints={true}
-                pointSize={6}
-                pointColor="#3b82f6"
-                enableArea={true}
-                areaOpacity={0.15}
-                enableGridX={false}
-                axisBottom={{
-                  tickSize: 5, tickPadding: 5, tickRotation: 0,
-                }}
-                axisLeft={{
-                  tickSize: 5, tickPadding: 5, tickRotation: 0,
-                  format: (v: number) => `${v} ч`,
-                }}
-                theme={nivoTheme}
-                enableSlices="x"
-                sliceTooltip={({ slice }) => {
-                  if (!slice.points.length) return null;
-                  return (
-                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                      <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} ч
-                    </div>
-                  );
-                }}
-              />
+              <LazyChart>
+                <ResponsiveLine
+                  data={[{
+                    id: 'mtbf',
+                    data: mtbfTrendData.map(d => ({ x: d.month, y: d.mtbf })),
+                  }]}
+                  margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
+                  xScale={{ type: 'point' }}
+                  yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                  curve="monotoneX"
+                  lineWidth={2}
+                  colors={['#3b82f6']}
+                  enablePoints={true}
+                  pointSize={6}
+                  pointColor="#3b82f6"
+                  enableArea={true}
+                  areaOpacity={0.15}
+                  enableGridX={false}
+                  axisBottom={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  }}
+                  axisLeft={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                    format: (v: number) => `${v} ч`,
+                  }}
+                  theme={nivoTheme}
+                  enableSlices="x"
+                  sliceTooltip={({ slice }) => {
+                    if (!slice.points.length) return null;
+                    return (
+                      <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                        <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} ч
+                      </div>
+                    );
+                  }}
+                />
+              </LazyChart>
             </div>
           </div>
         </Card>
@@ -221,41 +242,43 @@ export function Analytics() {
               MTTR Trend (Mean Time To Repair)
             </h3>
             <div className="h-[250px]">
-              <ResponsiveLine
-                data={[{
-                  id: 'mttr',
-                  data: mttrTrendData.map(d => ({ x: d.month, y: d.mttr })),
-                }]}
-                margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
-                xScale={{ type: 'point' }}
-                yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-                curve="monotoneX"
-                lineWidth={2}
-                colors={['#22c55e']}
-                enablePoints={true}
-                pointSize={6}
-                pointColor="#22c55e"
-                enableArea={true}
-                areaOpacity={0.15}
-                enableGridX={false}
-                axisBottom={{
-                  tickSize: 5, tickPadding: 5, tickRotation: 0,
-                }}
-                axisLeft={{
-                  tickSize: 5, tickPadding: 5, tickRotation: 0,
-                  format: (v: number) => `${v} мин`,
-                }}
-                theme={nivoTheme}
-                enableSlices="x"
-                sliceTooltip={({ slice }) => {
-                  if (!slice.points.length) return null;
-                  return (
-                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                      <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} мин
-                    </div>
-                  );
-                }}
-              />
+              <LazyChart>
+                <ResponsiveLine
+                  data={[{
+                    id: 'mttr',
+                    data: mttrTrendData.map(d => ({ x: d.month, y: d.mttr })),
+                  }]}
+                  margin={{ top: 10, right: 20, bottom: 30, left: 50 }}
+                  xScale={{ type: 'point' }}
+                  yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
+                  curve="monotoneX"
+                  lineWidth={2}
+                  colors={['#22c55e']}
+                  enablePoints={true}
+                  pointSize={6}
+                  pointColor="#22c55e"
+                  enableArea={true}
+                  areaOpacity={0.15}
+                  enableGridX={false}
+                  axisBottom={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  }}
+                  axisLeft={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                    format: (v: number) => `${v} мин`,
+                  }}
+                  theme={nivoTheme}
+                  enableSlices="x"
+                  sliceTooltip={({ slice }) => {
+                    if (!slice.points.length) return null;
+                    return (
+                      <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                        <strong>{String(slice.points[0].data.x)}</strong>: {Number(slice.points[0].data.y)} мин
+                      </div>
+                    );
+                  }}
+                />
+              </LazyChart>
             </div>
           </div>
         </Card>
@@ -267,26 +290,28 @@ export function Analytics() {
               Распределение отказов по типу
             </h3>
             <div className="h-[250px]">
-              <ResponsivePie
-                data={failureByTypeData}
-                margin={{ top: 20, right: 40, bottom: 20, left: 40 }}
-                innerRadius={0.55}
-                padAngle={4}
-                cornerRadius={4}
-                colors={{ datum: 'data.color' }}
-                arcLinkLabelsSkipAngle={10}
-                arcLinkLabelsTextColor="#64748b"
-                arcLinkLabelsThickness={1}
-                arcLinkLabelsColor={{ from: 'color' }}
-                arcLabelsSkipAngle={10}
-                arcLabelsTextColor="#ffffff"
-                theme={nivoTheme}
-                tooltip={({ datum }) => (
-                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                    <strong>{datum.label}</strong>: {datum.value} ({((datum.value / failureByTypeData.reduce((s, d) => s + d.value, 0)) * 100).toFixed(0)}%)
-                  </div>
-                )}
-              />
+              <LazyChart>
+                <ResponsivePie
+                  data={failureByTypeData}
+                  margin={{ top: 20, right: 40, bottom: 20, left: 40 }}
+                  innerRadius={0.55}
+                  padAngle={4}
+                  cornerRadius={4}
+                  colors={{ datum: 'data.color' }}
+                  arcLinkLabelsSkipAngle={10}
+                  arcLinkLabelsTextColor="#64748b"
+                  arcLinkLabelsThickness={1}
+                  arcLinkLabelsColor={{ from: 'color' }}
+                  arcLabelsSkipAngle={10}
+                  arcLabelsTextColor="#ffffff"
+                  theme={nivoTheme}
+                  tooltip={({ datum }) => (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      <strong>{datum.label}</strong>: {datum.value} ({((datum.value / failureByTypeData.reduce((s, d) => s + d.value, 0)) * 100).toFixed(0)}%)
+                    </div>
+                  )}
+                />
+              </LazyChart>
             </div>
           </div>
         </Card>
@@ -298,33 +323,35 @@ export function Analytics() {
               Прогноз отказов по вероятности
             </h3>
             <div className="h-[250px]">
-              <ResponsiveBar
-                data={[
-                  { name: 'Высокий (>70%)', count: predictions.filter(p => p.failure_probability > 70).length },
-                  { name: 'Средний (30-70%)', count: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 70).length },
-                  { name: 'Низкий (<30%)', count: predictions.filter(p => p.failure_probability <= 30).length },
-                ]}
-                keys={['count']}
-                indexBy="name"
-                margin={{ top: 10, right: 20, bottom: 50, left: 50 }}
-                padding={0.3}
-                colors={['#ef4444', '#f97316', '#22c55e']}
-                colorBy="indexValue"
-                borderRadius={4}
-                axisBottom={{
-                  tickSize: 5, tickPadding: 5, tickRotation: -15,
-                }}
-                axisLeft={{
-                  tickSize: 5, tickPadding: 5, tickRotation: 0,
-                }}
-                theme={nivoTheme}
-                enableLabel={false}
-                tooltip={({ data: d }) => (
-                  <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
-                    {String(d.name)}: {Number(d.count)}
-                  </div>
-                )}
-              />
+              <LazyChart>
+                <ResponsiveBar
+                  data={[
+                    { name: 'Высокий (>70%)', count: predictions.filter(p => p.failure_probability > 70).length },
+                    { name: 'Средний (30-70%)', count: predictions.filter(p => p.failure_probability > 30 && p.failure_probability <= 70).length },
+                    { name: 'Низкий (<30%)', count: predictions.filter(p => p.failure_probability <= 30).length },
+                  ]}
+                  keys={['count']}
+                  indexBy="name"
+                  margin={{ top: 10, right: 20, bottom: 50, left: 50 }}
+                  padding={0.3}
+                  colors={['#ef4444', '#f97316', '#22c55e']}
+                  colorBy="indexValue"
+                  borderRadius={4}
+                  axisBottom={{
+                    tickSize: 5, tickPadding: 5, tickRotation: -15,
+                  }}
+                  axisLeft={{
+                    tickSize: 5, tickPadding: 5, tickRotation: 0,
+                  }}
+                  theme={nivoTheme}
+                  enableLabel={false}
+                  tooltip={({ data: d }) => (
+                    <div style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+                      {String(d.name)}: {Number(d.count)}
+                    </div>
+                  )}
+                />
+              </LazyChart>
             </div>
           </div>
         </Card>

@@ -60,6 +60,25 @@ const IGNORED_ERROR_PATTERNS = [
   /^Error: \[requestError\]/i,
 ];
 
+/** P2-MED-19: Rate limiter — макс. 10 ошибок в минуту, затем 1 в минуту */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_BURST = 10;
+const RATE_LIMIT_SUSTAINED = 1;
+
+let rateLimitState: { count: number; windowStart: number } = { count: 0, windowStart: Date.now() };
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  if (now - rateLimitState.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitState = { count: 0, windowStart: now };
+  }
+  rateLimitState.count++;
+  if (rateLimitState.count <= RATE_LIMIT_BURST) return true;
+  // After burst: allow only 1 per window
+  const sustainedLimit = RATE_LIMIT_SUSTAINED;
+  return rateLimitState.count <= RATE_LIMIT_BURST + sustainedLimit;
+}
+
 /** Теги окружения для алертинга */
 const ALERT_TAGS: Record<string, string> = {
   kii: 'class-2',
@@ -274,12 +293,20 @@ export function initSentry(
     ],
     // ── Alerting: beforeSend (только для ошибок) ──
     beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
-      // 1. Игнорируем известные ошибки
+      // 1. Rate limiting (P2-MED-19: предотвращение DSN abuse)
+      if (!checkRateLimit()) {
+        if (import.meta.env.DEV) {
+          console.warn('[Sentry] Rate limit exceeded, dropping error event');
+        }
+        return null;
+      }
+
+      // 2. Игнорируем известные ошибки
       if (shouldIgnoreError(event)) {
         return null;
       }
 
-      // 2. Добавляем compliance-теги
+      // 3. Добавляем compliance-теги
       event.tags = {
         ...event.tags,
         ...ALERT_TAGS,

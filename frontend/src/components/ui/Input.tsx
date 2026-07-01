@@ -34,6 +34,8 @@ export function Input({
                 id={inputId}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={describedBy}
+                aria-required={props.required || undefined}
+                aria-label={!label ? (props.placeholder || undefined) : undefined}
                 className={`
           w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg
@@ -79,12 +81,15 @@ export function SearchInput({
     onSearch,
     ...props
 }: SearchInputProps) {
+    const searchId = props.id || 'search-input';
     return (
-        <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="relative" role="search">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
             <input
+                id={searchId}
                 type="text"
                 placeholder={placeholder}
+                aria-label={props['aria-label'] || 'Search'}
                 className={`
           w-full pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg
@@ -113,7 +118,7 @@ export function Select({
     id,
     ...props
 }: SelectProps) {
-    const selectId = id || label?.toLowerCase().replace(/\\s+/g, '-');
+    const selectId = id || label?.toLowerCase().replace(/\s+/g, '-');
     const errorId = error ? `${selectId}-error` : undefined;
     const hasCustomWidth = className.includes('w-');
 
@@ -131,6 +136,8 @@ export function Select({
                 id={selectId}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={errorId}
+                aria-required={props.required || undefined}
+                aria-label={!label ? 'Select' : undefined}
                 className={`
           px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg appearance-none
@@ -186,6 +193,8 @@ export function Textarea({
                 id={textareaId}
                 aria-invalid={error ? true : undefined}
                 aria-describedby={errorId}
+                aria-required={props.required || undefined}
+                aria-label={!label ? (props.placeholder || undefined) : undefined}
                 className={`
           w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-white
           bg-white dark:bg-slate-900 border rounded-lg

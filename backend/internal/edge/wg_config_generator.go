@@ -17,6 +17,7 @@
 //   - Приказ ОАЦ №66 п. 7.18.2: Управление удалённым доступом
 //   - ISO 27001 A.12.4: Audit trail (HMAC подпись)
 //   - OWASP ASVS V2.1: Session management
+//   - P1-HI-06: Per-device PSK + Post-Quantum Hybrid (ML-KEM)
 // ═══════════════════════════════════════════════════════════════════════════
 
 package edge
@@ -36,6 +37,9 @@ type WGConfigGenerator struct{}
 type WGClientConfig struct {
 	Interface WGInterfaceConfig `json:"interface"`
 	Peer      WGPeerConfig      `json:"peer"`
+	// PostQuantumHybridKey — публичный ключ ML-KEM (Kyber) для PQ-гибрида.
+	// P1-HI-06: Post-Quantum Cryptography Hybrid (X25519 + ML-KEM).
+	PostQuantumHybridKey string `json:"post_quantum_hybrid_key,omitempty"`
 }
 
 // WGInterfaceConfig — настройки [Interface] секции wg-quick конфига.
@@ -52,6 +56,9 @@ type WGInterfaceConfig struct {
 type WGPeerConfig struct {
 	// PublicKey — публичный ключ сервера (base64).
 	PublicKey string `json:"public_key"`
+	// PresharedKey — PSK для дополнительного слоя симметричного шифрования.
+	// P1-HI-06: Уникальный PSK на каждое устройство.
+	PresharedKey string `json:"preshared_key,omitempty"`
 	// AllowedIPs — список разрешённых подсетей (CIDR).
 	AllowedIPs []string `json:"allowed_ips"`
 	// Endpoint — адрес WireGuard сервера (host:port).
@@ -122,10 +129,12 @@ func (g *WGConfigGenerator) GenerateConfig(
 		},
 		Peer: WGPeerConfig{
 			PublicKey:           serverPubKey,
+			PresharedKey:        session.PresharedKey,
 			AllowedIPs:          allowedIPs,
 			Endpoint:            serverEndpoint,
 			PersistentKeepalive: 25,
 		},
+		PostQuantumHybridKey: session.PQHybridPublicKey,
 	}
 
 	return config, nil
@@ -139,9 +148,11 @@ func (g *WGConfigGenerator) GenerateConfig(
 //	PrivateKey = <base64>
 //	Address = <CIDR>
 //	DNS = <dns1>, <dns2>
+//	# PostQuantumHybridKey = <base64> (ML-KEM, P1-HI-06)
 //
 //	[Peer]
 //	PublicKey = <base64>
+//	PresharedKey = <base64> (P1-HI-06)
 //	AllowedIPs = <cidr1>, <cidr2>
 //	Endpoint = <host:port>
 //	PersistentKeepalive = <seconds>
@@ -166,11 +177,19 @@ func (g *WGConfigGenerator) GenerateConfigFile(
 	if len(config.Interface.DNS) > 0 {
 		sb.WriteString(fmt.Sprintf("DNS = %s\n", strings.Join(config.Interface.DNS, ", ")))
 	}
+	// P1-HI-06: Post-Quantum Hybrid Key (ML-KEM) — комментарий в конфиге
+	if config.PostQuantumHybridKey != "" {
+		sb.WriteString(fmt.Sprintf("# PostQuantumHybridKey = %s\n", config.PostQuantumHybridKey))
+	}
 	sb.WriteString("\n")
 
 	// [Peer] секция
 	sb.WriteString("[Peer]\n")
 	sb.WriteString(fmt.Sprintf("PublicKey = %s\n", config.Peer.PublicKey))
+	// P1-HI-06: Per-device PresharedKey для дополнительного слоя шифрования
+	if config.Peer.PresharedKey != "" {
+		sb.WriteString(fmt.Sprintf("PresharedKey = %s\n", config.Peer.PresharedKey))
+	}
 	sb.WriteString(fmt.Sprintf("AllowedIPs = %s\n", strings.Join(config.Peer.AllowedIPs, ", ")))
 	sb.WriteString(fmt.Sprintf("Endpoint = %s\n", config.Peer.Endpoint))
 	sb.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", config.Peer.PersistentKeepalive))

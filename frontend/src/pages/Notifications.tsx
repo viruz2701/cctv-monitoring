@@ -271,7 +271,7 @@ export function Notifications() {
     const isAllSelected = filteredNotifications.length > 0 && selectedIds.size === filteredNotifications.length;
 
     return (
-        <div className="space-y-4 sm:space-y-6">
+        <div className="space-y-4 sm:space-y-6" aria-live="polite" aria-label="Notifications list">
             {pageLoading ? (
                 <div className="space-y-6" aria-label="Loading notifications">
                     {/* Header skeleton */}

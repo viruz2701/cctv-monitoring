@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gb-telemetry-collector/internal/auth"
 	"net"
 	"net/http"
 	"regexp"
@@ -309,7 +310,7 @@ func ValidationRateLimitMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ip := clientIP(r)
+		ip := auth.ClientIP(r)
 		if !defaultValidationRateLimiter.check(ip) {
 			RespondError(w, r, NewRateLimitError("too many invalid requests. Try again later."))
 			return

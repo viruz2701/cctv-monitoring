@@ -33,4 +33,15 @@ export default defineConfig([globalIgnores(['dist']), {
     'react-hooks/exhaustive-deps': ['warn', { additionalHooks: '(useMutation|useQuery)' }],
     'react/jsx-key': 'error',
   },
-}, ...storybook.configs["flat/recommended"]])
+}, {
+  files: ['**/*.stories.@(ts|tsx)'],
+  plugins: {
+    storybook,
+  },
+  rules: {
+    'storybook/use-storybook-expect': 'error',
+    'storybook/story-exports': 'error',
+    'storybook/no-redundant-story-name': 'warn',
+    'storybook/default-exports': 'error',
+  },
+}])

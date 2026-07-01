@@ -29,7 +29,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -114,10 +116,169 @@ func (s *Server) handleCommunityDescriptorGet(w http.ResponseWriter, r *http.Req
 	jsonResponse(w, http.StatusOK, descriptor)
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Prototype Pollution Protection (P2-MED-23)
+//
+// Защита от Prototype Pollution через JSON Descriptor:
+//   1. Recursion depth limit — не более 10 уровней вложенности
+//   2. JSON Schema validation — проверка структуры descriptor
+//   3. URL allowlist — разрешённые URL для ссылок в дескрипторе
+// ═══════════════════════════════════════════════════════════════════════
+
+const (
+	maxDescriptorRecursionDepth = 10
+	allowedURLPrefixes          = "https://"
+)
+
+// allowedURLHosts — разрешённые хосты для URL в дескрипторе.
+var allowedURLHosts = []string{
+	"github.com",
+	"gitlab.com",
+	"bitbucket.org",
+	"hub.docker.com",
+	"docker.com",
+	"raw.githubusercontent.com",
+}
+
+// validateDescriptorRecursion проверяет глубину вложенности JSON,
+// предотвращая атаки типа Prototype Pollution через глубокую вложенность.
+func validateDescriptorRecursion(data map[string]interface{}, currentDepth int) error {
+	if currentDepth > maxDescriptorRecursionDepth {
+		return NewValidationError("descriptor exceeds maximum recursion depth of " +
+			strconv.Itoa(maxDescriptorRecursionDepth))
+	}
+
+	for key, val := range data {
+		// OWASP ASVS V5.1: проверка ключей на prototype pollution
+		if key == "__proto__" || key == "constructor" || key == "prototype" {
+			return NewValidationError("descriptor contains forbidden key: " + key)
+		}
+
+		switch v := val.(type) {
+		case map[string]interface{}:
+			if err := validateDescriptorRecursion(v, currentDepth+1); err != nil {
+				return err
+			}
+		case []interface{}:
+			for _, item := range v {
+				if nestedMap, ok := item.(map[string]interface{}); ok {
+					if err := validateDescriptorRecursion(nestedMap, currentDepth+1); err != nil {
+						return err
+					}
+				}
+			}
+		case string:
+			// Проверка URL-полей на соответствие allowlist
+			if looksLikeURL(v) {
+				if err := validateDescriptorURL(v); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// looksLikeURL проверяет, похожа ли строка на URL.
+func looksLikeURL(s string) bool {
+	s = strings.TrimSpace(s)
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "ftp://")
+}
+
+// validateDescriptorURL проверяет URL на соответствие allowlist.
+func validateDescriptorURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return NewValidationError("invalid URL in descriptor: " + rawURL)
+	}
+
+	// Только HTTPS разрешён
+	if parsed.Scheme != "https" {
+		return NewValidationError("only HTTPS URLs allowed in descriptor, got: " + parsed.Scheme)
+	}
+
+	// Проверка хоста по allowlist
+	host := strings.ToLower(parsed.Host)
+	allowed := false
+	for _, allowedHost := range allowedURLHosts {
+		if host == allowedHost || strings.HasSuffix(host, "."+allowedHost) {
+			allowed = true
+			break
+		}
+	}
+
+	if !allowed {
+		return NewValidationError("URL host not in allowlist: " + host)
+	}
+
+	return nil
+}
+
+// validateDescriptorSchema проверяет структуру descriptor на соответствие
+// ожидаемой JSON Schema (OWASP ASVS V1 — whitelist validation).
+func validateDescriptorSchema(descriptor map[string]interface{}) error {
+	// Ожидаемые поля и их типы (whitelist approach)
+	schema := map[string]string{
+		"name":              "string",
+		"version":           "string",
+		"description":       "string",
+		"vendor":            "string",
+		"protocol":          "string",
+		"endpoints":         "array",
+		"parameters":        "object",
+		"authentication":    "object",
+		"documentation_url": "string",
+		"icon_url":          "string",
+		"tags":              "array",
+		"capabilities":      "array",
+		"min_version":       "string",
+		"max_version":       "string",
+	}
+
+	for key := range descriptor {
+		// Пропускаем зарезервированные ключи Go (нижний регистр), они валидны
+		if key == "" {
+			continue
+		}
+
+		// Проверяем, что ключ есть в схеме (whitelist)
+		_, ok := schema[key]
+		if !ok {
+			return NewValidationError("unexpected field in descriptor: " + key)
+		}
+
+		// Проверяем тип значения
+		expectedType := schema[key]
+		val := descriptor[key]
+		switch expectedType {
+		case "string":
+			if _, ok := val.(string); !ok && val != nil {
+				return NewValidationError("field '" + key + "' must be a string")
+			}
+		case "array":
+			if _, ok := val.([]interface{}); !ok && val != nil {
+				return NewValidationError("field '" + key + "' must be an array")
+			}
+		case "object":
+			if _, ok := val.(map[string]interface{}); !ok && val != nil {
+				return NewValidationError("field '" + key + "' must be an object")
+			}
+		}
+	}
+
+	return nil
+}
+
 // handleCommunityDescriptorPublish — POST /api/v1/community/descriptors
 //
 // Body: { "vendor": "hikvision", "version": "1.0", "descriptor": {...} }
 // Auth required: JWT middleware обеспечивает user_id в контексте.
+//
+// Compliance:
+//   - P2-MED-23: Prototype Pollution — recursion depth + URL allowlist + schema validation
+//   - OWASP ASVS V1: Input validation (whitelist approach)
+//   - OWASP ASVS V5.1: Validation of serialized data structures
 func (s *Server) handleCommunityDescriptorPublish(w http.ResponseWriter, r *http.Request) {
 	userID := getUserIDFromContext(r.Context())
 
@@ -143,6 +304,37 @@ func (s *Server) handleCommunityDescriptorPublish(w http.ResponseWriter, r *http
 
 	if !v.Valid() {
 		respondValidationError(w, r, v.ToValidationErrors())
+		return
+	}
+
+	// P2-MED-23: Распаршиваем descriptor в map для валидации
+	var descriptorMap map[string]interface{}
+	if err := json.Unmarshal(req.Descriptor, &descriptorMap); err != nil {
+		s.logger.Warn("community descriptor parse failed",
+			"vendor", req.Vendor,
+			"error", err.Error(),
+		)
+		RespondError(w, r, NewBadRequestError("Invalid descriptor JSON format"))
+		return
+	}
+
+	// P2-MED-23: JSON Schema validation — whitelist approach
+	if err := validateDescriptorSchema(descriptorMap); err != nil {
+		s.logger.Warn("community descriptor schema validation failed",
+			"vendor", req.Vendor,
+			"error", err.Error(),
+		)
+		RespondError(w, r, err)
+		return
+	}
+
+	// P2-MED-23: Recursion depth limit — защита от Prototype Pollution
+	if err := validateDescriptorRecursion(descriptorMap, 0); err != nil {
+		s.logger.Warn("community descriptor recursion validation failed",
+			"vendor", req.Vendor,
+			"error", err.Error(),
+		)
+		RespondError(w, r, err)
 		return
 	}
 

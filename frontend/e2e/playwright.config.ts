@@ -1,8 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'path';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CCTV Health Monitor — Playwright Configuration
 // P1-QA.1: Parallel E2E + P1-QA.3: Accessibility Testing in CI
+// P2-MED-17: CI gate with --forbid-only, visual regression baseline snapshots
 // ═══════════════════════════════════════════════════════════════════════════
 
 const CI = !!process.env.CI;
@@ -57,3 +59,21 @@ export default defineConfig({
     },
   ],
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Visual Regression-specific overrides (applied via --project=visual)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const visualOverrides = {
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixels: 100,
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.2,
+      animations: 'disabled' as const,
+      caret: 'hide' as const,
+    },
+  },
+  snapshotPathTemplate:
+    '{testDir}/{testFileDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+};

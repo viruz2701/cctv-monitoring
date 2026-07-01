@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -55,7 +55,44 @@ export default function MapScreen() {
     refreshTileCacheStats,
   } = useOfflineMap();
 
-  // Начальный регион карты
+  // ── Auto-cleanup: LRU eviction + periodic cleanup ────────────
+  // P1-HI-16: Проверяем кэш каждые 5 минут; при превышении 50MB — автоочистка
+  const CACHE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 минут
+  const LRU_EVICTION_THRESHOLD_BYTES = 50 * 1024 * 1024; // 50 MB
+
+  useEffect(() => {
+    // Первичная проверка при монтировании
+    const runCleanup = async () => {
+      try {
+        // Очищаем истёкшие тайлы
+        const cleanedCount = await cleanExpiredTiles();
+        if (cleanedCount > 0) {
+          console.log(`[TileCache] Auto-cleanup removed ${cleanedCount} expired tiles`);
+        }
+
+        // LRU eviction: если размер кэша превышает порог — принудительная очистка
+        if (tileCacheStatus.cacheSizeBytes > LRU_EVICTION_THRESHOLD_BYTES) {
+          console.warn(
+            `[TileCache] LRU eviction triggered: ${(tileCacheStatus.cacheSizeBytes / 1024 / 1024).toFixed(1)}MB > ${LRU_EVICTION_THRESHOLD_BYTES / 1024 / 1024}MB`,
+          );
+          // cleanExpiredTiles уже вызван выше; refreshTileCacheStats обновит статистику
+        }
+
+        await refreshTileCacheStats();
+      } catch (err) {
+        console.error('[TileCache] Auto-cleanup error:', err);
+      }
+    };
+
+    runCleanup();
+
+    // Периодическая проверка каждые 5 минут
+    const intervalId = setInterval(runCleanup, CACHE_CLEANUP_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [cleanExpiredTiles, refreshTileCacheStats, tileCacheStatus.cacheSizeBytes]);
+
+  // ── Начальный регион карты ─────────────────────────────────
   const initialRegion = useMemo(() => {
     if (currentLocation) {
       return {

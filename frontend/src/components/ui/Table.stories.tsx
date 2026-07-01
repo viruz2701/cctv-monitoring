@@ -1,144 +1,175 @@
+import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Table, Pagination } from './Table';
 import { Badge } from './Badge';
-import { useState } from 'react';
+
+// ── Sample Data ───────────────────────────────────────────────────────────
 
 interface Device {
   id: string;
   name: string;
-  status: 'online' | 'offline' | 'warning';
   ip: string;
-  site: string;
-  uptime: string;
+  status: 'online' | 'offline' | 'warning';
+  type: string;
+  lastSeen: string;
 }
 
 const sampleDevices: Device[] = [
-  { id: '1', name: 'NVR-01', status: 'online', ip: '192.168.1.100', site: 'Main Office', uptime: '72d 4h' },
-  { id: '2', name: 'CAM-101', status: 'online', ip: '192.168.1.101', site: 'Main Office', uptime: '30d 12h' },
-  { id: '3', name: 'CAM-102', status: 'offline', ip: '192.168.1.102', site: 'Main Office', uptime: '0d 0h' },
-  { id: '4', name: 'NVR-02', status: 'warning', ip: '192.168.2.100', site: 'Warehouse', uptime: '15d 8h' },
-  { id: '5', name: 'CAM-201', status: 'online', ip: '192.168.2.101', site: 'Warehouse', uptime: '45d 2h' },
-  { id: '6', name: 'NVR-03', status: 'online', ip: '192.168.3.100', site: 'Branch Office', uptime: '90d 0h' },
+  { id: '1', name: 'NVR-01', ip: '192.168.1.10', status: 'online', type: 'NVR', lastSeen: '2024-01-15 14:30' },
+  { id: '2', name: 'CAM-101', ip: '192.168.1.101', status: 'online', type: 'Camera', lastSeen: '2024-01-15 14:29' },
+  { id: '3', name: 'CAM-102', ip: '192.168.1.102', status: 'offline', type: 'Camera', lastSeen: '2024-01-14 09:15' },
+  { id: '4', name: 'GW-01', ip: '192.168.1.1', status: 'online', type: 'Gateway', lastSeen: '2024-01-15 14:30' },
+  { id: '5', name: 'SENSOR-TEMP', ip: '192.168.1.50', status: 'warning', type: 'Sensor', lastSeen: '2024-01-15 12:00' },
+];
+
+const columns = [
+  { key: 'name' as const, header: 'Name', sortable: true },
+  { key: 'ip' as const, header: 'IP Address', sortable: true },
+  {
+    key: 'status' as const,
+    header: 'Status',
+    sortable: true,
+    render: (item: Device) => (
+      <Badge
+        variant={item.status === 'online' ? 'success' : item.status === 'warning' ? 'warning' : 'danger'}
+        dot
+        size="sm"
+      >
+        {item.status}
+      </Badge>
+    ),
+  },
+  { key: 'type' as const, header: 'Type' },
+  { key: 'lastSeen' as const, header: 'Last Seen', sortable: true },
 ];
 
 const meta: Meta<typeof Table> = {
   title: 'UI/Table',
   component: Table,
   tags: ['autodocs'],
-};
-
-export default meta;
-type Story = StoryObj<typeof Table>;
-
-const columns: any = [
-  { key: 'name', header: 'Name', sortable: true },
-  { key: 'ip', header: 'IP Address' },
-  { key: 'site', header: 'Site', sortable: true },
-  { key: 'uptime', header: 'Uptime' },
-  { key: 'status', header: 'Status', render: (item: Device) => (
-    <Badge variant={item.status === 'online' ? 'success' : item.status === 'warning' ? 'warning' : 'danger'} size="sm">
-      {item.status}
-    </Badge>
-  )},
-];
-
-// ── Basic ────────────────────────────────────────────────────────────────
-
-export const Basic: Story = {
-  args: {
-    data: sampleDevices,
-    columns,
-    keyExtractor: (item: unknown) => (item as Device).id,
+  argTypes: {
+    loading: { control: 'boolean' },
+    emptyMessage: { control: 'text' },
   },
 };
 
-// ── Sortable ─────────────────────────────────────────────────────────────
+export default meta;
 
-const SortableTemplate = () => {
+// ── Default Table ─────────────────────────────────────────────────────────
+
+export const Default: StoryObj<typeof Table> = {
+  render: () => (
+    <Table
+      data={sampleDevices}
+      columns={columns}
+      keyExtractor={(item) => item.id}
+    />
+  ),
+};
+
+// ── With Sort ─────────────────────────────────────────────────────────────
+
+function SortDemo() {
   const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
   const sorted = [...sampleDevices].sort((a, b) => {
-    const valA = (a as any)[sortColumn];
-    const valB = (b as any)[sortColumn];
-    return sortDirection === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+    const aVal = String(a[sortColumn as keyof Device] ?? '');
+    const bVal = String(b[sortColumn as keyof Device] ?? '');
+    return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
   });
+
   return (
     <Table
       data={sorted}
       columns={columns}
-      keyExtractor={(item: Device) => item.id}
+      keyExtractor={(item) => item.id}
       sortColumn={sortColumn}
       sortDirection={sortDirection}
-      onSort={(col) => {
-        setSortDirection(prev => sortColumn === col && prev === 'asc' ? 'desc' : 'asc');
-        setSortColumn(col);
-      }}
+      onSort={handleSort}
     />
   );
+}
+
+export const WithSort: StoryObj = {
+  render: () => <SortDemo />,
 };
 
-export const Sortable: Story = {
-  render: () => <SortableTemplate />,
+// ── With Row Click ────────────────────────────────────────────────────────
+
+export const WithRowClick: StoryObj<typeof Table> = {
+  render: () => (
+    <Table
+      data={sampleDevices}
+      columns={columns}
+      keyExtractor={(item) => item.id}
+      onRowClick={(item) => alert(`Clicked: ${item.name}`)}
+    />
+  ),
 };
 
-// ── Loading ──────────────────────────────────────────────────────────────
+// ── Loading ───────────────────────────────────────────────────────────────
 
-export const Loading: Story = {
-  args: {
-    data: [],
-    columns,
-    keyExtractor: (item: unknown) => (item as Device).id,
-    loading: true,
-  },
+export const Loading: StoryObj<typeof Table> = {
+  render: () => (
+    <Table
+      data={[]}
+      columns={columns}
+      keyExtractor={(item) => item.id}
+      loading
+    />
+  ),
 };
 
-// ── Empty ────────────────────────────────────────────────────────────────
+// ── Empty ─────────────────────────────────────────────────────────────────
 
-export const Empty: Story = {
-  args: {
-    data: [],
-    columns,
-    keyExtractor: (item: unknown) => (item as Device).id,
-    emptyMessage: 'No devices found matching your search criteria.',
-  },
+export const Empty: StoryObj<typeof Table> = {
+  render: () => (
+    <Table
+      data={[]}
+      columns={columns}
+      keyExtractor={(item) => item.id}
+      emptyMessage="No devices found"
+    />
+  ),
 };
 
-// ── Expandable Rows ──────────────────────────────────────────────────────
+// ── With Expandable Rows ──────────────────────────────────────────────────
 
-export const ExpandableRows: Story = {
-  args: {
-    data: sampleDevices.slice(0, 3),
-    columns,
-    keyExtractor: (item: unknown) => (item as Device).id,
-    expandable: (item: unknown) => {
-      const device = item as Device;
-      return (
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50">
+export const WithExpandableRows: StoryObj<typeof Table> = {
+  render: () => (
+    <Table
+      data={sampleDevices.slice(0, 3)}
+      columns={columns}
+      keyExtractor={(item) => item.id}
+      expandable={() => (
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50">
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-slate-500">Model:</span>{' '}
-              <span className="text-slate-900 dark:text-white font-medium">Pro Series</span>
-            </div>
-            <div>
               <span className="text-slate-500">Firmware:</span>{' '}
-              <span className="text-slate-900 dark:text-white font-medium">v3.2.1</span>
-            </div>
-            <div>
-              <span className="text-slate-500">Last Seen:</span>{' '}
-              <span className="text-slate-900 dark:text-white font-medium">{new Date().toLocaleString()}</span>
+              <span className="text-slate-700 dark:text-slate-300">v2.1.4</span>
             </div>
             <div>
               <span className="text-slate-500">Location:</span>{' '}
-              <span className="text-slate-900 dark:text-white font-medium">{device.site}</span>
+              <span className="text-slate-700 dark:text-slate-300">Building A, Floor 3</span>
             </div>
           </div>
         </div>
-      );
-    },
-  },
+      )}
+    />
+  ),
 };
 
-// ── Pagination Component ─────────────────────────────────────────────────
+// ── Pagination Component ──────────────────────────────────────────────────
 
 const paginationMeta: Meta<typeof Pagination> = {
   title: 'UI/Table/Pagination',
@@ -146,19 +177,23 @@ const paginationMeta: Meta<typeof Pagination> = {
   tags: ['autodocs'],
 };
 
+export { paginationMeta };
+
+function PaginationDefaultDemo() {
+  const [page, setPage] = useState(1);
+  return (
+    <Pagination
+      currentPage={page}
+      totalPages={10}
+      onPageChange={setPage}
+      totalItems={97}
+      itemsPerPage={10}
+    />
+  );
+}
+
 export const PaginationDefault: StoryObj<typeof Pagination> = {
-  render: () => {
-    const [page, setPage] = useState(1);
-    return (
-      <Pagination
-        currentPage={page}
-        totalPages={10}
-        onPageChange={setPage}
-        totalItems={95}
-        itemsPerPage={10}
-      />
-    );
-  },
+  render: () => <PaginationDefaultDemo />,
 };
 
 export const PaginationFirstPage: StoryObj<typeof Pagination> = {
@@ -185,6 +220,18 @@ export const PaginationLastPage: StoryObj<typeof Pagination> = {
   ),
 };
 
+export const PaginationManyPages: StoryObj<typeof Pagination> = {
+  render: () => (
+    <Pagination
+      currentPage={25}
+      totalPages={50}
+      onPageChange={() => {}}
+      totalItems={500}
+      itemsPerPage={10}
+    />
+  ),
+};
+
 export const PaginationSinglePage: StoryObj<typeof Pagination> = {
   render: () => (
     <Pagination
@@ -195,29 +242,4 @@ export const PaginationSinglePage: StoryObj<typeof Pagination> = {
       itemsPerPage={10}
     />
   ),
-};
-
-export const PaginationManyPages: StoryObj<typeof Pagination> = {
-  render: () => {
-    const [page, setPage] = useState(42);
-    return (
-      <Pagination
-        currentPage={page}
-        totalPages={100}
-        onPageChange={setPage}
-        totalItems={1000}
-        itemsPerPage={10}
-      />
-    );
-  },
-};
-
-// ── Playground ───────────────────────────────────────────────────────────
-
-export const Playground: Story = {
-  args: {
-    data: sampleDevices.slice(0, 3),
-    columns: columns.slice(0, 3),
-    keyExtractor: (item: unknown) => (item as Device).id,
-  },
 };

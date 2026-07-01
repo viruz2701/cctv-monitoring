@@ -94,8 +94,11 @@ CREATE INDEX idx_calendar_sync_log_provider ON calendar_sync_log(provider);
 CREATE INDEX idx_calendar_sync_log_created ON calendar_sync_log(created_at DESC);
 CREATE INDEX idx_calendar_sync_log_tenant ON calendar_sync_log(tenant_id);
 
--- Partition by month for performance (sync log is high-volume)
+-- Partition by day for performance (sync log is high-volume)
+-- P2-MED-01: Явно задаём chunk_time_interval => INTERVAL '1 day'
+-- для оптимального управления партициями и упрощения retention policy.
 SELECT create_hypertable('calendar_sync_log', 'created_at',
+    chunk_time_interval => INTERVAL '1 day',
     if_not_exists => TRUE);
 
 COMMENT ON TABLE calendar_sync_log IS 'Аудит синхронизации календарей (ISO 27001 A.12.4)';

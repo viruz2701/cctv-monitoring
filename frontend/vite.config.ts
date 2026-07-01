@@ -33,7 +33,19 @@ function cspPlugin(): Plugin {
           injectTo: 'head'
         }];
       }
-    }
+    },
+    // P2-MED-21: CSP HTTP response headers (defense-in-depth: meta + headers)
+    configureServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        const csp = prodCSP;
+        res.setHeader('Content-Security-Policy', csp);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+        next();
+      });
+    },
   };
 }
 // Sentry source maps upload (только при наличии SENTRY_AUTH_TOKEN)
@@ -73,6 +85,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // P2-MED-18: увеличен лимит для Storybook preview (sb-manager ~3.2MB)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         // Cache-first для статики (JS, CSS, изображения, шрифты)
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         globIgnores: ['**/stats.html'],
@@ -126,6 +140,7 @@ export default defineConfig({
       output: {
         // P3-2.3: Code splitting — выделение вендоров в отдельные чанки
         // P1-2.1: Bundle size reduction — выделение тяжёлых библиотек в отдельные чанки
+        // P0-CR-06: Route-based code splitting + динамический main.tsx
         manualChunks(id: string) {
           // Core React + scheduler (часть React)
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router') || id.includes('node_modules/react-hook-form') || id.includes('node_modules/scheduler')) {
@@ -243,11 +258,12 @@ export default defineConfig({
         'src/types/**',
         'src/stories/**',
       ],
+      // P2-MED-16: поднято с 82% → 85% через новые тесты critical paths
       thresholds: {
-        statements: 80,
-        branches: 75,
-        functions: 80,
-        lines: 80,
+        statements: 85,
+        branches: 80,
+        functions: 85,
+        lines: 85,
       },
     },
   }

@@ -7,6 +7,7 @@ const meta: Meta<typeof Gauge> = {
   tags: ['autodocs'],
   argTypes: {
     value: { control: { type: 'number', min: 0, max: 100 } },
+    max: { control: { type: 'number', min: 1, max: 1000 } },
     size: { control: 'select', options: ['sm', 'md', 'lg'] },
     showValue: { control: 'boolean' },
     label: { control: 'text' },
@@ -17,133 +18,111 @@ const meta: Meta<typeof Gauge> = {
 export default meta;
 type Story = StoryObj<typeof Gauge>;
 
-// ── Various Values ───────────────────────────────────────────────────────
+// ── Health States ─────────────────────────────────────────────────────────
 
-export const Empty: Story = {
-  args: { value: 0, label: 'Empty' },
+export const Healthy: Story = {
+  args: { value: 98, label: 'System Health', size: 'md' },
 };
 
-export const Quarter: Story = {
-  args: { value: 25, label: '25%' },
+export const Warning: Story = {
+  args: { value: 72, label: 'Disk Usage', size: 'md' },
 };
 
-export const Half: Story = {
-  args: { value: 50, label: '50%' },
+export const Critical: Story = {
+  args: { value: 35, label: 'Memory', size: 'md' },
 };
 
-export const ThreeQuarter: Story = {
-  args: { value: 75, label: '75%' },
+export const Low: Story = {
+  args: { value: 15, label: 'Battery', size: 'md' },
 };
 
-export const Full: Story = {
-  args: { value: 100, label: '100%' },
-};
-
-// ── Thresholds ───────────────────────────────────────────────────────────
-
-export const GreenThreshold: Story = {
-  args: {
-    value: 96,
-    label: 'SLA Compliance',
-    thresholds: [
-      { value: 95, color: '#16a34a', label: '≥95%' },
-      { value: 80, color: '#eab308', label: '80–94%' },
-      { value: 60, color: '#f97316', label: '60–79%' },
-      { value: 0, color: '#dc2626', label: '<60%' },
-    ],
-  },
-};
-
-export const YellowThreshold: Story = {
-  args: {
-    value: 85,
-    label: 'SLA Compliance',
-    thresholds: [
-      { value: 95, color: '#16a34a', label: '≥95%' },
-      { value: 80, color: '#eab308', label: '80–94%' },
-      { value: 60, color: '#f97316', label: '60–79%' },
-      { value: 0, color: '#dc2626', label: '<60%' },
-    ],
-  },
-};
-
-export const OrangeThreshold: Story = {
-  args: {
-    value: 65,
-    label: 'SLA Compliance',
-    thresholds: [
-      { value: 95, color: '#16a34a', label: '≥95%' },
-      { value: 80, color: '#eab308', label: '80–94%' },
-      { value: 60, color: '#f97316', label: '60–79%' },
-      { value: 0, color: '#dc2626', label: '<60%' },
-    ],
-  },
-};
-
-export const RedThreshold: Story = {
-  args: {
-    value: 45,
-    label: 'SLA Compliance',
-    thresholds: [
-      { value: 95, color: '#16a34a', label: '≥95%' },
-      { value: 80, color: '#eab308', label: '80–94%' },
-      { value: 60, color: '#f97316', label: '60–79%' },
-      { value: 0, color: '#dc2626', label: '<60%' },
-    ],
-  },
-};
-
-// ── Sizes ────────────────────────────────────────────────────────────────
+// ── Sizes ─────────────────────────────────────────────────────────────────
 
 export const Small: Story = {
-  args: { value: 72, size: 'sm', label: 'Small' },
+  args: { value: 85, label: 'Small', size: 'sm' },
 };
 
 export const Medium: Story = {
-  args: { value: 72, size: 'md', label: 'Medium' },
+  args: { value: 85, label: 'Medium', size: 'md' },
 };
 
 export const Large: Story = {
-  args: { value: 72, size: 'lg', label: 'Large' },
+  args: { value: 85, label: 'Large', size: 'lg' },
 };
 
-// ── With Label ───────────────────────────────────────────────────────────
-
-export const WithLabel: Story = {
-  args: {
-    value: 88,
-    label: 'CPU Usage',
-    unit: '%',
-  },
-};
-
-// ── Without Value Display ────────────────────────────────────────────────
-
-export const WithoutValue: Story = {
-  args: {
-    value: 60,
-    label: 'Hidden Value',
-    showValue: false,
-  },
-};
-
-// ── Custom Unit ──────────────────────────────────────────────────────────
+// ── Custom Unit ───────────────────────────────────────────────────────────
 
 export const CustomUnit: Story = {
+  args: { value: 42, label: 'Temperature', unit: '°C', size: 'md' },
+};
+
+// ── Without Label / Without Value ─────────────────────────────────────────
+
+export const WithoutLabel: Story = {
+  args: { value: 88, size: 'md' },
+};
+
+export const WithoutValue: Story = {
+  args: { value: 65, label: 'Progress', showValue: false, size: 'md' },
+};
+
+// ── Custom Thresholds ─────────────────────────────────────────────────────
+
+export const CustomThresholds: Story = {
   args: {
-    value: 34,
-    label: 'Temperature',
-    unit: '°C',
-    max: 60,
+    value: 95,
+    label: 'Network Quality',
+    size: 'md',
+    thresholds: [
+      { value: 90, color: '#16a34a', label: 'Excellent' },
+      { value: 70, color: '#eab308', label: 'Good' },
+      { value: 50, color: '#f97316', label: 'Fair' },
+      { value: 0, color: '#dc2626', label: 'Poor' },
+    ],
   },
 };
 
-// ── Playground ───────────────────────────────────────────────────────────
+// ── All Sizes Showcase ────────────────────────────────────────────────────
+
+export const AllSizes: StoryObj = {
+  render: () => (
+    <div className="flex items-end gap-8 p-4">
+      <Gauge value={92} label="SM" size="sm" />
+      <Gauge value={92} label="MD" size="md" />
+      <Gauge value={92} label="LG" size="lg" />
+    </div>
+  ),
+};
+
+// ── All Health States ─────────────────────────────────────────────────────
+
+export const AllHealthStates: StoryObj = {
+  render: () => (
+    <div className="flex gap-8 p-4">
+      <Gauge value={98} label="Healthy" size="sm" />
+      <Gauge value={72} label="Warning" size="sm" />
+      <Gauge value={35} label="Critical" size="sm" />
+      <Gauge value={15} label="Low" size="sm" />
+    </div>
+  ),
+};
+
+// ── Full Width ────────────────────────────────────────────────────────────
+
+export const FullWidth: StoryObj = {
+  render: () => (
+    <div className="flex justify-around p-4 bg-white dark:bg-slate-800 rounded-lg">
+      <Gauge value={99.97} label="SLA Compliance" size="lg" />
+    </div>
+  ),
+};
+
+// ── Playground ────────────────────────────────────────────────────────────
 
 export const Playground: Story = {
   args: {
-    value: 72,
-    label: 'SLA Score',
+    value: 75,
+    label: 'Custom Gauge',
     size: 'md',
     showValue: true,
     unit: '%',

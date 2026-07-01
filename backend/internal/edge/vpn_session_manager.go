@@ -43,7 +43,10 @@ import (
 // VPNSession представляет VPN сессию для удалённого доступа.
 //
 // SELFSERV-01: PrivateKey хранится только в памяти (не в БД),
-// передаётся клиенту при скачивании конфига.
+// передаётся инженеру при скачивании конфига.
+//
+// P1-HI-06: PresharedKey + PQHybridPublicKey — уникальный PSK на устройство
+// и публичный ключ ML-KEM для пост-квантового гибрида.
 type VPNSession struct {
 	ID         uuid.UUID   `json:"id"`
 	AgentID    string      `json:"agent_id"`
@@ -54,11 +57,18 @@ type VPNSession struct {
 	PublicKey  string      `json:"public_key"`
 	// PrivateKey — приватный ключ клиента (только в памяти, не в БД).
 	// SELFSERV-01: Передаётся инженеру при скачивании wg-quick конфига.
-	PrivateKey       string     `json:"-"`
-	Status           string     `json:"status"` // active, expired, revoked
-	BytesTransferred int64      `json:"bytes_transferred"`
-	CreatedAt        time.Time  `json:"created_at"`
-	ClosedAt         *time.Time `json:"closed_at,omitempty"`
+	PrivateKey string `json:"-"`
+	// PresharedKey — уникальный PSK для данного пира (только в памяти).
+	// P1-HI-06: Добавляет дополнительный слой симметричного шифрования
+	// поверх X25519. Генерируется при создании сессии.
+	PresharedKey string `json:"-"`
+	// PQHybridPublicKey — публичный ключ ML-KEM (Kyber) для пост-квантового
+	// гибрида X25519 + ML-KEM. P1-HI-06: Защита от квантовых атак.
+	PQHybridPublicKey string     `json:"-"`
+	Status            string     `json:"status"` // active, expired, revoked
+	BytesTransferred  int64      `json:"bytes_transferred"`
+	CreatedAt         time.Time  `json:"created_at"`
+	ClosedAt          *time.Time `json:"closed_at,omitempty"`
 }
 
 // CreateSessionRequest — запрос на создание VPN сессии.
@@ -217,8 +227,20 @@ func (m *VPNSessionManager) CreateSession(ctx context.Context, req CreateSession
 		return nil, fmt.Errorf("vpn: failed to generate keypair: %w", err)
 	}
 
-	// 3. Добавление пира в WG сервер
-	if err := m.wgServer.AddPeer(ctx, pubKey, req.AllowedIPs); err != nil {
+	// P1-HI-06: Генерация уникального PSK для данного пира
+	psk, err := m.wgServer.GeneratePresharedKey()
+	if err != nil {
+		return nil, fmt.Errorf("vpn: failed to generate preshared key: %w", err)
+	}
+
+	// P1-HI-06: Генерация пост-квантовой ключевой пары ML-KEM (Kyber)
+	pqPubKey, err := GeneratePQHybridKeypair()
+	if err != nil {
+		return nil, fmt.Errorf("vpn: failed to generate post-quantum keypair: %w", err)
+	}
+
+	// 3. Добавление пира в WG сервер с PSK
+	if err := m.wgServer.AddPeerWithPSK(ctx, pubKey, psk, req.AllowedIPs); err != nil {
 		return nil, fmt.Errorf("vpn: failed to add wireguard peer: %w", err)
 	}
 
@@ -226,16 +248,18 @@ func (m *VPNSessionManager) CreateSession(ctx context.Context, req CreateSession
 	expiresAt := now.Add(req.Duration.Duration)
 
 	session := &VPNSession{
-		ID:         uuid.New(),
-		AgentID:    req.AgentID,
-		EngineerID: req.EngineerID,
-		StartedAt:  now,
-		ExpiresAt:  expiresAt,
-		AllowedIPs: req.AllowedIPs,
-		PublicKey:  pubKey,
-		PrivateKey: privKey, // SELFSERV-01: для self-service скачивания конфига
-		Status:     "active",
-		CreatedAt:  now,
+		ID:                uuid.New(),
+		AgentID:           req.AgentID,
+		EngineerID:        req.EngineerID,
+		StartedAt:         now,
+		ExpiresAt:         expiresAt,
+		AllowedIPs:        req.AllowedIPs,
+		PublicKey:         pubKey,
+		PrivateKey:        privKey,  // SELFSERV-01: для self-service скачивания конфига
+		PresharedKey:      psk,      // P1-HI-06: уникальный PSK устройства
+		PQHybridPublicKey: pqPubKey, // P1-HI-06: ML-KEM публичный ключ
+		Status:            "active",
+		CreatedAt:         now,
 	}
 
 	// 4. Сохранение в БД

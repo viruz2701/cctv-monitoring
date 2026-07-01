@@ -18,10 +18,6 @@
 package auth
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"net/http"
 	"time"
@@ -207,29 +203,4 @@ func ExtractTokenFromCookie(r *http.Request) string {
 	return cookie.Value
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Refresh Tokens (opaque, HMAC-SHA256)
-// ────────────────────────────────────────────────────────────────────────────
-
-// RefreshTokenTTL — время жизни refresh token (30 дней).
-const RefreshTokenTTL = 30 * 24 * time.Hour
-
-// GenerateRefreshToken генерирует opaque refresh token.
-// ⚠ Refresh tokens — opaque (не JWT), используют HMAC-SHA256 только для хеширования.
-// Для JWT access tokens используется ECDSA P-256 (bign-curve256v1).
-func GenerateRefreshToken() (string, string, time.Time, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", "", time.Time{}, err
-	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
-	expiresAt := time.Now().Add(RefreshTokenTTL)
-	return token, HashRefreshToken(token), expiresAt, nil
-}
-
-// HashRefreshToken хеширует refresh token для хранения в БД.
-// Использует SHA-256 (не криптографический, а для хеширования токена).
-func HashRefreshToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
-}
+// (Refresh token logic moved to refresh_token.go — P1-HI-05)

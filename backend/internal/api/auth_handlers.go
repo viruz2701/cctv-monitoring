@@ -2,10 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 
 	"gb-telemetry-collector/internal/auth"
@@ -322,56 +322,99 @@ func (s *Server) handleCurrentUser(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, user)
 }
 
-// handleRefreshToken обновляет токены.
+// handleRefreshToken обновляет токены с rotation + device fingerprinting + reuse detection.
+//
+// P1-HI-05: Refresh Token Rotation
+//  1. Проверяет fingerprint устройства (User-Agent + IP хеш)
+//  2. Выполняет rotation: инвалидирует старый токен, выдаёт новый
+//  3. При reuse украденного токена — инвалидирует всю семью
+//
 // P1-SEC.1: Читает refresh_token из HttpOnly cookie (веб) или из JSON body (mobile).
+//
+// Compliance: OWASP ASVS V3.2.2, V3.2.3, V3.2.4
 func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
-	// P1-SEC.1: Пробуем получить refresh_token из cookie
-	refreshTokenValue := auth.GetRefreshTokenFromCookie(r)
-	source := "cookie"
-
-	// Если нет в cookie — пробуем из JSON body (mobile/API clients)
-	if refreshTokenValue == "" {
-		var req struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RefreshToken == "" {
-			RespondError(w, r, NewBadRequestError("invalid request: missing refresh token"))
-			return
-		}
-		refreshTokenValue = req.RefreshToken
-		source = "body"
+	// 1. Получаем refresh token из запроса
+	refreshTokenValue, source, err := auth.ValidateRefreshRequest(r)
+	if err != nil {
+		RespondError(w, r, NewBadRequestError("invalid request: missing refresh token"))
+		return
 	}
 
-	user, sessionID, err := s.db.GetUserByRefreshTokenHash(auth.HashRefreshToken(refreshTokenValue))
+	// 2. Вычисляем fingerprint устройства
+	fingerprint := auth.ComputeFingerprint(r.UserAgent(), auth.ClientIP(r))
+	tokenHash := auth.HashRefreshToken(refreshTokenValue)
+
+	// 3. Выполняем rotation с проверками
+	result, err := auth.RotateRefreshToken(s.db, tokenHash, fingerprint, "", auth.ClientIP(r), r.UserAgent())
 	if err != nil {
+		// P1-HI-05: Reuse detection — украденный токен
+		if result != nil && result.ReuseDetected {
+			s.logger.Error("refresh token reuse detected — token family revoked",
+				"fingerprint", fingerprint,
+				"ip", auth.ClientIP(r),
+				"user_agent", r.UserAgent(),
+				"trace_id", r.Header.Get("X-Request-ID"),
+			)
+			_ = s.db.SaveAudit("", "TOKEN_REUSE_DETECTED", "session", "", nil, nil)
+			RespondError(w, r, NewUnauthorizedError("refresh token revoked (reuse detected)"))
+			return
+		}
+
+		// Fingerprint mismatch — возможно, токен украден
+		if err == auth.ErrFingerprintMismatch {
+			s.logger.Warn("device fingerprint mismatch on refresh",
+				"fingerprint", fingerprint,
+				"ip", auth.ClientIP(r),
+				"user_agent", r.UserAgent(),
+				"trace_id", r.Header.Get("X-Request-ID"),
+			)
+			RespondError(w, r, NewUnauthorizedError("device fingerprint mismatch"))
+			return
+		}
+
+		// Другие ошибки (истёк, не найден)
+		s.logger.Error("refresh token rotation failed", "error", err)
 		RespondError(w, r, NewUnauthorizedError("invalid or expired refresh token"))
 		return
 	}
 
-	if err := s.db.RevokeSession(sessionID); err != nil {
-		s.logger.Error("failed to rotate refresh session", "error", err)
-		RespondError(w, r, NewInternalError("internal error", nil))
-		return
-	}
-
-	newToken, newRefreshToken, err := s.issueTokenPair(r, user.ID, user.Username, user.Role, user.TenantID)
+	// 4. Получаем пользователя из сессии
+	session, err := s.db.GetSessionByTokenHash(result.NewTokenHash)
 	if err != nil {
-		s.logger.Error("failed to issue refreshed tokens", "error", err)
+		s.logger.Error("failed to get new session", "error", err)
 		RespondError(w, r, NewInternalError("internal error", nil))
 		return
 	}
 
-	// P1-SEC.1: Устанавливаем новые HttpOnly cookies (Secure=auto, SameSite=Strict)
-	auth.SetAuthCookies(w, newToken, newRefreshToken, cookieConfigForRequest(r))
+	user, err := s.db.GetUserByID(session.UserID)
+	if err != nil {
+		s.logger.Error("failed to get user for new session", "error", err)
+		RespondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	// 5. Генерируем новый access token
+	newToken, err := auth.GenerateJWT(user.ID, user.Username, user.Role, user.TenantID)
+	if err != nil {
+		s.logger.Error("failed to generate new access token", "error", err)
+		RespondError(w, r, NewInternalError("internal error", nil))
+		return
+	}
+
+	// 6. Устанавливаем новые HttpOnly cookies (Secure=auto, SameSite=Strict)
+	auth.SetAuthCookies(w, newToken, result.NewToken, cookieConfigForRequest(r))
 
 	user.PasswordHash = ""
 	user.TOTPSecret = ""
+
+	// 7. Audit log для успешной ротации
+	_ = s.db.SaveAudit(session.UserID, "TOKEN_ROTATED", "session", result.NewSessionID, nil, nil)
 
 	// P1-SEC.1: Для клиентов, приславших refresh_token в body — возвращаем токены в ответе
 	if source == "body" {
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
 			"token":         newToken,
-			"refresh_token": newRefreshToken,
+			"refresh_token": result.NewToken,
 			"user":          user,
 		})
 		return
@@ -397,6 +440,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }
 
+// issueTokenPair создаёт новую пару access + refresh token для пользователя.
+// Используется при login и регистрации (initial token pair).
+//
+// P1-HI-05: Создаёт новую семью токенов для отслеживания rotation.
 func (s *Server) issueTokenPair(r *http.Request, userID, username, role, tenantID string) (string, string, error) {
 	token, err := auth.GenerateJWT(userID, username, role, tenantID)
 	if err != nil {
@@ -408,26 +455,16 @@ func (s *Server) issueTokenPair(r *http.Request, userID, username, role, tenantI
 		return "", "", err
 	}
 
-	if _, err := s.db.CreateUserSession(userID, tokenHash, clientIP(r), r.UserAgent(), expiresAt); err != nil {
+	// P1-HI-05: Вычисляем fingerprint и создаём сессию с новой семьёй токенов
+	fingerprint := auth.ComputeFingerprint(r.UserAgent(), auth.ClientIP(r))
+	tokenFamily := uuid.New()
+
+	if _, err := s.db.CreateSession(
+		userID, tokenHash, auth.ClientIP(r), r.UserAgent(),
+		fingerprint, &tokenFamily, expiresAt,
+	); err != nil {
 		return "", "", err
 	}
 
 	return token, refreshToken, nil
-}
-
-func clientIP(r *http.Request) string {
-	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-		if host, _, err := net.SplitHostPort(forwardedFor); err == nil {
-			return host
-		}
-		return forwardedFor
-	}
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		return realIP
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

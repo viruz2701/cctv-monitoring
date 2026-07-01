@@ -1,15 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/**
+ * Hybrid storage — AsyncStorage for simple key-value (auth tokens, push token)
+ * + WatermelonDB for structured offline data (work_orders, devices, sites, mutations).
+ *
+ * SYNC_QUEUE has been migrated to WatermelonDB `pending_mutations` table.
+ * See `mobile/src/database/` for the reactive database layer.
+ */
+
 const KEYS = {
   TOKEN: 'token',
   REFRESH_TOKEN: 'refreshToken',
   USER: 'user',
-  SYNC_QUEUE: 'syncQueue',
   PUSH_TOKEN: 'pushToken',
   DEVICE_MAP_CACHE: 'deviceMapCache',
 } as const;
 
 export const storage = {
+  // ── Auth tokens ──────────────────────────────────────────────
+
   async getToken(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.TOKEN);
   },
@@ -34,6 +43,8 @@ export const storage = {
     return AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
   },
 
+  // ── User profile (cached JSON) ───────────────────────────────
+
   async getUser(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.USER);
   },
@@ -46,13 +57,7 @@ export const storage = {
     return AsyncStorage.removeItem(KEYS.USER);
   },
 
-  async getSyncQueue(): Promise<string | null> {
-    return AsyncStorage.getItem(KEYS.SYNC_QUEUE);
-  },
-
-  async setSyncQueue(data: string): Promise<void> {
-    return AsyncStorage.setItem(KEYS.SYNC_QUEUE, data);
-  },
+  // ── Push notification token ──────────────────────────────────
 
   async getPushToken(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.PUSH_TOKEN);
@@ -62,7 +67,18 @@ export const storage = {
     return AsyncStorage.setItem(KEYS.PUSH_TOKEN, token);
   },
 
-  // Generic key-value methods for offline cache
+  // ── Device map cache (minimal GeoJSON for map tiles) ─────────
+
+  async getDeviceMapCache(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.DEVICE_MAP_CACHE);
+  },
+
+  async setDeviceMapCache(data: string): Promise<void> {
+    return AsyncStorage.setItem(KEYS.DEVICE_MAP_CACHE, data);
+  },
+
+  // ── Generic key-value methods (for ad-hoc caching) ───────────
+
   async getItem(key: string): Promise<string | null> {
     return AsyncStorage.getItem(key);
   },
@@ -74,6 +90,8 @@ export const storage = {
   async removeItem(key: string): Promise<void> {
     return AsyncStorage.removeItem(key);
   },
+
+  // ── Cleanup ──────────────────────────────────────────────────
 
   async clearAll(): Promise<void> {
     const keys = Object.values(KEYS);

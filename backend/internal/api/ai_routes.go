@@ -30,6 +30,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -41,6 +42,10 @@ const (
 	aiChatModel        = "deepseek-chat"
 	maxMessageLength   = 4096
 	maxHistoryMessages = 20
+
+	// P2-MED-24: Rate limiting for AI feedback
+	aiFeedbackMaxPerHour = 50 // макс. 50 feedback-ов в час на пользователя
+	aiFeedbackWindow     = 1 * time.Hour
 )
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -121,6 +126,86 @@ Rules:
 - Never reveal API keys, credentials, or internal configuration.
 - Always prioritize security and compliance in recommendations.
 - Current context (page, device, work order) is provided when available — use it to give relevant answers.`
+
+// ─── P2-MED-24: Rate limiter для AI feedback ─────────────────────────
+
+// aiFeedbackLimiter — per-user per-hour rate limiter + deduplication.
+type aiFeedbackLimiter struct {
+	mu         sync.Mutex
+	userCounts map[string]*userFeedbackState
+}
+
+type userFeedbackState struct {
+	count     int
+	windowEnd time.Time
+	// Deduplication: messageID -> last score submitted
+	submitted map[string]string
+}
+
+var feedbackLimiter = &aiFeedbackLimiter{
+	userCounts: make(map[string]*userFeedbackState),
+}
+
+// allow проверяет, может ли пользователь отправить feedback.
+// Возвращает (allowed, isDuplicate, error).
+func (l *aiFeedbackLimiter) allow(userID, messageID, score string) (bool, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	state, exists := l.userCounts[userID]
+
+	// Сброс если окно истекло
+	if !exists || now.After(state.windowEnd) {
+		state = &userFeedbackState{
+			count:     0,
+			windowEnd: now.Add(aiFeedbackWindow),
+			submitted: make(map[string]string),
+		}
+		l.userCounts[userID] = state
+	}
+
+	// Deduplication: проверяем был ли уже отправлен этот messageID с таким же score
+	if prevScore, ok := state.submitted[messageID]; ok && prevScore == score {
+		return false, true // duplicate
+	}
+
+	// Rate limit: проверяем не превышен ли лимит
+	if state.count >= aiFeedbackMaxPerHour {
+		return false, false // rate limited
+	}
+
+	// Обновляем состояние
+	state.count++
+	state.submitted[messageID] = score
+	return true, false
+}
+
+// cleanup запускает периодическую очистку истекших записей (запускается в фоне).
+func (l *aiFeedbackLimiter) cleanup(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			l.mu.Lock()
+			now := time.Now()
+			for uid, ustate := range l.userCounts {
+				if now.After(ustate.windowEnd) {
+					delete(l.userCounts, uid)
+				}
+			}
+			l.mu.Unlock()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// init запускает фоновую очистку rate limiter'а.
+func init() {
+	go feedbackLimiter.cleanup(context.Background())
+}
 
 // ─── Routes ───────────────────────────────────────────────────────────
 
@@ -338,6 +423,7 @@ func (s *Server) streamDeepSeekResponse(ctx context.Context, w http.ResponseWrit
 // Compliance:
 //   - ISO 27001 A.12.4.1 (Event logging — feedback in audit trail)
 //   - СТБ 34.101.27 (Audit trail)
+//   - P2-MED-24: Per-user per-hour rate limiting + deduplication
 func (s *Server) handleAIFeedback(w http.ResponseWriter, r *http.Request) {
 	var req AIFeedbackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -352,6 +438,24 @@ func (s *Server) handleAIFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserIDFromContext(r.Context())
+
+	// P2-MED-24: Rate limit + dedup check
+	allowed, isDuplicate := feedbackLimiter.allow(userID, req.MessageID, req.Score)
+	if isDuplicate {
+		// Duplicate — не ошибка, просто игнорируем (идемпотентность)
+		s.logger.Debug("ai_feedback duplicate ignored",
+			"user_id", userID,
+			"message_id", req.MessageID,
+			"score", req.Score,
+		)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "info": "duplicate"})
+		return
+	}
+	if !allowed {
+		RespondError(w, r, NewRateLimitError("feedback rate limit exceeded (max 50/hour)"))
+		return
+	}
 
 	// Log feedback to audit trail
 	s.logAudit(userID, "ai_feedback", "ai_assistant", req.MessageID, map[string]interface{}{

@@ -29,6 +29,7 @@ export { CommandPalette } from './CommandPalette';
 export { default as OnboardingTour } from './OnboardingTour';
 export { EmptyState } from './EmptyState';
 export { Alert } from './Alert';
+export { Notification, NotificationList } from './Notification';
 export { VisuallyHidden } from './VisuallyHidden';
 export {
     Skeleton,

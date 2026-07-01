@@ -109,22 +109,76 @@ export function useRestoreFocus(isActive: boolean) {
 }
 
 // ───────────────────────────────────────────────────────────────────────
+// FocusTrapStack — глобальный стек для вложенных focus trap'ов (P2-MED-14)
+//
+// Позволяет открывать модалку поверх модалки; только верхний trap
+// перехватывает Tab/Shift+Tab. При закрытии верхнего — активируется
+// предыдущий.
+//
+// UX-14.2.8: Focus Management — nested modals support
+// WCAG 2.4.3: Focus Order — predictable focus cycling
+// ───────────────────────────────────────────────────────────────────────
+
+let trapCounter = 0;
+
+interface TrapEntry {
+    id: number;
+    containerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const focusTrapStack: TrapEntry[] = [];
+
+function getTopTrap(): TrapEntry | null {
+    return focusTrapStack.length > 0 ? focusTrapStack[focusTrapStack.length - 1] : null;
+}
+
+function isTopTrap(id: number): boolean {
+    return getTopTrap()?.id === id;
+}
+
+/**
+ * Получить фокусируемые элементы внутри контейнера.
+ */
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+    return Array.from(
+        container.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+    );
+}
+
+// ───────────────────────────────────────────────────────────────────────
 // useFocusTrap — фокус-труппинг для модалок и панелей
 // Tab/Shift+Tab цикл внутри контейнера
-// UX-14.2.8: Focus Management — focus trap with restore
+// UX-14.2.8: Focus Management — focus trap with restore + nested support
 // ───────────────────────────────────────────────────────────────────────
 export function useFocusTrap(isActive: boolean, options?: { restoreFocus?: boolean }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const restoreFocus = options?.restoreFocus ?? true;
+    const trapIdRef = useRef<number>(0);
     useRestoreFocus(restoreFocus ? isActive : false);
+
+    // Регистрация/дерегистрация в глобальном стеке
+    useEffect(() => {
+        if (!isActive) return;
+
+        const id = ++trapCounter;
+        trapIdRef.current = id;
+        focusTrapStack.push({ id, containerRef });
+
+        return () => {
+            const idx = focusTrapStack.findIndex((t) => t.id === id);
+            if (idx !== -1) {
+                focusTrapStack.splice(idx, 1);
+            }
+        };
+    }, [isActive]);
 
     const focusFirstElement = useCallback(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        const focusable = container.querySelectorAll<HTMLElement>(
-            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
+        const focusable = getFocusableElements(container);
 
         if (focusable.length > 0) {
             focusable[0].focus({ preventScroll: true });
@@ -146,12 +200,13 @@ export function useFocusTrap(isActive: boolean, options?: { restoreFocus?: boole
         (e: React.KeyboardEvent) => {
             if (!isActive || e.key !== 'Tab') return;
 
+            // P2-MED-14: Игнорируем событие, если этот trap не на вершине стека
+            if (!isTopTrap(trapIdRef.current)) return;
+
             const container = containerRef.current;
             if (!container) return;
 
-            const focusableElements = container.querySelectorAll<HTMLElement>(
-                'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            );
+            const focusableElements = getFocusableElements(container);
 
             if (focusableElements.length === 0) {
                 e.preventDefault();

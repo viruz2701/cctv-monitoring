@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from './Icons';
 import { VirtualTable } from './VirtualTable';
 

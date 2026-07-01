@@ -26,6 +26,8 @@ export interface SyncChange {
   id: string;
   operation: 'insert' | 'update' | 'delete';
   data: Record<string, unknown>;
+  /** Поля, которые были изменены (для field-level 3-way merge) */
+  changedFields?: string[];
   timestamp: string;
 }
 

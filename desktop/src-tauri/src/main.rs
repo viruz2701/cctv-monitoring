@@ -20,6 +20,7 @@
 mod ie_mode;
 
 use serde::{Deserialize, Serialize};
+use tauri_plugin_updater::UpdaterExt;
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -196,6 +197,35 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        // P2-MED-02: Tauri Updater plugin — automatic updates
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            // P2-MED-02: Background update check on startup
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Delay to not impact startup time
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+                match handle.updater().check().await {
+                    Ok(Some(update)) => {
+                        println!(
+                            "[Updater] Update available: {} -> {}",
+                            update.current_version(),
+                            update.version()
+                        );
+                        // User dialog is handled automatically
+                        // when `dialog: true` in tauri.conf.json
+                    }
+                    Ok(None) => {
+                        println!("[Updater] No update available");
+                    }
+                    Err(e) => {
+                        eprintln!("[Updater] Update check failed: {}", e);
+                    }
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             open_camera_web_ui,
             get_credentials,

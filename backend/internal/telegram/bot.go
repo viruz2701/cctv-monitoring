@@ -17,22 +17,45 @@ import (
 
 // Bot represents Telegram bot instance
 type Bot struct {
-	api          *tgbotapi.BotAPI
-	db           *db.DB
-	stateManager state.DeviceStateManager
-	logger       *slog.Logger
-	updates      tgbotapi.UpdatesChannel
+	api           *tgbotapi.BotAPI
+	db            *db.DB
+	stateManager  state.DeviceStateManager
+	logger        *slog.Logger
+	updates       tgbotapi.UpdatesChannel
+	tokenProvider TokenProvider // P2-MED-04: Vault/env token provider
 }
 
 // Config holds Telegram bot configuration
 type Config struct {
-	Token  string
+	// Token — устарел. Используйте TokenProvider для Vault/env.
+	// P2-MED-04: Оставлен для обратной совместимости.
+	Token string
+
+	// TokenProvider — провайдер токена с поддержкой Vault + rotation.
+	// P2-MED-04: Если установлен, Token игнорируется.
+	TokenProvider TokenProvider
+
 	Logger *slog.Logger
 }
 
 // NewBot creates new Telegram bot instance
 func NewBot(cfg Config, database *db.DB, stateManager state.DeviceStateManager) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(cfg.Token)
+	// P2-MED-04: Получаем токен через TokenProvider или из cfg.Token
+	token := cfg.Token
+	if cfg.TokenProvider != nil {
+		ctx := context.Background()
+		var err error
+		token, err = cfg.TokenProvider.GetToken(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get telegram token from provider: %w", err)
+		}
+	}
+
+	if token == "" {
+		return nil, fmt.Errorf("telegram token is required (set GB_TELEGRAM_TOKEN or configure TokenProvider)")
+	}
+
+	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bot: %w", err)
 	}
@@ -40,10 +63,11 @@ func NewBot(cfg Config, database *db.DB, stateManager state.DeviceStateManager) 
 	api.Debug = false
 
 	bot := &Bot{
-		api:          api,
-		db:           database,
-		stateManager: stateManager,
-		logger:       cfg.Logger,
+		api:           api,
+		db:            database,
+		stateManager:  stateManager,
+		logger:        cfg.Logger,
+		tokenProvider: cfg.TokenProvider,
 	}
 
 	return bot, nil
