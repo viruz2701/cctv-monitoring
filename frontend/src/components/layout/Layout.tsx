@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { Breadcrumbs } from '../ui/Breadcrumbs';
 import { ErrorBoundaryLite } from '../ErrorBoundaryLite';
 import { useAlarmWebSocket } from '../../services/websocket';
 import { CommandPalette } from '../ui/CommandPalette';
@@ -9,6 +10,8 @@ import { ShortcutsCheatsheet } from '../ui/ShortcutsCheatsheet';
 import { useCommandPaletteStore } from '../../store/commandPaletteStore';
 import { useSkipLink } from '../../hooks/useAccessibility';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useBreadcrumbs } from '../../hooks/useBreadcrumbs';
+import { RouteAliasingMiddleware } from '../../middleware/routeAliasing';
 import type { Shortcut } from '../../hooks/useKeyboardShortcuts';
 import { VisuallyHidden } from '../ui/VisuallyHidden';
 
@@ -27,6 +30,12 @@ export function Layout() {
 
     // WCAG 2.1 AA: Skip-to-content link (UX-14.2.7)
     const { handleSkip, targetId } = useSkipLink('main-content');
+
+    // UX-1.4: Dynamic breadcrumbs from current route
+    const breadcrumbs = useBreadcrumbs();
+
+    // UX-1.3: Route aliasing (middleware runs on every route change)
+    const showBreadcrumbs = location.pathname !== '/dashboard';
 
     // Initialize WebSocket for real-time alarms (only connects if user is authenticated)
     useAlarmWebSocket();
@@ -129,6 +138,9 @@ export function Layout() {
                 className="sr-only"
             />
 
+            {/* UX-1.3: Route Aliasing Middleware (invisible, runs redirects) */}
+            <RouteAliasingMiddleware />
+
             {/* Sidebar */}
             <Sidebar
                 collapsed={sidebarCollapsed}
@@ -176,6 +188,15 @@ export function Layout() {
                     }`}
             >
                 <div className="p-4 md:p-6 lg:p-8">
+                    {/* UX-1.4: Auto-generated breadcrumbs (скрыты на dashboard) */}
+                    {showBreadcrumbs && breadcrumbs.length > 1 && (
+                        <Breadcrumbs
+                            items={breadcrumbs}
+                            className="mb-4"
+                            maxItems={5}
+                        />
+                    )}
+
                     <ErrorBoundaryLite>
                         <Outlet />
                     </ErrorBoundaryLite>

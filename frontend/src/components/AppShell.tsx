@@ -71,6 +71,12 @@ const PlaybookMarketplace = lazy(() => import('../pages/PlaybookMarketplace').th
 const Tutorials = lazy(() => import('../pages/Tutorials').then((m) => ({ default: m.Tutorials })));
 const Glossary = lazy(() => import('../pages/Glossary').then((m) => ({ default: m.Glossary })));
 
+// UX-4.1: Asset Tree Drill-down
+const AssetExplorer = lazy(() => import('../pages/AssetExplorer').then((m) => ({ default: m.AssetExplorer })));
+
+// UX-4.3: Maintenance Calendar UI
+const MaintenanceCalendar = lazy(() => import('../pages/MaintenanceCalendar').then((m) => ({ default: m.MaintenanceCalendar })));
+
 import { RoleProtectedRoute } from './auth/RoleProtectedRoute';
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -222,6 +228,14 @@ function AppRoutes() {
           <Route path="/compliance-shield" element={<PageSuspense><ComplianceShield /></PageSuspense>} />
           <Route path="/predictive-maintenance" element={<PageSuspense><PredictiveMaintenance /></PageSuspense>} />
           <Route path="/playbook-marketplace" element={<PageSuspense><PlaybookMarketplace /></PageSuspense>} />
+
+          {/* UX-4.1: Asset Tree Drill-down */}
+          {isFeatureEnabled('asset_tree_drilldown') && (
+            <Route path="/assets" element={<PageSuspense><AssetExplorer /></PageSuspense>} />
+          )}
+
+          {/* UX-4.3: Maintenance Calendar */}
+          <Route path="/maintenance-calendar" element={<PageSuspense><MaintenanceCalendar /></PageSuspense>} />
         </Route>
 
         {/* Tutorials — all roles */}

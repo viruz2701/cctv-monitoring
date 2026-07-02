@@ -3,7 +3,10 @@ import { getArrayData } from '../utils/helpers';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTickets, useDevices, useSites, useCreateTicket } from '../hooks/useApiQuery';
-import { SkeletonDetailPage } from '../components/layout';
+import { SkeletonDetailPage, ThreeColumnTemplate } from '../components/layout';
+import { ThreeColumnLayout } from '../components/layouts/ThreeColumnLayout';
+import { HistoryTimeline, type HistoryEvent } from '../components/device/HistoryTimeline';
+import { isFeatureEnabled } from '../config/featureFlags';
 import type { Ticket as APITicket, Device as APIDevice, TicketComment } from '../services/api';
 import { Breadcrumbs } from '../components/ui/Breadcrumbs';
 import {
@@ -33,6 +36,7 @@ import {
     Tag,
     QrCode,
     Shield,
+    FileText,
 } from '../components/ui/Icons';
 import {
     Card,
@@ -245,6 +249,10 @@ export function DeviceDetail() {
     });
     const [selectedMonth, setSelectedMonth] = useState(() => new Date(2026, 1, 1));
     const [activeTab, setActiveTab] = useState('overview');
+    const [activeDetailTab, setActiveDetailTab] = useState('overview');
+
+    // UX-2.1: Feature flag for three-column layout
+    const useThreeColumn = isFeatureEnabled('three_column_detail_layout');
 
     const handleSelectRecording = useCallback((entry: RecordingDay) => {
         setSelectedRecording(entry);
@@ -389,12 +397,384 @@ export function DeviceDetail() {
         ]
         : [{ label: 'devices', href: '/devices' }];
 
-    // UX-2.4: Tab definitions
+    // UX-2.4: Tab definitions (extended for three-column layout)
     const detailTabs = [
         { id: 'overview', label: t('overview') || 'Overview', icon: <Info className="w-4 h-4" /> },
+        ...(useThreeColumn ? [
+            { id: 'live_view', label: t('live_view') || 'Live View', icon: <Video className="w-4 h-4" /> },
+            { id: 'history', label: t('history') || 'History', icon: <Clock className="w-4 h-4" /> },
+            { id: 'documents', label: t('documents') || 'Documents', icon: <FileText className="w-4 h-4" /> },
+        ] as const : []),
         { id: 'tunnel', label: t('tunnel') || 'Tunnel', icon: <Shield className="w-4 h-4" /> },
     ];
 
+    // ── Center tab content ────────────────────────────────────────────
+    const centerOverviewContent = (
+        <div className="space-y-6">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card><CardBody><div className="flex items-center gap-3"><div className={`p-2.5 rounded-xl ${device.status === 'online' ? 'bg-emerald-50 dark:bg-emerald-900/30' : device.status === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>{device.status === 'online' ? <Wifi className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : device.status === 'warning' ? <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" /> : <WifiOff className="w-5 h-5 text-red-600 dark:text-red-400" />}</div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('status')}</p><p className="text-lg font-bold text-slate-900 dark:text-white capitalize">{device.status}</p></div></div></CardBody></Card>
+                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('uptime')} <InfoTooltip text="Mean Time Between Failures (MTBF) — среднее время наработки на отказ. Показатель надёжности оборудования." glossaryTerm="MTBF" /></p><p className={`text-lg font-bold ${uptimeColor}`}>{stats?.uptimePercent.toFixed(1)}%</p></div></div></CardBody></Card>
+                <Card><CardBody><div className="space-y-2"><div className="flex items-center gap-3"><div className="p-2.5 bg-purple-50 dark:bg-purple-900/30 rounded-xl"><HardDrive className="w-5 h-5 text-purple-600 dark:text-purple-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('hdd_free')}</p><p className="text-lg font-bold text-slate-900 dark:text-white">{stats?.hddFreePercent}%</p></div></div><div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div className={`${hddColor} h-1.5 rounded-full transition-all`} style={{ width: `${stats?.hddFreePercent ?? 0}%` }} /></div></div></CardBody></Card>
+                <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-orange-50 dark:bg-orange-900/30 rounded-xl"><Thermometer className="w-5 h-5 text-orange-600 dark:text-orange-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('temperature')}</p><p className={`text-lg font-bold ${(stats?.temperature ?? 0) > 50 ? 'text-red-600 dark:text-red-400' : (stats?.temperature ?? 0) > 40 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>{stats?.temperature}°C</p></div></div></CardBody></Card>
+            </div>
+
+            {/* Device Info & Camera List */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card><CardHeader>{t('device_information')}</CardHeader><CardBody><div className="space-y-3">
+                    {[
+                        [t('device_id'), device.id, true, false],
+                        [t('type'), device.type.toUpperCase(), false, false],
+                        [t('model'), device.model, false, false],
+                        [t('firmware'), device.firmware, false, false],
+                        [t('ip_address'), device.ipAddress, true, false],
+                        [t('site'), device.siteName, false, false],
+                        ['recording_status', device.recordingStatus.replace('_', ' '), false, true],
+                        [t('assigned_technicians') || 'Assigned Technicians', t('view_in_site_settings') || 'Manage in site settings', false, false],
+                    ].map(([label, value, mono, isRecording], idx, arr) => (
+                        <div key={label as string} className={`flex justify-between py-2 ${idx < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/50' : ''}`}>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                                {isRecording ? t('recording_status') : label}
+                                {isRecording && (
+                                    <InfoTooltip
+                                        text="Recording status — текущее состояние записи видео с устройства. Возможные значения: recording, stopped, error."
+                                        glossaryTerm="NVR"
+                                    />
+                                )}
+                            </span>
+                            <span className={`text-sm font-medium text-slate-900 dark:text-white ${mono ? 'font-mono' : ''} capitalize`}>{value as string}</span>
+                        </div>
+                    ))}
+                </div></CardBody></Card>
+                <Card><CardHeader>{t('connected_cameras')} ({cameras.length})</CardHeader><CardBody>
+                    {cameras.length === 0 ? (
+                        <div className="text-center py-8"><Camera className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" /><p className="text-sm text-slate-500 dark:text-slate-400">{t('no_cameras_connected')}</p></div>
+                    ) : (
+                        <div className="space-y-3">
+                            {cameras.map((cam) => (
+                                <div key={cam.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg border border-transparent dark:border-slate-800">
+                                    <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${cam.status === 'online' ? 'bg-emerald-500' : cam.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`} /><div><p className="text-sm font-medium text-slate-900 dark:text-white">{cam.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{t('channel')} {cam.channel} • {cam.type.toUpperCase()} • {cam.resolution}</p></div></div>
+                                    <StatusBadge status={cam.status} />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardBody></Card>
+            </div>
+
+            {/* Health Timeline */}
+            <Card><CardHeader>{t('health_timeline')} <InfoTooltip text="Health Score — комплексная оценка состояния устройства на основе uptime, температуры, свободного места на диске, частоты ошибок и статуса записи." glossaryTerm="health-score" /></CardHeader><CardBody>
+                {timeline.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">{t('no_events_recorded')}</p> : (
+                    <div className="relative"><div className="absolute left-[17px] top-3 bottom-3 w-px bg-slate-200 dark:bg-slate-700" />
+                        <div className="space-y-4">
+                            {timeline.map((event) => (
+                                <div key={event.id} className="flex items-start gap-4 relative">
+                                    <div className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full border-2 bg-white dark:bg-slate-800 ${severityBorder[event.severity]}`}><TimelineIcon event={event} /></div>
+                                    <div className="flex-1 pt-1">
+                                        <p className="text-sm font-medium text-slate-900 dark:text-white">{event.message}</p>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <span className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.timestamp, i18n.language)}</span>
+                                            <Badge variant={event.severity === 'error' ? 'danger' : event.severity === 'warning' ? 'warning' : event.severity === 'success' ? 'success' : 'info'} size="sm">{event.type.replace('_', ' ')}</Badge>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </CardBody></Card>
+
+            {/* ═══ P1-UX.7: RCA Widget — Summary card with full graph modal ═══ */}
+            <RCAWidget deviceId={deviceId || ''} />
+
+            {/* Recording Availability Calendar */}
+            <Card><CardHeader>{t('recording_availability')}</CardHeader><CardBody>
+                {calendarCameras.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">{t('no_camera_data')}</p> : (
+                    <>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+                            <div className="flex items-center gap-3">
+                                <button onClick={goToPrevMonth} disabled={!canGoPrev} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label={t('previous_month')}><ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" /></button>
+                                <span className="text-sm font-semibold text-slate-900 dark:text-white min-w-[140px] text-center">{monthLabel}</span>
+                                <button onClick={goToNextMonth} disabled={!canGoNext} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label={t('next_month')}><ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-400" /></button>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('available')}</span></div>
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-500" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('missing')}</span></div>
+                                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-300 dark:bg-slate-600" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('no_data')}</span></div>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <div className="min-w-[700px]">
+                                <div className="flex"><div className="w-32 flex-shrink-0" /><div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${dateRange.length}, 1fr)` }}>{dateRange.map((date) => { const d = new Date(date); return <div key={date} className="text-center px-0.5"><span className="text-[10px] text-slate-400 dark:text-slate-500">{d.getDate()}</span></div>; })}</div></div>
+                                {calendarCameras.map(([camId, camName]) => (
+                                    <CameraRow key={camId} camId={camId} camName={camName} dateRange={dateRange} recordingDataMap={recordingDataMap} onSelect={handleSelectRecording} t={t} />
+                                ))}
+                            </div>
+                        </div>
+                        {(() => {
+                            const now = new Date(); now.setHours(23,59,59,999);
+                            const oneYearAgo = new Date(); oneYearAgo.setFullYear(now.getFullYear() - 1); oneYearAgo.setHours(0,0,0,0);
+                            const monthStart = new Date(dateRange[0]);
+                            const monthEnd = new Date(dateRange[dateRange.length - 1]); monthEnd.setHours(23,59,59,999);
+                            const start = monthStart > oneYearAgo ? monthStart : oneYearAgo;
+                            const end = monthEnd < now ? monthEnd : now;
+                            if (start > end) return null;
+                            const validDaysCount = Math.floor((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1;
+                            const totalCapacity = validDaysCount * cameras.length;
+                            if (totalCapacity <= 0) return null;
+                            let available = 0, missing = 0;
+                            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                                const dateStr = d.toISOString().split('T')[0];
+                                cameras.forEach(cam => {
+                                    const entry = recordingDataMap.get(`${cam.id}-${dateStr}`);
+                                    if (entry?.status === 'available') available++;
+                                    else missing++;
+                                });
+                            }
+                            const pctAvail = Math.round((available / totalCapacity) * 100);
+                            const pctMissing = Math.round((missing / totalCapacity) * 100);
+                            return (
+                                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{t('monthly_summary')}</p>
+                                    <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700"><div className="bg-emerald-500" style={{ width: `${pctAvail}%` }} /><div className="bg-red-500" style={{ width: `${pctMissing}%` }} /></div>
+                                    <div className="flex justify-between mt-1 text-[10px] text-slate-500"><span>{pctAvail}% {t('available')}</span><span>{pctMissing}% {t('missing')}</span></div>
+                                </div>
+                            );
+                        })()}
+                    </>
+                )}
+            </CardBody></Card>
+
+            {/* Related Tickets */}
+            <Card>
+                <CardHeader action={<Button variant="ghost" size="sm" onClick={() => setShowCreateTicketModal(true)}>{t('create_ticket')}</Button>}>{t('related_tickets')}</CardHeader>
+                <CardBody>
+                    {deviceTickets.length === 0 ? (
+                        <div className="text-center py-8"><CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" /><p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('no_open_tickets')}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('this_device_has_no_tickets')}</p></div>
+                    ) : (
+                        <div className="space-y-3">
+                            {deviceTickets.map((ticket) => (
+                                <div key={ticket.id} className="p-3 bg-slate-50 dark:bg-slate-900/30 border border-transparent dark:border-slate-800 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/70 cursor-pointer transition-all">
+                                    <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-medium text-slate-900 dark:text-white">{ticket.title}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{ticket.id} • {ticket.assignee}</p></div><Badge variant={ticket.priority === 'critical' ? 'danger' : ticket.priority === 'high' ? 'warning' : ticket.priority === 'medium' ? 'info' : 'success'} size="sm">{ticket.priority}</Badge></div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardBody>
+            </Card>
+
+            {/* ═══ Audit Log Tab ═══ */}
+            <DeviceAuditLog deviceId={deviceId || ''} />
+        </div>
+    );
+
+    // ── UX-2.5: History timeline data (mock — replace with API call) ──
+    const historyEvents: HistoryEvent[] = [];
+
+    // ── Conditional render based on feature flag ─────────────────
+    if (useThreeColumn) {
+        const headerContent = (
+            <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-slate-100 dark:bg-slate-800/80 rounded-lg">
+                        <Camera className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-bold text-slate-900 dark:text-white">{device.name}</h1>
+                            <StatusBadge status={device.status} />
+                            <HealthBadge health={device.health} />
+                        </div>
+                        <Breadcrumbs items={breadcrumbItems} />
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" icon={<RefreshCw className="w-4 h-4" />} />
+                    <Button variant="outline" size="sm" icon={<Settings className="w-4 h-4" />} />
+                </div>
+            </div>
+        );
+
+        const leftPanel = (
+            <>
+                {/* Quick Status */}
+                <Card><CardBody>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-500">{t('status')}</span>
+                            <StatusBadge status={device.status} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-500">{t('health')}</span>
+                            <HealthBadge health={device.health} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-500">{t('uptime')}</span>
+                            <span className={`text-sm font-bold ${uptimeColor}`}>{stats?.uptimePercent.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-500">{t('last_seen')}</span>
+                            <span className="text-xs text-slate-600">{lastSeenFormatted}</span>
+                        </div>
+                    </div>
+                </CardBody></Card>
+
+                {/* Quick Actions */}
+                <Card><CardHeader>{t('quick_actions') || 'Quick Actions'}</CardHeader><CardBody>
+                    <div className="space-y-2">
+                        <Button variant="outline" size="sm" fullWidth icon={<RefreshCw className="w-4 h-4" />} onClick={() => window.location.reload()}>
+                            {t('refresh')}
+                        </Button>
+                        <Button variant="outline" size="sm" fullWidth icon={<QrCode className="w-4 h-4" />}
+                            onClick={() => window.open(`/request?device_id=${deviceId}`, '_blank')}>
+                            {t('qr_request') || 'QR Заявка'}
+                        </Button>
+                        <Button variant="outline" size="sm" fullWidth icon={<Wrench className="w-4 h-4" />}
+                            onClick={() => setShowCreateTicketModal(true)}>
+                            {t('create_ticket')}
+                        </Button>
+                    </div>
+                </CardBody></Card>
+
+                {/* Site Info */}
+                <Card><CardBody>
+                    <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-slate-400" />
+                        <div>
+                            <p className="text-sm font-medium text-slate-900 dark:text-white">{device.siteName}</p>
+                            <p className="text-xs text-slate-500">{device.ipAddress}</p>
+                        </div>
+                    </div>
+                </CardBody></Card>
+            </>
+        );
+
+        const centerPanel = (
+            <Tabs tabs={detailTabs} activeTab={activeDetailTab} onChange={setActiveDetailTab} variant="pills">
+                {activeDetailTab === 'overview' && centerOverviewContent}
+                {activeDetailTab === 'live_view' && (
+                    <Card><CardBody>
+                        <div className="text-center py-10">
+                            <Video className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('live_view') || 'Live View'}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('live_view_placeholder') || 'Live view stream will appear here'}</p>
+                        </div>
+                    </CardBody></Card>
+                )}
+                {activeDetailTab === 'history' && (
+                    <HistoryTimeline events={historyEvents} deviceId={deviceId} />
+                )}
+                {activeDetailTab === 'documents' && (
+                    <Card><CardBody>
+                        <div className="text-center py-10">
+                            <FileText className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('documents') || 'Documents'}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('documents_placeholder') || 'Device documents will appear here'}</p>
+                        </div>
+                    </CardBody></Card>
+                )}
+                {activeDetailTab === 'tunnel' && (
+                    <SecureTunnel deviceId={deviceId || ''} />
+                )}
+            </Tabs>
+        );
+
+        const rightPanel = (
+            <>
+                {/* Device Metadata */}
+                <Card><CardHeader>{t('device_info') || 'Device Info'}</CardHeader><CardBody>
+                    <div className="space-y-2 text-sm">
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-500">{t('device_id')}</span>
+                            <span className="font-mono text-xs text-slate-900 dark:text-white">{device.id.slice(0, 12)}...</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-500">{t('type')}</span>
+                            <span className="font-medium text-slate-900 dark:text-white">{device.type.toUpperCase()}</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-500">{t('model')}</span>
+                            <span className="font-medium text-slate-900 dark:text-white">{device.model || '—'}</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-500">{t('firmware')}</span>
+                            <span className="font-medium text-slate-900 dark:text-white">{device.firmware || '—'}</span>
+                        </div>
+                        <div className="flex justify-between py-1">
+                            <span className="text-slate-500">{t('recording')}</span>
+                            <span className="font-medium capitalize text-slate-900 dark:text-white">{device.recordingStatus}</span>
+                        </div>
+                    </div>
+                </CardBody></Card>
+
+                {/* SLA Timer */}
+                <Card><CardHeader>{t('sla_timer') || 'SLA Timer'}</CardHeader><CardBody>
+                    <div className="text-center py-4">
+                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">99.5%</div>
+                        <p className="text-xs text-slate-500 mt-1">{t('sla_uptime') || 'SLA Uptime'}</p>
+                    </div>
+                </CardBody></Card>
+
+                {/* Assignee */}
+                <Card><CardHeader>{t('assignee') || 'Assignee'}</CardHeader><CardBody>
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                            <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-900 dark:text-white">{t('unassigned') || 'Unassigned'}</p>
+                            <p className="text-xs text-slate-500">{t('no_technician_assigned') || 'No technician assigned'}</p>
+                        </div>
+                    </div>
+                </CardBody></Card>
+
+                {/* Audit Log (compact) */}
+                <DeviceAuditLog deviceId={deviceId || ''} compact />
+            </>
+        );
+
+        return (
+            <>
+                <ThreeColumnLayout
+                    header={headerContent}
+                    left={leftPanel}
+                    center={centerPanel}
+                    right={rightPanel}
+                    leftHeader={t('panel') || 'Панель'}
+                    centerHeader={t('overview') || 'Основное'}
+                    rightHeader={t('details') || 'Детали'}
+                />
+
+                {/* Missing Recording Modal */}
+                <Modal isOpen={!!selectedRecording} onClose={() => setSelectedRecording(null)} title={t('missing_recording')} size="sm" footer={
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setSelectedRecording(null)} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">{t('close')}</button>
+                        <button onClick={handleCreateTicket} disabled={ticketCreated} className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 transition-colors ${ticketCreated ? 'bg-emerald-600 text-white cursor-default' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}>{ticketCreated ? <><CheckCircle className="w-4 h-4" /> {t('ticket_created')}</> : t('create_ticket')}</button>
+                    </div>
+                }>
+                    {selectedRecording && (
+                        <div className="space-y-4">
+                            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl"><div className="flex items-center gap-2 mb-2"><AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" /><span className="text-sm font-semibold text-red-700 dark:text-red-400">{t('recording_gap_detected')}</span></div><p className="text-sm text-red-600 dark:text-red-300">{t('no_recording_data')}</p></div>
+                            <div className="space-y-3"><div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/50"><span className="text-sm text-slate-500 dark:text-slate-400">{t('date')}</span><span className="text-sm font-medium text-slate-900 dark:text-white">{formatDate(selectedRecording.date, i18n.language)}</span></div><div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/50"><span className="text-sm text-slate-500 dark:text-slate-400">{t('camera')}</span><span className="text-sm font-medium text-slate-900 dark:text-white">{selectedRecording.cameraName}</span></div><div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/50"><span className="text-sm text-slate-500 dark:text-slate-400">{t('device')}</span><span className="text-sm font-medium text-slate-900 dark:text-white">{device.name}</span></div><div className="flex justify-between py-2"><span className="text-sm text-slate-500 dark:text-slate-400">{t('site')}</span><span className="text-sm font-medium text-slate-900 dark:text-white">{device.siteName}</span></div></div>
+                        </div>
+                    )}
+                </Modal>
+
+                {/* General Ticket Modal */}
+                <Modal isOpen={showCreateTicketModal} onClose={() => setShowCreateTicketModal(false)} title={t('create_new_ticket')} size="md" footer={
+                    <div className="flex justify-end gap-3"><Button variant="outline" onClick={() => setShowCreateTicketModal(false)}>{t('cancel')}</Button><Button variant="primary" onClick={(e) => handleCreateGeneralTicket(e as any)}>{t('create_ticket_button')}</Button></div>
+                }>
+                    <form onSubmit={handleCreateGeneralTicket} className="space-y-4">
+                        <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('title')}</label><Input value={newTicket.title} onChange={e => setNewTicket({ ...newTicket, title: e.target.value })} placeholder={t('title_placeholder')} required /></div>
+                        <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('description')}</label><Input value={newTicket.description} onChange={e => setNewTicket({ ...newTicket, description: e.target.value })} placeholder={t('description_placeholder')} required /></div>
+                        <div><label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">{t('priority')}</label><Select value={newTicket.priority} onChange={e => setNewTicket({ ...newTicket, priority: e.target.value })} options={[{ value: 'low', label: t('low') }, { value: 'medium', label: t('medium') }, { value: 'high', label: t('high') }, { value: 'critical', label: t('critical') }]} /></div>
+                    </form>
+                </Modal>
+            </>
+        );
+    }
+
+    // ── Original layout (feature flag disabled) ───────────────────────
     return (
         <div className="space-y-6">
             <Breadcrumbs items={breadcrumbItems} className="mb-2" />
@@ -430,165 +810,7 @@ export function DeviceDetail() {
 
             {/* UX-2.4: Tabbed content with Tunnel tab */}
             <Tabs tabs={detailTabs} activeTab={activeTab} onChange={setActiveTab} variant="pills">
-                {activeTab === 'overview' && (
-                    <div className="space-y-6">
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <Card><CardBody><div className="flex items-center gap-3"><div className={`p-2.5 rounded-xl ${device.status === 'online' ? 'bg-emerald-50 dark:bg-emerald-900/30' : device.status === 'warning' ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>{device.status === 'online' ? <Wifi className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : device.status === 'warning' ? <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" /> : <WifiOff className="w-5 h-5 text-red-600 dark:text-red-400" />}</div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('status')}</p><p className="text-lg font-bold text-slate-900 dark:text-white capitalize">{device.status}</p></div></div></CardBody></Card>
-                            <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-xl"><Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('uptime')} <InfoTooltip text="Mean Time Between Failures (MTBF) — среднее время наработки на отказ. Показатель надёжности оборудования." glossaryTerm="MTBF" /></p><p className={`text-lg font-bold ${uptimeColor}`}>{stats?.uptimePercent.toFixed(1)}%</p></div></div></CardBody></Card>
-                            <Card><CardBody><div className="space-y-2"><div className="flex items-center gap-3"><div className="p-2.5 bg-purple-50 dark:bg-purple-900/30 rounded-xl"><HardDrive className="w-5 h-5 text-purple-600 dark:text-purple-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('hdd_free')}</p><p className="text-lg font-bold text-slate-900 dark:text-white">{stats?.hddFreePercent}%</p></div></div><div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5"><div className={`${hddColor} h-1.5 rounded-full transition-all`} style={{ width: `${stats?.hddFreePercent ?? 0}%` }} /></div></div></CardBody></Card>
-                            <Card><CardBody><div className="flex items-center gap-3"><div className="p-2.5 bg-orange-50 dark:bg-orange-900/30 rounded-xl"><Thermometer className="w-5 h-5 text-orange-600 dark:text-orange-400" /></div><div><p className="text-sm text-slate-500 dark:text-slate-400">{t('temperature')}</p><p className={`text-lg font-bold ${(stats?.temperature ?? 0) > 50 ? 'text-red-600 dark:text-red-400' : (stats?.temperature ?? 0) > 40 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>{stats?.temperature}°C</p></div></div></CardBody></Card>
-                        </div>
-
-                        {/* Device Info & Camera List */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <Card><CardHeader>{t('device_information')}</CardHeader><CardBody><div className="space-y-3">
-                                {[
-                                    [t('device_id'), device.id, true, false],
-                                    [t('type'), device.type.toUpperCase(), false, false],
-                                    [t('model'), device.model, false, false],
-                                    [t('firmware'), device.firmware, false, false],
-                                    [t('ip_address'), device.ipAddress, true, false],
-                                    [t('site'), device.siteName, false, false],
-                                    ['recording_status', device.recordingStatus.replace('_', ' '), false, true],
-                                    [t('assigned_technicians') || 'Assigned Technicians', t('view_in_site_settings') || 'Manage in site settings', false, false],
-                                ].map(([label, value, mono, isRecording], idx, arr) => (
-                                    <div key={label as string} className={`flex justify-between py-2 ${idx < arr.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/50' : ''}`}>
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">
-                                            {isRecording ? t('recording_status') : label}
-                                            {isRecording && (
-                                                <InfoTooltip
-                                                    text="Recording status — текущее состояние записи видео с устройства. Возможные значения: recording, stopped, error."
-                                                    glossaryTerm="NVR"
-                                                />
-                                            )}
-                                        </span>
-                                        <span className={`text-sm font-medium text-slate-900 dark:text-white ${mono ? 'font-mono' : ''} capitalize`}>{value as string}</span>
-                                    </div>
-                                ))}
-                            </div></CardBody></Card>
-                            <Card><CardHeader>{t('connected_cameras')} ({cameras.length})</CardHeader><CardBody>
-                                {cameras.length === 0 ? (
-                                    <div className="text-center py-8"><Camera className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" /><p className="text-sm text-slate-500 dark:text-slate-400">{t('no_cameras_connected')}</p></div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {cameras.map((cam) => (
-                                            <div key={cam.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900/30 rounded-lg border border-transparent dark:border-slate-800">
-                                                <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${cam.status === 'online' ? 'bg-emerald-500' : cam.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`} /><div><p className="text-sm font-medium text-slate-900 dark:text-white">{cam.name}</p><p className="text-xs text-slate-500 dark:text-slate-400">{t('channel')} {cam.channel} • {cam.type.toUpperCase()} • {cam.resolution}</p></div></div>
-                                                <StatusBadge status={cam.status} />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardBody></Card>
-                        </div>
-
-                        {/* Health Timeline */}
-                        <Card><CardHeader>{t('health_timeline')} <InfoTooltip text="Health Score — комплексная оценка состояния устройства на основе uptime, температуры, свободного места на диске, частоты ошибок и статуса записи." glossaryTerm="health-score" /></CardHeader><CardBody>
-                            {timeline.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">{t('no_events_recorded')}</p> : (
-                                <div className="relative"><div className="absolute left-[17px] top-3 bottom-3 w-px bg-slate-200 dark:bg-slate-700" />
-                                    <div className="space-y-4">
-                                        {timeline.map((event) => (
-                                            <div key={event.id} className="flex items-start gap-4 relative">
-                                                <div className={`relative z-10 flex items-center justify-center w-9 h-9 rounded-full border-2 bg-white dark:bg-slate-800 ${severityBorder[event.severity]}`}><TimelineIcon event={event} /></div>
-                                                <div className="flex-1 pt-1">
-                                                    <p className="text-sm font-medium text-slate-900 dark:text-white">{event.message}</p>
-                                                    <div className="flex items-center gap-3 mt-1">
-                                                        <span className="text-xs text-slate-500 dark:text-slate-400">{formatDateTime(event.timestamp, i18n.language)}</span>
-                                                        <Badge variant={event.severity === 'error' ? 'danger' : event.severity === 'warning' ? 'warning' : event.severity === 'success' ? 'success' : 'info'} size="sm">{event.type.replace('_', ' ')}</Badge>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </CardBody></Card>
-
-                        {/* ═══ P1-UX.7: RCA Widget — Summary card with full graph modal ═══ */}
-                        <RCAWidget deviceId={deviceId || ''} />
-
-                        {/* Recording Availability Calendar */}
-                        <Card><CardHeader>{t('recording_availability')}</CardHeader><CardBody>
-                            {calendarCameras.length === 0 ? <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-6">{t('no_camera_data')}</p> : (
-                                <>
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={goToPrevMonth} disabled={!canGoPrev} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label={t('previous_month')}><ChevronLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" /></button>
-                                            <span className="text-sm font-semibold text-slate-900 dark:text-white min-w-[140px] text-center">{monthLabel}</span>
-                                            <button onClick={goToNextMonth} disabled={!canGoNext} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label={t('next_month')}><ChevronRight className="w-4 h-4 text-slate-600 dark:text-slate-400" /></button>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('available')}</span></div>
-                                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-500" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('missing')}</span></div>
-                                            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-slate-300 dark:bg-slate-600" /><span className="text-xs text-slate-600 dark:text-slate-400">{t('no_data')}</span></div>
-                                        </div>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                        <div className="min-w-[700px]">
-                                            <div className="flex"><div className="w-32 flex-shrink-0" /><div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${dateRange.length}, 1fr)` }}>{dateRange.map((date) => { const d = new Date(date); return <div key={date} className="text-center px-0.5"><span className="text-[10px] text-slate-400 dark:text-slate-500">{d.getDate()}</span></div>; })}</div></div>
-                                            {calendarCameras.map(([camId, camName]) => (
-                                                <CameraRow key={camId} camId={camId} camName={camName} dateRange={dateRange} recordingDataMap={recordingDataMap} onSelect={handleSelectRecording} t={t} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {(() => {
-                                        const now = new Date(); now.setHours(23,59,59,999);
-                                        const oneYearAgo = new Date(); oneYearAgo.setFullYear(now.getFullYear() - 1); oneYearAgo.setHours(0,0,0,0);
-                                        const monthStart = new Date(dateRange[0]);
-                                        const monthEnd = new Date(dateRange[dateRange.length - 1]); monthEnd.setHours(23,59,59,999);
-                                        const start = monthStart > oneYearAgo ? monthStart : oneYearAgo;
-                                        const end = monthEnd < now ? monthEnd : now;
-                                        if (start > end) return null;
-                                        const validDaysCount = Math.floor((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1;
-                                        const totalCapacity = validDaysCount * cameras.length;
-                                        if (totalCapacity <= 0) return null;
-                                        let available = 0, missing = 0;
-                                        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                                            const dateStr = d.toISOString().split('T')[0];
-                                            cameras.forEach(cam => {
-                                                const entry = recordingDataMap.get(`${cam.id}-${dateStr}`);
-                                                if (entry?.status === 'available') available++;
-                                                else missing++;
-                                            });
-                                        }
-                                        const pctAvail = Math.round((available / totalCapacity) * 100);
-                                        const pctMissing = Math.round((missing / totalCapacity) * 100);
-                                        return (
-                                            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                                <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{t('monthly_summary')}</p>
-                                                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700"><div className="bg-emerald-500" style={{ width: `${pctAvail}%` }} /><div className="bg-red-500" style={{ width: `${pctMissing}%` }} /></div>
-                                                <div className="flex justify-between mt-1 text-[10px] text-slate-500"><span>{pctAvail}% {t('available')}</span><span>{pctMissing}% {t('missing')}</span></div>
-                                            </div>
-                                        );
-                                    })()}
-                                </>
-                            )}
-                        </CardBody></Card>
-
-                        {/* Related Tickets */}
-                        <Card>
-                            <CardHeader action={<Button variant="ghost" size="sm" onClick={() => setShowCreateTicketModal(true)}>{t('create_ticket')}</Button>}>{t('related_tickets')}</CardHeader>
-                            <CardBody>
-                                {deviceTickets.length === 0 ? (
-                                    <div className="text-center py-8"><CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" /><p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('no_open_tickets')}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('this_device_has_no_tickets')}</p></div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {deviceTickets.map((ticket) => (
-                                            <div key={ticket.id} className="p-3 bg-slate-50 dark:bg-slate-900/30 border border-transparent dark:border-slate-800 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/70 cursor-pointer transition-all">
-                                                <div className="flex items-start justify-between gap-2"><div><p className="text-sm font-medium text-slate-900 dark:text-white">{ticket.title}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{ticket.id} • {ticket.assignee}</p></div><Badge variant={ticket.priority === 'critical' ? 'danger' : ticket.priority === 'high' ? 'warning' : ticket.priority === 'medium' ? 'info' : 'success'} size="sm">{ticket.priority}</Badge></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </CardBody>
-                        </Card>
-
-                        {/* ═══ Audit Log Tab ═══ */}
-                        <DeviceAuditLog deviceId={deviceId || ''} />
-                    </div>
-                )}
-
+                {activeTab === 'overview' && centerOverviewContent}
                 {activeTab === 'tunnel' && (
                     <SecureTunnel deviceId={deviceId || ''} />
                 )}

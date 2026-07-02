@@ -12,12 +12,19 @@
 //   - Technician → "My Work" (Overview)
 //   - Manager → "Overview"
 //   - Admin → "System Health" (Overview)
+//
+// UX-1.5: Role-Based Home Pages (feature flag: role_based_home_pages)
+//   - Technician → TechnicianHome (tasks, overdue, QR scan)
+//   - Manager → ManagerHome (SLA heatmap, breach risk, approvals)
+//   - Admin → AdminHome (system health, compliance, audit alerts)
+//   - Skeleton loader while role-specific widgets load
 // ═══════════════════════════════════════════════════════════════════════
 
 import React, { Suspense, lazy, useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import { isFeatureEnabled } from '../config/featureFlags';
 import {
     LayoutDashboard,
     Shield,
@@ -31,6 +38,11 @@ import { DragDropDashboard } from '../components/dashboard/DragDropDashboard';
 import { getWidgetsForTab } from '../components/dashboard/WidgetRegistry';
 import type { DashboardWidget } from '../components/dashboard/DragDropDashboard';
 import { Button } from '../components/ui';
+
+// ═══ UX-1.5: Role-Based Home Pages ═════════════════════════════════
+const TechnicianHome = lazy(() => import('../components/home/TechnicianHome'));
+const ManagerHome = lazy(() => import('../components/home/ManagerHome'));
+const AdminHome = lazy(() => import('../components/home/AdminHome'));
 
 // ═══ Lazy-loaded tab components ══════════════════════════════════════
 
@@ -83,6 +95,41 @@ function TabSkeleton() {
     );
 }
 
+// ═══ UX-1.5: Role-based home page loader skeleton ═══════════════════
+function RoleHomeSkeleton() {
+    return (
+        <div className="space-y-6 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-24 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+                ))}
+            </div>
+            <div className="h-72 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="h-48 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+                <div className="h-48 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+            </div>
+        </div>
+    );
+}
+
+/** UX-1.5: Get role-based home component */
+function getRoleHome(role: string): React.LazyExoticComponent<React.ComponentType> | null {
+    if (!isFeatureEnabled('role_based_home_pages')) return null;
+    switch (role) {
+        case 'technician':
+            return TechnicianHome;
+        case 'manager':
+            return ManagerHome;
+        case 'admin':
+        case 'support':
+        case 'owner':
+            return AdminHome;
+        default:
+            return null;
+    }
+}
+
 // ═══ Widget content components ══════════════════════════════════════
 
 function WidgetPlaceholder({ title }: { title: string }) {
@@ -101,6 +148,35 @@ export function DashboardHub() {
     const role = user?.role ?? 'viewer';
     const [searchParams, setSearchParams] = useSearchParams();
     const [customizeMode, setCustomizeMode] = useState(false);
+
+    // UX-1.5: Role-based home page (replaces tabs when enabled)
+    const RoleHome = useMemo(() => getRoleHome(role), [role]);
+
+    // If role-based home is enabled, render it directly
+    if (RoleHome) {
+        return (
+            <div className="p-4 md:p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            {t('dashboard')}
+                        </h1>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            {role === 'technician'
+                                ? (t('technician_dashboard_description') || 'Your tasks and schedule')
+                                : role === 'manager'
+                                    ? (t('manager_dashboard_description') || 'Team performance and SLA')
+                                    : (t('admin_dashboard_description') || 'System health and compliance')
+                            }
+                        </p>
+                    </div>
+                </div>
+                <Suspense fallback={<RoleHomeSkeleton />}>
+                    <RoleHome />
+                </Suspense>
+            </div>
+        );
+    }
 
     // P1-1.2: Default tab based on role
     const defaultTab = useMemo(() => getDefaultTab(role), [role]);

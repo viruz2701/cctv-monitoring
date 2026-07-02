@@ -64,3 +64,15 @@ export const CommunityRegistry = lazy(() => import('./CommunityRegistry').then((
 
 // P2-BI: Self-Service Analytics Query Builder
 export const BIQueryBuilder = lazy(() => import('./BIQueryBuilder').then((m) => ({ default: m.BIQueryBuilder })));
+
+// Track 3: TO Compliance Automation
+export const TOJournals = lazy(() => import('./TOJournals').then((m) => ({ default: m.TOJournals })));
+
+// UX-3.5: Print Template Visual Editor
+export const PrintTemplateBuilder = lazy(() => import('./PrintTemplateBuilder').then((m) => ({ default: m.PrintTemplateBuilder })));
+
+// UX-4.1: Asset Tree Drill-down
+export const AssetExplorer = lazy(() => import('./AssetExplorer').then((m) => ({ default: m.AssetExplorer })));
+
+// UX-4.3: Maintenance Calendar UI
+export const MaintenanceCalendar = lazy(() => import('./MaintenanceCalendar').then((m) => ({ default: m.MaintenanceCalendar })));

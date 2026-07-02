@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useFocusTrap } from '../../hooks/useAccessibility';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import {
   LayoutDashboard,
@@ -58,6 +58,16 @@ import { weightedFuzzySearch, getCharMatches } from '../../lib/fuzzySearch';
 import type { SearchableItem } from '../../lib/fuzzySearch';
 import { useSearchEntities } from '../../hooks/useSearchEntities';
 import type { EntityResult } from '../../hooks/useSearchEntities';
+import { isFeatureEnabled } from '../../config/featureFlags';
+import {
+  searchCommands,
+  getContextualCommands,
+  parseNaturalLanguage,
+  type IndexedCommand,
+  type CommandContext,
+  type RegulatoryRegion,
+} from '../../services/commandIndex';
+import { useAuthStore } from '../../store/authStore';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types
@@ -548,6 +558,20 @@ export function CommandPalette() {
   const { isOpen, close, recentCommands, addRecent, clearRecent } = useCommandPaletteStore();
   const themeStore = useThemeStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const authUser = useAuthStore((s) => s.user);
+
+  // UX-5.1: Regulatory awareness when feature flag is enabled
+  const regulatoryEnabled = isFeatureEnabled('command_palette_regulatory');
+  const commandCtx = useMemo<CommandContext | null>(() => {
+    if (!regulatoryEnabled) return null;
+    return {
+      currentPath: location.pathname,
+      role: (authUser?.role as CommandContext['role']) || 'viewer',
+      region: 'INTL', // Will be overridden by settings
+      recentCommandIds: recentCommands,
+    };
+  }, [regulatoryEnabled, location.pathname, authUser?.role, recentCommands]);
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -569,15 +593,45 @@ export function CommandPalette() {
     [navigate, themeStore.isDark, themeStore.setTheme]
   );
 
+  // UX-5.1: Regulatory-aware commands when feature flag is enabled
+  const regulatoryCommands = useMemo<CommandItem[]>(() => {
+    if (!regulatoryEnabled || !commandCtx) return [];
+    return getContextualCommands(commandCtx).map((c) => ({
+      id: c.id,
+      label: c.label,
+      description: c.description,
+      path: c.path,
+      category: 'actions' as CommandCategory,
+      icon: Command, // Will be overridden by icon mapping
+      keywords: c.keywords,
+      action: undefined,
+    }));
+  }, [regulatoryEnabled, commandCtx]);
+
   // All commands (memoized static reference)
-  const allCommands = useMemo<CommandItem[]>(() => [...NAV_COMMANDS, ...actionCommands], [actionCommands]);
+  const allCommands = useMemo<CommandItem[]>(
+    () => [...NAV_COMMANDS, ...actionCommands, ...regulatoryCommands],
+    [actionCommands, regulatoryCommands],
+  );
 
   // ── Weighted fuzzy search ──────────────────────────────────────────
   const searchResults = useMemo(() => {
     const trimmed = query.trim();
     if (!trimmed) return null; // null means "show all grouped"
+
+    // UX-5.1: Try natural language parsing first
+    if (regulatoryEnabled) {
+      const nl = parseNaturalLanguage(trimmed);
+      if (nl.commandId && nl.confidence > 0.7) {
+        const cmd = allCommands.find((c) => c.id === nl.commandId);
+        if (cmd) {
+          return [{ item: cmd, score: 1, matchField: 'label' as const, matchType: 'exact' as const }];
+        }
+      }
+    }
+
     return weightedFuzzySearch(allCommands, query, { threshold: 10 });
-  }, [query, allCommands]);
+  }, [query, allCommands, regulatoryEnabled]);
 
   // Filtered commands (for non-empty query)
   const filteredCommands = useMemo(() => {

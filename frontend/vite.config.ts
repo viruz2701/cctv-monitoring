@@ -138,6 +138,11 @@ export default defineConfig({
       brotliSize: true,
     }),
   ].filter(Boolean),
+  // UX-7.1: esbuild config — remove console.* in production (P2-OPT.17)
+  esbuild: {
+    pure: ['console.log', 'console.debug', 'console.info'],
+    keepNames: true,
+  },
   build: {
     target: 'es2020', // P2-OPT.3: современные браузеры — меньше полифиллов
     minify: 'esbuild', // P2-OPT.4: esbuild быстрее terser, достаточно для production
@@ -146,6 +151,10 @@ export default defineConfig({
     sourcemap: Boolean(process.env.SENTRY_AUTH_TOKEN), // P2-OPT.7: sourcemap только для Sentry
     reportCompressedSize: false, // P2-OPT.8: ускоряет сборку, не влияет на деплой
     assetsInlineLimit: 4096, // P2-OPT.9: инлайн SVG/изображений <4KB как data URI
+    // UX-7.1: Bundle Size Optimization — module preload polyfill
+    modulePreload: {
+      polyfill: false, // P2-OPT.16: современные браузеры не нуждаются в polyfill
+    },
     emptyOutDir: true, // P2-OPT.14: очистка dist перед сборкой
     rollupOptions: {
       output: {

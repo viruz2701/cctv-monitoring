@@ -84,6 +84,13 @@ export const queryKeys = {
     all: ['agents'] as const,
     detail: (id: string) => ['agents', id] as const,
   },
+  // Track 3: TO Compliance Automation
+  toJournals: {
+    all: ['toJournals'] as const,
+    detail: (id: string) => ['toJournals', id] as const,
+    templates: (regionCode: string) => ['toJournals', 'templates', regionCode] as const,
+    regions: ['toJournals', 'regions'] as const,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
